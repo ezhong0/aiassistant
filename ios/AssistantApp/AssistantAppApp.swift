@@ -1,3 +1,10 @@
+//
+//  AssistantAppApp.swift
+//  AssistantApp
+//
+//  Created by Edward Zhong on 8/18/25.
+//
+
 import SwiftUI
 
 @main

@@ -1,3 +1,10 @@
+//
+//  ContentView.swift
+//  AssistantApp
+//
+//  Created by Edward Zhong on 8/18/25.
+//
+
 import SwiftUI
 
 struct ContentView: View {
@@ -6,7 +13,7 @@ struct ContentView: View {
             Image(systemName: "globe")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
-            Text("Assistant App")
+            Text("Hello, world!")
         }
         .padding()
     }
