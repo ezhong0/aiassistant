@@ -10,7 +10,8 @@ export const errorHandler = (
   err: AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _next: NextFunction
 ) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
@@ -42,7 +43,8 @@ export const errorHandler = (
   });
 };
 
-export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const notFoundHandler = (req: Request, res: Response, _next: NextFunction) => {
   logger.warn({
     message: 'Route not found',
     method: req.method,

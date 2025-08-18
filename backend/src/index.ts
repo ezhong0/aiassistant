@@ -1,13 +1,22 @@
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
 import express, { Request, Response } from 'express';
 import logger from './utils/logger';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import authRoutes from './routes/auth.routes';
 
 const app = express();
 const port = 3000;
 
 app.use(express.json());
 app.use(requestLogger);
+
+// Routes
+app.use('/auth', authRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Hello World!' });
