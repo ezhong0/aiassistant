@@ -23,16 +23,54 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXBuildFile section */
+		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
+		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
+		E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */; };
+		E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F32E53A25D00139AA3 /* MainAppView.swift */; };
+		E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F42E53A25D00139AA3 /* SignInView.swift */; };
+		E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
+		E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		E2DB26C22E53A25B00139AA3 /* AssistantApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AssistantApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26D02E53A25C00139AA3 /* AssistantAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26DA2E53A25C00139AA3 /* AssistantAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantAppApp.swift; sourceTree = "<group>"; };
+		E2DB26F12E53A25D00139AA3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		E2DB26F32E53A25D00139AA3 /* MainAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainAppView.swift; sourceTree = "<group>"; };
+		E2DB26F42E53A25D00139AA3 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
+		E2DB26F52E53A25D00139AA3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		E2DB26F72E53A25D00139AA3 /* AssistantApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AssistantApp.entitlements; sourceTree = "<group>"; };
+		E2DB26F82E53A25D00139AA3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
+/* Begin PBXGroup section */
 		E2DB26C42E53A25B00139AA3 /* AssistantApp */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
+			isa = PBXGroup;
+			children = (
+				E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */,
+				E2DB26F12E53A25D00139AA3 /* ContentView.swift */,
+				E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */,
+				E2DB26F32E53A25D00139AA3 /* MainAppView.swift */,
+				E2DB26F42E53A25D00139AA3 /* SignInView.swift */,
+				E2DB26F52E53A25D00139AA3 /* Assets.xcassets */,
+				E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */,
+				E2DB26F72E53A25D00139AA3 /* AssistantApp.entitlements */,
+				E2DB26F92E53A25D00139AA3 /* Supporting Files */,
+			);
 			path = AssistantApp;
+			sourceTree = "<group>";
+		};
+		E2DB26F92E53A25D00139AA3 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				E2DB26F82E53A25D00139AA3 /* Info.plist */,
+			);
+			path = "Supporting Files";
 			sourceTree = "<group>";
 		};
 		E2DB26D32E53A25C00139AA3 /* AssistantAppTests */ = {
@@ -45,7 +83,7 @@
 			path = AssistantAppUITests;
 			sourceTree = "<group>";
 		};
-/* End PBXFileSystemSynchronizedRootGroup section */
+/* End PBXGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		E2DB26BF2E53A25B00139AA3 /* Frameworks */ = {
@@ -107,11 +145,12 @@
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				E2DB26C42E53A25B00139AA3 /* AssistantApp */,
+			files = (
 			);
 			name = AssistantApp;
 			packageProductDependencies = (
+				E2DB27012E53A25E00139AA3 /* GoogleSignIn */,
+				E2DB27022E53A25E00139AA3 /* GoogleSignInSwift */,
 			);
 			productName = AssistantApp;
 			productReference = E2DB26C22E53A25B00139AA3 /* AssistantApp.app */;
@@ -199,6 +238,9 @@
 			productRefGroup = E2DB26C32E53A25B00139AA3 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				E2DB27002E53A25E00139AA3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			targets = (
 				E2DB26C12E53A25B00139AA3 /* AssistantApp */,
 				E2DB26CF2E53A25C00139AA3 /* AssistantAppTests */,
@@ -212,6 +254,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */,
+				E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,6 +280,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */,
+				E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */,
+				E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */,
+				E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */,
+				E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -392,7 +441,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "AssistantApp/Supporting Files/Info.plist";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -429,7 +479,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "AssistantApp/Supporting Files/Info.plist";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -583,6 +634,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E2DB27002E53A25E00139AA3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E2DB27012E53A25E00139AA3 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E2DB27002E53A25E00139AA3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		E2DB27022E53A25E00139AA3 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E2DB27002E53A25E00139AA3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E2DB26BA2E53A25B00139AA3 /* Project object */;
 }

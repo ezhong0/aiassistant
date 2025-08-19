@@ -72,8 +72,7 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Check Current User
     private func checkCurrentUser() {
-        if let user = GIDSignIn.sharedInstance.currentUser,
-           user.authentication.accessToken != nil {
+        if let user = GIDSignIn.sharedInstance.currentUser {
             let appUser = AppUser(from: user)
             authState = .signedIn(appUser)
         } else {
@@ -98,16 +97,13 @@ class AuthenticationManager: ObservableObject {
             let googleUser = result.user
             
             // Get tokens
-            let authentication = googleUser.authentication
-            guard let accessToken = authentication.accessToken else {
-                throw AuthError.noAccessToken
-            }
+            let accessToken = googleUser.accessToken.tokenString
             
             // Send tokens to backend for validation and JWT generation
             let jwtToken = try await exchangeTokensWithBackend(
                 accessToken: accessToken,
-                refreshToken: authentication.refreshToken,
-                idToken: authentication.idToken
+                refreshToken: googleUser.refreshToken.tokenString,
+                idToken: googleUser.idToken?.tokenString
             )
             
             // Store JWT token securely
@@ -172,28 +168,20 @@ class AuthenticationManager: ObservableObject {
         }
         
         do {
-            try await currentUser.authentication.do { authentication, error in
-                if let error = error {
-                    throw error
-                }
-                
-                guard let accessToken = authentication.accessToken else {
-                    throw AuthError.noAccessToken
-                }
-                
-                // Update backend with new tokens if needed
-                Task {
-                    do {
-                        let jwtToken = try await self.exchangeTokensWithBackend(
-                            accessToken: accessToken,
-                            refreshToken: authentication.refreshToken,
-                            idToken: authentication.idToken
-                        )
-                        try self.storeJWTToken(jwtToken)
-                    } catch {
-                        print("❌ Token refresh backend update failed: \(error)")
-                    }
-                }
+            try await currentUser.refreshTokensIfNeeded()
+            
+            let accessToken = currentUser.accessToken.tokenString
+            
+            // Update backend with new tokens if needed
+            do {
+                let jwtToken = try await self.exchangeTokensWithBackend(
+                    accessToken: accessToken,
+                    refreshToken: currentUser.refreshToken.tokenString,
+                    idToken: currentUser.idToken?.tokenString
+                )
+                try self.storeJWTToken(jwtToken)
+            } catch {
+                print("❌ Token refresh backend update failed: \(error)")
             }
             
             return true
@@ -259,6 +247,7 @@ class AuthenticationManager: ObservableObject {
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
             print("⚠️ Backend logout notification failed, continuing with local logout")
+            return
         }
     }
     
