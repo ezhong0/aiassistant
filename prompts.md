@@ -95,77 +95,145 @@ The app should handle the complete OAuth flow and store tokens securely.
 
 ---
 
-## Phase 2: Core Agent System
+## Phase 2: Master Agent System
 
-### Prompt 2.1: Master Assistant Agent
+### Prompt 2.1: Master Agent Core with Routing Logic
 ```
-Create the master assistant agent system:
+Create the ultimate personal assistant master agent that routes to specialized tools:
 
-1. Implement OpenAI service in /src/services/openai.service.ts with:
-   - GPT-4o-mini integration for intent classification
-   - Prompt templates for determining user intent
-   - Agent routing logic
-2. Create master agent in /src/agents/master.agent.ts that:
-   - Analyzes user input to determine intent
-   - Routes to appropriate specialized agents
-   - Manages conversation context
-   - Handles agent responses and formatting
-3. Add session management in /src/services/session.service.ts:
-   - In-memory session storage
-   - 30-minute expiration
-   - Context tracking
-4. Define TypeScript interfaces for agent communication
-5. Create the main assistant endpoint that ties everything together
+1. Create master agent in /src/agents/master.agent.ts with this exact prompt structure:
+   ```
+   # Overview
+   You are the ultimate personal assistant. Your job is to send the user's query to the correct tool. You should never be writing emails, or creating even summaries, you just need to call the correct tool.
 
-Include comprehensive error handling and logging.
+   ## Tools
+   - Think: Use this to think deeply or if you get stuck
+   - emailAgent: Use this tool to take action in email
+   - calendarAgent: Use this tool to take action in calendar
+   - contactAgent: Use this tool to get, update, or add contacts
+   - contentCreator: Use this tool to create blog posts
+   - Tavily: Use this tool to search the web
+
+   ## Rules
+   - Some actions require you to look up contact information first. For the following actions, you must get contact information and send that to the agent who needs it:
+     - sending emails
+     - drafting emails
+     - creating calendar event with attendee
+
+   ## Instructions
+   1) Call the necessary tools based on the user request
+   2) Use the "Think" tool to verify you took the right steps. This tool should be called every time.
+
+   ## Examples
+   1) 
+   - Input: send an email to nate herkelman asking him what time he wants to leave
+     - Action: Use contactAgent to get nate herkelman's email
+     - Action: Use emailAgent to send the email. You will pass the tool a query like "send nate herkelman an email to ask what time he wants to leave. here is his email: [email address]"
+   - Output: The email has been sent to Nate Herkelman. Anything else I can help you with?
+
+   ## Final Reminders
+   Here is the current date/time: {{ $now }}
+   ```
+
+2. Implement OpenAI service in /src/services/openai.service.ts with:
+   - GPT-4o-mini integration for the master agent
+   - Function calling setup for tool routing
+   - Conversation context management
+
+3. Create tool interface in /src/types/tools.ts:
+   - Standard tool input/output interfaces
+   - Tool execution tracking
+   - Result formatting
+
+4. Add session management in /src/services/session.service.ts:
+   - In-memory session storage with 30-minute expiration
+   - Tool execution history
+   - Context passing between tools
+
+Include comprehensive error handling and logging for tool routing decisions.
 ```
 
-### Prompt 2.2: Google API Services Foundation
+### Prompt 2.2: Core Service Layer (Google APIs + External Tools)
 ```
-Create the foundation services for Google APIs:
+Create the foundation services that power the specialized agents:
 
 1. Gmail service (/src/services/gmail.service.ts):
-   - Gmail API wrapper with authentication
-   - Functions for: send email, get emails, reply to email, search emails
+   - Gmail API wrapper with OAuth authentication
+   - Functions: send email, get emails, reply to email, search emails
    - Email parsing and formatting utilities
-   - Contact resolution from email addresses
+   - Thread management for replies
+
 2. Calendar service (/src/services/calendar.service.ts):
-   - Google Calendar API wrapper
-   - Functions for: create event, get events, update event, delete event
-   - Date/time parsing utilities
-   - Attendee management
+   - Google Calendar API wrapper with authentication
+   - Functions: create event, get events, update event, delete event
+   - Natural language date/time parsing
+   - Attendee management and conflict detection
+
 3. Contact service (/src/services/contact.service.ts):
-   - Contact data structure and interfaces
-   - Contact search and lookup functions
-   - Basic CRUD operations
-4. Add proper error handling for API rate limits and failures
-5. Include TypeScript interfaces for all data structures
+   - Google Contacts API integration
+   - Contact search by name, email, or partial match
+   - Contact data normalization and formatting
+   - Basic contact CRUD operations
 
-These services should be ready for the specialized agents to use.
+4. Tavily service (/src/services/tavily.service.ts):
+   - Tavily API integration for web search
+   - Search result processing and formatting
+   - Source attribution and summarization
+
+5. Content creation service (/src/services/content.service.ts):
+   - OpenAI integration for blog post generation
+   - Content templates and formatting
+   - SEO optimization helpers
+
+Include proper error handling for API rate limits, authentication failures, and network issues.
 ```
 
-### Prompt 2.3: Specialized Agents Implementation
+### Prompt 2.3: Specialized Tool Agents
 ```
-Create the specialized agents that use the Google API services:
+Create the specialized agents that implement each tool for the master agent:
 
-1. Email Agent (/src/agents/email.agent.ts):
-   - Handle email-related intents (send, reply, search, draft)
-   - Parse email commands from natural language
-   - Use Gmail service for operations
-   - Return formatted responses
-2. Calendar Agent (/src/agents/calendar.agent.ts):
-   - Handle calendar intents (create event, get schedule, update, delete)
-   - Parse date/time from natural language
-   - Use Calendar service for operations
-   - Handle timezone considerations
-3. Contact Agent (/src/agents/contact.agent.ts):
-   - Handle contact lookup and management
-   - Integrate with email and calendar agents
-   - Provide contact resolution services
-4. Create agent registry and factory pattern for easy agent management
-5. Add comprehensive logging and error handling
+1. Think Tool (/src/agents/think.agent.ts):
+   - Reflection and verification agent
+   - Analyzes if the right steps were taken
+   - Provides reasoning about tool usage decisions
+   - Returns verification status and suggestions
 
-Each agent should have a consistent interface and be easily testable.
+2. Email Agent (/src/agents/email.agent.ts):
+   - Accepts queries with contact information already resolved
+   - Handles: send email, reply, search, draft
+   - Uses Gmail service for all operations
+   - Returns execution status and confirmation
+
+3. Calendar Agent (/src/agents/calendar.agent.ts):
+   - Accepts queries with attendee emails already resolved
+   - Handles: create event, get schedule, update, delete
+   - Uses Calendar service for operations
+   - Manages timezone and recurring event logic
+
+4. Contact Agent (/src/agents/contact.agent.ts):
+   - Primary contact lookup and resolution service
+   - Searches by name, partial name, or email
+   - Returns formatted contact information for other agents
+   - Handles contact creation and updates
+
+5. Content Creator Agent (/src/agents/content.agent.ts):
+   - Blog post and content generation
+   - SEO-optimized content creation
+   - Multiple format support (markdown, HTML, etc.)
+   - Topic research and outline generation
+
+6. Tavily Agent (/src/agents/tavily.agent.ts):
+   - Web search and information retrieval
+   - Search result summarization
+   - Source verification and attribution
+   - Real-time information lookup
+
+7. Agent Registry (/src/services/agent.registry.ts):
+   - Tool registration and discovery
+   - Agent factory pattern for clean instantiation
+   - Tool execution pipeline with logging
+
+Each agent should follow a consistent interface pattern and include comprehensive error handling.
 ```
 
 ---
