@@ -274,7 +274,7 @@ export const retryOAuthOperation = async <T>(
         maxRetries
       });
       
-      await new Promise(resolve => global.setTimeout(resolve, delayMs * attempt));
+      await new Promise(resolve => (globalThis as any).setTimeout(resolve, delayMs * attempt));
     }
   }
   

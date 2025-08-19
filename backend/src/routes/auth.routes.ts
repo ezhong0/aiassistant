@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { authService } from '../services/auth.service';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/auth.middleware';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {
   GoogleTokens,
   GoogleUserInfo,
@@ -14,6 +14,12 @@ import {
   formatAuthErrorResponse,
   handleOAuthError
 } from '../utils/auth-errors';
+import {
+  validateGoogleCallback,
+  validateTokenRefresh,
+  validateMobileTokenExchange,
+} from '../middleware/validation.middleware';
+import { authRateLimit } from '../middleware/rate-limiting.middleware';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -23,7 +29,7 @@ const router = express.Router();
  * GET /auth/google
  * Initiate Google OAuth flow
  */
-router.get('/google', (req: Request, res: Response) => {
+router.get('/google', authRateLimit, (req: Request, res: Response) => {
   try {
     const scopes = ['openid', 'email', 'profile'];
     const authUrl = authService.generateAuthUrl(scopes);
@@ -44,7 +50,7 @@ router.get('/google', (req: Request, res: Response) => {
  * GET /auth/callback
  * Handle OAuth callback from Google
  */
-router.get('/callback', async (req: Request, res: Response) => {
+router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Request, res: Response) => {
   try {
     const { code, error, error_description }: OAuthCallbackQuery = req.query;
 
@@ -114,7 +120,7 @@ router.get('/callback', async (req: Request, res: Response) => {
  * POST /auth/refresh
  * Refresh access token using refresh token
  */
-router.post('/refresh', async (req: Request, res: Response) => {
+router.post('/refresh', authRateLimit, validateTokenRefresh, async (req: Request, res: Response) => {
   try {
     const { refresh_token }: TokenRefreshRequest = req.body;
 
@@ -246,6 +252,73 @@ router.get('/validate', (req: Request, res: Response) => {
       valid: false,
       error: 'Token validation failed'
     });
+  }
+});
+
+/**
+ * POST /auth/exchange-mobile-tokens
+ * Exchange mobile OAuth tokens for JWT
+ */
+router.post('/exchange-mobile-tokens', authRateLimit, validateMobileTokenExchange, async (req: Request, res: Response) => {
+  try {
+    const { access_token, platform }: {
+      access_token: string;
+      platform: string;
+    } = req.body;
+
+    if (!access_token || typeof access_token !== 'string') {
+      const authError = new AuthenticationError(
+        'MISSING_TOKEN' as any,
+        'Missing or invalid access token',
+        400
+      );
+      const errorResponse = formatAuthErrorResponse(authError);
+      return res.status(400).json(errorResponse);
+    }
+
+    // Validate the access token with Google
+    const tokenValidation = await authService.validateGoogleToken(access_token);
+    if (!tokenValidation.valid) {
+      const authError = new AuthenticationError(
+        'INVALID_TOKEN' as any,
+        'Invalid access token',
+        401
+      );
+      const errorResponse = formatAuthErrorResponse(authError);
+      return res.status(401).json(errorResponse);
+    }
+
+    // Get user info from Google
+    const userInfo: GoogleUserInfo = await authService.getUserInfo(access_token);
+    
+    // Generate internal JWT token
+    const jwtToken = authService.generateJWT({
+      userId: userInfo.id,
+      email: userInfo.email,
+      name: userInfo.name,
+      picture: userInfo.picture
+    });
+
+    logger.info(`Mobile token exchange successful for user: ${userInfo.email}`, {
+      platform,
+      userId: userInfo.id
+    });
+
+    return res.json({
+      success: true,
+      user: userInfo,
+      jwt: jwtToken,
+      platform,
+      message: 'Mobile authentication successful'
+    });
+
+  } catch (error) {
+    logger.error('Mobile token exchange error:', error);
+    const authError = error instanceof AuthenticationError 
+      ? error 
+      : handleOAuthError('token_exchange', error);
+    const errorResponse = formatAuthErrorResponse(authError);
+    return res.status(authError.statusCode || 500).json(errorResponse);
   }
 });
 

@@ -232,7 +232,7 @@ router.post('/api-heavy',
       logger.info('Heavy API operation requested', { userId: user.userId });
       
       // Simulate heavy processing
-      global.setTimeout(() => {
+      (globalThis as any).setTimeout(() => {
         res.json({
           success: true,
           data: {

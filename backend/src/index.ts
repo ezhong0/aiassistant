@@ -1,64 +1,142 @@
 import dotenv from 'dotenv';
 
-// Load environment variables
+// Load environment variables first
 dotenv.config();
 
 import express, { Request, Response } from 'express';
+import configService from './config/config.service';
 import logger from './utils/logger';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { 
+  corsMiddleware, 
+  securityHeaders, 
+  compressionMiddleware,
+  apiSecurityHeaders,
+  requestSizeLimiter,
+  requestTimeout,
+  sanitizeRequest
+} from './middleware/security.middleware';
+import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
+import healthRoutes from './routes/health';
 
 const app = express();
-const port = 3000;
+const port = configService.port;
 
-app.use(express.json());
+// Trust proxy (for proper IP detection behind reverse proxy)
+app.set('trust proxy', 1);
+
+// Security middleware (order matters)
+app.use(requestTimeout(30000)); // 30 second timeout
+app.use(corsMiddleware);
+app.use(securityHeaders);
+app.use(compressionMiddleware);
+app.use(apiSecurityHeaders);
+app.use(requestSizeLimiter);
+
+// Parse JSON with size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request processing middleware
+app.use(sanitizeRequest);
 app.use(requestLogger);
 
-// Routes
+// Rate limiting (apply to all routes)
+app.use(apiRateLimit);
+
+// Health check (before other routes)
+app.use('/health', healthRoutes);
+
+// API Routes
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 
+// Root endpoint
 app.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'Hello World!' });
+  res.json({ 
+    message: 'Assistant App API',
+    version: '1.0.0',
+    environment: configService.nodeEnv,
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.get('/health', (req: Request, res: Response) => {
-  const healthCheck = {
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    version: process.env.npm_package_version || '1.0.0',
-    memory: {
-      used: Math.round((process.memoryUsage().heapUsed / 1024 / 1024) * 100) / 100,
-      total: Math.round((process.memoryUsage().heapTotal / 1024 / 1024) * 100) / 100,
-    },
-  };
-
-  res.status(200).json(healthCheck);
-});
 
 // Error handling middleware (must be last)
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 const server = app.listen(port, () => {
-  logger.info(`Server running at http://localhost:${port}`);
+  logger.info('Server started successfully', {
+    port,
+    environment: configService.nodeEnv,
+    nodeVersion: process.version,
+    pid: process.pid,
+    timestamp: new Date().toISOString()
+  });
 });
 
-server.on('error', (err) => {
-  logger.error('Server error:', err);
-});
-
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
+// Enhanced error handling
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    logger.error(`Port ${port} is already in use. Please check if another instance is running.`);
+  } else {
+    logger.error('Server error:', err);
+  }
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+// Graceful shutdown handling
+const gracefulShutdown = (signal: string) => {
+  logger.info(`Received ${signal}. Starting graceful shutdown...`);
+  
+  server.close((err) => {
+    if (err) {
+      logger.error('Error during server shutdown:', err);
+      process.exit(1);
+    }
+    
+    logger.info('Server closed successfully');
+    process.exit(0);
+  });
+  
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    logger.error('Forced shutdown due to timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Enhanced error handling
+process.on('uncaughtException', (err: Error) => {
+  logger.error('Uncaught Exception - shutting down:', {
+    error: err.message,
+    stack: err.stack
+  });
+  process.exit(1);
 });
 
-logger.info('Server setup complete');
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+  logger.error('Unhandled Rejection:', {
+    reason,
+    promise
+  });
+  // Don't exit on unhandled promise rejection in production
+  if (configService.isDevelopment) {
+    process.exit(1);
+  }
+});
+
+logger.info('Server setup complete', {
+  environment: configService.nodeEnv,
+  configuration: 'loaded',
+  security: 'enabled',
+  rateLimit: 'enabled'
+});

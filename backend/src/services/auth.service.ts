@@ -14,38 +14,28 @@ import {
   validateGoogleUserInfo,
   retryOAuthOperation
 } from '../utils/auth-errors';
+import configService from '../config/config.service';
 import logger from '../utils/logger';
 
 export class AuthService {
   private oauth2Client: OAuth2Client;
-  private readonly clientId: string;
-  private readonly clientSecret: string;
-  private readonly redirectUri: string;
-  private readonly jwtSecret: string;
+  private readonly config = configService;
 
   constructor() {
-    this.clientId = process.env.GOOGLE_CLIENT_ID || '';
-    this.clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
-    this.redirectUri = process.env.GOOGLE_REDIRECT_URI || '';
-    this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
-
-    if (!this.clientId || !this.clientSecret || !this.redirectUri) {
-      const missingVars = [];
-      if (!this.clientId) missingVars.push('GOOGLE_CLIENT_ID');
-      if (!this.clientSecret) missingVars.push('GOOGLE_CLIENT_SECRET');
-      if (!this.redirectUri) missingVars.push('GOOGLE_REDIRECT_URI');
-      
-      logger.error('Missing OAuth configuration', { missingVars });
-      throw AuthErrors.invalidClient({ missingVariables: missingVars });
-    }
-
+    // Validate configuration
+    this.config.validate();
+    
     this.oauth2Client = new OAuth2Client(
-      this.clientId,
-      this.clientSecret,
-      this.redirectUri
+      this.config.googleClientId,
+      this.config.googleClientSecret,
+      this.config.googleRedirectUri
     );
 
-    logger.info('Auth service initialized successfully');
+    logger.info('Auth service initialized successfully', {
+      environment: this.config.nodeEnv,
+      jwtIssuer: this.config.jwtIssuer,
+      jwtExpiresIn: this.config.jwtExpiresIn
+    });
   }
 
   /**
@@ -160,7 +150,7 @@ export class AuthService {
     try {
       const ticket = await this.oauth2Client.verifyIdToken({
         idToken,
-        audience: this.clientId,
+        audience: this.config.googleClientId,
       });
 
       const payload = ticket.getPayload();
@@ -219,22 +209,24 @@ export class AuthService {
   /**
    * Generate JWT token for internal use
    */
-  generateJWT(payload: JWTPayload, expiresIn: string | number = '24h'): string {
+  generateJWT(payload: JWTPayload, expiresIn?: string | number): string {
     try {
       const jwtPayload: JWTPayload = {
         ...payload,
         iat: Math.floor(Date.now() / 1000)
       };
       
-      const token = jwt.sign(jwtPayload, this.jwtSecret, { 
-        expiresIn,
-        issuer: 'assistantapp',
-        audience: 'assistantapp-client'
+      const token = jwt.sign(jwtPayload, this.config.jwtSecret, { 
+        expiresIn: expiresIn || this.config.jwtExpiresIn,
+        issuer: this.config.jwtIssuer,
+        audience: this.config.jwtAudience,
+        algorithm: 'HS256' // Explicitly set algorithm
       } as SignOptions);
       
       logger.info('JWT generated successfully', { 
         userId: payload.userId,
-        expiresIn 
+        expiresIn: expiresIn || this.config.jwtExpiresIn,
+        issuer: this.config.jwtIssuer
       });
       
       return token;
@@ -251,9 +243,10 @@ export class AuthService {
     try {
       validateTokenFormat(token);
       
-      const payload = jwt.verify(token, this.jwtSecret, {
-        issuer: 'assistantapp',
-        audience: 'assistantapp-client'
+      const payload = jwt.verify(token, this.config.jwtSecret, {
+        issuer: this.config.jwtIssuer,
+        audience: this.config.jwtAudience,
+        algorithms: ['HS256'] // Explicitly specify allowed algorithms
       }) as JWTPayload;
       
       // Additional payload validation
@@ -264,7 +257,19 @@ export class AuthService {
         };
       }
       
-      logger.debug('JWT validated successfully', { userId: payload.userId });
+      // Check token expiration more explicitly
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp && payload.exp < now) {
+        return {
+          valid: false,
+          error: 'Token has expired'
+        };
+      }
+      
+      logger.debug('JWT validated successfully', { 
+        userId: payload.userId,
+        expiresAt: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'never'
+      });
       
       return {
         valid: true,
@@ -272,7 +277,10 @@ export class AuthService {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'JWT validation failed';
-      logger.warn('JWT validation failed', { error: errorMessage });
+      logger.warn('JWT validation failed', { 
+        error: errorMessage,
+        tokenLength: token?.length || 0
+      });
       
       return {
         valid: false,
