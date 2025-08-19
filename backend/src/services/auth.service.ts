@@ -1,32 +1,20 @@
 import { OAuth2Client } from 'google-auth-library';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import axios from 'axios';
-
-export interface GoogleTokens {
-  access_token: string;
-  refresh_token?: string;
-  id_token?: string;
-  token_type: string;
-  expires_in: number;
-  scope?: string;
-}
-
-export interface GoogleUserInfo {
-  id: string;
-  email: string;
-  verified_email: boolean;
-  name: string;
-  given_name: string;
-  family_name: string;
-  picture: string;
-  locale?: string;
-}
-
-export interface TokenValidationResult {
-  valid: boolean;
-  payload?: object | string;
-  error?: string;
-}
+import {
+  GoogleTokens,
+  GoogleUserInfo,
+  TokenValidationResult,
+  JWTPayload
+} from '../types/auth.types';
+import {
+  AuthErrors,
+  handleOAuthError,
+  validateTokenFormat,
+  validateGoogleUserInfo,
+  retryOAuthOperation
+} from '../utils/auth-errors';
+import logger from '../utils/logger';
 
 export class AuthService {
   private oauth2Client: OAuth2Client;
@@ -42,7 +30,13 @@ export class AuthService {
     this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
 
     if (!this.clientId || !this.clientSecret || !this.redirectUri) {
-      throw new Error('Missing required OAuth configuration. Please check your environment variables.');
+      const missingVars = [];
+      if (!this.clientId) missingVars.push('GOOGLE_CLIENT_ID');
+      if (!this.clientSecret) missingVars.push('GOOGLE_CLIENT_SECRET');
+      if (!this.redirectUri) missingVars.push('GOOGLE_REDIRECT_URI');
+      
+      logger.error('Missing OAuth configuration', { missingVars });
+      throw AuthErrors.invalidClient({ missingVariables: missingVars });
     }
 
     this.oauth2Client = new OAuth2Client(
@@ -50,6 +44,8 @@ export class AuthService {
       this.clientSecret,
       this.redirectUri
     );
+
+    logger.info('Auth service initialized successfully');
   }
 
   /**
@@ -69,22 +65,32 @@ export class AuthService {
    */
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
     try {
-      const { tokens } = await this.oauth2Client.getToken(code);
+      validateTokenFormat(code);
       
-      if (!tokens.access_token) {
-        throw new Error('No access token received from Google');
-      }
+      logger.info('Exchanging authorization code for tokens');
+      
+      const result = await retryOAuthOperation(async () => {
+        const { tokens } = await this.oauth2Client.getToken(code);
+        
+        if (!tokens.access_token) {
+          throw AuthErrors.tokenExchangeFailed(new Error('No access token received from Google'));
+        }
 
-      return {
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token || undefined,
-        id_token: tokens.id_token || undefined,
-        token_type: tokens.token_type || 'Bearer',
-        expires_in: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
-        scope: tokens.scope,
-      };
+        return {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token || undefined,
+          id_token: tokens.id_token || undefined,
+          token_type: tokens.token_type || 'Bearer',
+          expires_in: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
+          scope: tokens.scope,
+          expiry_date: tokens.expiry_date || undefined
+        };
+      });
+      
+      logger.info('Token exchange successful');
+      return result;
     } catch (error) {
-      throw new Error(`Failed to exchange code for tokens: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw handleOAuthError('token_exchange', error, { codeLength: code?.length });
     }
   }
 
@@ -93,26 +99,36 @@ export class AuthService {
    */
   async refreshAccessToken(refreshToken: string): Promise<GoogleTokens> {
     try {
-      this.oauth2Client.setCredentials({
-        refresh_token: refreshToken,
+      validateTokenFormat(refreshToken);
+      
+      logger.info('Refreshing access token');
+      
+      const result = await retryOAuthOperation(async () => {
+        this.oauth2Client.setCredentials({
+          refresh_token: refreshToken,
+        });
+
+        const { credentials } = await this.oauth2Client.refreshAccessToken();
+
+        if (!credentials.access_token) {
+          throw AuthErrors.tokenRefreshFailed(new Error('No access token received during refresh'));
+        }
+
+        return {
+          access_token: credentials.access_token,
+          refresh_token: credentials.refresh_token || refreshToken,
+          id_token: credentials.id_token || undefined,
+          token_type: credentials.token_type || 'Bearer',
+          expires_in: credentials.expiry_date ? Math.floor((credentials.expiry_date - Date.now()) / 1000) : 3600,
+          scope: credentials.scope,
+          expiry_date: credentials.expiry_date || undefined
+        };
       });
-
-      const { credentials } = await this.oauth2Client.refreshAccessToken();
-
-      if (!credentials.access_token) {
-        throw new Error('No access token received during refresh');
-      }
-
-      return {
-        access_token: credentials.access_token,
-        refresh_token: credentials.refresh_token || refreshToken,
-        id_token: credentials.id_token || undefined,
-        token_type: credentials.token_type || 'Bearer',
-        expires_in: credentials.expiry_date ? Math.floor((credentials.expiry_date - Date.now()) / 1000) : 3600,
-        scope: credentials.scope,
-      };
+      
+      logger.info('Token refresh successful');
+      return result;
     } catch (error) {
-      throw new Error(`Failed to refresh access token: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw handleOAuthError('token_refresh', error, { refreshTokenLength: refreshToken?.length });
     }
   }
 
@@ -172,23 +188,60 @@ export class AuthService {
    */
   async getUserInfo(accessToken: string): Promise<GoogleUserInfo> {
     try {
-      const response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      validateTokenFormat(accessToken);
+      
+      logger.info('Fetching user information from Google');
+      
+      const result = await retryOAuthOperation(async () => {
+        const response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          timeout: 10000, // 10 second timeout
+        });
 
-      return response.data as GoogleUserInfo;
+        const userInfo = response.data as GoogleUserInfo;
+        validateGoogleUserInfo(userInfo);
+        
+        return userInfo;
+      });
+      
+      logger.info('User information retrieved successfully', { 
+        userId: result.id, 
+        email: result.email 
+      });
+      return result;
     } catch (error) {
-      throw new Error(`Failed to get user info: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw handleOAuthError('user_info', error, { accessTokenLength: accessToken?.length });
     }
   }
 
   /**
    * Generate JWT token for internal use
    */
-  generateJWT(payload: object, expiresIn: string | number = '24h'): string {
-    return jwt.sign(payload, this.jwtSecret, { expiresIn } as SignOptions);
+  generateJWT(payload: JWTPayload, expiresIn: string | number = '24h'): string {
+    try {
+      const jwtPayload: JWTPayload = {
+        ...payload,
+        iat: Math.floor(Date.now() / 1000)
+      };
+      
+      const token = jwt.sign(jwtPayload, this.jwtSecret, { 
+        expiresIn,
+        issuer: 'assistantapp',
+        audience: 'assistantapp-client'
+      } as SignOptions);
+      
+      logger.info('JWT generated successfully', { 
+        userId: payload.userId,
+        expiresIn 
+      });
+      
+      return token;
+    } catch (error) {
+      logger.error('JWT generation failed', { error, payload: { userId: payload.userId } });
+      throw new Error('Failed to generate JWT token');
+    }
   }
 
   /**
@@ -196,15 +249,34 @@ export class AuthService {
    */
   validateJWT(token: string): TokenValidationResult {
     try {
-      const payload = jwt.verify(token, this.jwtSecret);
+      validateTokenFormat(token);
+      
+      const payload = jwt.verify(token, this.jwtSecret, {
+        issuer: 'assistantapp',
+        audience: 'assistantapp-client'
+      }) as JWTPayload;
+      
+      // Additional payload validation
+      if (!payload.userId || !payload.email) {
+        return {
+          valid: false,
+          error: 'Invalid token payload: missing required fields'
+        };
+      }
+      
+      logger.debug('JWT validated successfully', { userId: payload.userId });
+      
       return {
         valid: true,
         payload,
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'JWT validation failed';
+      logger.warn('JWT validation failed', { error: errorMessage });
+      
       return {
         valid: false,
-        error: error instanceof Error ? error.message : 'JWT validation failed',
+        error: errorMessage,
       };
     }
   }

@@ -8,6 +8,7 @@ import logger from './utils/logger';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth.routes';
+import protectedRoutes from './routes/protected.routes';
 
 const app = express();
 const port = 3000;
@@ -17,6 +18,7 @@ app.use(requestLogger);
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/protected', protectedRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: 'Hello World!' });
