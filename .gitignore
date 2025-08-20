@@ -11,6 +11,13 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Credentials - never commit these!
+credentials/
+*.json
+!package*.json
+!tsconfig*.json
+GoogleService-Info.plist
+
 # Logs
 logs/
 *.log

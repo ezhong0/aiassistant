@@ -1,8 +1,23 @@
-# Assistant App Monorepo
+# Assistant App
 
-A full-stack application with Node.js/Express backend and iOS mobile app.
+A personal AI assistant with Node.js backend and iOS app, featuring Google integration for Gmail, Calendar, and Contacts.
 
-## Project Structure
+## 🚀 Quick Start
+
+### Backend
+```bash
+cd backend
+npm install
+npm run dev    # Starts on http://localhost:3000
+```
+
+### iOS
+```bash
+open ios/AssistantApp.xcodeproj
+# Build and run in Xcode (⌘+R)
+```
+
+## 🏗️ Project Structure
 
 ```
 assistantapp/
@@ -13,49 +28,64 @@ assistantapp/
 │   │   ├── middleware/# Express middleware functions
 │   │   ├── routes/    # API route handlers
 │   │   └── index.ts   # Main application entry point
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── ...
+│   └── .env           # Environment variables (created)
 ├── ios/               # iOS SwiftUI application
-│   ├── AssistantApp.xcodeproj/
-│   ├── AssistantApp/
-│   │   ├── Views/     # SwiftUI views
-│   │   ├── Models/    # Data models
-│   │   ├── ViewModels/# View models (MVVM)
-│   │   ├── Services/  # API and business logic
-│   │   ├── Utils/     # Utility functions
-│   │   └── Resources/ # Assets and resources
-│   ├── AssistantAppTests/
-│   └── AssistantAppUITests/
-└── README.md
+│   └── AssistantApp/  # Main iOS app
+├── credentials/       # Google Cloud credentials (secured)
+└── n8n/              # Workflow automation configs
 ```
 
-## Getting Started
+## ✅ Setup Status
 
-### Backend Development
+- ✅ **Google Cloud Integration**: OAuth & APIs configured
+- ✅ **iOS Google Sign-In**: Working with GoogleSignIn SDK 7.1.0
+- ✅ **Backend Authentication**: JWT token exchange working
+- ✅ **Environment Configuration**: All credentials secured
+- ✅ **Build System**: Both iOS and backend building successfully
 
+## 🔧 Development
+
+### Backend Commands
 ```bash
-cd backend
-npm install
-npm run dev    # Start development server
-npm run build  # Build TypeScript
-npm run lint   # Run ESLint
-npm run format # Format with Prettier
+npm run dev        # Development server with hot reload
+npm run build      # Build TypeScript
+npm run lint       # Run ESLint
+npm run format     # Format with Prettier
 ```
 
-### iOS Development
+### Available APIs
+- **Gmail API**: Email management and automation
+- **Calendar API**: Calendar integration and scheduling
+- **Contacts API**: Contact management
+- **Authentication**: Google OAuth 2.0 flow
 
-Open `ios/AssistantApp.xcodeproj` in Xcode to build and run the iOS app.
-
-## Technologies
+## 🛠️ Technologies
 
 **Backend:**
 - Node.js & Express
 - TypeScript
-- ESLint & Prettier
-- Husky (pre-commit hooks)
+- Google APIs (Gmail, Calendar, Contacts)
+- JWT Authentication
+- Winston Logging
 
 **iOS:**
 - SwiftUI
-- iOS 17.2+
-- Xcode 15.2+
+- GoogleSignIn SDK
+- iOS 18.5+
+- Xcode 16.4+
+
+## 📱 Features
+
+- **Google Authentication**: Secure OAuth 2.0 flow
+- **Email Management**: Gmail integration
+- **Calendar Integration**: Google Calendar access
+- **Contact Management**: Google Contacts integration
+- **AI Agents**: Automated task processing
+- **Cross-Platform**: iOS app with Node.js backend
+
+## 🔒 Security
+
+- All credentials stored securely in `credentials/` (gitignored)
+- JWT tokens for authentication
+- Environment variables for configuration
+- OAuth 2.0 for Google integration

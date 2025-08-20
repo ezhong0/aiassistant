@@ -6,6 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
+		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
+		E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */; };
+		E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F32E53A25D00139AA3 /* MainAppView.swift */; };
+		E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F42E53A25D00139AA3 /* SignInView.swift */; };
+		E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
+		E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */; };
+		E2F9343D2E5534AD00660204 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = E2DB27012E53A25E00139AA3 /* GoogleSignIn */; };
+		E2F9343E2E5534AD00660204 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = E2DB27022E53A25E00139AA3 /* GoogleSignInSwift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		E2DB26D12E53A25C00139AA3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -23,16 +35,6 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXBuildFile section */
-		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
-		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
-		E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */; };
-		E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F32E53A25D00139AA3 /* MainAppView.swift */; };
-		E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F42E53A25D00139AA3 /* SignInView.swift */; };
-		E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
-		E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		E2DB26C22E53A25B00139AA3 /* AssistantApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AssistantApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26D02E53A25C00139AA3 /* AssistantAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -48,31 +50,7 @@
 		E2DB26F82E53A25D00139AA3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXGroup section */
-		E2DB26C42E53A25B00139AA3 /* AssistantApp */ = {
-			isa = PBXGroup;
-			children = (
-				E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */,
-				E2DB26F12E53A25D00139AA3 /* ContentView.swift */,
-				E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */,
-				E2DB26F32E53A25D00139AA3 /* MainAppView.swift */,
-				E2DB26F42E53A25D00139AA3 /* SignInView.swift */,
-				E2DB26F52E53A25D00139AA3 /* Assets.xcassets */,
-				E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */,
-				E2DB26F72E53A25D00139AA3 /* AssistantApp.entitlements */,
-				E2DB26F92E53A25D00139AA3 /* Supporting Files */,
-			);
-			path = AssistantApp;
-			sourceTree = "<group>";
-		};
-		E2DB26F92E53A25D00139AA3 /* Supporting Files */ = {
-			isa = PBXGroup;
-			children = (
-				E2DB26F82E53A25D00139AA3 /* Info.plist */,
-			);
-			path = "Supporting Files";
-			sourceTree = "<group>";
-		};
+/* Begin PBXFileSystemSynchronizedRootGroup section */
 		E2DB26D32E53A25C00139AA3 /* AssistantAppTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AssistantAppTests;
@@ -83,13 +61,15 @@
 			path = AssistantAppUITests;
 			sourceTree = "<group>";
 		};
-/* End PBXGroup section */
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		E2DB26BF2E53A25B00139AA3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E2F9343E2E5534AD00660204 /* GoogleSignInSwift in Frameworks */,
+				E2F9343D2E5534AD00660204 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,6 +110,30 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		E2DB26C42E53A25B00139AA3 /* AssistantApp */ = {
+			isa = PBXGroup;
+			children = (
+				E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */,
+				E2DB26F12E53A25D00139AA3 /* ContentView.swift */,
+				E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */,
+				E2DB26F32E53A25D00139AA3 /* MainAppView.swift */,
+				E2DB26F42E53A25D00139AA3 /* SignInView.swift */,
+				E2DB26F52E53A25D00139AA3 /* Assets.xcassets */,
+				E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */,
+				E2DB26F72E53A25D00139AA3 /* AssistantApp.entitlements */,
+				E2DB26F92E53A25D00139AA3 /* Supporting Files */,
+			);
+			path = AssistantApp;
+			sourceTree = "<group>";
+		};
+		E2DB26F92E53A25D00139AA3 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				E2DB26F82E53A25D00139AA3 /* Info.plist */,
+			);
+			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -144,8 +148,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			files = (
 			);
 			name = AssistantApp;
 			packageProductDependencies = (
@@ -234,13 +236,13 @@
 			);
 			mainGroup = E2DB26B92E53A25B00139AA3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E2DB27002E53A25E00139AA3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E2DB26C32E53A25B00139AA3 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			packageReferences = (
-				E2DB27002E53A25E00139AA3 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
-			);
 			targets = (
 				E2DB26C12E53A25B00139AA3 /* AssistantApp */,
 				E2DB26CF2E53A25C00139AA3 /* AssistantAppTests */,
