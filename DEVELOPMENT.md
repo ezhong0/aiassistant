@@ -88,5 +88,11 @@ lsof -ti:3000 | xargs kill -9
 
 - Never commit `.env` files
 - Keep `credentials/` directory secure
+- **Never commit `GoogleService-Info.plist`** - use template instead
 - Rotate Google Cloud credentials periodically
 - Use HTTPS in production
+
+### Setting up GoogleService-Info.plist
+1. Copy `GoogleService-Info.plist.template` to `GoogleService-Info.plist`
+2. Fill in your actual Google Cloud values
+3. **Never commit the real file** - it's in `.gitignore`

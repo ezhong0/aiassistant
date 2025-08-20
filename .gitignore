@@ -17,6 +17,7 @@ credentials/
 !package*.json
 !tsconfig*.json
 GoogleService-Info.plist
+**/GoogleService-Info.plist
 
 # Logs
 logs/
