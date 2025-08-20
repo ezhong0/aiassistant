@@ -32,3 +32,6 @@ DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
 
 // Info.plist Configuration
 INFOPLIST_FILE = AssistantApp/Supporting Files/Info-Production.plist
+
+// Google Configuration (will be populated by build script)
+GOOGLE_REVERSED_CLIENT_ID = REPLACE_WITH_PRODUCTION_REVERSED_CLIENT_ID

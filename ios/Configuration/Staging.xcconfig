@@ -28,3 +28,6 @@ ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon-Staging
 
 // Info.plist Configuration
 INFOPLIST_FILE = AssistantApp/Supporting Files/Info-Staging.plist
+
+// Google Configuration (will be populated by build script)
+GOOGLE_REVERSED_CLIENT_ID = REPLACE_WITH_STAGING_REVERSED_CLIENT_ID

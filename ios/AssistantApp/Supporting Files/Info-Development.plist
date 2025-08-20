@@ -66,10 +66,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.googleusercontent.apps.526055709746-golq3n9mgv1oh55sgim0s5qrqcped8j6</string>
+			<string>$(GOOGLE_REVERSED_CLIENT_ID)</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.526055709746-golq3n9mgv1oh55sgim0s5qrqcped8j6</string>
+				<string>$(GOOGLE_REVERSED_CLIENT_ID)</string>
 			</array>
 		</dict>
 	</array>

@@ -81,6 +81,64 @@ fi
 
 echo "✅ Configuration validation passed for ${ENV} environment"
 
+# Google Client ID Validation
+echo "🔍 Validating Google Client configuration..."
+
+# Determine Google config file based on environment
+if [[ "${ENV}" == "Production" ]]; then
+    GOOGLE_CONFIG="${SRCROOT}/AssistantApp/Configuration/GoogleClient-Production.plist"
+elif [[ "${ENV}" == "Staging" ]]; then
+    GOOGLE_CONFIG="${SRCROOT}/AssistantApp/Configuration/GoogleClient-Staging.plist"
+else
+    GOOGLE_CONFIG="${SRCROOT}/AssistantApp/Configuration/GoogleClient-Development.plist"
+fi
+
+# Check if Google config file exists
+if [ ! -f "${GOOGLE_CONFIG}" ]; then
+    echo "❌ ERROR: Google configuration file not found: ${GOOGLE_CONFIG}"
+    exit 1
+fi
+
+# Extract Google values
+GOOGLE_CLIENT_ID=$(/usr/libexec/PlistBuddy -c "Print CLIENT_ID" "${GOOGLE_CONFIG}" 2>/dev/null || echo "")
+GOOGLE_REVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c "Print REVERSED_CLIENT_ID" "${GOOGLE_CONFIG}" 2>/dev/null || echo "")
+
+echo "📋 Google Configuration:"
+echo "   Client ID: ${GOOGLE_CLIENT_ID:0:20}..."
+echo "   Reversed Client ID: ${GOOGLE_REVERSED_CLIENT_ID:0:30}..."
+
+# Validate Google Client ID for production
+if [[ "${ENV}" == "Production" ]]; then
+    if [[ "${GOOGLE_CLIENT_ID}" == *"REPLACE_WITH"* ]]; then
+        echo "❌ ERROR: Production builds require a real Google Client ID"
+        echo "   Current value: ${GOOGLE_CLIENT_ID}"
+        echo "   Please configure ${GOOGLE_CONFIG} with your production Google Client ID"
+        exit 1
+    fi
+    
+    if [[ "${GOOGLE_REVERSED_CLIENT_ID}" == *"REPLACE_WITH"* ]]; then
+        echo "❌ ERROR: Production builds require a real Google Reversed Client ID"
+        echo "   Current value: ${GOOGLE_REVERSED_CLIENT_ID}"
+        echo "   Please configure ${GOOGLE_CONFIG} with your production Google Reversed Client ID"
+        exit 1
+    fi
+    
+    echo "✅ Google configuration is properly configured for production"
+elif [[ "${ENV}" == "Development" ]]; then
+    if [[ "${GOOGLE_CLIENT_ID}" == *"REPLACE_WITH"* ]]; then
+        echo "⚠️  WARNING: Development has placeholder Google Client ID"
+    else
+        echo "✅ Google configuration set for development"
+    fi
+else
+    # Staging
+    if [[ "${GOOGLE_CLIENT_ID}" == *"REPLACE_WITH"* ]]; then
+        echo "⚠️  WARNING: Staging has placeholder Google Client ID"
+    else
+        echo "✅ Google configuration set for staging"
+    fi
+fi
+
 # ATS (App Transport Security) Validation
 echo "🔒 Validating App Transport Security configuration..."
 
@@ -161,6 +219,36 @@ cat > "${BUILD_INFO_FILE}" << EOF
 </dict>
 </plist>
 EOF
+
+# Validate xcconfig files for production
+echo "🔍 Validating xcconfig configuration..."
+
+ENV_XCCONFIG_FILE="${SRCROOT}/Configuration/${ENV}.xcconfig"
+
+if [ -f "${ENV_XCCONFIG_FILE}" ]; then
+    # Check for placeholder values in xcconfig
+    XCCONFIG_REVERSED_CLIENT_ID=$(grep "GOOGLE_REVERSED_CLIENT_ID" "${ENV_XCCONFIG_FILE}" | cut -d'=' -f2 | xargs)
+    
+    if [[ "${ENV}" == "Production" ]]; then
+        if [[ "${XCCONFIG_REVERSED_CLIENT_ID}" == *"REPLACE_WITH"* ]]; then
+            echo "❌ ERROR: Production xcconfig has placeholder Google Reversed Client ID"
+            echo "   File: ${ENV_XCCONFIG_FILE}"
+            echo "   Current value: ${XCCONFIG_REVERSED_CLIENT_ID}"
+            echo "   Run the populate-google-config.sh script to update automatically"
+            exit 1
+        fi
+        echo "✅ Production xcconfig file properly configured"
+    else
+        if [[ "${XCCONFIG_REVERSED_CLIENT_ID}" == *"REPLACE_WITH"* ]]; then
+            echo "⚠️  WARNING: ${ENV} xcconfig has placeholder Google Reversed Client ID"
+        else
+            echo "✅ ${ENV} xcconfig file configured"
+        fi
+    fi
+else
+    echo "❌ ERROR: xcconfig file not found: ${ENV_XCCONFIG_FILE}"
+    exit 1
+fi
 
 echo "📋 Build info written to ${BUILD_INFO_FILE}"
 echo "🎉 Configuration validation complete!"

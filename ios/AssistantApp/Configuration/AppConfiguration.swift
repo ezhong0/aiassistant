@@ -27,6 +27,7 @@ class AppConfiguration {
     
     // MARK: - Properties
     private let configuration: [String: Any]
+    private let googleConfiguration: [String: Any]
     private let environment: Environment
     
     // MARK: - Configuration Values
@@ -40,11 +41,29 @@ class AppConfiguration {
     }
     
     var googleClientID: String {
-        guard let clientID = configuration["GoogleClientID"] as? String,
-              !clientID.isEmpty else {
-            fatalError("❌ GoogleClientID is not configured for \(environment.rawValue) environment")
+        guard let clientID = googleConfiguration["CLIENT_ID"] as? String,
+              !clientID.isEmpty,
+              !clientID.contains("REPLACE_WITH") else {
+            fatalError("❌ GoogleClientID is not configured for \(environment.rawValue) environment. Please configure GoogleClient-\(environment.rawValue).plist")
         }
         return clientID
+    }
+    
+    var googleReversedClientID: String {
+        guard let reversedClientID = googleConfiguration["REVERSED_CLIENT_ID"] as? String,
+              !reversedClientID.isEmpty,
+              !reversedClientID.contains("REPLACE_WITH") else {
+            fatalError("❌ Google Reversed Client ID is not configured for \(environment.rawValue) environment")
+        }
+        return reversedClientID
+    }
+    
+    var googleBundleID: String {
+        return googleConfiguration["BUNDLE_ID"] as? String ?? Bundle.main.bundleIdentifier ?? ""
+    }
+    
+    var googleProjectID: String {
+        return googleConfiguration["PROJECT_ID"] as? String ?? ""
     }
     
     var apiTimeout: TimeInterval {
@@ -95,6 +114,15 @@ class AppConfiguration {
         
         self.configuration = plist
         
+        // Load Google client configuration
+        let googleConfigFileName = "GoogleClient-\(environment.rawValue)"
+        guard let googlePath = Bundle.main.path(forResource: googleConfigFileName, ofType: "plist"),
+              let googlePlist = NSDictionary(contentsOfFile: googlePath) as? [String: Any] else {
+            fatalError("❌ Could not load \(googleConfigFileName).plist Google configuration file")
+        }
+        
+        self.googleConfiguration = googlePlist
+        
         // Validate configuration on initialization
         self.validateConfiguration()
         
@@ -125,15 +153,30 @@ class AppConfiguration {
             errors.append("BackendBaseURL is missing from configuration")
         }
         
-        // Validate GoogleClientID
-        if let clientID = configuration["GoogleClientID"] as? String {
+        // Validate Google Client Configuration
+        if let clientID = googleConfiguration["CLIENT_ID"] as? String {
             if clientID.isEmpty {
-                errors.append("GoogleClientID is empty")
+                errors.append("Google CLIENT_ID is empty")
+            } else if clientID.contains("REPLACE_WITH") {
+                if isProduction {
+                    errors.append("Google CLIENT_ID must be configured for production builds")
+                } else {
+                    print("⚠️ Warning: Google CLIENT_ID contains placeholder value in \(environment.rawValue) environment")
+                }
             } else if !isValidGoogleClientID(clientID) {
-                errors.append("GoogleClientID format appears invalid")
+                errors.append("Google CLIENT_ID format appears invalid")
             }
         } else {
-            errors.append("GoogleClientID is missing from configuration")
+            errors.append("Google CLIENT_ID is missing from GoogleClient configuration")
+        }
+        
+        // Validate Reversed Client ID
+        if let reversedClientID = googleConfiguration["REVERSED_CLIENT_ID"] as? String {
+            if reversedClientID.contains("REPLACE_WITH") && isProduction {
+                errors.append("Google REVERSED_CLIENT_ID must be configured for production builds")
+            }
+        } else {
+            errors.append("Google REVERSED_CLIENT_ID is missing from GoogleClient configuration")
         }
         
         // Validate Environment

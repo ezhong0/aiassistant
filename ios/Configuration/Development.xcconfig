@@ -28,3 +28,6 @@ ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon-Dev
 
 // Info.plist Configuration
 INFOPLIST_FILE = AssistantApp/Supporting Files/Info-Development.plist
+
+// Google Configuration (will be populated by build script)
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.526055709746-golq3n9mgv1oh55sgim0s5qrqcped8j6
