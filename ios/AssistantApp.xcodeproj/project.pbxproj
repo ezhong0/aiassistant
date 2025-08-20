@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E23021642E566CA700FA32C7 /* Staging.plist in Resources */ = {isa = PBXBuildFile; fileRef = E23021622E566CA700FA32C7 /* Staging.plist */; };
+		E23021652E566CA700FA32C7 /* GoogleClient-Development.plist in Resources */ = {isa = PBXBuildFile; fileRef = E230215E2E566CA700FA32C7 /* GoogleClient-Development.plist */; };
+		E23021662E566CA700FA32C7 /* Development.plist in Resources */ = {isa = PBXBuildFile; fileRef = E230215D2E566CA700FA32C7 /* Development.plist */; };
+		E23021672E566CA700FA32C7 /* GoogleClient-Staging.plist in Resources */ = {isa = PBXBuildFile; fileRef = E23021602E566CA700FA32C7 /* GoogleClient-Staging.plist */; };
+		E23021682E566CA700FA32C7 /* Production.plist in Resources */ = {isa = PBXBuildFile; fileRef = E23021612E566CA700FA32C7 /* Production.plist */; };
+		E23021692E566CA700FA32C7 /* GoogleClient-Production.plist in Resources */ = {isa = PBXBuildFile; fileRef = E230215F2E566CA700FA32C7 /* GoogleClient-Production.plist */; };
+		E230216A2E566CA700FA32C7 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230215C2E566CA700FA32C7 /* AppConfiguration.swift */; };
 		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
 		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
 		E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */; };
@@ -36,6 +43,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		E230215C2E566CA700FA32C7 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		E230215D2E566CA700FA32C7 /* Development.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Development.plist; sourceTree = "<group>"; };
+		E230215E2E566CA700FA32C7 /* GoogleClient-Development.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleClient-Development.plist"; sourceTree = "<group>"; };
+		E230215F2E566CA700FA32C7 /* GoogleClient-Production.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleClient-Production.plist"; sourceTree = "<group>"; };
+		E23021602E566CA700FA32C7 /* GoogleClient-Staging.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleClient-Staging.plist"; sourceTree = "<group>"; };
+		E23021612E566CA700FA32C7 /* Production.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Production.plist; sourceTree = "<group>"; };
+		E23021622E566CA700FA32C7 /* Staging.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Staging.plist; sourceTree = "<group>"; };
 		E2DB26C22E53A25B00139AA3 /* AssistantApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AssistantApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26D02E53A25C00139AA3 /* AssistantAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26DA2E53A25C00139AA3 /* AssistantAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -90,6 +104,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E23021632E566CA700FA32C7 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				E230215C2E566CA700FA32C7 /* AppConfiguration.swift */,
+				E230215D2E566CA700FA32C7 /* Development.plist */,
+				E230215E2E566CA700FA32C7 /* GoogleClient-Development.plist */,
+				E230215F2E566CA700FA32C7 /* GoogleClient-Production.plist */,
+				E23021602E566CA700FA32C7 /* GoogleClient-Staging.plist */,
+				E23021612E566CA700FA32C7 /* Production.plist */,
+				E23021622E566CA700FA32C7 /* Staging.plist */,
+			);
+			path = Configuration;
+			sourceTree = "<group>";
+		};
 		E2DB26B92E53A25B00139AA3 = {
 			isa = PBXGroup;
 			children = (
@@ -115,6 +143,7 @@
 			children = (
 				E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */,
 				E2DB26F12E53A25D00139AA3 /* ContentView.swift */,
+				E23021632E566CA700FA32C7 /* Configuration */,
 				E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */,
 				E2DB26F32E53A25D00139AA3 /* MainAppView.swift */,
 				E2DB26F42E53A25D00139AA3 /* SignInView.swift */,
@@ -257,6 +286,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */,
+				E23021642E566CA700FA32C7 /* Staging.plist in Resources */,
+				E23021652E566CA700FA32C7 /* GoogleClient-Development.plist in Resources */,
+				E23021662E566CA700FA32C7 /* Development.plist in Resources */,
+				E23021672E566CA700FA32C7 /* GoogleClient-Staging.plist in Resources */,
+				E23021682E566CA700FA32C7 /* Production.plist in Resources */,
+				E23021692E566CA700FA32C7 /* GoogleClient-Production.plist in Resources */,
 				E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -282,6 +317,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E230216A2E566CA700FA32C7 /* AppConfiguration.swift in Sources */,
 				E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */,
 				E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */,
 				E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */,

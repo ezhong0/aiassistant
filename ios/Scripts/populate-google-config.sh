@@ -99,6 +99,8 @@ else
 fi
 
 # Also create a temporary xcconfig file for additional build variables
+DERIVED_FILE_DIR="${DERIVED_FILE_DIR:-${SRCROOT}/build/DerivedSources}"
+mkdir -p "${DERIVED_FILE_DIR}"
 TEMP_GOOGLE_CONFIG="${DERIVED_FILE_DIR}/GoogleConfig.xcconfig"
 cat > "${TEMP_GOOGLE_CONFIG}" << EOF
 // Auto-generated Google configuration for ${ENV}

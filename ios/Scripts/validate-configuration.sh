@@ -202,7 +202,12 @@ echo "   Backend URL: ${BACKEND_URL}"
 echo "   Client ID: ${GOOGLE_CLIENT_ID:0:20}..."
 
 # Create a build info file that can be accessed by the app
+BUILT_PRODUCTS_DIR="${BUILT_PRODUCTS_DIR:-${SRCROOT}/build}"
+PRODUCT_NAME="${PRODUCT_NAME:-AssistantApp}"
 BUILD_INFO_FILE="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/BuildInfo.plist"
+
+# Create directory if it doesn't exist
+mkdir -p "$(dirname "${BUILD_INFO_FILE}")"
 cat > "${BUILD_INFO_FILE}" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
