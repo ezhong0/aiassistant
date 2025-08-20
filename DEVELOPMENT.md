@@ -21,7 +21,8 @@ open ios/AssistantApp.xcodeproj
 
 ### Backend
 ```bash
-npm run dev        # Development server
+cd backend
+npm run dev        # Development server (uses root .env)
 npm run build      # Build TypeScript
 npm run lint       # Check code style
 npm run format     # Format code
@@ -38,7 +39,7 @@ npm run format     # Format code
 - `src/index.ts` - Main server entry point
 - `src/routes/auth.routes.ts` - Authentication endpoints
 - `src/services/auth.service.ts` - Google OAuth logic
-- `.env` - Environment variables (configured)
+- `../.env` - Environment variables (configured at root)
 
 ### iOS
 - `AssistantAppApp.swift` - App entry point
@@ -73,9 +74,10 @@ lsof -ti:3000 | xargs kill -9
 3. Check Xcode console for specific errors
 
 ### Backend Issues
-- Check `.env` file exists
+- Check root `.env` file exists and is properly configured
 - Verify Google credentials in `credentials/`
 - Check server logs for specific errors
+- Ensure backend loads root `.env` (not backend/.env)
 
 ## 📚 Next Steps
 

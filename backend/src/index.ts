@@ -1,7 +1,8 @@
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables first
-dotenv.config();
+// Load environment variables from root directory
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import express, { Request, Response } from 'express';
 import configService from './config/config.service';
