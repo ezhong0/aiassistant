@@ -1,0 +1,30 @@
+//
+//  Staging.xcconfig
+//  AssistantApp
+//
+//  Staging configuration settings
+//
+
+// App Bundle ID
+PRODUCT_BUNDLE_IDENTIFIER = com.assistantapp.staging
+
+// App Display Name
+PRODUCT_NAME = AssistantApp Staging
+
+// Swift Compiler Flags
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG STAGING
+
+// Other Swift Flags
+OTHER_SWIFT_FLAGS = -DSTAGING
+
+// Code Signing
+CODE_SIGN_IDENTITY = iPhone Developer
+
+// Provisioning Profile
+PROVISIONING_PROFILE_SPECIFIER = 
+
+// App Icon
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon-Staging
+
+// Info.plist Configuration
+INFOPLIST_FILE = AssistantApp/Supporting Files/Info-Staging.plist

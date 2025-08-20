@@ -1,0 +1,34 @@
+//
+//  Production.xcconfig
+//  AssistantApp
+//
+//  Production configuration settings
+//
+
+// App Bundle ID
+PRODUCT_BUNDLE_IDENTIFIER = com.assistantapp
+
+// App Display Name
+PRODUCT_NAME = AssistantApp
+
+// Swift Compiler Flags
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = PRODUCTION
+
+// Other Swift Flags
+OTHER_SWIFT_FLAGS = -DPRODUCTION
+
+// Code Signing
+CODE_SIGN_IDENTITY = iPhone Distribution
+
+// Provisioning Profile
+PROVISIONING_PROFILE_SPECIFIER = 
+
+// App Icon
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+
+// Disable debugging for production
+ENABLE_TESTABILITY = NO
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+
+// Info.plist Configuration
+INFOPLIST_FILE = AssistantApp/Supporting Files/Info-Production.plist

@@ -50,8 +50,7 @@ class AuthenticationManager: ObservableObject {
     @Published var authState: AuthenticationState = .signedOut
     @Published var isLoading = false
     
-    private let backendBaseURL = "http://localhost:3000"
-    private let clientID = "526055709746-golq3n9mgv1oh55sgim0s5qrqcped8j6.apps.googleusercontent.com"
+    private let config = AppConfiguration.shared
     
     init() {
         setupGoogleSignIn()
@@ -60,14 +59,15 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Setup
     private func setupGoogleSignIn() {
-        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let plist = NSDictionary(contentsOfFile: path),
-              let clientID = plist["CLIENT_ID"] as? String else {
-            print("Error: GoogleService-Info.plist not found or CLIENT_ID missing")
-            return
-        }
-        
+        // Use client ID from configuration
+        let clientID = config.googleClientID
         GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        
+        if config.enableDebugLogs {
+            print("🔧 Google Sign-In configured with Client ID: \(clientID.prefix(20))...")
+            print("🔧 Environment: \(config.environmentName)")
+            print("🔧 Backend URL: \(config.backendBaseURL)")
+        }
     }
     
     // MARK: - Check Current User
@@ -116,7 +116,10 @@ class AuthenticationManager: ObservableObject {
                 self.isLoading = false
             }
             
-            print("✅ Sign-in successful for: \(appUser.email)")
+            if config.enableDebugLogs {
+                print("✅ Sign-in successful for: \(appUser.email)")
+                print("🔧 Using backend: \(config.backendBaseURL)")
+            }
             
         } catch {
             await MainActor.run {
@@ -150,7 +153,9 @@ class AuthenticationManager: ObservableObject {
                 self.isLoading = false
             }
             
-            print("✅ Sign-out successful")
+            if config.enableDebugLogs {
+                print("✅ Sign-out successful")
+            }
             
         } catch {
             await MainActor.run {
@@ -193,13 +198,12 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Backend Communication
     private func exchangeTokensWithBackend(accessToken: String, refreshToken: String?, idToken: String?) async throws -> String {
-        guard let url = URL(string: "\(backendBaseURL)/auth/exchange-mobile-tokens") else {
-            throw AuthError.invalidURL
-        }
+        let url = config.authURL(for: "exchange-mobile-tokens")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = config.apiTimeout
         
         let requestBody = [
             "access_token": accessToken,
@@ -230,14 +234,13 @@ class AuthenticationManager: ObservableObject {
     }
     
     private func notifyBackendLogout(jwtToken: String) async throws {
-        guard let url = URL(string: "\(backendBaseURL)/auth/logout") else {
-            throw AuthError.invalidURL
-        }
+        let url = config.authURL(for: "logout")
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(jwtToken)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = config.apiTimeout
         
         let requestBody = ["everywhere": true]
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
@@ -304,14 +307,13 @@ class AuthenticationManager: ObservableObject {
             throw AuthError.noJWTToken
         }
         
-        guard let url = URL(string: "\(backendBaseURL)\(endpoint)") else {
-            throw AuthError.invalidURL
-        }
+        let url = config.apiURL(for: endpoint)
         
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(jwtToken)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = config.apiTimeout
         
         if let body = body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -398,5 +400,15 @@ extension AuthenticationManager {
             return message
         }
         return nil
+    }
+    
+    /// Returns current configuration information for debugging
+    var configurationInfo: String {
+        return config.configurationSummary
+    }
+    
+    /// Returns whether debug features should be shown
+    var shouldShowDebugInfo: Bool {
+        return config.shouldShowDebugUI
     }
 }

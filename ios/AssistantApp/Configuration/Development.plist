@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>BackendBaseURL</key>
+    <string>http://localhost:3000</string>
+    <key>GoogleClientID</key>
+    <string>526055709746-golq3n9mgv1oh55sgim0s5qrqcped8j6.apps.googleusercontent.com</string>
+    <key>Environment</key>
+    <string>Development</string>
+    <key>ApiTimeout</key>
+    <integer>30</integer>
+    <key>LogLevel</key>
+    <string>debug</string>
+    <key>EnableDebugLogs</key>
+    <true/>
+</dict>
+</plist>
