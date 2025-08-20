@@ -21,6 +21,7 @@ import {
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
+import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/health', healthRoutes);
 // API Routes
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
+app.use('/assistant', assistantRoutes);
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {

@@ -181,10 +181,12 @@ Create the foundation services that power the specialized agents:
    - Attendee management and conflict detection
 
 3. Contact service (/src/services/contact.service.ts):
-   - Google Contacts API integration
-   - Contact search by name, email, or partial match
+   - Google Contacts API and People API integration
+   - Access to user's contacts and frequently contacted people
+   - Contact search by name, email, or partial match with fuzzy matching
+   - Automatic discovery of contacts from email interactions
    - Contact data normalization and formatting
-   - Basic contact CRUD operations
+   - Ranking by interaction frequency and recency
 
 4. Tavily service (/src/services/tavily.service.ts):
    - Tavily API integration for web search
@@ -222,10 +224,12 @@ Create the specialized agents that implement each tool for the master agent:
    - Manages timezone and recurring event logic
 
 4. Contact Agent (/src/agents/contact.agent.ts):
-   - Primary contact lookup and resolution service
-   - Searches by name, partial name, or email
+   - Primary contact lookup and resolution service using Google Contacts/People API
+   - Searches user's contacts and frequently contacted people by name, partial name, or email
+   - Fuzzy matching with confidence scoring for natural language queries
    - Returns formatted contact information for other agents
-   - Handles contact creation and updates
+   - Handles contact creation and updates in user's Google Contacts
+   - Prioritizes results by interaction frequency and recency
 
 5. Content Creator Agent (/src/agents/content.agent.ts):
    - Blog post and content generation

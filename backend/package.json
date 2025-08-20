@@ -16,6 +16,8 @@
     "test:master": "node dist/test-master-agent.js",
     "test:openai": "node dist/test-openai-integration.js",
     "test:comprehensive": "node dist/test-comprehensive.js",
+    "test:contact": "node dist/test-contact-agent.js",
+    "test:contact-integration": "node dist/test-contact-integration.js",
     "cli": "node dist/cli-test.js",
     "prepare": "husky"
   },
@@ -32,6 +34,7 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "google-auth-library": "^10.2.1",
+    "googleapis": "^156.0.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "openai": "^5.13.1",
