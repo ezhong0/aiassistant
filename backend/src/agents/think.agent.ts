@@ -1,6 +1,5 @@
-import logger from '../utils/logger';
 import { ToolCall, ToolResult, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
-import { BaseAgent } from '../types/agent.types';
+import { BaseAgent } from '../framework/base-agent';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {
@@ -16,13 +15,19 @@ export interface ThinkAgentResponse extends AgentResponse {
   };
 }
 
-export class ThinkAgent extends BaseAgent {
-  readonly name = 'Think';
-  readonly description = 'Analyze and reason about user requests, verify correct actions were taken';
-  readonly keywords = ['think', 'analyze', 'reason', 'verify', 'check'];
-  readonly requiresConfirmation = false;
-  readonly isCritical = false;
-  readonly systemPrompt = `# Think Agent - Reflection and Verification
+export class ThinkAgent extends BaseAgent<ThinkParams, ThinkAgentResponse> {
+  
+  constructor() {
+    super({
+      name: 'Think',
+      description: 'Analyze and reason about user requests, verify correct actions were taken',
+      enabled: true,
+      timeout: 15000,
+      retryCount: 2
+    });
+  }
+
+  private readonly systemPrompt = `# Think Agent - Reflection and Verification
 You are a specialized thinking and verification agent that analyzes whether the correct steps were taken for user requests.
 
 ## Core Responsibilities
@@ -84,23 +89,18 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
 `;
 
   /**
-   * Execute the think agent (BaseAgent interface)
+   * Core thinking and verification logic - required by framework BaseAgent
    */
-  async execute(parameters: any, context: ToolExecutionContext, accessToken?: string): Promise<any> {
-    const params: ThinkParams = {
-      query: parameters.query,
-      context: parameters.context,
-      previousActions: parameters.previousActions || []
-    };
-    return await this.processQuery(params);
+  protected async processQuery(params: ThinkParams, context: ToolExecutionContext): Promise<ThinkAgentResponse> {
+    return await this.processThinking(params);
   }
 
   /**
    * Process thinking and verification queries
    */
-  async processQuery(params: ThinkParams): Promise<ThinkAgentResponse> {
+  private async processThinking(params: ThinkParams): Promise<ThinkAgentResponse> {
     try {
-      logger.info('ThinkAgent processing verification query', { 
+      this.logger.info('ThinkAgent processing verification query', { 
         query: params.query,
         hasPreviousActions: !!params.previousActions?.length 
       });
@@ -115,7 +115,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
       };
 
     } catch (error) {
-      logger.error('Error in ThinkAgent.processQuery:', error);
+      this.logger.error('Error in ThinkAgent.processQuery:', error);
       return {
         success: false,
         message: 'An error occurred during reflection and verification',

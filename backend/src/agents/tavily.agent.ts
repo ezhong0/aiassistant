@@ -1,15 +1,23 @@
-import logger from '../utils/logger';
-import { BaseAgent } from '../types/agent.types';
 import { ToolExecutionContext } from '../types/tools';
+import { BaseAgent } from '../framework/base-agent';
 
 /**
  * Tavily Agent - Web search and information retrieval
  * TODO: Implement full Tavily API integration
  */
-export class TavilyAgent extends BaseAgent {
-  readonly name = 'Tavily';
-  readonly description = 'Search the web for information using Tavily API';
-  readonly systemPrompt = `# Tavily Search Agent
+export class TavilyAgent extends BaseAgent<any, any> {
+  
+  constructor() {
+    super({
+      name: 'Tavily',
+      description: 'Search the web for information using Tavily API',
+      enabled: true,
+      timeout: 30000,
+      retryCount: 2
+    });
+  }
+
+  private readonly systemPrompt = `# Tavily Search Agent
 You are a specialized web search agent that retrieves information from the internet.
 
 ## Capabilities
@@ -24,17 +32,18 @@ You receive search queries and return relevant, up-to-date information from web 
 
 ## Response Format
 Always return structured search results with sources and reliability indicators.`;
-  readonly keywords = ['search', 'web', 'find', 'lookup', 'internet', 'what is', 'who is'];
-  readonly requiresConfirmation = false;
-  readonly isCritical = false;
+
+  private readonly keywords = ['search', 'web', 'find', 'lookup', 'internet', 'what is', 'who is'];
+  private readonly requiresConfirmation = false;
+  private readonly isCritical = false;
 
   /**
-   * Execute the Tavily search agent
+   * Core Tavily search logic - required by framework BaseAgent
    */
-  async execute(parameters: any, context: ToolExecutionContext, accessToken?: string): Promise<any> {
+  protected async processQuery(parameters: any, context: ToolExecutionContext): Promise<any> {
     try {
       // Placeholder implementation - Tavily search functionality not yet implemented
-      logger.info('Tavily search agent execution (placeholder)', { 
+      this.logger.info('Tavily search agent execution (placeholder)', { 
         query: parameters.query,
         sessionId: context.sessionId
       });
@@ -57,38 +66,10 @@ Always return structured search results with sources and reliability indicators.
       };
 
     } catch (error) {
-      logger.error('Tavily search agent execution failed:', error);
-      return this.handleError(error, 'search web');
+      this.logger.error('Tavily search agent execution failed:', error);
+      return this.createError('Tavily search failed', 'SEARCH_ERROR');
     }
   }
 
-  /**
-   * Validate Tavily search parameters
-   */
-  validateParameters(parameters: any): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
 
-    if (!parameters) {
-      errors.push('Parameters are required');
-      return { valid: false, errors };
-    }
-
-    if (!parameters.query || typeof parameters.query !== 'string') {
-      errors.push('Query parameter is required and must be a string');
-    }
-
-    if (parameters.maxResults && (typeof parameters.maxResults !== 'number' || parameters.maxResults < 1)) {
-      errors.push('MaxResults parameter must be a positive number if provided');
-    }
-
-    if (parameters.includeAnswer && typeof parameters.includeAnswer !== 'boolean') {
-      errors.push('IncludeAnswer parameter must be a boolean if provided');
-    }
-
-    if (parameters.searchDepth && !['basic', 'advanced'].includes(parameters.searchDepth)) {
-      errors.push('SearchDepth parameter must be either "basic" or "advanced" if provided');
-    }
-
-    return { valid: errors.length === 0, errors };
-  }
 }

@@ -1,7 +1,7 @@
 import { Logger } from 'winston';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import logger from '../utils/logger';
-import { aiConfig } from './ai-config';
+import { aiConfigService } from '../config/ai-config';
 
 /**
  * Abstract base class that eliminates boilerplate code for all agents
@@ -159,7 +159,7 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
   getTimeout(): number {
     // Try to get timeout from AI configuration first, then fall back to local config
     try {
-      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
       return aiAgentConfig.timeout;
     } catch (error) {
       // Fall back to local config or default
@@ -173,7 +173,7 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
   getRetries(): number {
     // Try to get retries from AI configuration first, then fall back to local config
     try {
-      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
       return aiAgentConfig.retries;
     } catch (error) {
       // Fall back to local config or default
@@ -186,7 +186,7 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
    */
   getFallbackStrategy(): 'fail' | 'retry' | 'queue' {
     try {
-      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
       return aiAgentConfig.fallback_strategy;
     } catch (error) {
       // Default fallback strategy
@@ -199,7 +199,7 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
    */
   isEnabledFromConfig(): boolean {
     try {
-      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
       return aiAgentConfig.enabled;
     } catch (error) {
       // Fall back to local config

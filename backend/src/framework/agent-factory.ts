@@ -1,6 +1,6 @@
 import { BaseAgent } from './base-agent';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
-import { ToolMetadata, IAgent } from '../types/agent.types';
+import { ToolMetadata } from '../types/agent.types';
 import { EmailAgent } from '../agents/email.agent';
 import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
@@ -15,31 +15,24 @@ import logger from '../utils/logger';
  * This replaces the need for a separate tool registry system
  */
 export class AgentFactory {
-  private static agents = new Map<string, BaseAgent | IAgent>();
+  private static agents = new Map<string, BaseAgent>();
   private static toolMetadata = new Map<string, ToolMetadata>();
   private static initialized = false;
   
   /**
    * Register a single agent instance
    */
-  static registerAgent(name: string, agent: BaseAgent | IAgent): void {
+  static registerAgent(name: string, agent: BaseAgent): void {
     if (this.agents.has(name)) {
       logger.warn(`Agent ${name} is already registered, replacing with new instance`);
     }
     
     this.agents.set(name, agent);
     
-    if ('getConfig' in agent) {
-      logger.info(`Framework agent registered: ${name}`, {
-        config: agent.getConfig(),
-        enabled: agent.isEnabled()
-      });
-    } else {
-      logger.info(`Legacy agent registered: ${name}`, {
-        name: agent.name,
-        description: agent.description
-      });
-    }
+    logger.info(`Framework agent registered: ${name}`, {
+      config: agent.getConfig(),
+      enabled: agent.isEnabled()
+    });
   }
   
   /**
@@ -47,7 +40,7 @@ export class AgentFactory {
    */
   static registerAgentClass<TParams, TResult>(
     name: string, 
-    AgentClass: new () => BaseAgent<TParams, TResult> | IAgent
+    AgentClass: new () => BaseAgent<TParams, TResult>
   ): void {
     try {
       const agent = new AgentClass();
@@ -73,7 +66,7 @@ export class AgentFactory {
   /**
    * Get an agent by name
    */
-  static getAgent(name: string): BaseAgent | IAgent | undefined {
+  static getAgent(name: string): BaseAgent | undefined {
     const agent = this.agents.get(name);
     
     if (!agent) {
@@ -83,8 +76,8 @@ export class AgentFactory {
       return undefined;
     }
     
-    // Check if it's a framework agent with isEnabled method
-    if ('isEnabled' in agent && !agent.isEnabled()) {
+    // Check if agent is enabled
+    if (!agent.isEnabled()) {
       logger.warn(`Agent is disabled: ${name}`);
       return undefined;
     }
@@ -102,22 +95,15 @@ export class AgentFactory {
   /**
    * Get all registered agents
    */
-  static getAllAgents(): (BaseAgent | IAgent)[] {
+  static getAllAgents(): BaseAgent[] {
     return Array.from(this.agents.values());
   }
   
   /**
    * Get only enabled agents
    */
-  static getEnabledAgents(): (BaseAgent | IAgent)[] {
-    return Array.from(this.agents.values()).filter(agent => {
-      // Framework agents have isEnabled method
-      if ('isEnabled' in agent) {
-        return agent.isEnabled();
-      }
-      // Legacy agents are always considered enabled
-      return true;
-    });
+  static getEnabledAgents(): BaseAgent[] {
+    return Array.from(this.agents.values()).filter(agent => agent.isEnabled());
   }
   
   /**
@@ -132,14 +118,7 @@ export class AgentFactory {
    */
   static getEnabledAgentNames(): string[] {
     return Array.from(this.agents.entries())
-      .filter(([_, agent]) => {
-        // Framework agents have isEnabled method
-        if ('isEnabled' in agent) {
-          return agent.isEnabled();
-        }
-        // Legacy agents are always considered enabled
-        return true;
-      })
+      .filter(([_, agent]) => agent.isEnabled())
       .map(([name, _]) => name);
   }
   
@@ -149,13 +128,7 @@ export class AgentFactory {
   static hasAgent(name: string): boolean {
     const agent = this.agents.get(name);
     if (!agent) return false;
-    
-    // Framework agents have isEnabled method
-    if ('isEnabled' in agent) {
-      return agent.isEnabled();
-    }
-    // Legacy agents are always considered enabled
-    return true;
+    return agent.isEnabled();
   }
   
   /**
@@ -191,24 +164,8 @@ export class AgentFactory {
         userId: context.userId
       });
       
-      // Handle both framework and legacy agents
-      if ('processQuery' in agent) {
-        // Framework BaseAgent - use the new execution pattern
-        return await agent.execute(parameters, context);
-      } else {
-        // Legacy IAgent - use the old execution pattern
-        const startTime = Date.now();
-        const result = await agent.execute(parameters, context);
-        const executionTime = Date.now() - startTime;
-        
-        return {
-          toolName: name,
-          result,
-          success: true,
-          error: undefined,
-          executionTime
-        };
-      }
+      // Execute the framework BaseAgent
+      return await agent.execute(parameters, context);
       
     } catch (error) {
       const errorResult: ToolResult = {
@@ -626,7 +583,7 @@ export class AgentFactory {
    */
   static getAgentConfig(name: string): AgentConfig | undefined {
     const agent = this.getAgent(name);
-    if (agent && 'getConfig' in agent) {
+    if (agent) {
       return agent.getConfig();
     }
     return undefined;
@@ -645,39 +602,24 @@ export class AgentFactory {
     
     for (const [name, agent] of this.agents.entries()) {
       try {
-        // Framework agents have getConfig method
-        if ('getConfig' in agent) {
-          const config = agent.getConfig();
-          
-          // Validate agent configuration
-          if (!config.name) {
-            errors.push(`Agent ${name} has no name in config`);
-          }
-          
-          if (!config.description) {
-            warnings.push(`Agent ${name} has no description`);
-          }
-          
-          if (config.timeout && config.timeout < 1000) {
-            warnings.push(`Agent ${name} has very short timeout: ${config.timeout}ms`);
-          }
-          
-          // Check if agent is properly configured
-          if (!agent.isEnabled()) {
-            warnings.push(`Agent ${name} is disabled`);
-          }
-        } else {
-          // Legacy agents - basic validation
-          if (!agent.name) {
-            errors.push(`Legacy agent ${name} has no name`);
-          }
-          
-          if (!agent.description) {
-            warnings.push(`Legacy agent ${name} has no description`);
-          }
-          
-          // Legacy agents are always considered enabled
-          logger.debug(`Legacy agent ${name} validation passed`);
+        const config = agent.getConfig();
+        
+        // Validate agent configuration
+        if (!config.name) {
+          errors.push(`Agent ${name} has no name in config`);
+        }
+        
+        if (!config.description) {
+          warnings.push(`Agent ${name} has no description`);
+        }
+        
+        if (config.timeout && config.timeout < 1000) {
+          warnings.push(`Agent ${name} has very short timeout: ${config.timeout}ms`);
+        }
+        
+        // Check if agent is properly configured
+        if (!agent.isEnabled()) {
+          warnings.push(`Agent ${name} is disabled`);
         }
         
       } catch (error) {
@@ -701,29 +643,14 @@ export class AgentFactory {
       return null;
     }
     
-    if ('getConfig' in agent) {
-      // Framework agent
-      return {
-        name,
-        config: agent.getConfig(),
-        enabled: agent.isEnabled(),
-        timeout: agent.getTimeout(),
-        retries: agent.getRetries(),
-        className: agent.constructor.name
-      };
-    } else {
-      // Legacy agent
-      return {
-        name,
-        config: null,
-        enabled: true, // Legacy agents are always enabled
-        timeout: null,
-        retries: null,
-        className: agent.constructor.name,
-        description: agent.description,
-        keywords: agent.keywords
-      };
-    }
+    return {
+      name,
+      config: agent.getConfig(),
+      enabled: agent.isEnabled(),
+      timeout: agent.getTimeout(),
+      retries: agent.getRetries(),
+      className: agent.constructor.name
+    };
   }
   
   /**
@@ -750,7 +677,7 @@ export function initializeAgentFactory(): void {
 /**
  * Convenience function to get an agent
  */
-export function getAgent(name: string): BaseAgent | IAgent | undefined {
+export function getAgent(name: string): BaseAgent | undefined {
   return AgentFactory.getAgent(name);
 }
 

@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import logger from '../utils/logger';
 import { ToolCall } from '../types/tools';
-import { aiConfig } from '../framework/ai-config';
+import { aiConfigService } from '../config/ai-config';
 
 export interface OpenAIConfig {
   apiKey: string;
@@ -29,7 +29,7 @@ export class OpenAIService {
     
     // Use AI configuration for default model
     try {
-      const aiOpenAIConfig = aiConfig.getOpenAIConfig('routing');
+      const aiOpenAIConfig = aiConfigService.getOpenAIConfig('routing');
       this.model = config.model || aiOpenAIConfig.model;
       logger.info(`OpenAI service initialized with model: ${this.model} (from AI config)`);
     } catch (error) {
@@ -167,7 +167,7 @@ export class OpenAIService {
       ];
 
       // Get AI configuration for routing
-      const routingConfig = aiConfig.getOpenAIConfig('routing');
+      const routingConfig = aiConfigService.getOpenAIConfig('routing');
       
       const response = await this.client.chat.completions.create({
         model: this.model,
@@ -250,7 +250,7 @@ export class OpenAIService {
   ): Promise<string> {
     try {
       // Get AI configuration for content generation
-      const contentConfig = aiConfig.getOpenAIConfig('content');
+      const contentConfig = aiConfigService.getOpenAIConfig('content');
       
       const response = await this.client.chat.completions.create({
         model: this.model,
@@ -278,7 +278,7 @@ export class OpenAIService {
   ): Promise<{ content: string }> {
     try {
       // Get AI configuration for analysis
-      const analysisConfig = aiConfig.getOpenAIConfig('analysis');
+      const analysisConfig = aiConfigService.getOpenAIConfig('analysis');
       
       const response = await this.client.chat.completions.create({
         model: this.model,
@@ -305,7 +305,7 @@ export class OpenAIService {
   async healthCheck(): Promise<boolean> {
     try {
       // Get AI configuration for general use
-      const generalConfig = aiConfig.getOpenAIConfig('general');
+      const generalConfig = aiConfigService.getOpenAIConfig('general');
       
       await this.client.chat.completions.create({
         model: this.model,

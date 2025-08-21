@@ -1,15 +1,23 @@
-import logger from '../utils/logger';
-import { BaseAgent } from '../types/agent.types';
 import { ToolExecutionContext } from '../types/tools';
+import { BaseAgent } from '../framework/base-agent';
 
 /**
  * Content Creator Agent - Creates blog posts, articles, and other written content
  * TODO: Implement full content creation functionality with AI integration
  */
-export class ContentCreatorAgent extends BaseAgent {
-  readonly name = 'contentCreator';
-  readonly description = 'Create blog posts, articles, and other written content';
-  readonly systemPrompt = `# Content Creator Agent
+export class ContentCreatorAgent extends BaseAgent<any, any> {
+  
+  constructor() {
+    super({
+      name: 'contentCreator',
+      description: 'Create blog posts, articles, and other written content',
+      enabled: true,
+      timeout: 45000,
+      retryCount: 2
+    });
+  }
+
+  private readonly systemPrompt = `# Content Creator Agent
 You are a specialized content creation agent that helps generate written material.
 
 ## Capabilities
@@ -24,17 +32,18 @@ You receive natural language requests for content creation and generate appropri
 
 ## Response Format
 Always return structured content with metadata and formatting suggestions.`;
-  readonly keywords = ['blog', 'write', 'create', 'content', 'article', 'post', 'draft'];
-  readonly requiresConfirmation = false;
-  readonly isCritical = false;
+
+  private readonly keywords = ['blog', 'write', 'create', 'content', 'article', 'post', 'draft'];
+  private readonly requiresConfirmation = false;
+  private readonly isCritical = false;
 
   /**
-   * Execute the content creator agent
+   * Core content creation logic - required by framework BaseAgent
    */
-  async execute(parameters: any, context: ToolExecutionContext, accessToken?: string): Promise<any> {
+  protected async processQuery(parameters: any, context: ToolExecutionContext): Promise<any> {
     try {
       // Placeholder implementation - content creation functionality not yet implemented
-      logger.info('Content creator agent execution (placeholder)', { 
+      this.logger.info('Content creator agent execution (placeholder)', { 
         query: parameters.query,
         sessionId: context.sessionId
       });
@@ -56,42 +65,10 @@ Always return structured content with metadata and formatting suggestions.`;
       };
 
     } catch (error) {
-      logger.error('Content creator agent execution failed:', error);
-      return this.handleError(error, 'create content');
+      this.logger.error('Content creator agent execution failed:', error);
+      return this.createError('Content creation failed', 'CONTENT_ERROR');
     }
   }
 
-  /**
-   * Validate content creator parameters
-   */
-  validateParameters(parameters: any): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
 
-    if (!parameters) {
-      errors.push('Parameters are required');
-      return { valid: false, errors };
-    }
-
-    if (!parameters.query || typeof parameters.query !== 'string') {
-      errors.push('Query parameter is required and must be a string');
-    }
-
-    if (parameters.topic && typeof parameters.topic !== 'string') {
-      errors.push('Topic parameter must be a string if provided');
-    }
-
-    if (parameters.tone && typeof parameters.tone !== 'string') {
-      errors.push('Tone parameter must be a string if provided');
-    }
-
-    if (parameters.length && typeof parameters.length !== 'string') {
-      errors.push('Length parameter must be a string if provided');
-    }
-
-    if (parameters.format && !['blog', 'article', 'social', 'email'].includes(parameters.format)) {
-      errors.push('Format parameter must be one of: blog, article, social, email');
-    }
-
-    return { valid: errors.length === 0, errors };
-  }
 }
