@@ -6,6 +6,8 @@ import {
 } from '../middleware/auth.middleware';
 import { validate, sanitizeString } from '../middleware/validation.middleware';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
+import { CONFIRMATION_WORDS } from '../config/agent-config';
+import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
 import { toolExecutorService } from '../services/tool-executor.service';
@@ -54,19 +56,19 @@ const sessionService = new SessionService();
 // Validation schemas
 const textCommandSchema = z.object({
   command: z.string()
-    .min(1, 'Command is required')
-    .max(5000, 'Command too long')
-    .transform(val => sanitizeString(val, 5000)),
+    .min(REQUEST_LIMITS.command.minLength, 'Command is required')
+    .max(REQUEST_LIMITS.command.maxLength, 'Command too long')
+    .transform(val => sanitizeString(val, REQUEST_LIMITS.command.maxLength)),
   sessionId: z.string()
     .optional()
-    .transform(val => val ? sanitizeString(val, 100) : undefined),
+    .transform(val => val ? sanitizeString(val, REQUEST_LIMITS.sessionId.maxLength) : undefined),
   accessToken: z.string()
     .optional()
-    .transform(val => val ? sanitizeString(val, 2000) : undefined),
+    .transform(val => val ? sanitizeString(val, REQUEST_LIMITS.accessToken.maxLength) : undefined),
   context: z.object({
     conversationHistory: z.array(z.object({
       role: z.enum(['user', 'assistant']),
-      content: z.string().max(10000),
+      content: z.string().max(REQUEST_LIMITS.conversation.maxContentLength),
       timestamp: z.string().datetime().optional()
     })).optional(),
     pendingActions: z.array(z.object({
@@ -100,7 +102,10 @@ const sessionIdSchema = z.object({
  */
 router.post('/text-command', 
   authenticateToken,
-  userRateLimit(50, 15 * 60 * 1000), // 50 requests per 15 minutes per user
+  userRateLimit(
+    RATE_LIMITS.assistant.textCommand.maxRequests, 
+    RATE_LIMITS.assistant.textCommand.windowMs
+  ),
   validate({ body: textCommandSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -354,7 +359,10 @@ router.post('/confirm-action',
  */
 router.get('/session/:id',
   authenticateToken,
-  userRateLimit(20, 15 * 60 * 1000), // 20 requests per 15 minutes per user
+  userRateLimit(
+    RATE_LIMITS.assistant.session.maxRequests, 
+    RATE_LIMITS.assistant.session.windowMs
+  ),
   validate({ params: sessionIdSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -470,7 +478,10 @@ router.get('/session/:id',
  */
 router.delete('/session/:id',
   authenticateToken,
-  userRateLimit(10, 15 * 60 * 1000), // 10 deletions per 15 minutes per user
+  userRateLimit(
+    RATE_LIMITS.assistant.sessionDelete.maxRequests, 
+    RATE_LIMITS.assistant.sessionDelete.windowMs
+  ),
   validate({ params: sessionIdSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -649,7 +660,10 @@ router.get('/email/search', authenticateToken, async (req: AuthenticatedRequest,
     const user = req.user!;
     
     const query = (q as string) || '';
-    const limit = Math.min(parseInt(maxResults as string) || 20, 100);
+    const limit = Math.min(
+      parseInt(maxResults as string) || REQUEST_LIMITS.emailSearch.defaultMaxResults, 
+      REQUEST_LIMITS.emailSearch.maxResults
+    );
 
     // Get access token
     const accessToken = req.headers.authorization?.replace('Bearer ', '');
@@ -724,10 +738,8 @@ router.get('/status', authenticateToken, (req: AuthenticatedRequest, res: Respon
  */
 function isConfirmationResponse(command: string): boolean {
   const lowerCommand = command.toLowerCase().trim();
-  const confirmWords = ['yes', 'y', 'confirm', 'ok', 'okay', 'proceed', 'go ahead', 'do it'];
-  const rejectWords = ['no', 'n', 'cancel', 'abort', 'stop', 'nevermind', 'never mind'];
-  
-  return confirmWords.includes(lowerCommand) || rejectWords.includes(lowerCommand);
+  return CONFIRMATION_WORDS.confirm.includes(lowerCommand as any) || 
+         CONFIRMATION_WORDS.reject.includes(lowerCommand as any);
 }
 
 /**
@@ -741,8 +753,7 @@ async function handleActionConfirmation(
   sessionId: string
 ): Promise<Response> {
   const lowerCommand = command.toLowerCase().trim();
-  const confirmWords = ['yes', 'y', 'confirm', 'ok', 'okay', 'proceed', 'go ahead', 'do it'];
-  const confirmed = confirmWords.includes(lowerCommand);
+  const confirmed = CONFIRMATION_WORDS.confirm.includes(lowerCommand as any);
 
   if (!confirmed) {
     return res.json({

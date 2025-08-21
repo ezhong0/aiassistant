@@ -5,6 +5,7 @@ import { ContactAgentWrapper } from '../agents/contact.agent.registry';
 import { CalendarAgent } from '../agents/calendar.agent';
 import { ContentCreatorAgent } from '../agents/content-creator.agent';
 import { TavilyAgent } from '../agents/tavily.agent';
+import { AGENT_CONFIG } from './agent-config';
 
 /**
  * Centralized tool definitions configuration
@@ -35,9 +36,9 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
       },
       required: ['query']
     },
-    keywords: ['think', 'analyze', 'reason', 'verify', 'check'],
-    requiresConfirmation: false,
-    isCritical: false,
+    keywords: AGENT_CONFIG.think.keywords,
+    requiresConfirmation: AGENT_CONFIG.think.requiresConfirmation,
+    isCritical: AGENT_CONFIG.think.isCritical,
     agentClass: ThinkAgent
   },
   {
@@ -72,9 +73,9 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
       },
       required: ['query']
     },
-    keywords: ['email', 'send', 'reply', 'draft', 'message', 'mail', 'gmail'],
-    requiresConfirmation: true,
-    isCritical: true,
+    keywords: AGENT_CONFIG.email.keywords,
+    requiresConfirmation: AGENT_CONFIG.email.requiresConfirmation,
+    isCritical: AGENT_CONFIG.email.isCritical,
     agentClass: EmailAgentWrapper
   },
   {
@@ -96,9 +97,9 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
       },
       required: ['query']
     },
-    keywords: ['contact', 'find', 'lookup', 'search', 'person', 'email address'],
-    requiresConfirmation: false,
-    isCritical: true,
+    keywords: AGENT_CONFIG.contact.keywords,
+    requiresConfirmation: AGENT_CONFIG.contact.requiresConfirmation,
+    isCritical: AGENT_CONFIG.contact.isCritical,
     agentClass: ContactAgentWrapper
   },
   {
@@ -140,9 +141,9 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
       },
       required: ['query']
     },
-    keywords: ['calendar', 'meeting', 'schedule', 'event', 'appointment', 'book'],
-    requiresConfirmation: true,
-    isCritical: true,
+    keywords: AGENT_CONFIG.calendar.keywords,
+    requiresConfirmation: AGENT_CONFIG.calendar.requiresConfirmation,
+    isCritical: AGENT_CONFIG.calendar.isCritical,
     agentClass: CalendarAgent
   },
   {
@@ -179,9 +180,9 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
       },
       required: ['query']
     },
-    keywords: ['blog', 'write', 'create', 'content', 'article', 'post', 'draft'],
-    requiresConfirmation: false,
-    isCritical: false,
+    keywords: AGENT_CONFIG.content.keywords,
+    requiresConfirmation: AGENT_CONFIG.content.requiresConfirmation,
+    isCritical: AGENT_CONFIG.content.isCritical,
     agentClass: ContentCreatorAgent
   },
   {
@@ -213,9 +214,9 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
       },
       required: ['query']
     },
-    keywords: ['search', 'web', 'find', 'lookup', 'internet', 'what is', 'who is'],
-    requiresConfirmation: false,
-    isCritical: false,
+    keywords: AGENT_CONFIG.search.keywords,
+    requiresConfirmation: AGENT_CONFIG.search.requiresConfirmation,
+    isCritical: AGENT_CONFIG.search.isCritical,
     agentClass: TavilyAgent
   }
 ];

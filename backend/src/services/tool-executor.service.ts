@@ -7,6 +7,7 @@ import {
   ToolExecutionError,
   TOOL_NAMES 
 } from '../types/tools';
+import { TIMEOUTS, EXECUTION_CONFIG } from '../config/app-config';
 
 export interface ToolExecutorConfig {
   timeout?: number;
@@ -22,8 +23,8 @@ export class ToolExecutorService {
 
   constructor(config: ToolExecutorConfig = {}) {
     this.config = {
-      timeout: config.timeout || 30000, // 30 seconds
-      retryCount: config.retryCount || 1
+      timeout: config.timeout || TIMEOUTS.toolExecution,
+      retryCount: config.retryCount || EXECUTION_CONFIG.toolExecution.defaultRetryCount
     };
     logger.info('ToolExecutorService initialized', { config: this.config });
   }

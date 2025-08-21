@@ -6,19 +6,20 @@ import {
   ToolResult,
   SessionExpiredError 
 } from '../types/tools';
+import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config';
 
 export class SessionService {
   private sessions: Map<string, SessionContext> = new Map();
-  private readonly defaultTimeoutMinutes: number = 30;
+  private readonly defaultTimeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes;
   private cleanupInterval: NodeJS.Timeout;
 
-  constructor(timeoutMinutes: number = 30) {
+  constructor(timeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes) {
     this.defaultTimeoutMinutes = timeoutMinutes;
     
-    // Clean up expired sessions every 5 minutes
+    // Clean up expired sessions using configured interval
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSessions();
-    }, 5 * 60 * 1000);
+    }, TIMEOUTS.sessionCleanup);
 
     logger.info(`SessionService initialized with ${timeoutMinutes} minute timeout`);
   }

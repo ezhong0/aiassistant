@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './auth.middleware';
 import configService from '../config/config.service';
 import logger from '../utils/logger';
+import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
+import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 
 interface RateLimitData {
   count: number;
@@ -25,10 +27,10 @@ class RateLimitStore {
   private cleanupInterval: any;
   
   constructor() {
-    // Cleanup expired entries every 5 minutes
+    // Cleanup expired entries using configured interval
     this.cleanupInterval = (globalThis as any).setInterval(() => {
       this.cleanup();
-    }, 5 * 60 * 1000);
+    }, TIMEOUTS.rateLimitCleanup);
   }
   
   get(key: string): RateLimitData | undefined {
@@ -113,7 +115,7 @@ export const rateLimit = (options: RateLimitOptions) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
       // Skip rate limiting in development mode or if disabled
-      if (configService.nodeEnv === 'development' || process.env.DISABLE_RATE_LIMITING === 'true') {
+      if (ENV_VALIDATION.isDevelopment() || !ENVIRONMENT.features.rateLimiting) {
         next();
         return;
       }
@@ -193,22 +195,25 @@ export const apiRateLimit = rateLimit({
 
 // Strict rate limiting for authentication endpoints
 export const authRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 10, // Only 10 auth attempts per 15 minutes
-  message: 'Too many authentication attempts. Please try again later.',
+  windowMs: RATE_LIMITS.auth.windowMs,
+  maxRequests: RATE_LIMITS.auth.maxRequests,
+  message: RATE_LIMITS.auth.message,
   keyGenerator: (req: Request) => req.ip || 'unknown'
 });
 
 // Very strict rate limiting for sensitive operations
 export const sensitiveOperationRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  maxRequests: 5, // Only 5 sensitive operations per hour
-  message: 'Too many sensitive operations. Please try again later.',
+  windowMs: RATE_LIMITS.sensitive.windowMs,
+  maxRequests: RATE_LIMITS.sensitive.maxRequests,
+  message: RATE_LIMITS.sensitive.message,
   keyGenerator: (req: Request) => req.ip || 'unknown'
 });
 
 // User-specific rate limiting (requires authentication)
-export const userRateLimit = (maxRequests: number = 100, windowMs: number = 15 * 60 * 1000) => {
+export const userRateLimit = (
+  maxRequests: number = RATE_LIMITS.user.defaultMaxRequests, 
+  windowMs: number = RATE_LIMITS.user.defaultWindowMs
+) => {
   return rateLimit({
     windowMs,
     maxRequests,
