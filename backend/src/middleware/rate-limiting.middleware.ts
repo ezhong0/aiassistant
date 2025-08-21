@@ -112,6 +112,12 @@ export const rateLimit = (options: RateLimitOptions) => {
   
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
+      // Skip rate limiting in development mode or if disabled
+      if (configService.nodeEnv === 'development' || process.env.DISABLE_RATE_LIMITING === 'true') {
+        next();
+        return;
+      }
+      
       const key = keyGenerator(req);
       const data = rateLimitStore.increment(key, windowMs);
       

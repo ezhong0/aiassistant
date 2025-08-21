@@ -27,6 +27,17 @@ class ChatViewModel: ObservableObject {
     func setAuthManager(_ authManager: AuthenticationManager) {
         self.authManager = authManager
         self.apiService = APIService(authManager: authManager)
+        
+        // Check if we have required scopes for contacts and Gmail
+        if !authManager.hasRequiredScopes {
+            Task {
+                do {
+                    try await authManager.requestAdditionalScopesIfNeeded()
+                } catch {
+                    print("⚠️ Could not request additional scopes: \(error)")
+                }
+            }
+        }
     }
     
     // MARK: - Session Management

@@ -61,7 +61,10 @@ class AuthenticationManager: ObservableObject {
     private func setupGoogleSignIn() {
         // Use client ID from configuration
         let clientID = config.googleClientID
-        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        
+        // Configure Google Sign-In with required scopes for contacts and email
+        let configuration = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = configuration
         
         if config.enableDebugLogs {
             print("🔧 Google Sign-In configured with Client ID: \(clientID.prefix(20))...")
@@ -93,7 +96,18 @@ class AuthenticationManager: ObservableObject {
                 throw AuthError.noViewController
             }
             
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
+            // Request additional scopes for contacts and Gmail access
+            let additionalScopes = [
+                "https://www.googleapis.com/auth/contacts.readonly",
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/gmail.readonly"
+            ]
+            
+            let result = try await GIDSignIn.sharedInstance.signIn(
+                withPresenting: rootViewController,
+                hint: nil,
+                additionalScopes: additionalScopes
+            )
             let googleUser = result.user
             
             // Get tokens
@@ -415,5 +429,70 @@ extension AuthenticationManager {
     /// Get current Google access token for API calls
     var googleAccessToken: String? {
         return GIDSignIn.sharedInstance.currentUser?.accessToken.tokenString
+    }
+    
+    /// Check if user has granted required scopes for contacts and Gmail
+    var hasRequiredScopes: Bool {
+        guard let user = GIDSignIn.sharedInstance.currentUser else { 
+            if config.enableDebugLogs {
+                print("🔍 No current user for scope check")
+            }
+            return false 
+        }
+        
+        let requiredScopes = [
+            "https://www.googleapis.com/auth/contacts.readonly",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://www.googleapis.com/auth/gmail.readonly"
+        ]
+        
+        let grantedScopes = user.grantedScopes ?? []
+        let hasAllScopes = requiredScopes.allSatisfy { grantedScopes.contains($0) }
+        
+        if config.enableDebugLogs {
+            print("🔍 Required scopes: \(requiredScopes)")
+            print("🔍 Granted scopes: \(grantedScopes)")
+            print("🔍 Has all required scopes: \(hasAllScopes)")
+        }
+        
+        return hasAllScopes
+    }
+    
+    /// Request additional scopes if not already granted
+    func requestAdditionalScopesIfNeeded() async throws {
+        guard let rootViewController = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows.first?.rootViewController else {
+            throw AuthError.noViewController
+        }
+        
+        if !hasRequiredScopes {
+            let additionalScopes = [
+                "https://www.googleapis.com/auth/contacts.readonly",
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/gmail.readonly"
+            ]
+            
+            // Use signIn with additional scopes to request new permissions
+            _ = try await GIDSignIn.sharedInstance.signIn(
+                withPresenting: rootViewController,
+                hint: nil,
+                additionalScopes: additionalScopes
+            )
+            
+            if config.enableDebugLogs {
+                print("✅ Additional scopes granted successfully")
+            }
+        }
+    }
+    
+    /// Force re-authentication with new scopes (sign out and sign in again)
+    func reauthorizeWithNewScopes() async {
+        await signOut()
+        
+        // Wait a moment for sign out to complete
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        
+        await signIn()
     }
 }

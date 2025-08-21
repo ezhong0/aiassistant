@@ -26,6 +26,12 @@
 		E23021782E56BD8E00FA32C7 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021772E56BD8E00FA32C7 /* APIService.swift */; };
 		E23021792E56BD8E00FA32C7 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021772E56BD8E00FA32C7 /* APIService.swift */; };
 		E230217A2E56BD8E00FA32C7 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021772E56BD8E00FA32C7 /* APIService.swift */; };
+		E230218A2E576C3900FA32C7 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021892E576C3900FA32C7 /* DebugView.swift */; };
+		E230218B2E576C3900FA32C7 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021892E576C3900FA32C7 /* DebugView.swift */; };
+		E230218C2E576C3900FA32C7 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021892E576C3900FA32C7 /* DebugView.swift */; };
+		E230218E2E576C4A00FA32C7 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230218D2E576C4A00FA32C7 /* SecurityManager.swift */; };
+		E230218F2E576C4A00FA32C7 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230218D2E576C4A00FA32C7 /* SecurityManager.swift */; };
+		E23021902E576C4A00FA32C7 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230218D2E576C4A00FA32C7 /* SecurityManager.swift */; };
 		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
 		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
 		E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */; };
@@ -66,6 +72,8 @@
 		E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		E23021732E56BD3400FA32C7 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		E23021772E56BD8E00FA32C7 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
+		E23021892E576C3900FA32C7 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
+		E230218D2E576C4A00FA32C7 /* SecurityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityManager.swift; sourceTree = "<group>"; };
 		E2DB26C22E53A25B00139AA3 /* AssistantApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AssistantApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26D02E53A25C00139AA3 /* AssistantAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26DA2E53A25C00139AA3 /* AssistantAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -137,6 +145,8 @@
 		E2DB26B92E53A25B00139AA3 = {
 			isa = PBXGroup;
 			children = (
+				E230218D2E576C4A00FA32C7 /* SecurityManager.swift */,
+				E23021892E576C3900FA32C7 /* DebugView.swift */,
 				E23021772E56BD8E00FA32C7 /* APIService.swift */,
 				E23021732E56BD3400FA32C7 /* APIModels.swift */,
 				E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */,
@@ -347,6 +357,8 @@
 				E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */,
 				E230216E2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */,
 				E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */,
+				E230218A2E576C3900FA32C7 /* DebugView.swift in Sources */,
+				E23021902E576C4A00FA32C7 /* SecurityManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -354,10 +366,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E230218C2E576C3900FA32C7 /* DebugView.swift in Sources */,
 				E23021762E56BD3400FA32C7 /* APIModels.swift in Sources */,
 				E23021782E56BD8E00FA32C7 /* APIService.swift in Sources */,
 				E230216D2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */,
 				E23021722E56BCA000FA32C7 /* ChatViewModel.swift in Sources */,
+				E230218E2E576C4A00FA32C7 /* SecurityManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,6 +382,8 @@
 				E23021742E56BD3400FA32C7 /* APIModels.swift in Sources */,
 				E23021712E56BCA000FA32C7 /* ChatViewModel.swift in Sources */,
 				E230217A2E56BD8E00FA32C7 /* APIService.swift in Sources */,
+				E230218F2E576C4A00FA32C7 /* SecurityManager.swift in Sources */,
+				E230218B2E576C3900FA32C7 /* DebugView.swift in Sources */,
 				E230216C2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

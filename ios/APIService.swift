@@ -15,7 +15,8 @@ class APIService: ObservableObject {
     /// Send a text command to the assistant
     func sendTextCommand(_ command: String, sessionId: String? = nil) async throws -> TextCommandResponse {
         let endpoint = "api/assistant/text-command"
-        let body: [String: Any] = [
+        
+        var body: [String: Any] = [
             "command": command,
             "sessionId": sessionId ?? UUID().uuidString,
             "context": [
@@ -24,6 +25,42 @@ class APIService: ObservableObject {
                 ]
             ]
         ]
+        
+        // Add Google access token if available
+        await MainActor.run {
+            if let googleAccessToken = authManager.googleAccessToken {
+                body["accessToken"] = googleAccessToken
+                if config.enableDebugLogs {
+                    print("✅ Sending Google access token: \(googleAccessToken.prefix(20))...")
+                    print("🔍 User has required scopes: \(authManager.hasRequiredScopes)")
+                }
+            } else {
+                if config.enableDebugLogs {
+                    print("❌ No Google access token available")
+                    print("🔍 User signed in: \(authManager.authState)")
+                    print("🔍 Has required scopes: \(authManager.hasRequiredScopes)")
+                }
+            }
+        }
+        
+        // If no access token, try to request additional scopes
+        if body["accessToken"] == nil {
+            do {
+                try await authManager.requestAdditionalScopesIfNeeded()
+                await MainActor.run {
+                    if let googleAccessToken = authManager.googleAccessToken {
+                        body["accessToken"] = googleAccessToken
+                        if config.enableDebugLogs {
+                            print("✅ Obtained access token after scope request: \(googleAccessToken.prefix(20))...")
+                        }
+                    }
+                }
+            } catch {
+                if config.enableDebugLogs {
+                    print("⚠️ Could not obtain Google access token: \(error)")
+                }
+            }
+        }
         
         let data = try await authManager.makeAuthenticatedRequest(
             to: endpoint,
