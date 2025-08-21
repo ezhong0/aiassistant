@@ -7,11 +7,12 @@ import {
   SessionExpiredError 
 } from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config';
+import { serviceManager } from './service-manager';
 
 export class SessionService {
   private sessions: Map<string, SessionContext> = new Map();
   private readonly defaultTimeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes;
-  private cleanupInterval: NodeJS.Timeout;
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(timeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes) {
     this.defaultTimeoutMinutes = timeoutMinutes;
@@ -20,6 +21,9 @@ export class SessionService {
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSessions();
     }, TIMEOUTS.sessionCleanup);
+
+    // Register for graceful shutdown
+    serviceManager.registerService(this);
 
     logger.info(`SessionService initialized with ${timeoutMinutes} minute timeout`);
   }
@@ -272,7 +276,11 @@ export class SessionService {
   destroy(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
+    
+    // Unregister from service manager
+    serviceManager.unregisterService(this);
     
     this.sessions.clear();
     logger.info('SessionService destroyed');

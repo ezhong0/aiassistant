@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import logger from '../utils/logger';
 import { ToolCall } from '../types/tools';
+import { aiConfig } from '../framework/ai-config';
 
 export interface OpenAIConfig {
   apiKey: string;
@@ -25,8 +26,16 @@ export class OpenAIService {
     this.client = new OpenAI({
       apiKey: config.apiKey,
     });
-    this.model = config.model || 'gpt-4o-mini';
-    logger.info(`OpenAI service initialized with model: ${this.model}`);
+    
+    // Use AI configuration for default model
+    try {
+      const aiOpenAIConfig = aiConfig.getOpenAIConfig('routing');
+      this.model = config.model || aiOpenAIConfig.model;
+      logger.info(`OpenAI service initialized with model: ${this.model} (from AI config)`);
+    } catch (error) {
+      this.model = config.model || 'gpt-4o-mini';
+      logger.warn(`Using fallback model: ${this.model} (AI config not available)`);
+    }
   }
 
   /**
@@ -157,13 +166,18 @@ export class OpenAIService {
         }
       ];
 
+      // Get AI configuration for routing
+      const routingConfig = aiConfig.getOpenAIConfig('routing');
+      
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: messages as any,
         tools: tools,
         tool_choice: 'auto',
-        temperature: 0.1, // Low temperature for consistent routing
-        max_tokens: 1000, // Allow enough tokens for multiple tool calls
+        temperature: routingConfig.temperature,
+        max_tokens: routingConfig.max_tokens,
+      }, {
+        timeout: routingConfig.timeout,
       });
 
       const choice = response.choices[0];
@@ -232,14 +246,19 @@ export class OpenAIService {
    */
   async generateText(
     prompt: string,
-    maxTokens: number = 500
+    maxTokens?: number
   ): Promise<string> {
     try {
+      // Get AI configuration for content generation
+      const contentConfig = aiConfig.getOpenAIConfig('content');
+      
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
-        temperature: 0.7,
+        max_tokens: maxTokens || contentConfig.max_tokens,
+        temperature: contentConfig.temperature,
+      }, {
+        timeout: contentConfig.timeout,
       });
 
       return response.choices[0]?.message?.content || '';
@@ -255,14 +274,19 @@ export class OpenAIService {
    */
   async createChatCompletion(
     messages: ChatMessage[],
-    maxTokens: number = 1000
+    maxTokens?: number
   ): Promise<{ content: string }> {
     try {
+      // Get AI configuration for analysis
+      const analysisConfig = aiConfig.getOpenAIConfig('analysis');
+      
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages,
-        max_tokens: maxTokens,
-        temperature: 0.7,
+        max_tokens: maxTokens || analysisConfig.max_tokens,
+        temperature: analysisConfig.temperature,
+      }, {
+        timeout: analysisConfig.timeout,
       });
 
       return {
@@ -280,10 +304,15 @@ export class OpenAIService {
    */
   async healthCheck(): Promise<boolean> {
     try {
+      // Get AI configuration for general use
+      const generalConfig = aiConfig.getOpenAIConfig('general');
+      
       await this.client.chat.completions.create({
         model: this.model,
         messages: [{ role: 'user', content: 'Hello' }],
         max_tokens: 5,
+      }, {
+        timeout: generalConfig.timeout,
       });
       return true;
     } catch (error) {

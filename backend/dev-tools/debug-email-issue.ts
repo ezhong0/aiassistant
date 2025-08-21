@@ -2,8 +2,8 @@
  * Debug script to test email functionality and identify the issue
  */
 
-import { initializeToolRegistry } from '../src/config/tool-registry-init';
-import { toolRegistry } from '../src/registry/tool.registry';
+import { initializeAgentFactory } from '../src/config/agent-factory-init';
+import { AgentFactory } from '../src/framework/agent-factory';
 import { ToolExecutorService } from '../src/services/tool-executor.service';
 import { ToolExecutionContext } from '../src/types/tools';
 
@@ -11,23 +11,23 @@ async function debugEmailIssue() {
   console.log('🔍 Debugging Email Functionality Issue\n');
 
   try {
-    // 1. Initialize registry
-    console.log('1️⃣ Initializing Tool Registry...');
-    initializeToolRegistry();
-    const stats = toolRegistry.getStats();
-    console.log(`✅ Registry initialized with ${stats.totalTools} tools`);
+    // 1. Initialize AgentFactory
+    console.log('1️⃣ Initializing AgentFactory...');
+    initializeAgentFactory();
+    const stats = AgentFactory.getStats();
+    console.log(`✅ AgentFactory initialized with ${stats.totalTools} tools`);
     console.log(`🔧 Available tools: ${stats.toolNames.join(', ')}\n`);
 
     // 2. Check if emailAgent is registered
     console.log('2️⃣ Checking Email Agent Registration...');
-    const emailTool = toolRegistry.getToolMetadata('emailAgent');
+    const emailTool = AgentFactory.getToolMetadata('emailAgent');
     if (emailTool) {
-      console.log('✅ EmailAgent is registered in registry');
+      console.log('✅ EmailAgent is registered in AgentFactory');
       console.log(`   Description: ${emailTool.description}`);
       console.log(`   Requires confirmation: ${emailTool.requiresConfirmation}`);
       console.log(`   Keywords: ${emailTool.keywords.join(', ')}`);
     } else {
-      console.log('❌ EmailAgent is NOT registered in registry');
+      console.log('❌ EmailAgent is NOT registered in AgentFactory');
       return;
     }
     console.log('');

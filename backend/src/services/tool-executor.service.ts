@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { toolRegistry } from '../registry/tool.registry';
+import { AgentFactory } from '../framework/agent-factory';
 import { 
   ToolCall, 
   ToolResult, 
@@ -46,7 +46,7 @@ export class ToolExecutorService {
         sessionId: context.sessionId 
       });
 
-      let result: any;
+      let result: unknown;
       let success = true;
       let error: string | undefined;
 
@@ -55,17 +55,20 @@ export class ToolExecutorService {
       
       if (mode.preview && needsConfirmation) {
         // In preview mode for confirmation-required tools, return action preview
-        result = await toolRegistry.generatePreview(toolCall, accessToken);
+        // TODO: Implement preview functionality in AgentFactory if needed
+        logger.info(`Tool ${toolCall.name} requires confirmation, but preview not implemented yet`);
+        result = { success: true, message: `Preview for ${toolCall.name}: ${toolCall.parameters.query || 'action'}` };
       } else {
-        // Execute the tool using registry
-        return await toolRegistry.executeTool(toolCall, context, accessToken);
+        // Execute the tool using AgentFactory
+        result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context);
       }
 
       // Check if the tool execution was successful
       if (result && typeof result === 'object' && 'success' in result) {
-        success = result.success;
-        if (!success && result.error) {
-          error = result.error;
+        const resultObj = result as { success: unknown; error?: unknown };
+        success = Boolean(resultObj.success);
+        if (!success && resultObj.error) {
+          error = String(resultObj.error);
         }
       }
 
@@ -154,7 +157,7 @@ export class ToolExecutorService {
    * Determine if a tool needs user confirmation before execution
    */
   private toolNeedsConfirmation(toolName: string): boolean {
-    return toolRegistry.toolNeedsConfirmation(toolName);
+    return AgentFactory.toolNeedsConfirmation(toolName);
   }
 
 
@@ -162,7 +165,7 @@ export class ToolExecutorService {
    * Determine if a tool is critical for the workflow
    */
   private isCriticalTool(toolName: string): boolean {
-    return toolRegistry.isCriticalTool(toolName);
+    return AgentFactory.isCriticalTool(toolName);
   }
 
   /**

@@ -1,30 +1,45 @@
 import { BaseAgent } from './base-agent';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
+import { ToolMetadata, IAgent } from '../types/agent.types';
 import { EmailAgent } from '../agents/email.agent';
 import { ContactAgent } from '../agents/contact.agent';
+import { ThinkAgent } from '../agents/think.agent';
+import { CalendarAgent } from '../agents/calendar.agent';
+import { ContentCreatorAgent } from '../agents/content-creator.agent';
+import { TavilyAgent } from '../agents/tavily.agent';
+import { AGENT_CONFIG } from '../config/agent-config';
 import logger from '../utils/logger';
 
 /**
- * Agent factory for creating and managing agent instances
- * Provides centralized agent registration, discovery, and lifecycle management
+ * Enhanced AgentFactory that handles all agent management including tool metadata
+ * This replaces the need for a separate tool registry system
  */
 export class AgentFactory {
-  private static agents = new Map<string, BaseAgent>();
+  private static agents = new Map<string, BaseAgent | IAgent>();
+  private static toolMetadata = new Map<string, ToolMetadata>();
   private static initialized = false;
   
   /**
    * Register a single agent instance
    */
-  static registerAgent(name: string, agent: BaseAgent): void {
+  static registerAgent(name: string, agent: BaseAgent | IAgent): void {
     if (this.agents.has(name)) {
       logger.warn(`Agent ${name} is already registered, replacing with new instance`);
     }
     
     this.agents.set(name, agent);
-    logger.info(`Agent registered: ${name}`, {
-      config: agent.getConfig(),
-      enabled: agent.isEnabled()
-    });
+    
+    if ('getConfig' in agent) {
+      logger.info(`Framework agent registered: ${name}`, {
+        config: agent.getConfig(),
+        enabled: agent.isEnabled()
+      });
+    } else {
+      logger.info(`Legacy agent registered: ${name}`, {
+        name: agent.name,
+        description: agent.description
+      });
+    }
   }
   
   /**
@@ -32,7 +47,7 @@ export class AgentFactory {
    */
   static registerAgentClass<TParams, TResult>(
     name: string, 
-    AgentClass: new () => BaseAgent<TParams, TResult>
+    AgentClass: new () => BaseAgent<TParams, TResult> | IAgent
   ): void {
     try {
       const agent = new AgentClass();
@@ -42,11 +57,23 @@ export class AgentFactory {
       throw new Error(`Agent registration failed for ${name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
+
+  /**
+   * Register tool metadata for an agent
+   */
+  static registerToolMetadata(metadata: ToolMetadata): void {
+    this.toolMetadata.set(metadata.name, metadata);
+    logger.info(`Tool metadata registered: ${metadata.name}`, {
+      keywords: metadata.keywords,
+      requiresConfirmation: metadata.requiresConfirmation,
+      isCritical: metadata.isCritical
+    });
+  }
   
   /**
    * Get an agent by name
    */
-  static getAgent(name: string): BaseAgent | undefined {
+  static getAgent(name: string): BaseAgent | IAgent | undefined {
     const agent = this.agents.get(name);
     
     if (!agent) {
@@ -56,26 +83,41 @@ export class AgentFactory {
       return undefined;
     }
     
-    if (!agent.isEnabled()) {
+    // Check if it's a framework agent with isEnabled method
+    if ('isEnabled' in agent && !agent.isEnabled()) {
       logger.warn(`Agent is disabled: ${name}`);
       return undefined;
     }
     
     return agent;
   }
-  
+
+  /**
+   * Get tool metadata by name
+   */
+  static getToolMetadata(name: string): ToolMetadata | undefined {
+    return this.toolMetadata.get(name);
+  }
+
   /**
    * Get all registered agents
    */
-  static getAllAgents(): BaseAgent[] {
+  static getAllAgents(): (BaseAgent | IAgent)[] {
     return Array.from(this.agents.values());
   }
   
   /**
    * Get only enabled agents
    */
-  static getEnabledAgents(): BaseAgent[] {
-    return Array.from(this.agents.values()).filter(agent => agent.isEnabled());
+  static getEnabledAgents(): (BaseAgent | IAgent)[] {
+    return Array.from(this.agents.values()).filter(agent => {
+      // Framework agents have isEnabled method
+      if ('isEnabled' in agent) {
+        return agent.isEnabled();
+      }
+      // Legacy agents are always considered enabled
+      return true;
+    });
   }
   
   /**
@@ -90,7 +132,14 @@ export class AgentFactory {
    */
   static getEnabledAgentNames(): string[] {
     return Array.from(this.agents.entries())
-      .filter(([_, agent]) => agent.isEnabled())
+      .filter(([_, agent]) => {
+        // Framework agents have isEnabled method
+        if ('isEnabled' in agent) {
+          return agent.isEnabled();
+        }
+        // Legacy agents are always considered enabled
+        return true;
+      })
       .map(([name, _]) => name);
   }
   
@@ -99,7 +148,14 @@ export class AgentFactory {
    */
   static hasAgent(name: string): boolean {
     const agent = this.agents.get(name);
-    return agent ? agent.isEnabled() : false;
+    if (!agent) return false;
+    
+    // Framework agents have isEnabled method
+    if ('isEnabled' in agent) {
+      return agent.isEnabled();
+    }
+    // Legacy agents are always considered enabled
+    return true;
   }
   
   /**
@@ -135,7 +191,24 @@ export class AgentFactory {
         userId: context.userId
       });
       
-      return await agent.execute(parameters, context);
+      // Handle both framework and legacy agents
+      if ('processQuery' in agent) {
+        // Framework BaseAgent - use the new execution pattern
+        return await agent.execute(parameters, context);
+      } else {
+        // Legacy IAgent - use the old execution pattern
+        const startTime = Date.now();
+        const result = await agent.execute(parameters, context);
+        const executionTime = Date.now() - startTime;
+        
+        return {
+          toolName: name,
+          result,
+          success: true,
+          error: undefined,
+          executionTime
+        };
+      }
       
     } catch (error) {
       const errorResult: ToolResult = {
@@ -154,9 +227,90 @@ export class AgentFactory {
       return errorResult;
     }
   }
+
+  /**
+   * Generate OpenAI function definitions for all registered tools
+   */
+  static generateOpenAIFunctions(): any[] {
+    return Array.from(this.toolMetadata.values()).map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters
+    }));
+  }
+
+  /**
+   * Find tools that match the given input using keywords
+   */
+  static findMatchingTools(input: string): ToolMetadata[] {
+    const lowerInput = input.toLowerCase();
+    const matches: { tool: ToolMetadata; score: number }[] = [];
+
+    for (const tool of this.toolMetadata.values()) {
+      let score = 0;
+      
+      // Check keyword matches
+      for (const keyword of tool.keywords) {
+        if (lowerInput.includes(keyword.toLowerCase())) {
+          score += 1;
+          // Exact word match gets higher score
+          const words = lowerInput.split(/\s+/);
+          if (words.includes(keyword.toLowerCase())) {
+            score += 1;
+          }
+        }
+      }
+
+      if (score > 0) {
+        matches.push({ tool, score });
+      }
+    }
+
+    // Sort by score (highest first) and return tools
+    return matches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3) // Limit to top 3 matches
+      .map(match => match.tool);
+  }
+
+  /**
+   * Generate system prompts for all registered agents
+   */
+  static generateSystemPrompts(): string {
+    const prompts: string[] = [];
+    
+    prompts.push('# Available Tools');
+    
+    for (const [name, metadata] of this.toolMetadata) {
+      prompts.push(`- ${name}: ${metadata.description}`);
+    }
+
+    prompts.push('\n# Tool Usage Guidelines');
+    prompts.push('- Analyze the user request to determine which tool(s) to use');
+    prompts.push('- Some actions require multiple tools (e.g., contact lookup + email sending)');
+    prompts.push('- Always call the "Think" tool at the end to verify correct steps were taken');
+    
+    return prompts.join('\n');
+  }
+
+  /**
+   * Check if a tool requires confirmation
+   */
+  static toolNeedsConfirmation(toolName: string): boolean {
+    const metadata = this.toolMetadata.get(toolName);
+    return metadata?.requiresConfirmation || false;
+  }
+
+  /**
+   * Check if a tool is critical
+   */
+  static isCriticalTool(toolName: string): boolean {
+    const metadata = this.toolMetadata.get(toolName);
+    return metadata?.isCritical || false;
+  }
   
   /**
-   * Initialize all core agents
+   * Initialize all core agents and their metadata
    */
   static initialize(): void {
     if (this.initialized) {
@@ -165,17 +319,223 @@ export class AgentFactory {
     }
     
     try {
-      logger.info('Initializing AgentFactory with core agents...');
+      logger.info('Initializing AgentFactory with core agents and metadata...');
       
       // Register core agents
       this.registerAgentClass('emailAgent', EmailAgent);
       this.registerAgentClass('contactAgent', ContactAgent);
+      this.registerAgentClass('Think', ThinkAgent);
+      this.registerAgentClass('calendarAgent', CalendarAgent);
+      this.registerAgentClass('contentCreator', ContentCreatorAgent);
+      this.registerAgentClass('Tavily', TavilyAgent);
       
-      // Future agents can be added here:
-      // this.registerAgentClass('calendarAgent', CalendarAgent);
-      // this.registerAgentClass('contentCreator', ContentCreatorAgent);
-      // this.registerAgentClass('tavilyAgent', TavilyAgent);
-      // this.registerAgentClass('thinkAgent', ThinkAgent);
+      // Register tool metadata for all agents
+      this.registerToolMetadata({
+        name: 'Think',
+        description: 'Analyze and reason about user requests, verify correct actions were taken',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The query or request to analyze and think about'
+            },
+            context: {
+              type: 'string',
+              description: 'Additional context for analysis',
+              nullable: true
+            },
+            previousActions: {
+              type: 'array',
+              description: 'Previous tool calls that were executed',
+              items: { type: 'object' },
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        keywords: AGENT_CONFIG.think.keywords,
+        requiresConfirmation: AGENT_CONFIG.think.requiresConfirmation,
+        isCritical: AGENT_CONFIG.think.isCritical
+      });
+
+      this.registerToolMetadata({
+        name: 'emailAgent',
+        description: 'Send, reply to, search, and manage emails using Gmail API',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The email request in natural language'
+            },
+            contacts: {
+              type: 'array',
+              description: 'Contact information if provided by contact agent',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  email: { type: 'string' },
+                  phone: { type: 'string', nullable: true }
+                }
+              },
+              nullable: true
+            },
+            contactResults: {
+              type: 'array',
+              description: 'Raw contact results from contact agent',
+              items: { type: 'object' },
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        keywords: AGENT_CONFIG.email.keywords,
+        requiresConfirmation: AGENT_CONFIG.email.requiresConfirmation,
+        isCritical: AGENT_CONFIG.email.isCritical
+      });
+
+      this.registerToolMetadata({
+        name: 'contactAgent',
+        description: 'Search and manage contacts from Google Contacts and email history',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The contact search request in natural language'
+            },
+            operation: {
+              type: 'string',
+              description: 'The type of operation to perform',
+              enum: ['search', 'create', 'update'],
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        keywords: AGENT_CONFIG.contact.keywords,
+        requiresConfirmation: AGENT_CONFIG.contact.requiresConfirmation,
+        isCritical: AGENT_CONFIG.contact.isCritical
+      });
+
+      this.registerToolMetadata({
+        name: 'calendarAgent',
+        description: 'Create, update, and manage calendar events',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The calendar request in natural language'
+            },
+            title: {
+              type: 'string',
+              description: 'Event title',
+              nullable: true
+            },
+            startTime: {
+              type: 'string',
+              description: 'Event start time in ISO format',
+              nullable: true
+            },
+            endTime: {
+              type: 'string',
+              description: 'Event end time in ISO format',
+              nullable: true
+            },
+            attendees: {
+              type: 'array',
+              description: 'List of attendee email addresses',
+              items: { type: 'string' },
+              nullable: true
+            },
+            description: {
+              type: 'string',
+              description: 'Event description',
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        keywords: AGENT_CONFIG.calendar.keywords,
+        requiresConfirmation: AGENT_CONFIG.calendar.requiresConfirmation,
+        isCritical: AGENT_CONFIG.calendar.isCritical
+      });
+
+      this.registerToolMetadata({
+        name: 'contentCreator',
+        description: 'Create blog posts, articles, and other written content',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The content creation request in natural language'
+            },
+            topic: {
+              type: 'string',
+              description: 'The main topic or subject',
+              nullable: true
+            },
+            tone: {
+              type: 'string',
+              description: 'The desired tone (professional, casual, etc.)',
+              nullable: true
+            },
+            length: {
+              type: 'string',
+              description: 'Desired length (short, medium, long)',
+              nullable: true
+            },
+            format: {
+              type: 'string',
+              description: 'Content format',
+              enum: ['blog', 'article', 'social', 'email'],
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        keywords: AGENT_CONFIG.content.keywords,
+        requiresConfirmation: AGENT_CONFIG.content.requiresConfirmation,
+        isCritical: AGENT_CONFIG.content.isCritical
+      });
+
+      this.registerToolMetadata({
+        name: 'Tavily',
+        description: 'Search the web for information using Tavily API',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The search query'
+            },
+            maxResults: {
+              type: 'number',
+              description: 'Maximum number of results to return',
+              nullable: true
+            },
+            includeAnswer: {
+              type: 'boolean',
+              description: 'Whether to include AI-generated answer',
+              nullable: true
+            },
+            searchDepth: {
+              type: 'string',
+              description: 'Search depth level',
+              enum: ['basic', 'advanced'],
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        keywords: AGENT_CONFIG.search.keywords,
+        requiresConfirmation: AGENT_CONFIG.search.requiresConfirmation,
+        isCritical: AGENT_CONFIG.search.isCritical
+      });
       
       this.initialized = true;
       
@@ -193,6 +553,7 @@ export class AgentFactory {
    */
   static reset(): void {
     this.agents.clear();
+    this.toolMetadata.clear();
     this.initialized = false;
     logger.info('AgentFactory reset');
   }
@@ -206,16 +567,25 @@ export class AgentFactory {
     disabledAgents: number;
     agentNames: string[];
     enabledAgentNames: string[];
+    totalTools: number;
+    criticalTools: number;
+    confirmationTools: number;
+    toolNames: string[];
   } {
     const allAgents = this.getAllAgents();
     const enabledAgents = this.getEnabledAgents();
+    const tools = Array.from(this.toolMetadata.values());
     
     return {
       totalAgents: allAgents.length,
       enabledAgents: enabledAgents.length,
       disabledAgents: allAgents.length - enabledAgents.length,
       agentNames: this.getAgentNames(),
-      enabledAgentNames: this.getEnabledAgentNames()
+      enabledAgentNames: this.getEnabledAgentNames(),
+      totalTools: tools.length,
+      criticalTools: tools.filter(t => t.isCritical).length,
+      confirmationTools: tools.filter(t => t.requiresConfirmation).length,
+      toolNames: tools.map(t => t.name)
     };
   }
   
@@ -256,7 +626,10 @@ export class AgentFactory {
    */
   static getAgentConfig(name: string): AgentConfig | undefined {
     const agent = this.getAgent(name);
-    return agent?.getConfig();
+    if (agent && 'getConfig' in agent) {
+      return agent.getConfig();
+    }
+    return undefined;
   }
   
   /**
@@ -272,24 +645,39 @@ export class AgentFactory {
     
     for (const [name, agent] of this.agents.entries()) {
       try {
-        const config = agent.getConfig();
-        
-        // Validate agent configuration
-        if (!config.name) {
-          errors.push(`Agent ${name} has no name in config`);
-        }
-        
-        if (!config.description) {
-          warnings.push(`Agent ${name} has no description`);
-        }
-        
-        if (config.timeout && config.timeout < 1000) {
-          warnings.push(`Agent ${name} has very short timeout: ${config.timeout}ms`);
-        }
-        
-        // Check if agent is properly configured
-        if (!agent.isEnabled()) {
-          warnings.push(`Agent ${name} is disabled`);
+        // Framework agents have getConfig method
+        if ('getConfig' in agent) {
+          const config = agent.getConfig();
+          
+          // Validate agent configuration
+          if (!config.name) {
+            errors.push(`Agent ${name} has no name in config`);
+          }
+          
+          if (!config.description) {
+            warnings.push(`Agent ${name} has no description`);
+          }
+          
+          if (config.timeout && config.timeout < 1000) {
+            warnings.push(`Agent ${name} has very short timeout: ${config.timeout}ms`);
+          }
+          
+          // Check if agent is properly configured
+          if (!agent.isEnabled()) {
+            warnings.push(`Agent ${name} is disabled`);
+          }
+        } else {
+          // Legacy agents - basic validation
+          if (!agent.name) {
+            errors.push(`Legacy agent ${name} has no name`);
+          }
+          
+          if (!agent.description) {
+            warnings.push(`Legacy agent ${name} has no description`);
+          }
+          
+          // Legacy agents are always considered enabled
+          logger.debug(`Legacy agent ${name} validation passed`);
         }
         
       } catch (error) {
@@ -313,14 +701,29 @@ export class AgentFactory {
       return null;
     }
     
-    return {
-      name,
-      config: agent.getConfig(),
-      enabled: agent.isEnabled(),
-      timeout: agent.getTimeout(),
-      retries: agent.getRetries(),
-      className: agent.constructor.name
-    };
+    if ('getConfig' in agent) {
+      // Framework agent
+      return {
+        name,
+        config: agent.getConfig(),
+        enabled: agent.isEnabled(),
+        timeout: agent.getTimeout(),
+        retries: agent.getRetries(),
+        className: agent.constructor.name
+      };
+    } else {
+      // Legacy agent
+      return {
+        name,
+        config: null,
+        enabled: true, // Legacy agents are always enabled
+        timeout: null,
+        retries: null,
+        className: agent.constructor.name,
+        description: agent.description,
+        keywords: agent.keywords
+      };
+    }
   }
   
   /**
@@ -347,7 +750,7 @@ export function initializeAgentFactory(): void {
 /**
  * Convenience function to get an agent
  */
-export function getAgent(name: string): BaseAgent | undefined {
+export function getAgent(name: string): BaseAgent | IAgent | undefined {
   return AgentFactory.getAgent(name);
 }
 

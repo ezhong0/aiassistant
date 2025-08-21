@@ -1,0 +1,98 @@
+# AI Configuration - Hot reloadable!
+openai:
+  routing:
+  general:
+    model: "gpt-4o-mini"
+    temperature: 0.3
+    max_tokens: 1000
+    timeout: 25000
+    model: "gpt-4o-mini"
+    temperature: 0.1
+    max_tokens: 500
+    timeout: 15000
+    
+  content:
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 2000
+    timeout: 30000
+    
+  analysis:
+    model: "gpt-4o-mini"
+    temperature: 0.0
+    max_tokens: 1000
+    timeout: 20000
+
+prompts:
+  email_extraction:
+    template: |
+      Extract email components from this request: "${userInput}"
+      
+      Required JSON format:
+      {
+        "recipient": "email address or person name",
+        "subject": "email subject line", 
+        "body": "email content",
+        "priority": "low|normal|high"
+      }
+      
+      Return only valid JSON.
+    variables: ["userInput"]
+    description: "Extracts structured email data from natural language"
+    
+  contact_resolution:
+    template: |
+      Find the best matching contact for: "${query}"
+      
+      Available contacts:
+      ${contacts}
+      
+      Return JSON with best match and confidence score (0-1).
+    variables: ["query", "contacts"]
+    description: "Resolves contact names to actual contact information"
+    
+  master_agent_system:
+    template: |
+      You are a master AI assistant that routes user requests to specialized tools.
+      
+      Current date/time: ${currentDateTime}
+      User request: "${userInput}"
+      
+      Available tools:
+      ${availableTools}
+      
+      Rules:
+      1. Call contactAgent first if email/calendar needs contact lookup
+      2. Always call Think tool last for verification
+      3. Multiple tools can be called in one response
+      
+      Return tool calls as JSON array.
+    variables: ["currentDateTime", "userInput", "availableTools"]
+    description: "Master agent routing prompt"
+
+agents:
+  emailAgent:
+    timeout: 30000
+    retries: 3
+    enabled: true
+    fallback_strategy: "retry"
+    
+  contactAgent:
+    timeout: 15000
+    retries: 2
+    enabled: true
+    fallback_strategy: "fail"
+    confidence_threshold: 0.7
+    max_results: 5
+    
+  masterAgent:
+    timeout: 45000
+    retries: 1
+    enabled: true
+    fallback_strategy: "queue"
+    
+  thinkAgent:
+    timeout: 20000
+    retries: 2
+    enabled: true
+    fallback_strategy: "retry"

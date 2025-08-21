@@ -4,6 +4,7 @@ import configService from '../config/config.service';
 import logger from '../utils/logger';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
+import { serviceManager } from '../services/service-manager';
 
 interface RateLimitData {
   count: number;
@@ -24,11 +25,11 @@ interface RateLimitOptions {
 
 class RateLimitStore {
   private store = new Map<string, RateLimitData>();
-  private cleanupInterval: any;
+  private cleanupInterval: NodeJS.Timeout | null = null;
   
   constructor() {
     // Cleanup expired entries using configured interval
-    this.cleanupInterval = (globalThis as any).setInterval(() => {
+    this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, TIMEOUTS.rateLimitCleanup);
   }
@@ -86,18 +87,21 @@ class RateLimitStore {
   
   destroy(): void {
     if (this.cleanupInterval) {
-      (globalThis as any).clearInterval(this.cleanupInterval);
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
     this.store.clear();
+    
+    // Unregister from service manager
+    serviceManager.unregisterService(this);
   }
 }
 
 // Global rate limit store
 const rateLimitStore = new RateLimitStore();
 
-// Graceful shutdown
-process.on('SIGTERM', () => rateLimitStore.destroy());
-process.on('SIGINT', () => rateLimitStore.destroy());
+// Register with service manager for graceful shutdown
+serviceManager.registerService(rateLimitStore);
 
 /**
  * Generic rate limiting middleware

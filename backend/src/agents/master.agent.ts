@@ -2,8 +2,8 @@ import logger from '../utils/logger';
 import { OpenAIService } from '../services/openai.service';
 import { SessionService } from '../services/session.service';
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
-import { toolRegistry } from '../registry/tool.registry';
-import { initializeToolRegistry } from '../config/tool-registry-init';
+import { AgentFactory } from '../framework/agent-factory';
+import { initializeAgentFactory } from '../config/agent-factory-init';
 
 export interface MasterAgentResponse {
   message: string;
@@ -21,12 +21,12 @@ export class MasterAgent {
   constructor(config?: MasterAgentConfig) {
     this.sessionService = new SessionService(config?.sessionTimeoutMinutes);
     
-    // Initialize tool registry if not already done
-    if (!toolRegistry.getStats().totalTools) {
-      initializeToolRegistry();
+    // Initialize AgentFactory if not already done
+    if (!AgentFactory.getStats().totalTools) {
+      initializeAgentFactory();
     }
 
-    // Generate dynamic system prompt from registry
+    // Generate dynamic system prompt from AgentFactory
     this.systemPrompt = this.generateSystemPrompt();
     
     if (config?.openaiApiKey) {
@@ -108,7 +108,7 @@ export class MasterAgent {
     const toolCalls: ToolCall[] = [];
 
     // Use registry to find matching tools
-    const matchingTools = toolRegistry.findMatchingTools(userInput);
+          const matchingTools = AgentFactory.findMatchingTools(userInput);
     
     if (matchingTools.length > 0) {
       // Get the best matching tool
@@ -222,8 +222,8 @@ You are the ultimate personal assistant. Your job is to send the user's query to
 - Always include Think tool at the end
 - Current date/time: ${new Date().toISOString()}`;
 
-    // Get dynamic tool information from registry
-    const toolsSection = toolRegistry.generateSystemPrompts();
+    // Get dynamic tool information from AgentFactory
+    const toolsSection = AgentFactory.generateSystemPrompts();
     
     return `${basePrompt}\n\n${toolsSection}`;
   }

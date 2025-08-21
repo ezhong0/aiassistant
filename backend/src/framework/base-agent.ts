@@ -1,6 +1,7 @@
 import { Logger } from 'winston';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import logger from '../utils/logger';
+import { aiConfig } from './ai-config';
 
 /**
  * Abstract base class that eliminates boilerplate code for all agents
@@ -156,14 +157,54 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
    * Get agent timeout in milliseconds
    */
   getTimeout(): number {
-    return this.config.timeout || 30000; // Default 30 seconds
+    // Try to get timeout from AI configuration first, then fall back to local config
+    try {
+      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      return aiAgentConfig.timeout;
+    } catch (error) {
+      // Fall back to local config or default
+      return this.config.timeout || 30000; // Default 30 seconds
+    }
   }
 
   /**
    * Get retry count
    */
   getRetries(): number {
-    return this.config.retryCount || 3; // Default 3 retries
+    // Try to get retries from AI configuration first, then fall back to local config
+    try {
+      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      return aiAgentConfig.retries;
+    } catch (error) {
+      // Fall back to local config or default
+      return this.config.retryCount || 3; // Default 3 retries
+    }
+  }
+
+  /**
+   * Get agent fallback strategy from AI configuration
+   */
+  getFallbackStrategy(): 'fail' | 'retry' | 'queue' {
+    try {
+      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      return aiAgentConfig.fallback_strategy;
+    } catch (error) {
+      // Default fallback strategy
+      return 'retry';
+    }
+  }
+
+  /**
+   * Check if agent is enabled from AI configuration
+   */
+  isEnabledFromConfig(): boolean {
+    try {
+      const aiAgentConfig = aiConfig.getAgentConfig(this.config.name);
+      return aiAgentConfig.enabled;
+    } catch (error) {
+      // Fall back to local config
+      return this.isEnabled();
+    }
   }
 
   /**
@@ -196,7 +237,7 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
   }
 
   /**
-   * Helper method for retry logic
+   * Helper method for retry logic with AI configuration fallback strategy
    */
   protected async withRetries<T>(
     operation: () => Promise<T>, 
@@ -205,15 +246,40 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
   ): Promise<T> {
     const retries = maxRetries || this.getRetries();
     const retryDelay = delay || 1000;
+    const fallbackStrategy = this.getFallbackStrategy();
     
     let lastError: Error | null = null;
     
+    // Handle different fallback strategies
+    if (fallbackStrategy === 'fail') {
+      // No retries, fail immediately
+      try {
+        return await operation();
+      } catch (error) {
+        this.logger.error(`Operation failed with 'fail' strategy`, {
+          agent: this.config.name,
+          error: (error as Error).message
+        });
+        throw error;
+      }
+    }
+    
+    // For queue strategy, we'll implement basic retry for now
+    // In a full implementation, this would add to a queue for later processing
+    if (fallbackStrategy === 'queue') {
+      this.logger.info(`Using 'queue' fallback strategy - implementing as retry for now`, {
+        agent: this.config.name
+      });
+    }
+    
+    // Standard retry logic (for both 'retry' and 'queue' strategies)
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (attempt > 0) {
           this.logger.warn(`Retry attempt ${attempt}/${retries}`, {
             agent: this.config.name,
-            lastError: lastError?.message
+            lastError: lastError?.message,
+            strategy: fallbackStrategy
           });
           
           // Wait before retry
@@ -228,7 +294,8 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
           this.logger.error(`All retry attempts exhausted`, {
             agent: this.config.name,
             attempts: attempt + 1,
-            finalError: lastError.message
+            finalError: lastError.message,
+            strategy: fallbackStrategy
           });
           throw lastError;
         }

@@ -9,7 +9,7 @@ dotenv.config({ path: envPath });
 import express, { Request, Response } from 'express';
 import configService from './config/config.service';
 import logger from './utils/logger';
-import { initializeToolRegistry } from './config/tool-registry-init';
+import { initializeAgentFactory } from './config/agent-factory-init';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 
@@ -27,12 +27,12 @@ import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 
-// Initialize tool registry before anything else
+// Initialize AgentFactory before anything else
 try {
-  initializeToolRegistry();
-  logger.info('Tool registry initialized successfully');
+  initializeAgentFactory();
+  logger.info('AgentFactory initialized successfully');
 } catch (error) {
-  logger.error('Failed to initialize tool registry:', error);
+  logger.error('Failed to initialize AgentFactory:', error);
   // Continue anyway - the app can still function with basic routing
 }
 

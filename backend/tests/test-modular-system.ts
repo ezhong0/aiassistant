@@ -1,6 +1,6 @@
 import logger from '../src/utils/logger';
-import { initializeToolRegistry } from '../src/config/tool-registry-init';
-import { toolRegistry } from '../src/registry/tool.registry';
+import { initializeAgentFactory } from '../src/config/agent-factory-init';
+import { AgentFactory } from '../src/framework/agent-factory';
 import { ToolExecutorService } from '../src/services/tool-executor.service';
 import { MasterAgent } from '../src/agents/master.agent';
 import { ToolExecutionContext } from '../src/types/tools';
@@ -12,18 +12,18 @@ async function testModularSystem() {
   console.log('🧪 Testing Modular Assistant System\n');
 
   try {
-    // 1. Test Tool Registry Initialization
-    console.log('1️⃣ Testing Tool Registry Initialization...');
-    initializeToolRegistry();
+    // 1. Test AgentFactory Initialization
+    console.log('1️⃣ Testing AgentFactory Initialization...');
+    initializeAgentFactory();
     
-    const stats = toolRegistry.getStats();
-    console.log(`✅ Registry initialized with ${stats.totalTools} tools`);
+    const stats = AgentFactory.getStats();
+    console.log(`✅ AgentFactory initialized with ${stats.totalTools} tools`);
     console.log(`📊 Critical tools: ${stats.criticalTools}, Confirmation tools: ${stats.confirmationTools}`);
     console.log(`🔧 Available tools: ${stats.toolNames.join(', ')}\n`);
 
     // 2. Test OpenAI Function Generation
     console.log('2️⃣ Testing OpenAI Function Generation...');
-    const openAIFunctions = toolRegistry.generateOpenAIFunctions();
+    const openAIFunctions = AgentFactory.generateOpenAIFunctions();
     console.log(`✅ Generated ${openAIFunctions.length} OpenAI function definitions`);
     console.log(`📝 Function names: ${openAIFunctions.map(f => f.name).join(', ')}\n`);
 
@@ -38,7 +38,7 @@ async function testModularSystem() {
     ];
 
     for (const query of testQueries) {
-      const matchingTools = toolRegistry.findMatchingTools(query);
+      const matchingTools = AgentFactory.findMatchingTools(query);
       const toolNames = matchingTools.map(t => t.name).join(', ') || 'none';
       console.log(`🔍 "${query}" → ${toolNames}`);
     }
