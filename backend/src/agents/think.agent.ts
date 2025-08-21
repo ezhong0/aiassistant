@@ -1,5 +1,6 @@
 import logger from '../utils/logger';
-import { ToolCall, ToolResult, ThinkParams, AgentResponse } from '../types/tools';
+import { ToolCall, ToolResult, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
+import { BaseAgent } from '../types/agent.types';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {
@@ -15,8 +16,13 @@ export interface ThinkAgentResponse extends AgentResponse {
   };
 }
 
-export class ThinkAgent {
-  private readonly systemPrompt = `# Think Agent - Reflection and Verification
+export class ThinkAgent extends BaseAgent {
+  readonly name = 'Think';
+  readonly description = 'Analyze and reason about user requests, verify correct actions were taken';
+  readonly keywords = ['think', 'analyze', 'reason', 'verify', 'check'];
+  readonly requiresConfirmation = false;
+  readonly isCritical = false;
+  readonly systemPrompt = `# Think Agent - Reflection and Verification
 You are a specialized thinking and verification agent that analyzes whether the correct steps were taken for user requests.
 
 ## Core Responsibilities
@@ -76,6 +82,18 @@ User: "What's the weather today?"
 Tools: [contentCreator, Think]
 Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appropriate for current information
 `;
+
+  /**
+   * Execute the think agent (BaseAgent interface)
+   */
+  async execute(parameters: any, context: ToolExecutionContext, accessToken?: string): Promise<any> {
+    const params: ThinkParams = {
+      query: parameters.query,
+      context: parameters.context,
+      previousActions: parameters.previousActions || []
+    };
+    return await this.processQuery(params);
+  }
 
   /**
    * Process thinking and verification queries

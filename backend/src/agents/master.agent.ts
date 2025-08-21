@@ -2,6 +2,8 @@ import logger from '../utils/logger';
 import { OpenAIService } from '../services/openai.service';
 import { SessionService } from '../services/session.service';
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
+import { toolRegistry } from '../registry/tool.registry';
+import { initializeToolRegistry } from '../config/tool-registry-init';
 
 export interface MasterAgentResponse {
   message: string;
@@ -11,55 +13,21 @@ export interface MasterAgentResponse {
 }
 
 export class MasterAgent {
-  private readonly systemPrompt = `# Overview
-You are the ultimate personal assistant. Your job is to send the user's query to the correct tool. You should never be writing emails, or creating even summaries, you just need to call the correct tool.
-
-## Tools
-- Think: Use this to think deeply or if you get stuck
-- emailAgent: Use this tool to take action in email
-- calendarAgent: Use this tool to take action in calendar
-- contactAgent: Use this tool to get, update, or add contacts
-- contentCreator: Use this tool to create blog posts
-- Tavily: Use this tool to search the web
-
-## Rules
-- Some actions require you to look up contact information first. For the following actions, you must get contact information and send that to the agent who needs it:
-  - sending emails
-  - drafting emails
-  - creating calendar event with attendee
-- IMPORTANT: For email/calendar actions that require contact lookup, you should call BOTH contactAgent AND the main action tool (emailAgent/calendarAgent) in the SAME response
-- You must ALWAYS call the "Think" tool at the end to verify you took the right steps
-
-## Instructions
-1) Analyze the user request
-2) If it needs contact lookup + action, call contactAgent AND the action tool (emailAgent/calendarAgent)
-3) If it's a direct action, call the appropriate tool directly
-4) ALWAYS call the "Think" tool last to verify
-
-## Examples
-1) 
-- Input: "send an email to nate herkelman asking him what time he wants to leave"
-- Expected tool calls: contactAgent(query: "get contact info for nate herkelman") + emailAgent(query: "send email to nate herkelman asking what time he wants to leave") + Think(query: "verify correct steps")
-
-2)
-- Input: "schedule a meeting with john and sarah tomorrow at 3pm"
-- Expected tool calls: contactAgent(query: "get contact info for john and sarah") + calendarAgent(query: "schedule meeting with john and sarah tomorrow at 3pm") + Think(query: "verify correct steps")
-
-3)
-- Input: "create a blog post about AI"
-- Expected tool calls: contentCreator(query: "create blog post about AI") + Think(query: "verify correct steps")
-
-## Final Reminders
-- Call multiple tools in one response when needed
-- Always include Think tool at the end
-- Current date/time: ${new Date().toISOString()}`;
-
   private openaiService: OpenAIService | null = null;
   private sessionService: SessionService;
   private useOpenAI: boolean = false;
+  private systemPrompt: string;
 
   constructor(config?: MasterAgentConfig) {
     this.sessionService = new SessionService(config?.sessionTimeoutMinutes);
+    
+    // Initialize tool registry if not already done
+    if (!toolRegistry.getStats().totalTools) {
+      initializeToolRegistry();
+    }
+
+    // Generate dynamic system prompt from registry
+    this.systemPrompt = this.generateSystemPrompt();
     
     if (config?.openaiApiKey) {
       this.openaiService = new OpenAIService({
@@ -134,90 +102,78 @@ You are the ultimate personal assistant. Your job is to send the user's query to
   }
 
   /**
-   * Simple rule-based tool determination (will be replaced with OpenAI later)
+   * Rule-based tool determination using registry
    */
   private determineToolCalls(userInput: string): ToolCall[] {
-    const input = userInput.toLowerCase();
     const toolCalls: ToolCall[] = [];
 
-    // Email-related requests
-    if (input.includes('email') || input.includes('send') && (input.includes('@') || input.includes('to '))) {
-      // Check if we need contact lookup first
-      if (!input.includes('@') && (input.includes('send') || input.includes('email'))) {
-        // Extract potential contact name
-        const contactName = this.extractContactName(userInput);
-        if (contactName) {
-          toolCalls.push({
-            name: 'contactAgent',
-            parameters: { query: `get contact information for ${contactName}` }
-          });
-        }
-      }
+    // Use registry to find matching tools
+    const matchingTools = toolRegistry.findMatchingTools(userInput);
+    
+    if (matchingTools.length > 0) {
+      // Get the best matching tool
+      const primaryTool = matchingTools[0];
       
-      toolCalls.push({
-        name: 'emailAgent',
-        parameters: { query: userInput }
-      });
-    }
-    
-    // Calendar-related requests
-    else if (input.includes('calendar') || input.includes('meeting') || input.includes('schedule') || input.includes('event')) {
-      // Check if we need contact lookup for attendees
-      if (input.includes('with ') || input.includes('attendee')) {
-        const contactName = this.extractContactName(userInput);
-        if (contactName) {
-          toolCalls.push({
-            name: 'contactAgent',
-            parameters: { query: `get contact information for ${contactName}` }
-          });
+      if (primaryTool) {
+        // Check if we need contact lookup first for email/calendar operations
+        const needsContactLookup = this.needsContactLookup(userInput, primaryTool.name);
+        
+        if (needsContactLookup) {
+          const contactName = this.extractContactName(userInput);
+          if (contactName) {
+            toolCalls.push({
+              name: 'contactAgent',
+              parameters: { query: `get contact information for ${contactName}` }
+            });
+          }
         }
+        
+        // Add the primary tool
+        toolCalls.push({
+          name: primaryTool.name,
+          parameters: { query: userInput }
+        });
       }
-      
-      toolCalls.push({
-        name: 'calendarAgent',
-        parameters: { query: userInput }
-      });
-    }
-    
-    // Contact-related requests
-    else if (input.includes('contact') || input.includes('find') && (input.includes('person') || input.includes('email'))) {
-      toolCalls.push({
-        name: 'contactAgent',
-        parameters: { query: userInput }
-      });
-    }
-    
-    // Content creation requests
-    else if (input.includes('blog') || input.includes('write') || input.includes('create') && input.includes('post')) {
-      toolCalls.push({
-        name: 'contentCreator',
-        parameters: { query: userInput }
-      });
-    }
-    
-    // Web search requests
-    else if (input.includes('search') || input.includes('find') || input.includes('look up') || input.includes('what is')) {
-      toolCalls.push({
-        name: 'Tavily',
-        parameters: { query: userInput }
-      });
-    }
-    
-    // If no specific tool determined, use Think to figure it out
-    if (toolCalls.length === 0) {
+    } else {
+      // If no tools match, use Think to analyze
       toolCalls.push({
         name: 'Think',
         parameters: { query: `Analyze this user request and determine the correct tool to use: "${userInput}"` }
       });
     }
 
-    // Always add Think tool at the end (as per the rules)
+    // Always add Think tool at the end for verification
     toolCalls.push({
       name: 'Think',
-      parameters: { query: `Verify that the correct steps were taken for the user request: "${userInput}"` }
+      parameters: { 
+        query: `Verify that the correct steps were taken for the user request: "${userInput}"`,
+        previousActions: toolCalls.slice(0, -1) // Pass previous actions for analysis
+      }
     });
 
     return toolCalls;
+  }
+
+  /**
+   * Check if a tool needs contact lookup
+   */
+  private needsContactLookup(userInput: string, toolName: string): boolean {
+    const input = userInput.toLowerCase();
+    
+    // Only email and calendar agents typically need contact lookup
+    if (!['emailAgent', 'calendarAgent'].includes(toolName)) {
+      return false;
+    }
+    
+    // Don't need lookup if email address is already provided
+    if (input.includes('@')) {
+      return false;
+    }
+    
+    // Check for name patterns in email/calendar contexts
+    const hasNameReference = /\b(?:send|email|meeting|schedule|invite).*?(?:to|with)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i.test(input);
+    
+    return hasNameReference;
   }
 
   /**
@@ -238,6 +194,38 @@ You are the ultimate personal assistant. Your job is to send the user's query to
     }
 
     return null;
+  }
+
+  /**
+   * Generate dynamic system prompt from registry
+   */
+  private generateSystemPrompt(): string {
+    const basePrompt = `# Overview
+You are the ultimate personal assistant. Your job is to send the user's query to the correct tool. You should never be writing emails, or creating even summaries, you just need to call the correct tool.
+
+## Rules
+- Some actions require you to look up contact information first. For the following actions, you must get contact information and send that to the agent who needs it:
+  - sending emails
+  - drafting emails
+  - creating calendar event with attendee
+- IMPORTANT: For email/calendar actions that require contact lookup, you should call BOTH contactAgent AND the main action tool (emailAgent/calendarAgent) in the SAME response
+- You must ALWAYS call the "Think" tool at the end to verify you took the right steps
+
+## Instructions
+1) Analyze the user request
+2) If it needs contact lookup + action, call contactAgent AND the action tool (emailAgent/calendarAgent)
+3) If it's a direct action, call the appropriate tool directly
+4) ALWAYS call the "Think" tool last to verify
+
+## Final Reminders
+- Call multiple tools in one response when needed
+- Always include Think tool at the end
+- Current date/time: ${new Date().toISOString()}`;
+
+    // Get dynamic tool information from registry
+    const toolsSection = toolRegistry.generateSystemPrompts();
+    
+    return `${basePrompt}\n\n${toolsSection}`;
   }
 
   /**

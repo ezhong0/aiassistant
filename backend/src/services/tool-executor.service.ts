@@ -1,7 +1,5 @@
 import logger from '../utils/logger';
-import { emailAgent } from '../agents/email.agent';
-import { contactAgent } from '../agents/contact.agent';
-import { ContactAgent } from '../agents/contact.agent';
+import { toolRegistry } from '../registry/tool.registry';
 import { 
   ToolCall, 
   ToolResult, 
@@ -56,40 +54,10 @@ export class ToolExecutorService {
       
       if (mode.preview && needsConfirmation) {
         // In preview mode for confirmation-required tools, return action preview
-        result = await this.previewTool(toolCall, accessToken);
+        result = await toolRegistry.generatePreview(toolCall, accessToken);
       } else {
-        // Execute the tool normally
-        switch (toolCall.name) {
-          case TOOL_NAMES.EMAIL_AGENT:
-            result = await this.executeEmailAgent(toolCall, accessToken);
-            break;
-
-          case TOOL_NAMES.THINK:
-            result = await this.executeThink(toolCall);
-            break;
-
-          case TOOL_NAMES.CONTACT_AGENT:
-            result = await this.executeContactAgent(toolCall, accessToken);
-            break;
-
-          case TOOL_NAMES.CALENDAR_AGENT:
-            result = await this.executeCalendarAgent(toolCall);
-            break;
-
-          case TOOL_NAMES.CONTENT_CREATOR:
-            result = await this.executeContentCreator(toolCall);
-            break;
-
-          case TOOL_NAMES.TAVILY:
-            result = await this.executeTavily(toolCall);
-            break;
-
-          default:
-            throw new ToolExecutionError(
-              toolCall.name,
-              new Error(`Unknown tool: ${toolCall.name}`)
-            );
-        }
+        // Execute the tool using registry
+        return await toolRegistry.executeTool(toolCall, context, accessToken);
       }
 
       // Check if the tool execution was successful
@@ -180,212 +148,20 @@ export class ToolExecutorService {
     return results;
   }
 
-  /**
-   * Execute email agent
-   */
-  private async executeEmailAgent(toolCall: ToolCall, accessToken?: string): Promise<any> {
-    if (!accessToken) {
-      return {
-        success: false,
-        message: 'Access token required for email operations',
-        error: 'MISSING_ACCESS_TOKEN'
-      };
-    }
-
-    // Format contacts from contact agent if provided
-    let formattedContacts = toolCall.parameters.contacts;
-    if (toolCall.parameters.contactResults) {
-      // Convert contact agent results to the format email agent expects
-      formattedContacts = ContactAgent.formatContactsForAgent(toolCall.parameters.contactResults);
-    }
-
-    return await emailAgent.processQuery({
-      query: toolCall.parameters.query,
-      accessToken,
-      contacts: formattedContacts
-    });
-  }
-
-  /**
-   * Execute think tool (analysis/reasoning)
-   */
-  private async executeThink(toolCall: ToolCall): Promise<any> {
-    // Think tool provides reasoning and analysis
-    const query = toolCall.parameters.query;
-    
-    // For now, this is a simple implementation
-    // In a real system, this might use an LLM for reasoning
-    return {
-      success: true,
-      message: `Analyzed: ${query}`,
-      analysis: `The request "${query}" has been analyzed and appropriate actions have been taken.`,
-      reasoning: 'Based on the user input, the correct tools were identified and executed.',
-      recommendations: [
-        'Verify the results of the executed actions',
-        'Check for any follow-up actions needed',
-        'Confirm with user if the request was fulfilled'
-      ]
-    };
-  }
-
-  /**
-   * Execute contact agent
-   */
-  private async executeContactAgent(toolCall: ToolCall, accessToken?: string): Promise<any> {
-    if (!accessToken) {
-      return {
-        success: false,
-        message: 'Access token required for contact operations',
-        error: 'MISSING_ACCESS_TOKEN'
-      };
-    }
-
-    return await contactAgent.processQuery({
-      query: toolCall.parameters.query,
-      operation: toolCall.parameters.operation
-    }, accessToken);
-  }
-
-  /**
-   * Execute calendar agent (placeholder)
-   */
-  private async executeCalendarAgent(toolCall: ToolCall): Promise<any> {
-    // Placeholder for calendar agent
-    logger.info('Calendar agent execution (placeholder)', { query: toolCall.parameters.query });
-    
-    return {
-      success: false,
-      message: 'Calendar agent not yet implemented',
-      error: 'NOT_IMPLEMENTED'
-    };
-  }
-
-  /**
-   * Execute content creator (placeholder)
-   */
-  private async executeContentCreator(toolCall: ToolCall): Promise<any> {
-    // Placeholder for content creator
-    logger.info('Content creator execution (placeholder)', { query: toolCall.parameters.query });
-    
-    return {
-      success: false,
-      message: 'Content creator not yet implemented',
-      error: 'NOT_IMPLEMENTED'
-    };
-  }
-
-  /**
-   * Execute Tavily search (placeholder)
-   */
-  private async executeTavily(toolCall: ToolCall): Promise<any> {
-    // Placeholder for Tavily search
-    logger.info('Tavily search execution (placeholder)', { query: toolCall.parameters.query });
-    
-    return {
-      success: false,
-      message: 'Tavily search not yet implemented',
-      error: 'NOT_IMPLEMENTED'
-    };
-  }
 
   /**
    * Determine if a tool needs user confirmation before execution
    */
   private toolNeedsConfirmation(toolName: string): boolean {
-    const confirmationRequiredTools = [
-      TOOL_NAMES.EMAIL_AGENT,
-      TOOL_NAMES.CALENDAR_AGENT
-      // Note: ContactAgent and Think don't need confirmation - they're read-only
-    ];
-    
-    return confirmationRequiredTools.includes(toolName as any);
+    return toolRegistry.toolNeedsConfirmation(toolName);
   }
 
-  /**
-   * Generate preview for a tool without executing it
-   */
-  private async previewTool(toolCall: ToolCall, accessToken?: string): Promise<any> {
-    const actionId = `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    switch (toolCall.name) {
-      case TOOL_NAMES.EMAIL_AGENT:
-        return {
-          success: true,
-          message: 'Email action prepared for confirmation',
-          actionId,
-          type: 'email',
-          parameters: {
-            query: toolCall.parameters.query,
-            // Extract email details for preview
-            preview: this.extractEmailPreview(toolCall.parameters.query)
-          },
-          awaitingConfirmation: true,
-          confirmationPrompt: 'I\'m about to send an email. Would you like me to proceed?'
-        };
-        
-      case TOOL_NAMES.CALENDAR_AGENT:
-        return {
-          success: true,
-          message: 'Calendar action prepared for confirmation',
-          actionId,
-          type: 'calendar',
-          parameters: {
-            query: toolCall.parameters.query,
-            preview: this.extractCalendarPreview(toolCall.parameters.query)
-          },
-          awaitingConfirmation: true,
-          confirmationPrompt: 'I\'m about to create a calendar event. Would you like me to proceed?'
-        };
-        
-      default:
-        return {
-          success: false,
-          message: `Preview not supported for tool: ${toolCall.name}`,
-          error: 'PREVIEW_NOT_SUPPORTED'
-        };
-    }
-  }
-
-  /**
-   * Extract email preview information from query
-   */
-  private extractEmailPreview(query: string): any {
-    // Simple extraction - in a real system you might use NLP
-    const toMatch = query.match(/(?:to|send.*to)\s+([^\s]+@[^\s]+)/i);
-    const subjectMatch = query.match(/(?:subject|about|regarding)\s+([^,.]+)/i);
-    
-    return {
-      to: toMatch ? toMatch[1] : 'recipient',
-      subject: subjectMatch ? subjectMatch[1]?.trim() : 'No subject',
-      body: query.includes('asking') ? query.split('asking')[1]?.trim() : 'Email content'
-    };
-  }
-
-  /**
-   * Extract calendar preview information from query
-   */
-  private extractCalendarPreview(query: string): any {
-    const titleMatch = query.match(/(?:meeting|event).*?(?:about|for|with)\s+([^,\n]+)/i);
-    const timeMatch = query.match(/(?:at|on|tomorrow|today|next)\s+([^,\n]+)/i);
-    
-    return {
-      title: titleMatch ? titleMatch[1]?.trim() : 'Meeting',
-      time: timeMatch ? timeMatch[1]?.trim() : 'Not specified',
-      type: 'meeting'
-    };
-  }
 
   /**
    * Determine if a tool is critical for the workflow
    */
   private isCriticalTool(toolName: string): boolean {
-    const criticalTools = [
-      TOOL_NAMES.EMAIL_AGENT,
-      TOOL_NAMES.CALENDAR_AGENT,
-      TOOL_NAMES.CONTACT_AGENT
-    ];
-    
-    return criticalTools.includes(toolName as any);
+    return toolRegistry.isCriticalTool(toolName);
   }
 
   /**

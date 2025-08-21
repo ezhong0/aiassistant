@@ -9,6 +9,7 @@ dotenv.config({ path: envPath });
 import express, { Request, Response } from 'express';
 import configService from './config/config.service';
 import logger from './utils/logger';
+import { initializeToolRegistry } from './config/tool-registry-init';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 
@@ -25,6 +26,15 @@ import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
+
+// Initialize tool registry before anything else
+try {
+  initializeToolRegistry();
+  logger.info('Tool registry initialized successfully');
+} catch (error) {
+  logger.error('Failed to initialize tool registry:', error);
+  // Continue anyway - the app can still function with basic routing
+}
 
 const app = express();
 const port = configService.port;
