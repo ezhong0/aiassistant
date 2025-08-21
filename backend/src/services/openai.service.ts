@@ -251,6 +251,31 @@ export class OpenAIService {
   }
 
   /**
+   * Create a chat completion with messages array
+   */
+  async createChatCompletion(
+    messages: ChatMessage[],
+    maxTokens: number = 1000
+  ): Promise<{ content: string }> {
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+      });
+
+      return {
+        content: response.choices[0]?.message?.content || ''
+      };
+      
+    } catch (error) {
+      logger.error('Error in OpenAI chat completion:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Health check for the OpenAI service
    */
   async healthCheck(): Promise<boolean> {

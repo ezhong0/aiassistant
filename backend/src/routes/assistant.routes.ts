@@ -112,6 +112,15 @@ router.post('/text-command',
     // Get session context from backend session service (includes pending actions)
     const sessionContext = sessionService.getSession(finalSessionId);
     
+    logger.info('Session context retrieved', {
+      sessionId: finalSessionId,
+      sessionFound: !!sessionContext,
+      sessionPendingActions: sessionContext?.pendingActions?.length || 0,
+      sessionPendingActionsData: sessionContext?.pendingActions,
+      clientPendingActions: context?.pendingActions?.length || 0,
+      clientPendingActionsData: context?.pendingActions
+    });
+    
     // Merge client context with session context (session context takes precedence for pending actions)
     const mergedContext = {
       ...context,
@@ -134,9 +143,21 @@ router.post('/text-command',
     });
 
     // Handle pending actions if present
+    logger.info('Checking for pending actions', {
+      hasMergedContext: !!mergedContext,
+      hasPendingActions: !!(mergedContext?.pendingActions),
+      pendingActionsCount: mergedContext?.pendingActions?.length || 0,
+      pendingActionsDetails: mergedContext?.pendingActions,
+      isConfirmationResponse: isConfirmationResponse(command),
+      command: command
+    });
+    
     if (mergedContext?.pendingActions && mergedContext.pendingActions.length > 0) {
       const pendingAction = mergedContext.pendingActions.find(action => action.awaitingConfirmation);
+      logger.info('Found pending action for confirmation', { pendingAction, command });
+      
       if (pendingAction && isConfirmationResponse(command)) {
+        logger.info('Processing confirmation response', { actionId: pendingAction.actionId });
         return await handleActionConfirmation(req, res, pendingAction, command, finalSessionId);
       }
     }
@@ -180,6 +201,14 @@ router.post('/text-command',
         // Store pending actions in session context
         const pendingActions = extractPendingActions(previewResults);
         
+        logger.info('Storing pending actions in session', {
+          sessionId: finalSessionId,
+          pendingActionsCount: pendingActions.length,
+          pendingActionsData: pendingActions,
+          previewResultsCount: previewResults.length,
+          previewResultsAwaitingConfirmation: previewResults.filter(r => r.result?.awaitingConfirmation).length
+        });
+        
         // Update session with pending actions
         await sessionService.updateSession(finalSessionId, {
           lastActivity: new Date(),
@@ -187,16 +216,20 @@ router.post('/text-command',
           conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
         });
         
+        // Generate dynamic confirmation message
+        const confirmationMessage = await generateDynamicConfirmationMessage(masterResponse.toolCalls, previewResults, command);
+        const confirmationPrompt = await generateDynamicConfirmationPrompt(masterResponse.toolCalls, previewResults, command);
+        
         // Return confirmation required response
         return res.json({
           success: true,
           type: 'confirmation_required',
-          message: 'I need your confirmation before proceeding with this action.',
+          message: confirmationMessage,
           data: {
             sessionId: finalSessionId,
             toolResults: previewResults,
             pendingActions: pendingActions,
-            confirmationPrompt: generateConfirmationPrompt(masterResponse.toolCalls, previewResults),
+            confirmationPrompt: confirmationPrompt,
             conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
           }
         });
@@ -210,10 +243,12 @@ router.post('/text-command',
         );
         
         const executionStats = toolExecutorService.getExecutionStats(toolResults);
+        const completionMessage = await generateDynamicCompletionMessage(toolResults, command);
+        
         return res.json({
           success: true,
           type: 'action_completed', 
-          message: generateCompletionMessage(toolResults),
+          message: completionMessage,
           data: {
             sessionId: finalSessionId,
             toolResults,
@@ -272,10 +307,12 @@ router.post('/confirm-action',
       });
 
       if (!confirmed) {
+        const cancelMessage = await generateDynamicCancelMessage(actionId);
+        
         return res.json({
           success: true,
           type: 'response',
-          message: 'Action cancelled.',
+          message: cancelMessage,
           data: {
             actionId,
             status: 'cancelled',
@@ -1005,6 +1042,68 @@ function extractPendingActions(toolResults: any[]): any[] {
     }));
 }
 
+async function generateDynamicConfirmationMessage(toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> {
+  try {
+    if (masterAgent && masterAgent['openaiService']) {
+      const openaiService = masterAgent['openaiService'];
+      const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
+      
+      const messages = [
+        {
+          role: 'system' as const,
+          content: 'You are a helpful assistant. Generate a natural confirmation message asking the user if they want to proceed with an action. Keep it concise and friendly. Do not use quotes.'
+        },
+        {
+          role: 'user' as const,
+          content: `User command: "${userCommand}"\nAction to confirm: ${mainAction?.name || 'unknown'} with query "${mainAction?.parameters?.query || ''}"\n\nGenerate a natural confirmation message.`
+        }
+      ];
+      
+      const response = await openaiService.createChatCompletion(messages, 100);
+      return response.content.trim().replace(/^"|"$/g, '');
+    }
+  } catch (error) {
+    logger.error('Failed to generate dynamic confirmation message', { error });
+  }
+  
+  // Fallback
+  return 'I need your confirmation before proceeding with this action.';
+}
+
+async function generateDynamicConfirmationPrompt(toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> {
+  try {
+    if (masterAgent && masterAgent['openaiService']) {
+      const openaiService = masterAgent['openaiService'];
+      const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
+      
+      const messages = [
+        {
+          role: 'system' as const,
+          content: 'You are a helpful assistant. Generate a brief instruction for the user on how to confirm or cancel an action. Keep it concise. Do not use quotes.'
+        },
+        {
+          role: 'user' as const,
+          content: `User wants to ${mainAction?.name === 'emailAgent' ? 'send an email' : mainAction?.name === 'calendarAgent' ? 'create a calendar event' : 'perform an action'}. Generate a brief instruction on how to confirm or cancel.`
+        }
+      ];
+      
+      const response = await openaiService.createChatCompletion(messages, 50);
+      return response.content.trim().replace(/^"|"$/g, '');
+    }
+  } catch (error) {
+    logger.error('Failed to generate dynamic confirmation prompt', { error });
+  }
+  
+  // Fallback
+  const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
+  if (mainAction?.name === 'emailAgent') {
+    return 'Reply with "yes" to send the email or "no" to cancel.';
+  } else if (mainAction?.name === 'calendarAgent') {
+    return 'Reply with "yes" to create the event or "no" to cancel.';
+  }
+  return 'Reply with "yes" to proceed or "no" to cancel.';
+}
+
 function generateConfirmationPrompt(toolCalls: any[], toolResults: any[]): string {
   const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
   if (!mainAction) {
@@ -1018,6 +1117,64 @@ function generateConfirmationPrompt(toolCalls: any[], toolResults: any[]): strin
   }
   
   return 'Would you like me to proceed with this action?';
+}
+
+async function generateDynamicCompletionMessage(toolResults: any[], userCommand: string): Promise<string> {
+  try {
+    if (masterAgent && masterAgent['openaiService']) {
+      const openaiService = masterAgent['openaiService'];
+      const successfulResults = toolResults.filter(r => r.success && r.toolName !== 'Think');
+      const failedResults = toolResults.filter(r => !r.success);
+      
+      const toolSummary = successfulResults.map(r => `${r.toolName}: ${r.result?.message || 'completed'}`).join(', ');
+      
+      const messages = [
+        {
+          role: 'system' as const,
+          content: 'You are a helpful assistant. Generate a natural completion message summarizing what was accomplished. Keep it concise and positive. Do not use quotes.'
+        },
+        {
+          role: 'user' as const,
+          content: `User command: "${userCommand}"\nCompleted actions: ${toolSummary}\nFailed actions: ${failedResults.length}\n\nGenerate a natural completion message.`
+        }
+      ];
+      
+      const response = await openaiService.createChatCompletion(messages, 100);
+      return response.content.trim().replace(/^"|"$/g, '');
+    }
+  } catch (error) {
+    logger.error('Failed to generate dynamic completion message', { error });
+  }
+  
+  // Fallback to original logic
+  return generateCompletionMessage(toolResults);
+}
+
+async function generateDynamicCancelMessage(actionId: string): Promise<string> {
+  try {
+    if (masterAgent && masterAgent['openaiService']) {
+      const openaiService = masterAgent['openaiService'];
+      
+      const messages = [
+        {
+          role: 'system' as const,
+          content: 'You are a helpful assistant. Generate a brief, natural message confirming an action was cancelled. Keep it concise and reassuring. Do not use quotes.'
+        },
+        {
+          role: 'user' as const,
+          content: 'Generate a message confirming that an action was cancelled by the user.'
+        }
+      ];
+      
+      const response = await openaiService.createChatCompletion(messages, 50);
+      return response.content.trim().replace(/^"|"$/g, '');
+    }
+  } catch (error) {
+    logger.error('Failed to generate dynamic cancel message', { error });
+  }
+  
+  // Fallback
+  return 'Action cancelled.';
 }
 
 function generateCompletionMessage(toolResults: any[]): string {

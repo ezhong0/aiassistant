@@ -2,6 +2,7 @@ import logger from '../utils/logger';
 import { gmailService } from '../services/gmail.service';
 import { EmailParser } from '../utils/email-parser';
 import { ThreadManager } from '../utils/thread-manager';
+import { OpenAIService } from '../services/openai.service';
 import { 
   SendEmailRequest, 
   SearchEmailsRequest, 
@@ -35,6 +36,12 @@ export interface EmailAgentResponse {
 }
 
 export class EmailAgent {
+  private openAIService?: OpenAIService;
+
+  constructor(openAIService?: OpenAIService) {
+    this.openAIService = openAIService;
+  }
+
   private readonly systemPrompt = `# Email Agent
 You are a specialized email agent that handles all email-related tasks using Gmail API.
 
@@ -68,9 +75,13 @@ Always return structured execution status with confirmation details.
       logger.info('EmailAgent processing query', { query: request.query });
 
       if (!request.accessToken) {
+        const errorMessage = await this.generateResponseMessage('error', {
+          type: 'missing_access_token',
+          query: request.query
+        });
         return {
           success: false,
-          message: 'Access token required for email operations',
+          message: errorMessage,
           error: 'MISSING_ACCESS_TOKEN'
         };
       }
@@ -98,18 +109,27 @@ Always return structured execution status with confirmation details.
           return await this.handleGetThread(request, action.params);
         
         default:
+          const unknownActionMessage = await this.generateResponseMessage('error', {
+            type: 'unknown_action',
+            query: request.query
+          });
           return {
             success: false,
-            message: 'Unable to determine the email action requested',
+            message: unknownActionMessage,
             error: 'UNKNOWN_ACTION'
           };
       }
 
     } catch (error) {
       logger.error('Error in EmailAgent.processQuery:', error);
+      const errorMessage = await this.generateResponseMessage('error', {
+        type: 'processing_error',
+        query: request.query,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return {
         success: false,
-        message: 'An error occurred while processing your email request',
+        message: errorMessage,
         error: error instanceof Error ? error.message : 'UNKNOWN_ERROR'
       };
     }
@@ -181,12 +201,17 @@ Always return structured execution status with confirmation details.
    */
   private async handleSendEmail(request: EmailAgentRequest, params: any): Promise<EmailAgentResponse> {
     try {
-      const emailRequest = this.buildSendEmailRequest(request, params);
+      const emailRequest = await this.buildSendEmailRequest(request, params);
       
       if (!emailRequest.to || (!emailRequest.subject && !emailRequest.body)) {
+        const errorMessage = await this.generateResponseMessage('error', {
+          type: 'missing_email_info',
+          query: request.query,
+          missing: !emailRequest.to ? 'recipient' : 'subject or body'
+        });
         return {
           success: false,
-          message: 'Missing required email information (recipient, subject, or body)',
+          message: errorMessage,
           error: 'INVALID_EMAIL_REQUEST'
         };
       }
@@ -199,9 +224,16 @@ Always return structured execution status with confirmation details.
         to: emailRequest.to 
       });
 
+      const successMessage = await this.generateResponseMessage('success', {
+        type: 'email_sent',
+        recipients: Array.isArray(emailRequest.to) ? emailRequest.to : [emailRequest.to],
+        subject: emailRequest.subject,
+        query: request.query
+      });
+
       return {
         success: true,
-        message: `Email sent successfully to ${Array.isArray(emailRequest.to) ? emailRequest.to.join(', ') : emailRequest.to}`,
+        message: successMessage,
         data: {
           emailId: sentEmail.id,
           threadId: sentEmail.threadId
@@ -212,26 +244,50 @@ Always return structured execution status with confirmation details.
       logger.error('Failed to send email:', error);
       
       // Provide more specific error messages for common issues
-      let errorMessage = 'Failed to send email';
+      let errorMessage: string;
       let errorCode = 'SEND_FAILED';
       
       if (error instanceof GmailServiceError) {
         errorCode = error.code;
-        errorMessage = error.message;
+        errorMessage = await this.generateResponseMessage('error', {
+          type: 'gmail_service_error',
+          query: request.query,
+          errorCode: error.code,
+          errorMessage: error.message
+        });
       } else if (error && typeof error === 'object' && 'message' in error) {
         const errorStr = String(error.message);
         if (errorStr.includes('insufficient authentication scopes') || errorStr.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
-          errorMessage = 'Insufficient permissions. Please re-authenticate with Gmail access.';
           errorCode = 'INSUFFICIENT_SCOPE';
+          errorMessage = await this.generateResponseMessage('error', {
+            type: 'insufficient_scope',
+            query: request.query
+          });
         } else if (errorStr.includes('403')) {
-          errorMessage = 'Gmail access denied. Please check your permissions.';
           errorCode = 'ACCESS_DENIED';
+          errorMessage = await this.generateResponseMessage('error', {
+            type: 'access_denied',
+            query: request.query
+          });
         } else if (errorStr.includes('401')) {
-          errorMessage = 'Authentication failed. Please re-login.';
           errorCode = 'AUTH_FAILED';
+          errorMessage = await this.generateResponseMessage('error', {
+            type: 'auth_failed',
+            query: request.query
+          });
         } else {
-          errorMessage = errorStr;
+          errorMessage = await this.generateResponseMessage('error', {
+            type: 'send_failed',
+            query: request.query,
+            error: errorStr
+          });
         }
+      } else {
+        errorMessage = await this.generateResponseMessage('error', {
+          type: 'send_failed',
+          query: request.query,
+          error: 'Unknown error'
+        });
       }
       
       return {
@@ -247,12 +303,16 @@ Always return structured execution status with confirmation details.
    */
   private async handleReplyEmail(request: EmailAgentRequest, params: any): Promise<EmailAgentResponse> {
     try {
-      const replyRequest = this.buildReplyEmailRequest(request, params);
+      const replyRequest = await this.buildReplyEmailRequest(request, params);
       
       if (!replyRequest.messageId || !replyRequest.threadId || !replyRequest.body) {
+        const errorMessage = await this.generateResponseMessage('error', {
+          type: 'missing_reply_info',
+          query: request.query
+        });
         return {
           success: false,
-          message: 'Missing required information for reply (message ID, thread ID, or body)',
+          message: errorMessage,
           error: 'INVALID_REPLY_REQUEST'
         };
       }
@@ -264,9 +324,14 @@ Always return structured execution status with confirmation details.
         threadId: replyEmail.threadId 
       });
 
+      const successMessage = await this.generateResponseMessage('success', {
+        type: 'reply_sent',
+        query: request.query
+      });
+
       return {
         success: true,
-        message: 'Reply sent successfully',
+        message: successMessage,
         data: {
           emailId: replyEmail.id,
           threadId: replyEmail.threadId
@@ -275,9 +340,14 @@ Always return structured execution status with confirmation details.
 
     } catch (error) {
       logger.error('Failed to send reply:', error);
+      const errorMessage = await this.generateResponseMessage('error', {
+        type: 'reply_failed',
+        query: request.query,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return {
         success: false,
-        message: 'Failed to send reply',
+        message: errorMessage,
         error: error instanceof GmailServiceError ? error.code : 'REPLY_FAILED'
       };
     }
@@ -301,9 +371,15 @@ Always return structured execution status with confirmation details.
         count: searchResult.messages.length 
       });
 
+      const successMessage = await this.generateResponseMessage('success', {
+        type: 'search_completed',
+        query: request.query,
+        count: searchResult.messages.length
+      });
+
       return {
         success: true,
-        message: `Found ${searchResult.messages.length} emails matching your search`,
+        message: successMessage,
         data: {
           emails: searchResult.messages,
           count: searchResult.messages.length
@@ -312,9 +388,14 @@ Always return structured execution status with confirmation details.
 
     } catch (error) {
       logger.error('Failed to search emails:', error);
+      const errorMessage = await this.generateResponseMessage('error', {
+        type: 'search_failed',
+        query: request.query,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return {
         success: false,
-        message: 'Failed to search emails',
+        message: errorMessage,
         error: error instanceof GmailServiceError ? error.code : 'SEARCH_FAILED'
       };
     }
@@ -325,12 +406,16 @@ Always return structured execution status with confirmation details.
    */
   private async handleCreateDraft(request: EmailAgentRequest, params: any): Promise<EmailAgentResponse> {
     try {
-      const emailRequest = this.buildSendEmailRequest(request, params);
+      const emailRequest = await this.buildSendEmailRequest(request, params);
       
       if (!emailRequest.to) {
+        const errorMessage = await this.generateResponseMessage('error', {
+          type: 'missing_recipient',
+          query: request.query
+        });
         return {
           success: false,
-          message: 'Recipient required for draft email',
+          message: errorMessage,
           error: 'INVALID_DRAFT_REQUEST'
         };
       }
@@ -349,9 +434,15 @@ Always return structured execution status with confirmation details.
         subject: emailRequest.subject 
       });
 
+      const successMessage = await this.generateResponseMessage('success', {
+        type: 'draft_created',
+        query: request.query,
+        recipients: Array.isArray(emailRequest.to) ? emailRequest.to : [emailRequest.to]
+      });
+
       return {
         success: true,
-        message: `Draft created for ${Array.isArray(emailRequest.to) ? emailRequest.to.join(', ') : emailRequest.to}`,
+        message: successMessage,
         data: {
           draft
         }
@@ -359,9 +450,14 @@ Always return structured execution status with confirmation details.
 
     } catch (error) {
       logger.error('Failed to create draft:', error);
+      const errorMessage = await this.generateResponseMessage('error', {
+        type: 'draft_failed',
+        query: request.query,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return {
         success: false,
-        message: 'Failed to create draft',
+        message: errorMessage,
         error: 'DRAFT_FAILED'
       };
     }
@@ -373,9 +469,13 @@ Always return structured execution status with confirmation details.
   private async handleGetEmail(request: EmailAgentRequest, params: any): Promise<EmailAgentResponse> {
     try {
       if (!params.messageId) {
+        const errorMessage = await this.generateResponseMessage('error', {
+          type: 'missing_message_id',
+          query: request.query
+        });
         return {
           success: false,
-          message: 'Message ID required to get specific email',
+          message: errorMessage,
           error: 'MISSING_MESSAGE_ID'
         };
       }
@@ -384,9 +484,14 @@ Always return structured execution status with confirmation details.
 
       logger.info('Email retrieved successfully', { messageId: params.messageId });
 
+      const successMessage = await this.generateResponseMessage('success', {
+        type: 'email_retrieved',
+        query: request.query
+      });
+
       return {
         success: true,
-        message: 'Email retrieved successfully',
+        message: successMessage,
         data: {
           emails: [email]
         }
@@ -394,9 +499,14 @@ Always return structured execution status with confirmation details.
 
     } catch (error) {
       logger.error('Failed to get email:', error);
+      const errorMessage = await this.generateResponseMessage('error', {
+        type: 'get_email_failed',
+        query: request.query,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return {
         success: false,
-        message: 'Failed to retrieve email',
+        message: errorMessage,
         error: error instanceof GmailServiceError ? error.code : 'GET_FAILED'
       };
     }
@@ -408,9 +518,13 @@ Always return structured execution status with confirmation details.
   private async handleGetThread(request: EmailAgentRequest, params: any): Promise<EmailAgentResponse> {
     try {
       if (!params.threadId) {
+        const errorMessage = await this.generateResponseMessage('error', {
+          type: 'missing_thread_id',
+          query: request.query
+        });
         return {
           success: false,
-          message: 'Thread ID required to get conversation',
+          message: errorMessage,
           error: 'MISSING_THREAD_ID'
         };
       }
@@ -425,9 +539,15 @@ Always return structured execution status with confirmation details.
         messageCount: enhancedThread.thread.messages.length 
       });
 
+      const successMessage = await this.generateResponseMessage('success', {
+        type: 'thread_retrieved',
+        query: request.query,
+        messageCount: enhancedThread.thread.messages.length
+      });
+
       return {
         success: true,
-        message: `Retrieved conversation with ${enhancedThread.thread.messages.length} messages`,
+        message: successMessage,
         data: {
           threadId: enhancedThread.thread.id,
           emails: enhancedThread.thread.messages,
@@ -437,9 +557,14 @@ Always return structured execution status with confirmation details.
 
     } catch (error) {
       logger.error('Failed to get thread:', error);
+      const errorMessage = await this.generateResponseMessage('error', {
+        type: 'get_thread_failed',
+        query: request.query,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
       return {
         success: false,
-        message: 'Failed to retrieve conversation',
+        message: errorMessage,
         error: error instanceof GmailServiceError ? error.code : 'THREAD_FAILED'
       };
     }
@@ -448,35 +573,98 @@ Always return structured execution status with confirmation details.
   /**
    * Build SendEmailRequest from user input and contacts
    */
-  private buildSendEmailRequest(request: EmailAgentRequest, params: any): SendEmailRequest {
-    const { to, cc, bcc, subject, body } = this.extractEmailContent(request.query, request.contacts);
+  private async buildSendEmailRequest(request: EmailAgentRequest, params: any): Promise<SendEmailRequest> {
+    const { to, cc, bcc, subject, body } = await this.extractEmailContent(request.query, request.contacts);
 
     return {
       to: to || params.to,
       cc: cc || params.cc,
       bcc: bcc || params.bcc,
-      subject: subject || params.subject || 'No Subject',
-      body: body || params.body || 'This email was sent via your assistant.'
+      subject: subject || params.subject,
+      body: body || params.body
     };
   }
 
   /**
-   * Build ReplyEmailRequest from user input
+   * Build ReplyEmailRequest from user input  
    */
-  private buildReplyEmailRequest(request: EmailAgentRequest, params: any): ReplyEmailRequest {
-    const { body } = this.extractEmailContent(request.query, request.contacts);
+  private async buildReplyEmailRequest(request: EmailAgentRequest, params: any): Promise<ReplyEmailRequest> {
+    const { body } = await this.extractEmailContent(request.query, request.contacts);
 
     return {
       messageId: params.messageId,
       threadId: params.threadId,
-      body: body || params.body || 'Reply sent via your assistant.'
+      body: body || params.body
     };
   }
 
   /**
-   * Extract email content from natural language query
+   * Extract email content from natural language query using OpenAI
    */
-  private extractEmailContent(query: string, contacts?: Array<{ name: string; email: string; phone?: string; }>): {
+  private async extractEmailContent(query: string, contacts?: Array<{ name: string; email: string; phone?: string; }>): Promise<{
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject?: string;
+    body?: string;
+  }> {
+    if (!this.openAIService) {
+      // Fallback to basic extraction if OpenAI not available
+      return this.extractEmailContentBasic(query, contacts);
+    }
+
+    try {
+      const contactsContext = contacts?.length ? 
+        `Available contacts: ${contacts.map(c => `${c.name} (${c.email})`).join(', ')}` : 
+        'No contacts provided';
+
+      const extractionPrompt = `Extract email details from this request:
+"${query}"
+
+${contactsContext}
+
+Please provide a JSON response with the following structure:
+{
+  "to": ["email@example.com"], // Required: recipient email addresses
+  "subject": "Subject line", // Required: email subject
+  "body": "Email content", // Required: email body content
+  "cc": ["email@example.com"], // Optional: CC recipients
+  "bcc": ["email@example.com"] // Optional: BCC recipients
+}
+
+Guidelines:
+- Extract the recipient from the query or use provided contacts
+- Generate an appropriate subject line based on the intent
+- Create professional email content that fulfills the user's request
+- If asking a question, make it clear and polite
+- Keep the tone natural and appropriate for the context`;
+
+      const messages = [
+        { role: 'system' as const, content: 'You are an expert at extracting and generating email content from natural language requests. Always respond with valid JSON.' },
+        { role: 'user' as const, content: extractionPrompt }
+      ];
+
+      const response = await this.openAIService.createChatCompletion(messages);
+      
+      try {
+        const emailDetails = JSON.parse(response.content);
+        logger.info('OpenAI extracted email details', { query: query.substring(0, 100), hasDetails: !!emailDetails });
+        return emailDetails;
+      } catch (parseError) {
+        logger.error('Failed to parse OpenAI email extraction response', { error: parseError, response: response.content });
+        return this.extractEmailContentBasic(query, contacts);
+      }
+
+    } catch (error) {
+      logger.error('OpenAI email content extraction failed, using fallback', { error });
+      return this.extractEmailContentBasic(query, contacts);
+    }
+  }
+
+  /**
+   * Basic email content extraction fallback
+   */
+  private extractEmailContentBasic(query: string, contacts?: Array<{ name: string; email: string; phone?: string; }>): {
     to?: string[];
     cc?: string[];
     bcc?: string[];
@@ -602,6 +790,161 @@ Always return structured execution status with confirmation details.
   }
 
   /**
+   * Generate dynamic response messages using OpenAI
+   */
+  private async generateResponseMessage(
+    type: 'success' | 'error' | 'confirmation',
+    context: {
+      type: string;
+      query: string;
+      [key: string]: any;
+    }
+  ): Promise<string> {
+    if (!this.openAIService) {
+      return this.generateFallbackMessage(type, context);
+    }
+
+    try {
+      const prompt = this.buildResponsePrompt(type, context);
+      const messages = [
+        {
+          role: 'system' as const,
+          content: 'You are an email assistant. Generate natural, helpful response messages. Keep responses concise and professional. Do not use quotes around the response.'
+        },
+        {
+          role: 'user' as const,
+          content: prompt
+        }
+      ];
+
+      const response = await this.openAIService.createChatCompletion(messages, 150);
+      const message = response.content.trim().replace(/^"|"$/g, ''); // Remove quotes if present
+      
+      logger.info('Generated dynamic response message', { 
+        type, 
+        contextType: context.type,
+        messageLength: message.length 
+      });
+      
+      return message;
+      
+    } catch (error) {
+      logger.error('Failed to generate response message, using fallback', { error });
+      return this.generateFallbackMessage(type, context);
+    }
+  }
+
+  /**
+   * Build prompt for response message generation
+   */
+  private buildResponsePrompt(type: 'success' | 'error' | 'confirmation', context: any): string {
+    const baseContext = `User query: "${context.query}"`;
+    
+    switch (type) {
+      case 'success':
+        return this.buildSuccessPrompt(context, baseContext);
+      case 'error':
+        return this.buildErrorPrompt(context, baseContext);
+      case 'confirmation':
+        return this.buildConfirmationPrompt(context, baseContext);
+      default:
+        return `${baseContext}\n\nGenerate a helpful response message.`;
+    }
+  }
+
+  /**
+   * Build success message prompt
+   */
+  private buildSuccessPrompt(context: any, baseContext: string): string {
+    switch (context.type) {
+      case 'email_sent':
+        return `${baseContext}\n\nEmail successfully sent to: ${context.recipients?.join(', ')}\nSubject: ${context.subject || 'N/A'}\n\nGenerate a natural success message confirming the email was sent.`;
+      
+      case 'reply_sent':
+        return `${baseContext}\n\nEmail reply sent successfully.\n\nGenerate a natural success message confirming the reply was sent.`;
+      
+      case 'search_completed':
+        return `${baseContext}\n\nFound ${context.count} emails matching the search.\n\nGenerate a natural message describing the search results.`;
+      
+      case 'draft_created':
+        return `${baseContext}\n\nDraft created for: ${context.recipients?.join(', ')}\n\nGenerate a natural success message confirming the draft was created.`;
+      
+      case 'email_retrieved':
+        return `${baseContext}\n\nEmail retrieved successfully.\n\nGenerate a natural success message confirming the email was retrieved.`;
+      
+      case 'thread_retrieved':
+        return `${baseContext}\n\nRetrieved conversation with ${context.messageCount} messages.\n\nGenerate a natural success message describing the thread retrieval.`;
+      
+      default:
+        return `${baseContext}\n\nOperation completed successfully.\n\nGenerate a natural success message.`;
+    }
+  }
+
+  /**
+   * Build error message prompt
+   */
+  private buildErrorPrompt(context: any, baseContext: string): string {
+    switch (context.type) {
+      case 'missing_access_token':
+        return `${baseContext}\n\nError: Missing Google access token for email operations.\n\nGenerate a helpful error message asking the user to authenticate.`;
+      
+      case 'insufficient_scope':
+        return `${baseContext}\n\nError: Insufficient Gmail permissions.\n\nGenerate a helpful message explaining the user needs to re-authenticate with Gmail permissions.`;
+      
+      case 'missing_email_info':
+        return `${baseContext}\n\nError: Missing ${context.missing} for email.\n\nGenerate a helpful message explaining what information is needed.`;
+      
+      case 'send_failed':
+        return `${baseContext}\n\nError: Failed to send email. ${context.error || ''}\n\nGenerate a helpful error message suggesting next steps.`;
+      
+      case 'unknown_action':
+        return `${baseContext}\n\nError: Could not determine what email action to perform.\n\nGenerate a helpful message asking for clarification.`;
+      
+      default:
+        return `${baseContext}\n\nError: ${context.error || 'An error occurred'}\n\nGenerate a helpful error message.`;
+    }
+  }
+
+  /**
+   * Build confirmation message prompt
+   */
+  private buildConfirmationPrompt(context: any, baseContext: string): string {
+    return `${baseContext}\n\nGenerate a natural confirmation message asking the user if they want to proceed with this email action.`;
+  }
+
+  /**
+   * Generate fallback messages when OpenAI is not available
+   */
+  private generateFallbackMessage(type: 'success' | 'error' | 'confirmation', context: any): string {
+    switch (type) {
+      case 'success':
+        switch (context.type) {
+          case 'email_sent':
+            return `Email sent successfully to ${context.recipients?.join(', ')}`;
+          case 'reply_sent':
+            return 'Reply sent successfully';
+          case 'search_completed':
+            return `Found ${context.count} emails matching your search`;
+          default:
+            return 'Operation completed successfully';
+        }
+      case 'error':
+        switch (context.type) {
+          case 'missing_access_token':
+            return 'Access token required for email operations';
+          case 'insufficient_scope':
+            return 'Insufficient permissions. Please re-authenticate with Gmail access.';
+          default:
+            return context.error || 'An error occurred';
+        }
+      case 'confirmation':
+        return 'Would you like me to proceed with this email action?';
+      default:
+        return 'Processing your request...';
+    }
+  }
+
+  /**
    * Get system prompt for external use
    */
   getSystemPrompt(): string {
@@ -609,4 +952,24 @@ Always return structured execution status with confirmation details.
   }
 }
 
-export const emailAgent = new EmailAgent();
+// Initialize EmailAgent with OpenAI if available
+let emailAgent: EmailAgent;
+try {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  if (openaiApiKey) {
+    const openAIService = new OpenAIService({
+      apiKey: openaiApiKey,
+      model: 'gpt-4o-mini'
+    });
+    emailAgent = new EmailAgent(openAIService);
+    logger.info('EmailAgent initialized with OpenAI integration');
+  } else {
+    emailAgent = new EmailAgent();
+    logger.info('EmailAgent initialized without OpenAI (fallback mode)');
+  }
+} catch (error) {
+  logger.error('Failed to initialize EmailAgent with OpenAI, using fallback', error);
+  emailAgent = new EmailAgent();
+}
+
+export { emailAgent };
