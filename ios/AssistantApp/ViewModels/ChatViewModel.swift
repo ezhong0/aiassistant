@@ -86,7 +86,17 @@ class ChatViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            let response = try await apiService.sendTextCommand(command, sessionId: sessionId)
+            // Include pending action in context if there is one
+            let context: [String: Any]? = pendingAction != nil ? [
+                "pendingActions": [[
+                    "actionId": pendingAction!.actionId,
+                    "type": pendingAction!.type,
+                    "parameters": pendingAction!.parameters,
+                    "awaitingConfirmation": true
+                ]]
+            ] : nil
+            
+            let response = try await apiService.sendTextCommand(command, sessionId: sessionId, context: context)
             await handleResponse(response)
             
         } catch {

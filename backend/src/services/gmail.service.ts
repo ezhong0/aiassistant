@@ -499,10 +499,25 @@ export class GmailService {
       return error;
     }
 
-    const message = error?.message || 'Unknown Gmail API error';
-    const code = error?.code || operation;
+    let message = error?.message || 'Unknown Gmail API error';
+    let code = error?.code || operation;
     
-    logger.error('Gmail API error', { operation, error: message, code });
+    // Handle specific Google API error responses
+    if (error?.response?.data?.error) {
+      const apiError = error.response.data.error;
+      message = apiError.message || message;
+      code = apiError.code || code;
+      
+      // Check for scope issues
+      if (apiError.code === 403 && 
+          (apiError.message?.includes('insufficient authentication scopes') || 
+           apiError.status === 'PERMISSION_DENIED')) {
+        message = 'Insufficient Gmail permissions. Please re-authenticate with Gmail access.';
+        code = 'INSUFFICIENT_SCOPE';
+      }
+    }
+    
+    logger.error('Gmail API error', { operation, error: message, code, originalError: error });
     
     return new GmailServiceError(message, code);
   }

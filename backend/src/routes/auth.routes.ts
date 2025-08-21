@@ -31,7 +31,14 @@ const router = express.Router();
  */
 router.get('/google', authRateLimit, (req: Request, res: Response) => {
   try {
-    const scopes = ['openid', 'email', 'profile'];
+    const scopes = [
+      'openid', 
+      'email', 
+      'profile',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/contacts.readonly'
+    ];
     const authUrl = authService.generateAuthUrl(scopes);
     
     logger.info('Generated Google OAuth URL for user authentication');

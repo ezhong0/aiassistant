@@ -210,10 +210,34 @@ Always return structured execution status with confirmation details.
 
     } catch (error) {
       logger.error('Failed to send email:', error);
+      
+      // Provide more specific error messages for common issues
+      let errorMessage = 'Failed to send email';
+      let errorCode = 'SEND_FAILED';
+      
+      if (error instanceof GmailServiceError) {
+        errorCode = error.code;
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        const errorStr = String(error.message);
+        if (errorStr.includes('insufficient authentication scopes') || errorStr.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+          errorMessage = 'Insufficient permissions. Please re-authenticate with Gmail access.';
+          errorCode = 'INSUFFICIENT_SCOPE';
+        } else if (errorStr.includes('403')) {
+          errorMessage = 'Gmail access denied. Please check your permissions.';
+          errorCode = 'ACCESS_DENIED';
+        } else if (errorStr.includes('401')) {
+          errorMessage = 'Authentication failed. Please re-login.';
+          errorCode = 'AUTH_FAILED';
+        } else {
+          errorMessage = errorStr;
+        }
+      }
+      
       return {
         success: false,
-        message: 'Failed to send email',
-        error: error instanceof GmailServiceError ? error.code : 'SEND_FAILED'
+        message: errorMessage,
+        error: errorCode
       };
     }
   }

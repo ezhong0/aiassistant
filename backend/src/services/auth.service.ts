@@ -41,7 +41,14 @@ export class AuthService {
   /**
    * Generate Google OAuth authorization URL
    */
-  generateAuthUrl(scopes: string[] = ['openid', 'email', 'profile']): string {
+  generateAuthUrl(scopes: string[] = [
+    'openid', 
+    'email', 
+    'profile',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/contacts.readonly'
+  ]): string {
     return this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,

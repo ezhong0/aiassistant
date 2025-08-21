@@ -13,13 +13,13 @@ class APIService: ObservableObject {
     // MARK: - Assistant API Calls
     
     /// Send a text command to the assistant
-    func sendTextCommand(_ command: String, sessionId: String? = nil) async throws -> TextCommandResponse {
+    func sendTextCommand(_ command: String, sessionId: String? = nil, context: [String: Any]? = nil) async throws -> TextCommandResponse {
         let endpoint = "api/assistant/text-command"
         
         var body: [String: Any] = [
             "command": command,
             "sessionId": sessionId ?? UUID().uuidString,
-            "context": [
+            "context": context ?? [
                 "userPreferences": [
                     "verbosity": "normal"
                 ]

@@ -137,6 +137,22 @@ export class SessionService {
   }
 
   /**
+   * Update session with new data
+   */
+  updateSession(sessionId: string, updates: Partial<SessionContext>): void {
+    let session = this.getSession(sessionId);
+    
+    if (!session) {
+      // Create session if it doesn't exist
+      logger.info(`Session ${sessionId} not found, creating new one`);
+      session = this.createSession(sessionId, updates.userId);
+    }
+
+    Object.assign(session, updates);
+    logger.info(`Updated session ${sessionId}`);
+  }
+
+  /**
    * Get conversation context for AI
    */
   getConversationContext(sessionId: string): string {

@@ -109,18 +109,33 @@ router.post('/text-command',
 
     const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
     
+    // Get session context from backend session service (includes pending actions)
+    const sessionContext = sessionService.getSession(finalSessionId);
+    
+    // Merge client context with session context (session context takes precedence for pending actions)
+    const mergedContext = {
+      ...context,
+      pendingActions: sessionContext?.pendingActions || context?.pendingActions,
+      conversationHistory: context?.conversationHistory || sessionContext?.conversationHistory
+    };
+    
     logger.info('Processing assistant text command', { 
       userId: user.userId, 
       command: command.substring(0, 100) + (command.length > 100 ? '...' : ''),
       sessionId: finalSessionId,
-      hasContext: !!context,
+      hasContext: !!mergedContext,
       hasAccessToken: !!accessToken,
-      pendingActions: context?.pendingActions?.length || 0
+      pendingActions: mergedContext?.pendingActions?.length || 0,
+      sessionDebug: mergedContext ? { 
+        hasPendingActions: !!mergedContext.pendingActions,
+        pendingActionsCount: mergedContext.pendingActions?.length,
+        pendingActionsData: mergedContext.pendingActions?.slice(0, 2) // Only show first 2 for debugging
+      } : 'no-context'
     });
 
     // Handle pending actions if present
-    if (context?.pendingActions && context.pendingActions.length > 0) {
-      const pendingAction = context.pendingActions.find(action => action.awaitingConfirmation);
+    if (mergedContext?.pendingActions && mergedContext.pendingActions.length > 0) {
+      const pendingAction = mergedContext.pendingActions.find(action => action.awaitingConfirmation);
       if (pendingAction && isConfirmationResponse(command)) {
         return await handleActionConfirmation(req, res, pendingAction, command, finalSessionId);
       }
@@ -162,6 +177,16 @@ router.post('/text-command',
       );
       
       if (needsConfirmation) {
+        // Store pending actions in session context
+        const pendingActions = extractPendingActions(previewResults);
+        
+        // Update session with pending actions
+        await sessionService.updateSession(finalSessionId, {
+          lastActivity: new Date(),
+          pendingActions: pendingActions,
+          conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
+        });
+        
         // Return confirmation required response
         return res.json({
           success: true,
@@ -170,9 +195,9 @@ router.post('/text-command',
           data: {
             sessionId: finalSessionId,
             toolResults: previewResults,
-            pendingActions: extractPendingActions(previewResults),
+            pendingActions: pendingActions,
             confirmationPrompt: generateConfirmationPrompt(masterResponse.toolCalls, previewResults),
-            conversationContext: buildConversationContext(command, masterResponse.message, context)
+            conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
           }
         });
       } else {
@@ -193,7 +218,7 @@ router.post('/text-command',
             sessionId: finalSessionId,
             toolResults,
             executionStats,
-            conversationContext: buildConversationContext(command, masterResponse.message, context)
+            conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
           }
         });
       }
@@ -206,7 +231,7 @@ router.post('/text-command',
         data: {
           response: masterResponse.message,
           sessionId: finalSessionId,
-          conversationContext: buildConversationContext(command, masterResponse.message, context)
+          conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
         }
       });
     }
@@ -967,11 +992,15 @@ function buildConversationContext(
 // Helper functions
 function extractPendingActions(toolResults: any[]): any[] {
   return toolResults
-    .filter(result => result.result && typeof result.result === 'object' && 'actionId' in result.result)
+    .filter(result => result.result && typeof result.result === 'object' && 'awaitingConfirmation' in result.result)
     .map(result => ({
       actionId: result.result.actionId || `action-${Date.now()}`,
-      type: result.toolName,
-      parameters: result.result.parameters || {},
+      type: result.toolName === 'emailAgent' ? 'email' : result.toolName === 'calendarAgent' ? 'calendar' : result.toolName,
+      parameters: {
+        type: result.toolName === 'emailAgent' ? 'email' : result.toolName === 'calendarAgent' ? 'calendar' : result.toolName,
+        query: result.result.parameters?.query || result.result.originalQuery,
+        ...result.result.parameters
+      },
       awaitingConfirmation: true
     }));
 }

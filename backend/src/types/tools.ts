@@ -38,6 +38,8 @@ export interface SessionContext {
   lastActivity: Date;
   conversationHistory: ConversationEntry[];
   toolExecutionHistory: ToolResult[];
+  pendingActions?: any[];
+  conversationContext?: any;
   expiresAt: Date;
 }
 
