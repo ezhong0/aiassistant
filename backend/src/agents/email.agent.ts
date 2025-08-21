@@ -647,11 +647,31 @@ Guidelines:
       const response = await this.openAIService.createChatCompletion(messages);
       
       try {
-        const emailDetails = JSON.parse(response.content);
+        // Clean the response content to extract JSON
+        let jsonContent = response.content.trim();
+        
+        // Remove markdown code blocks if present
+        if (jsonContent.startsWith('```json')) {
+          jsonContent = jsonContent.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+        } else if (jsonContent.startsWith('```')) {
+          jsonContent = jsonContent.replace(/^```\s*/, '').replace(/```\s*$/, '');
+        }
+        
+        // Try to find JSON object in the response
+        const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonContent = jsonMatch[0];
+        }
+        
+        const emailDetails = JSON.parse(jsonContent);
         logger.info('OpenAI extracted email details', { query: query.substring(0, 100), hasDetails: !!emailDetails });
         return emailDetails;
       } catch (parseError) {
-        logger.error('Failed to parse OpenAI email extraction response', { error: parseError, response: response.content });
+        logger.error('Failed to parse OpenAI email extraction response', { 
+          error: parseError, 
+          response: response.content.substring(0, 500),
+          rawResponse: response.content 
+        });
         return this.extractEmailContentBasic(query, contacts);
       }
 
