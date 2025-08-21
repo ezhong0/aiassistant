@@ -221,8 +221,8 @@ export interface ToolMetadata {
   /** Whether this tool is critical */
   isCritical: boolean;
   
-  /** Agent class constructor */
-  agentClass: new () => IAgent;
+  /** Agent class constructor (optional for new BaseAgent framework) */
+  agentClass?: new () => IAgent;
 }
 
 /**

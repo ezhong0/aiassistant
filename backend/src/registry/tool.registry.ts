@@ -22,21 +22,33 @@ export class ToolRegistry {
    */
   registerTool(metadata: ToolMetadata): void {
     try {
-      // Create agent instance
-      const agent = new metadata.agentClass();
-      
-      // Validate agent implements interface correctly
-      this.validateAgent(agent);
-      
-      // Store metadata and agent
-      this.tools.set(metadata.name, metadata);
-      this.agents.set(metadata.name, agent);
-      
-      logger.info(`Tool registered: ${metadata.name}`, {
-        keywords: metadata.keywords,
-        requiresConfirmation: metadata.requiresConfirmation,
-        isCritical: metadata.isCritical
-      });
+      // For new BaseAgent framework, tools are registered via AgentFactory
+      // Legacy tools with agentClass can still be registered here
+      if (metadata.agentClass) {
+        const agent = new metadata.agentClass();
+        
+        // Validate agent implements interface correctly
+        this.validateAgent(agent);
+        
+        // Store metadata and agent
+        this.tools.set(metadata.name, metadata);
+        this.agents.set(metadata.name, agent);
+        
+        logger.info(`Legacy tool registered: ${metadata.name}`, {
+          keywords: metadata.keywords,
+          requiresConfirmation: metadata.requiresConfirmation,
+          isCritical: metadata.isCritical
+        });
+      } else {
+        // Store only metadata for new BaseAgent framework tools
+        this.tools.set(metadata.name, metadata);
+        
+        logger.info(`Tool metadata registered: ${metadata.name} (BaseAgent framework)`, {
+          keywords: metadata.keywords,
+          requiresConfirmation: metadata.requiresConfirmation,
+          isCritical: metadata.isCritical
+        });
+      }
     } catch (error) {
       logger.error(`Failed to register tool: ${metadata.name}`, error);
       throw error;
@@ -329,8 +341,19 @@ export class ToolRegistry {
    * Get combined statistics from both registry and factory
    */
   getCombinedStats(): {
-    registry: ReturnType<typeof this.getStats>;
-    factory: ReturnType<typeof AgentFactory.getStats>;
+    registry: {
+      totalTools: number;
+      criticalTools: number;
+      confirmationTools: number;
+      toolNames: string[];
+    };
+    factory: {
+      totalAgents: number;
+      enabledAgents: number;
+      disabledAgents: number;
+      agentNames: string[];
+      enabledAgentNames: string[];
+    };
     totalAvailable: number;
   } {
     const registryStats = this.getStats();

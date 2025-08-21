@@ -206,8 +206,11 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
     searchTerm: string;
     maxResults?: number;
   } {
-    // Use BaseAgent's common parameter extraction
-    const commonParams = this.extractCommonParams(query);
+    // Remove common search phrases to extract the actual search term
+    const cleanedQuery = query
+      .replace(/^(find|search|look for|get|lookup|contact|contacts?)\s+/i, '')
+      .replace(/\s+(contact|contacts?|information|info|details?)$/i, '')
+      .trim();
     
     // Look for result limit requests
     let maxResults: number | undefined;
@@ -217,7 +220,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
     }
 
     return {
-      searchTerm: commonParams.searchTerm || query,
+      searchTerm: cleanedQuery || query,
       maxResults
     };
   }

@@ -1,7 +1,5 @@
 import { ToolMetadata } from '../types/agent.types';
 import { ThinkAgent } from '../agents/think.agent';
-import { EmailAgentWrapper } from '../agents/email.agent.registry';
-import { ContactAgentWrapper } from '../agents/contact.agent.registry';
 import { CalendarAgent } from '../agents/calendar.agent';
 import { ContentCreatorAgent } from '../agents/content-creator.agent';
 import { TavilyAgent } from '../agents/tavily.agent';
@@ -75,8 +73,7 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
     },
     keywords: AGENT_CONFIG.email.keywords,
     requiresConfirmation: AGENT_CONFIG.email.requiresConfirmation,
-    isCritical: AGENT_CONFIG.email.isCritical,
-    agentClass: EmailAgentWrapper
+    isCritical: AGENT_CONFIG.email.isCritical
   },
   {
     name: 'contactAgent',
@@ -99,8 +96,7 @@ export const TOOL_DEFINITIONS: ToolMetadata[] = [
     },
     keywords: AGENT_CONFIG.contact.keywords,
     requiresConfirmation: AGENT_CONFIG.contact.requiresConfirmation,
-    isCritical: AGENT_CONFIG.contact.isCritical,
-    agentClass: ContactAgentWrapper
+    isCritical: AGENT_CONFIG.contact.isCritical
   },
   {
     name: 'calendarAgent',
