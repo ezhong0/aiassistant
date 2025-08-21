@@ -1,7 +1,7 @@
-import { MasterAgent } from './agents/master.agent';
-import { emailAgent } from './agents/email.agent';
-import { toolExecutorService } from './services/tool-executor.service';
-import logger from './utils/logger';
+import { MasterAgent } from '../src/agents/master.agent';
+import { emailAgent } from '../src/agents/email.agent';
+import { toolExecutorService } from '../src/services/tool-executor.service';
+import logger from '../src/utils/logger';
 
 /**
  * Test the Email Agent integration with Master Agent

@@ -2,8 +2,8 @@
  * Test only the registry system without any agent dependencies
  */
 
-import { ToolRegistry } from './registry/tool.registry';
-import { ToolMetadata } from './types/agent.types';
+import { ToolRegistry } from '../src/registry/tool.registry';
+import { ToolMetadata } from '../src/types/agent.types';
 
 // Create mock agent classes for testing
 class MockThinkAgent {

@@ -2,10 +2,10 @@
  * Debug script to test email functionality and identify the issue
  */
 
-import { initializeToolRegistry } from './config/tool-registry-init';
-import { toolRegistry } from './registry/tool.registry';
-import { ToolExecutorService } from './services/tool-executor.service';
-import { ToolExecutionContext } from './types/tools';
+import { initializeToolRegistry } from '../src/config/tool-registry-init';
+import { toolRegistry } from '../src/registry/tool.registry';
+import { ToolExecutorService } from '../src/services/tool-executor.service';
+import { ToolExecutionContext } from '../src/types/tools';
 
 async function debugEmailIssue() {
   console.log('🔍 Debugging Email Functionality Issue\n');

@@ -2,8 +2,8 @@
  * Simple test for the modular system without full app dependencies
  */
 
-import { ToolRegistry } from './registry/tool.registry';
-import { TOOL_DEFINITIONS } from './config/tool-definitions';
+import { ToolRegistry } from '../src/registry/tool.registry';
+import { TOOL_DEFINITIONS } from '../src/config/tool-definitions';
 
 function testModularSystemSimple() {
   console.log('🧪 Testing Modular Assistant System (Simple)\n');

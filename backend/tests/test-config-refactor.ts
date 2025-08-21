@@ -2,9 +2,9 @@
  * Test script to verify the configuration refactoring works correctly
  */
 
-import { AGENT_CONFIG, CONFIRMATION_WORDS, AGENT_HELPERS } from './config/agent-config';
-import { TIMEOUTS, RATE_LIMITS, REQUEST_LIMITS, APP_CONFIG_HELPERS } from './config/app-config';
-import { ENVIRONMENT, ENV_VALIDATION, ENV_HELPERS } from './config/environment';
+import { AGENT_CONFIG, CONFIRMATION_WORDS, AGENT_HELPERS } from '../src/config/agent-config';
+import { TIMEOUTS, RATE_LIMITS, REQUEST_LIMITS, APP_CONFIG_HELPERS } from '../src/config/app-config';
+import { ENVIRONMENT, ENV_VALIDATION, ENV_HELPERS } from '../src/config/environment';
 
 function testConfigRefactor() {
   console.log('🧪 Testing Configuration Refactoring\n');

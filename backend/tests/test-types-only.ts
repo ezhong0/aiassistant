@@ -141,7 +141,7 @@ import {
   SessionDataResponse,
   HealthCheckResponse,
   ApiEndpoint
-} from './types/api.types';
+} from '../src/types/api.types';
 
 // Test type compatibility - these should compile without errors
 const testTextCommandRequest: TextCommandRequest = validTextCommand;

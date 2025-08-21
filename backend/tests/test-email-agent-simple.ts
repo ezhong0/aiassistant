@@ -1,5 +1,5 @@
 // Simple test without config dependencies
-import { emailAgent } from './agents/email.agent';
+import { emailAgent } from '../src/agents/email.agent';
 
 /**
  * Simple test of email agent functionality without config dependencies

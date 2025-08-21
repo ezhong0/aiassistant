@@ -4,9 +4,9 @@
 
 import express from 'express';
 import request from 'supertest';
-import { validate } from './middleware/validation.middleware';
-import { assistantApiLogging } from './middleware/api-logging.middleware';
-import { userRateLimit } from './middleware/rate-limiting.middleware';
+import { validate } from '../src/middleware/validation.middleware';
+import { assistantApiLogging } from '../src/middleware/api-logging.middleware';
+import { userRateLimit } from '../src/middleware/rate-limiting.middleware';
 import { z } from 'zod';
 
 // Test the validation schemas
@@ -77,7 +77,7 @@ import {
   ConfirmActionRequest,
   SessionDataResponse,
   HealthCheckResponse
-} from './types/api.types';
+} from '../src/types/api.types';
 
 // Test type compatibility
 const testTextCommandRequest: TextCommandRequest = {

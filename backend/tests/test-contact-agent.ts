@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
-import logger from './utils/logger';
-import { contactAgent } from './agents/contact.agent';
-import { ContactAgent } from './agents/contact.agent';
+import logger from '../src/utils/logger';
+import { contactAgent } from '../src/agents/contact.agent';
+import { ContactAgent } from '../src/agents/contact.agent';
 
 // Load environment variables from main project root directory
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });

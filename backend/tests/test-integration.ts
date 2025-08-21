@@ -17,7 +17,7 @@ import {
   ConfirmActionRequest,
   SessionDataResponse,
   HealthCheckResponse
-} from './types/api.types';
+} from '../src/types/api.types';
 
 console.log('\n🎯 Integration Test Summary\n');
 

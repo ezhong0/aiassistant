@@ -1,9 +1,9 @@
-import logger from './utils/logger';
-import { initializeToolRegistry } from './config/tool-registry-init';
-import { toolRegistry } from './registry/tool.registry';
-import { ToolExecutorService } from './services/tool-executor.service';
-import { MasterAgent } from './agents/master.agent';
-import { ToolExecutionContext } from './types/tools';
+import logger from '../src/utils/logger';
+import { initializeToolRegistry } from '../src/config/tool-registry-init';
+import { toolRegistry } from '../src/registry/tool.registry';
+import { ToolExecutorService } from '../src/services/tool-executor.service';
+import { MasterAgent } from '../src/agents/master.agent';
+import { ToolExecutionContext } from '../src/types/tools';
 
 /**
  * Test the modular system to verify it works correctly

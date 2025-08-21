@@ -1,5 +1,5 @@
-import { MasterAgent } from './agents/master.agent';
-import logger from './utils/logger';
+import { MasterAgent } from '../src/agents/master.agent';
+import logger from '../src/utils/logger';
 
 // Simple test function to verify the master agent
 async function testMasterAgent() {

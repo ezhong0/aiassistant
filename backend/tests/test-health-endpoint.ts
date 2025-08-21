@@ -3,7 +3,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { HealthCheckResponse, ServiceStatus } from './types/api.types';
+import { HealthCheckResponse, ServiceStatus } from '../src/types/api.types';
 
 console.log('🏥 Testing Health Check Endpoint...\n');
 
