@@ -1,6 +1,8 @@
 import logger from '../utils/logger';
 import { IAgent, ToolMetadata, ToolRegistryConfig } from '../types/agent.types';
 import { ToolCall, ToolResult, ToolExecutionContext } from '../types/tools';
+import { BaseAgent } from '../framework/base-agent';
+import { AgentFactory } from '../framework/agent-factory';
 
 /**
  * Centralized tool registry that manages all agents and their metadata
@@ -108,13 +110,21 @@ export class ToolRegistry {
   }
 
   /**
-   * Execute a tool by name
+   * Execute a tool by name - delegated to AgentFactory for BaseAgent instances
    */
   async executeTool(
     toolCall: ToolCall,
     context: ToolExecutionContext,
     accessToken?: string
   ): Promise<ToolResult> {
+    // First try AgentFactory for BaseAgent instances
+    if (AgentFactory.hasAgent(toolCall.name)) {
+      // Prepare parameters with access token if needed
+      const params = accessToken ? { ...toolCall.parameters, accessToken } : toolCall.parameters;
+      return await AgentFactory.executeAgent(toolCall.name, params, context);
+    }
+    
+    // Fallback to legacy agent execution for non-BaseAgent instances
     const startTime = Date.now();
     
     try {
@@ -129,7 +139,7 @@ export class ToolRegistry {
         throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
       }
 
-      logger.info(`Executing tool: ${toolCall.name}`, {
+      logger.info(`Executing legacy tool: ${toolCall.name}`, {
         toolName: toolCall.name,
         sessionId: context.sessionId
       });
@@ -158,7 +168,7 @@ export class ToolRegistry {
         executionTime
       };
 
-      logger.info(`Tool execution completed: ${toolCall.name}`, {
+      logger.info(`Legacy tool execution completed: ${toolCall.name}`, {
         success,
         executionTime,
         hasError: !!error
@@ -282,6 +292,55 @@ export class ToolRegistry {
     this.tools.clear();
     this.agents.clear();
     logger.info('ToolRegistry cleared');
+  }
+
+  /**
+   * Initialize AgentFactory with agents from this registry
+   */
+  initializeAgentFactory(): void {
+    logger.info('Initializing AgentFactory from ToolRegistry...');
+    
+    // Initialize AgentFactory first
+    AgentFactory.initialize();
+    
+    // Add any additional agents from this registry that aren't in AgentFactory
+    for (const [name, agent] of this.agents) {
+      if (!AgentFactory.hasAgent(name)) {
+        if (agent instanceof BaseAgent) {
+          AgentFactory.registerAgent(name, agent);
+          logger.info(`Migrated agent to AgentFactory: ${name}`);
+        } else {
+          logger.warn(`Legacy agent not migrated to AgentFactory: ${name} (not BaseAgent instance)`);
+        }
+      }
+    }
+    
+    const factoryStats = AgentFactory.getStats();
+    const registryStats = this.getStats();
+    
+    logger.info('AgentFactory initialization from ToolRegistry completed', {
+      factoryAgents: factoryStats.enabledAgents,
+      registryTools: registryStats.totalTools,
+      migratedAgents: factoryStats.enabledAgentNames
+    });
+  }
+  
+  /**
+   * Get combined statistics from both registry and factory
+   */
+  getCombinedStats(): {
+    registry: ReturnType<typeof this.getStats>;
+    factory: ReturnType<typeof AgentFactory.getStats>;
+    totalAvailable: number;
+  } {
+    const registryStats = this.getStats();
+    const factoryStats = AgentFactory.getStats();
+    
+    return {
+      registry: registryStats,
+      factory: factoryStats,
+      totalAvailable: new Set([...registryStats.toolNames, ...factoryStats.agentNames]).size
+    };
   }
 
   /**

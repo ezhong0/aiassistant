@@ -1,84 +1,186 @@
-import logger from '../utils/logger';
+import { BaseAgent } from '../framework/base-agent';
+import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
 import { contactService } from '../services/contact.service';
 import {
   Contact,
-  ContactAgentRequest,
-  ContactAgentResponse,
   ContactSearchRequest,
   ContactServiceError
 } from '../types/contact.types';
+import { CONTACT_CONSTANTS } from '../config/constants';
 
-export class ContactAgent {
-  private readonly systemPrompt = `# Contact Agent
-You are a specialized contact management agent that helps users find, lookup, and manage their contacts.
+/**
+ * Contact operation result interface
+ */
+export interface ContactResult {
+  contacts: Contact[];
+  totalCount: number;
+  operation: 'search' | 'create' | 'update';
+  searchTerm?: string;
+}
 
-## Capabilities
-- Search user's Google Contacts and frequently contacted people
-- Find contacts by name, partial name, or email address
-- Use fuzzy matching for natural language queries
-- Rank results by relevance and interaction frequency
-- Handle typos and partial matches
+/**
+ * Contact agent parameters with access token
+ */
+export interface ContactAgentRequest extends ContactAgentParams {
+  accessToken: string;
+  operation?: 'search' | 'create' | 'update';
+}
 
-## Input Processing
-You receive natural language queries about contacts and resolve them to specific contact information.
-
-## Search Strategies
-1. Exact name matching (highest priority)
-2. Partial name matching
-3. Email address matching
-4. Fuzzy matching for typos
-5. Include frequently contacted people from email history
-
-## Response Format
-Always return structured contact information that other agents can use directly.
-`;
-
+/**
+ * Enhanced ContactAgent using BaseAgent framework
+ * Handles contact search and management using Google Contacts API
+ */
+export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> {
+  
+  constructor() {
+    super({
+      name: 'contactAgent',
+      description: 'Search and manage contacts from Google Contacts and email history',
+      enabled: true,
+      timeout: 15000,
+      retryCount: 2
+    });
+  }
+  
   /**
-   * Process contact-related queries
+   * Core contact processing logic - simplified and focused
    */
-  async processQuery(request: ContactAgentRequest, accessToken: string): Promise<ContactAgentResponse> {
-    try {
-      logger.info('ContactAgent processing query', { 
-        query: request.query,
-        operation: request.operation 
-      });
-
-      if (!accessToken) {
-        return {
-          success: false,
-          message: 'Access token required for contact operations',
-          error: 'MISSING_ACCESS_TOKEN'
-        };
-      }
-
-      // Determine the operation type
-      const operation = request.operation || this.determineOperation(request.query);
-
-      switch (operation) {
-        case 'search':
-          return await this.handleSearchContacts(request, accessToken);
-        
-        case 'create':
-          return await this.handleCreateContact(request, accessToken);
-        
-        case 'update':
-          return await this.handleUpdateContact(request, accessToken);
-        
-        default:
-          // Default to search for most queries
-          return await this.handleSearchContacts(request, accessToken);
-      }
-
-    } catch (error) {
-      logger.error('Error in ContactAgent.processQuery:', error);
-      return {
-        success: false,
-        message: 'An error occurred while processing your contact request',
-        error: error instanceof Error ? error.message : 'UNKNOWN_ERROR'
-      };
+  protected async processQuery(params: ContactAgentRequest, context: ToolExecutionContext): Promise<ContactResult> {
+    const { query, accessToken } = params;
+    
+    // Determine the operation type
+    const operation = params.operation || this.determineOperation(query);
+    
+    switch (operation) {
+      case 'search':
+        return await this.handleSearchContacts(params);
+      case 'create':
+        return await this.handleCreateContact(params);
+      case 'update':
+        return await this.handleUpdateContact(params);
+      default:
+        // Default to search for most queries
+        return await this.handleSearchContacts(params);
     }
   }
+  
+  /**
+   * Enhanced parameter validation for contact operations
+   */
+  protected validateParams(params: ContactAgentRequest): void {
+    super.validateParams(params);
+    
+    if (!params.accessToken || typeof params.accessToken !== 'string') {
+      throw this.createError('Access token is required for contact operations', 'MISSING_ACCESS_TOKEN');
+    }
+    
+    if (params.query && params.query.length > CONTACT_CONSTANTS.MAX_NAME_LENGTH * 2) {
+      throw this.createError('Query is too long for contact search', 'QUERY_TOO_LONG');
+    }
+  }
+  
+  /**
+   * Pre-execution hook - validate Google Contacts access
+   */
+  protected async beforeExecution(params: ContactAgentRequest, context: ToolExecutionContext): Promise<void> {
+    await super.beforeExecution(params, context);
+    
+    // Log contact operation start
+    this.logger.debug('Google Contacts access validated', { 
+      sessionId: context.sessionId,
+      operation: params.operation || 'search'
+    });
+  }
+  
+  /**
+   * Post-execution hook - log contact metrics
+   */
+  protected async afterExecution(result: ContactResult, context: ToolExecutionContext): Promise<void> {
+    await super.afterExecution(result, context);
+    
+    // Log contact operation metrics
+    this.logger.info('Contact operation completed', {
+      operation: result.operation,
+      contactsFound: result.totalCount,
+      searchTerm: result.searchTerm?.substring(0, 50),
+      sessionId: context.sessionId
+    });
+  }
+  
+  /**
+   * Sanitize sensitive data from logs
+   */
+  protected sanitizeForLogging(params: ContactAgentRequest): any {
+    return {
+      query: params.query?.substring(0, 100) + (params.query?.length > 100 ? '...' : ''),
+      accessToken: '[REDACTED]',
+      operation: params.operation,
+      name: params.name,
+      email: params.email ? '[EMAIL]' : undefined,
+      phone: params.phone ? '[PHONE]' : undefined
+    };
+  }
+  
+  // PRIVATE IMPLEMENTATION METHODS
+  
+  /**
+   * Handle contact search queries
+   */
+  private async handleSearchContacts(params: ContactAgentRequest): Promise<ContactResult> {
+    // Extract search parameters from query
+    const searchParams = this.extractSearchParameters(params.query);
+    
+    const searchRequest: ContactSearchRequest = {
+      query: searchParams.searchTerm,
+      maxResults: Math.min(
+        searchParams.maxResults || CONTACT_CONSTANTS.DEFAULT_SEARCH_RESULTS,
+        CONTACT_CONSTANTS.MAX_SEARCH_RESULTS
+      ),
+      includeOtherContacts: true // Always include frequently contacted
+    };
 
+    // Use retry mechanism from BaseAgent for reliability
+    const searchResult = await this.withRetries(async () => {
+      return await contactService.searchContacts(params.accessToken, searchRequest);
+    });
+
+    this.logger.info('Contact search completed successfully', {
+      query: searchParams.searchTerm,
+      foundCount: searchResult.contacts.length
+    });
+
+    return {
+      contacts: searchResult.contacts,
+      totalCount: searchResult.totalCount,
+      operation: 'search',
+      searchTerm: searchParams.searchTerm
+    };
+  }
+  
+  /**
+   * Handle contact creation (placeholder - requires additional permissions)
+   */
+  private async handleCreateContact(params: ContactAgentRequest): Promise<ContactResult> {
+    this.logger.info('Contact creation requested (not implemented)', { query: params.query });
+    
+    throw this.createError(
+      'Contact creation not yet implemented. This requires additional Google API permissions.',
+      'NOT_IMPLEMENTED'
+    );
+  }
+  
+  /**
+   * Handle contact updates (placeholder - requires additional permissions)
+   */
+  private async handleUpdateContact(params: ContactAgentRequest): Promise<ContactResult> {
+    this.logger.info('Contact update requested (not implemented)', { query: params.query });
+    
+    throw this.createError(
+      'Contact updates not yet implemented. This requires additional Google API permissions.',
+      'NOT_IMPLEMENTED'
+    );
+  }
+  
   /**
    * Determine operation type from query
    */
@@ -96,102 +198,7 @@ Always return structured contact information that other agents can use directly.
     // Default to search
     return 'search';
   }
-
-  /**
-   * Handle contact search queries
-   */
-  private async handleSearchContacts(
-    request: ContactAgentRequest, 
-    accessToken: string
-  ): Promise<ContactAgentResponse> {
-    try {
-      // Extract search parameters from query
-      const searchParams = this.extractSearchParameters(request.query);
-      
-      const searchRequest: ContactSearchRequest = {
-        query: searchParams.searchTerm,
-        maxResults: searchParams.maxResults || 10,
-        includeOtherContacts: true // Always include frequently contacted
-      };
-
-      const searchResult = await contactService.searchContacts(accessToken, searchRequest);
-
-      if (searchResult.contacts.length === 0) {
-        return {
-          success: true,
-          message: `No contacts found matching "${searchParams.searchTerm}"`,
-          data: {
-            contacts: [],
-            totalCount: 0
-          }
-        };
-      }
-
-      // Format response message
-      const contactNames = searchResult.contacts.slice(0, 3).map(c => c.name || 'Unknown').join(', ');
-      const firstContact = searchResult.contacts[0];
-      const message = searchResult.contacts.length === 1
-        ? `Found contact: ${firstContact?.name || 'Unknown'} (${firstContact?.email || 'No email'})`
-        : `Found ${searchResult.contacts.length} contacts: ${contactNames}${searchResult.contacts.length > 3 ? ' and others' : ''}`;
-
-      logger.info('Contact search completed successfully', {
-        query: searchParams.searchTerm,
-        foundCount: searchResult.contacts.length
-      });
-
-      return {
-        success: true,
-        message,
-        data: {
-          contacts: searchResult.contacts,
-          totalCount: searchResult.totalCount
-        }
-      };
-
-    } catch (error) {
-      logger.error('Failed to search contacts:', error);
-      return {
-        success: false,
-        message: 'Failed to search contacts',
-        error: error instanceof ContactServiceError ? error.code : 'SEARCH_FAILED'
-      };
-    }
-  }
-
-  /**
-   * Handle contact creation (placeholder - would require People API write permissions)
-   */
-  private async handleCreateContact(
-    request: ContactAgentRequest, 
-    accessToken: string
-  ): Promise<ContactAgentResponse> {
-    // Note: Creating contacts requires additional permissions and implementation
-    logger.info('Contact creation requested (not implemented)', { query: request.query });
-    
-    return {
-      success: false,
-      message: 'Contact creation not yet implemented. This requires additional Google API permissions.',
-      error: 'NOT_IMPLEMENTED'
-    };
-  }
-
-  /**
-   * Handle contact updates (placeholder - would require People API write permissions)
-   */
-  private async handleUpdateContact(
-    request: ContactAgentRequest, 
-    accessToken: string
-  ): Promise<ContactAgentResponse> {
-    // Note: Updating contacts requires additional permissions and implementation
-    logger.info('Contact update requested (not implemented)', { query: request.query });
-    
-    return {
-      success: false,
-      message: 'Contact updates not yet implemented. This requires additional Google API permissions.',
-      error: 'NOT_IMPLEMENTED'
-    };
-  }
-
+  
   /**
    * Extract search parameters from natural language query
    */
@@ -199,54 +206,24 @@ Always return structured contact information that other agents can use directly.
     searchTerm: string;
     maxResults?: number;
   } {
-    // Remove common search phrases to extract the actual search term
-    const cleanedQuery = query
-      .replace(/^(find|search|look for|get|lookup|contact|contacts?)\s+/i, '')
-      .replace(/\s+(contact|contacts?|information|info|details?)$/i, '')
-      .trim();
-
-    // Extract search term (everything that's not a number or command)
-    let searchTerm = cleanedQuery;
-    let maxResults: number | undefined;
-
+    // Use BaseAgent's common parameter extraction
+    const commonParams = this.extractCommonParams(query);
+    
     // Look for result limit requests
+    let maxResults: number | undefined;
     const limitMatch = query.match(/(?:first|top|limit)\s+(\d+)/i);
     if (limitMatch && limitMatch[1]) {
-      maxResults = parseInt(limitMatch[1]);
-      searchTerm = searchTerm.replace(/(?:first|top|limit)\s+\d+/i, '').trim();
-    }
-
-    // Handle various query formats
-    const queryFormats = [
-      // "find contact for john" -> "john"
-      /(?:find|search|get)\s+(?:contact|info|information)\s+for\s+(.+)/i,
-      // "lookup john smith" -> "john smith"
-      /(?:lookup|find|search)\s+(.+)/i,
-      // "contact john" -> "john"
-      /contact\s+(.+)/i,
-      // "get john's email" -> "john"
-      /get\s+(.+?)(?:'s\s+(?:email|phone|contact))/i
-    ];
-
-    for (const format of queryFormats) {
-      const match = searchTerm.match(format);
-      if (match && match[1]) {
-        searchTerm = match[1].trim();
-        break;
-      }
-    }
-
-    // If no specific pattern matched, use the cleaned query as-is
-    if (!searchTerm || searchTerm.length < 1) {
-      searchTerm = cleanedQuery || query;
+      maxResults = Math.min(parseInt(limitMatch[1]), CONTACT_CONSTANTS.MAX_SEARCH_RESULTS);
     }
 
     return {
-      searchTerm,
+      searchTerm: commonParams.searchTerm || query,
       maxResults
     };
   }
-
+  
+  // STATIC UTILITY METHODS (for other agents to use)
+  
   /**
    * Format contacts for use by other agents (especially EmailAgent)
    */
@@ -261,7 +238,7 @@ Always return structured contact information that other agents can use directly.
       phone: contact.phone
     }));
   }
-
+  
   /**
    * Get the best matching contact from a search result
    */
@@ -271,24 +248,25 @@ Always return structured contact information that other agents can use directly.
     // Return the first contact (highest confidence due to ranking)
     return contacts[0] || null;
   }
-
+  
   /**
    * Check if a search result is ambiguous (multiple good matches)
    */
-  static isAmbiguous(contacts: Contact[], confidenceThreshold: number = 0.8): boolean {
+  static isAmbiguous(contacts: Contact[], confidenceThreshold: number = CONTACT_CONSTANTS.HIGH_CONFIDENCE_THRESHOLD): boolean {
     if (contacts.length < 2) return false;
     
     // Check if we have multiple contacts with high confidence
     const highConfidenceContacts = contacts.filter(c => (c.confidence || 0) >= confidenceThreshold);
     return highConfidenceContacts.length > 1;
   }
-
+  
   /**
-   * Get system prompt for external use
+   * Filter contacts by minimum confidence score
    */
-  getSystemPrompt(): string {
-    return this.systemPrompt;
+  static filterByConfidence(contacts: Contact[], minConfidence: number = CONTACT_CONSTANTS.MIN_CONFIDENCE_SCORE): Contact[] {
+    return contacts.filter(contact => (contact.confidence || 0) >= minConfidence);
   }
 }
 
+// Export singleton instance
 export const contactAgent = new ContactAgent();

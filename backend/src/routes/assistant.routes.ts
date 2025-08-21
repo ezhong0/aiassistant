@@ -4,6 +4,12 @@ import {
   authenticateToken,
   AuthenticatedRequest 
 } from '../middleware/auth.middleware';
+import { 
+  StandardAPIResponse, 
+  ResponseBuilder, 
+  HTTP_STATUS, 
+  ERROR_CODES 
+} from '../types/api-response.types';
 import { validate, sanitizeString } from '../middleware/validation.middleware';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
 import { CONFIRMATION_WORDS } from '../config/agent-config';
@@ -169,12 +175,17 @@ router.post('/text-command',
 
     // Step 1: Process command with MasterAgent
     if (!masterAgent) {
-      return res.status(503).json({
-        success: false,
-        type: 'error',
-        message: 'Assistant is currently unavailable. Please try again later.',
-        error: 'MASTER_AGENT_UNAVAILABLE'
-      });
+      const errorResponse = ResponseBuilder.error(
+        'Assistant is currently unavailable. Please try again later.',
+        ERROR_CODES.SERVICE_UNAVAILABLE,
+        HTTP_STATUS.SERVICE_UNAVAILABLE,
+        undefined,
+        { 
+          sessionId: finalSessionId,
+          userId: user.userId 
+        }
+      );
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(errorResponse);
     }
 
     // Get Master Agent response (determines which tools to call)
@@ -226,18 +237,21 @@ router.post('/text-command',
         const confirmationPrompt = await generateDynamicConfirmationPrompt(masterResponse.toolCalls, previewResults, command);
         
         // Return confirmation required response
-        return res.json({
-          success: true,
-          type: 'confirmation_required',
-          message: confirmationMessage,
-          data: {
+        const confirmationResponse = ResponseBuilder.confirmationRequired(
+          confirmationMessage,
+          {
             sessionId: finalSessionId,
             toolResults: previewResults,
             pendingActions: pendingActions,
             confirmationPrompt: confirmationPrompt,
             conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
+          },
+          {
+            sessionId: finalSessionId,
+            userId: user.userId
           }
-        });
+        );
+        return res.json(confirmationResponse);
       } else {
         // No confirmation needed, execute tools normally
         const toolResults = await toolExecutorService.executeTools(
@@ -250,17 +264,20 @@ router.post('/text-command',
         const executionStats = toolExecutorService.getExecutionStats(toolResults);
         const completionMessage = await generateDynamicCompletionMessage(toolResults, command);
         
-        return res.json({
-          success: true,
-          type: 'action_completed', 
-          message: completionMessage,
-          data: {
+        const actionResponse = ResponseBuilder.actionCompleted(
+          completionMessage,
+          {
             sessionId: finalSessionId,
             toolResults,
             executionStats,
             conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
+          },
+          {
+            sessionId: finalSessionId,
+            userId: user.userId
           }
-        });
+        );
+        return res.json(actionResponse);
       }
     } else {
       // No tools needed, just return the response
