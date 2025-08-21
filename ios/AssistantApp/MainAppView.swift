@@ -315,12 +315,115 @@ struct StatCard: View {
     }
 }
 
-// MARK: - Placeholder Views
+// MARK: - Chat View
 struct ChatView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    @StateObject private var chatViewModel = ChatViewModel()
+    @FocusState private var isTextFieldFocused: Bool
+    
     var body: some View {
         NavigationView {
-            Text("Chat View - Coming Soon")
-                .navigationTitle("Chat")
+            VStack(spacing: 0) {
+                // Messages List
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(chatViewModel.messages) { message in
+                                MessageBubbleView(message: message) { actionId, confirmed in
+                                    Task {
+                                        await chatViewModel.confirmAction(actionId, confirmed: confirmed)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        .padding(.vertical)
+                    }
+                    .onChange(of: chatViewModel.messages.count) { _ in
+                        if let lastMessage = chatViewModel.messages.last {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+                
+                Divider()
+                
+                // Input Area
+                VStack(spacing: 12) {
+                    if chatViewModel.isLoading {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Assistant is thinking...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    if let errorMessage = chatViewModel.errorMessage {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text(errorMessage)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
+                    }
+                    
+                    HStack(spacing: 12) {
+                        TextField("Type your command...", text: $chatViewModel.currentCommand, axis: .vertical)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .focused($isTextFieldFocused)
+                            .onSubmit {
+                                Task {
+                                    await chatViewModel.sendCommand()
+                                }
+                            }
+                        
+                        Button(action: {
+                            Task {
+                                await chatViewModel.sendCommand()
+                            }
+                        }) {
+                            Image(systemName: "paperplane.fill")
+                                .foregroundColor(.white)
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    Circle()
+                                        .fill(chatViewModel.currentCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray : Color.blue)
+                                )
+                        }
+                        .disabled(chatViewModel.currentCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || chatViewModel.isLoading)
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+                .background(Color(.systemGroupedBackground))
+            }
+            .navigationTitle("Assistant Chat")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("New Session") {
+                            chatViewModel.startNewSession()
+                        }
+                        
+                        Button("Clear Messages") {
+                            chatViewModel.clearMessages()
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        .onAppear {
+            chatViewModel.setAuthManager(authManager)
         }
     }
 }

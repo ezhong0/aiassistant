@@ -57,7 +57,7 @@ app.use('/health', healthRoutes);
 // API Routes
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
-app.use('/assistant', assistantRoutes);
+app.use('/api/assistant', assistantRoutes);
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {

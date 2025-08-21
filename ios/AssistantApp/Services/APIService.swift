@@ -13,11 +13,16 @@ class APIService: ObservableObject {
     // MARK: - Assistant API Calls
     
     /// Send a text command to the assistant
-    func sendTextCommand(_ command: String) async throws -> AssistantResponse {
-        let endpoint = "assistant/text-command"
-        let body = [
+    func sendTextCommand(_ command: String, sessionId: String? = nil) async throws -> TextCommandResponse {
+        let endpoint = "api/assistant/text-command"
+        let body: [String: Any] = [
             "command": command,
-            "sessionId": UUID().uuidString
+            "sessionId": sessionId ?? UUID().uuidString,
+            "context": [
+                "userPreferences": [
+                    "verbosity": "normal"
+                ]
+            ]
         ]
         
         let data = try await authManager.makeAuthenticatedRequest(
@@ -26,11 +31,37 @@ class APIService: ObservableObject {
             body: body
         )
         
-        let response = try JSONDecoder().decode(AssistantResponse.self, from: data)
+        let response = try JSONDecoder().decode(TextCommandResponse.self, from: data)
         
         if config.enableDebugLogs {
             print("📤 Sent command: \(command)")
-            print("📥 Received response: \(response.message)")
+            print("📥 Received response type: \(response.type)")
+            print("📥 Message: \(response.message)")
+        }
+        
+        return response
+    }
+    
+    /// Confirm or cancel a pending action
+    func confirmAction(actionId: String, confirmed: Bool, sessionId: String) async throws -> ActionConfirmationResponse {
+        let endpoint = "api/assistant/confirm-action"
+        let body: [String: Any] = [
+            "actionId": actionId,
+            "confirmed": confirmed,
+            "sessionId": sessionId
+        ]
+        
+        let data = try await authManager.makeAuthenticatedRequest(
+            to: endpoint,
+            method: "POST",
+            body: body
+        )
+        
+        let response = try JSONDecoder().decode(ActionConfirmationResponse.self, from: data)
+        
+        if config.enableDebugLogs {
+            print("📤 Confirmed action: \(actionId) - \(confirmed ? "YES" : "NO")")
+            print("📥 Confirmation result: \(response.message)")
         }
         
         return response
@@ -38,12 +69,26 @@ class APIService: ObservableObject {
     
     /// Get session information
     func getSession(_ sessionId: String) async throws -> SessionInfo {
-        let endpoint = "assistant/session/\(sessionId)"
+        let endpoint = "api/assistant/session/\(sessionId)"
         
         let data = try await authManager.makeAuthenticatedRequest(to: endpoint)
         let session = try JSONDecoder().decode(SessionInfo.self, from: data)
         
         return session
+    }
+    
+    /// Delete a session
+    func deleteSession(_ sessionId: String) async throws {
+        let endpoint = "api/assistant/session/\(sessionId)"
+        
+        _ = try await authManager.makeAuthenticatedRequest(
+            to: endpoint,
+            method: "DELETE"
+        )
+        
+        if config.enableDebugLogs {
+            print("🗑️ Deleted session: \(sessionId)")
+        }
     }
     
     /// Health check for the backend service
@@ -78,15 +123,72 @@ class APIService: ObservableObject {
 
 // MARK: - Response Models
 
-struct AssistantResponse: Codable {
-    let message: String
+struct TextCommandResponse: Codable {
     let success: Bool
-    let data: AnyCodable?
-    let sessionId: String?
+    let type: ResponseType
+    let message: String
+    let data: ResponseData?
     
-    private enum CodingKeys: String, CodingKey {
-        case message, success, data, sessionId
+    enum ResponseType: String, Codable {
+        case response = "response"
+        case confirmationRequired = "confirmation_required"
+        case actionCompleted = "action_completed"
+        case authRequired = "auth_required"
     }
+}
+
+struct ResponseData: Codable {
+    let sessionId: String?
+    let conversationContext: ConversationContext?
+    let pendingAction: PendingAction?
+    let confirmationPrompt: String?
+    let toolResults: [ToolResult]?
+    let requiredScopes: [String]?
+    let redirectUrl: String?
+}
+
+struct ConversationContext: Codable {
+    let messages: [ConversationMessage]?
+    let userPreferences: UserPreferences?
+}
+
+struct ConversationMessage: Codable {
+    let role: String
+    let content: String
+    let timestamp: String
+}
+
+struct UserPreferences: Codable {
+    let verbosity: String?
+}
+
+struct PendingAction: Codable {
+    let actionId: String
+    let type: String
+    let parameters: [String: AnyCodable]
+    let awaitingConfirmation: Bool
+}
+
+struct ToolResult: Codable {
+    let toolName: String
+    let result: AnyCodable?
+    let success: Bool
+    let error: String?
+    let executionTime: Int?
+}
+
+struct ActionConfirmationResponse: Codable {
+    let success: Bool
+    let type: TextCommandResponse.ResponseType
+    let message: String
+    let data: ConfirmationData?
+}
+
+struct ConfirmationData: Codable {
+    let actionId: String
+    let status: String
+    let result: AnyCodable?
+    let sessionId: String?
 }
 
 struct SessionInfo: Codable {
