@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import logger from './utils/logger';
-import { masterAgent } from './agents/master.agent';
+import { MasterAgent } from './agents/master.agent';
 import { toolExecutorService } from './services/tool-executor.service';
 import { contactAgent } from './agents/contact.agent';
 import { ContactAgent } from './agents/contact.agent';
@@ -48,6 +48,7 @@ async function testContactIntegration() {
 
     try {
       // Step 1: Master agent determines tool calls
+      const masterAgent = new MasterAgent();
       const masterResponse = await masterAgent.processUserInput(
         scenario.userInput,
         'test-session',
@@ -57,11 +58,11 @@ async function testContactIntegration() {
       logger.info('🧠 Master Agent Response:', {
         message: masterResponse.message,
         toolCallCount: masterResponse.toolCalls?.length || 0,
-        tools: masterResponse.toolCalls?.map(tc => tc.name) || []
+        tools: masterResponse.toolCalls?.map((tc: any) => tc.name) || []
       });
 
       // Verify expected tool flow
-      const actualTools = masterResponse.toolCalls?.map(tc => tc.name) || [];
+      const actualTools = masterResponse.toolCalls?.map((tc: any) => tc.name) || [];
       const expectedTools = scenario.expectedFlow;
       
       const flowMatches = expectedTools.every(tool => actualTools.includes(tool));

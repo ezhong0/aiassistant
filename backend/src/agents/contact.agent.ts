@@ -128,9 +128,10 @@ Always return structured contact information that other agents can use directly.
       }
 
       // Format response message
-      const contactNames = searchResult.contacts.slice(0, 3).map(c => c.name).join(', ');
+      const contactNames = searchResult.contacts.slice(0, 3).map(c => c.name || 'Unknown').join(', ');
+      const firstContact = searchResult.contacts[0];
       const message = searchResult.contacts.length === 1
-        ? `Found contact: ${searchResult.contacts[0].name} (${searchResult.contacts[0].email})`
+        ? `Found contact: ${firstContact?.name || 'Unknown'} (${firstContact?.email || 'No email'})`
         : `Found ${searchResult.contacts.length} contacts: ${contactNames}${searchResult.contacts.length > 3 ? ' and others' : ''}`;
 
       logger.info('Contact search completed successfully', {
@@ -210,7 +211,7 @@ Always return structured contact information that other agents can use directly.
 
     // Look for result limit requests
     const limitMatch = query.match(/(?:first|top|limit)\s+(\d+)/i);
-    if (limitMatch) {
+    if (limitMatch && limitMatch[1]) {
       maxResults = parseInt(limitMatch[1]);
       searchTerm = searchTerm.replace(/(?:first|top|limit)\s+\d+/i, '').trim();
     }
@@ -268,7 +269,7 @@ Always return structured contact information that other agents can use directly.
     if (contacts.length === 0) return null;
     
     // Return the first contact (highest confidence due to ranking)
-    return contacts[0];
+    return contacts[0] || null;
   }
 
   /**
