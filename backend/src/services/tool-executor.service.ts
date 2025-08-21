@@ -15,6 +15,10 @@ export interface ToolExecutorConfig {
   retryCount?: number;
 }
 
+export interface ExecutionMode {
+  preview: boolean; // If true, prepare action but don't execute
+}
+
 export class ToolExecutorService {
   private config: ToolExecutorConfig;
 
@@ -32,7 +36,8 @@ export class ToolExecutorService {
   async executeTool(
     toolCall: ToolCall, 
     context: ToolExecutionContext,
-    accessToken?: string
+    accessToken?: string,
+    mode: ExecutionMode = { preview: false }
   ): Promise<ToolResult> {
     const startTime = Date.now();
     
@@ -46,36 +51,45 @@ export class ToolExecutorService {
       let success = true;
       let error: string | undefined;
 
-      switch (toolCall.name) {
-        case TOOL_NAMES.EMAIL_AGENT:
-          result = await this.executeEmailAgent(toolCall, accessToken);
-          break;
+      // Determine if this tool needs confirmation
+      const needsConfirmation = this.toolNeedsConfirmation(toolCall.name);
+      
+      if (mode.preview && needsConfirmation) {
+        // In preview mode for confirmation-required tools, return action preview
+        result = await this.previewTool(toolCall, accessToken);
+      } else {
+        // Execute the tool normally
+        switch (toolCall.name) {
+          case TOOL_NAMES.EMAIL_AGENT:
+            result = await this.executeEmailAgent(toolCall, accessToken);
+            break;
 
-        case TOOL_NAMES.THINK:
-          result = await this.executeThink(toolCall);
-          break;
+          case TOOL_NAMES.THINK:
+            result = await this.executeThink(toolCall);
+            break;
 
-        case TOOL_NAMES.CONTACT_AGENT:
-          result = await this.executeContactAgent(toolCall, accessToken);
-          break;
+          case TOOL_NAMES.CONTACT_AGENT:
+            result = await this.executeContactAgent(toolCall, accessToken);
+            break;
 
-        case TOOL_NAMES.CALENDAR_AGENT:
-          result = await this.executeCalendarAgent(toolCall);
-          break;
+          case TOOL_NAMES.CALENDAR_AGENT:
+            result = await this.executeCalendarAgent(toolCall);
+            break;
 
-        case TOOL_NAMES.CONTENT_CREATOR:
-          result = await this.executeContentCreator(toolCall);
-          break;
+          case TOOL_NAMES.CONTENT_CREATOR:
+            result = await this.executeContentCreator(toolCall);
+            break;
 
-        case TOOL_NAMES.TAVILY:
-          result = await this.executeTavily(toolCall);
-          break;
+          case TOOL_NAMES.TAVILY:
+            result = await this.executeTavily(toolCall);
+            break;
 
-        default:
-          throw new ToolExecutionError(
-            toolCall.name,
-            new Error(`Unknown tool: ${toolCall.name}`)
-          );
+          default:
+            throw new ToolExecutionError(
+              toolCall.name,
+              new Error(`Unknown tool: ${toolCall.name}`)
+            );
+        }
       }
 
       // Check if the tool execution was successful
@@ -130,7 +144,8 @@ export class ToolExecutorService {
   async executeTools(
     toolCalls: ToolCall[], 
     context: ToolExecutionContext,
-    accessToken?: string
+    accessToken?: string,
+    mode: ExecutionMode = { preview: false }
   ): Promise<ToolResult[]> {
     const results: ToolResult[] = [];
     
@@ -141,7 +156,7 @@ export class ToolExecutorService {
 
     for (const toolCall of toolCalls) {
       try {
-        const result = await this.executeTool(toolCall, context, accessToken);
+        const result = await this.executeTool(toolCall, context, accessToken, mode);
         results.push(result);
 
         // If a critical tool fails, we might want to stop execution
@@ -270,6 +285,93 @@ export class ToolExecutorService {
       success: false,
       message: 'Tavily search not yet implemented',
       error: 'NOT_IMPLEMENTED'
+    };
+  }
+
+  /**
+   * Determine if a tool needs user confirmation before execution
+   */
+  private toolNeedsConfirmation(toolName: string): boolean {
+    const confirmationRequiredTools = [
+      TOOL_NAMES.EMAIL_AGENT,
+      TOOL_NAMES.CALENDAR_AGENT
+      // Note: ContactAgent and Think don't need confirmation - they're read-only
+    ];
+    
+    return confirmationRequiredTools.includes(toolName as any);
+  }
+
+  /**
+   * Generate preview for a tool without executing it
+   */
+  private async previewTool(toolCall: ToolCall, accessToken?: string): Promise<any> {
+    const actionId = `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    switch (toolCall.name) {
+      case TOOL_NAMES.EMAIL_AGENT:
+        return {
+          success: true,
+          message: 'Email action prepared for confirmation',
+          actionId,
+          type: 'email',
+          parameters: {
+            query: toolCall.parameters.query,
+            // Extract email details for preview
+            preview: this.extractEmailPreview(toolCall.parameters.query)
+          },
+          awaitingConfirmation: true,
+          confirmationPrompt: 'I\'m about to send an email. Would you like me to proceed?'
+        };
+        
+      case TOOL_NAMES.CALENDAR_AGENT:
+        return {
+          success: true,
+          message: 'Calendar action prepared for confirmation',
+          actionId,
+          type: 'calendar',
+          parameters: {
+            query: toolCall.parameters.query,
+            preview: this.extractCalendarPreview(toolCall.parameters.query)
+          },
+          awaitingConfirmation: true,
+          confirmationPrompt: 'I\'m about to create a calendar event. Would you like me to proceed?'
+        };
+        
+      default:
+        return {
+          success: false,
+          message: `Preview not supported for tool: ${toolCall.name}`,
+          error: 'PREVIEW_NOT_SUPPORTED'
+        };
+    }
+  }
+
+  /**
+   * Extract email preview information from query
+   */
+  private extractEmailPreview(query: string): any {
+    // Simple extraction - in a real system you might use NLP
+    const toMatch = query.match(/(?:to|send.*to)\s+([^\s]+@[^\s]+)/i);
+    const subjectMatch = query.match(/(?:subject|about|regarding)\s+([^,.]+)/i);
+    
+    return {
+      to: toMatch ? toMatch[1] : 'recipient',
+      subject: subjectMatch ? subjectMatch[1]?.trim() : 'No subject',
+      body: query.includes('asking') ? query.split('asking')[1]?.trim() : 'Email content'
+    };
+  }
+
+  /**
+   * Extract calendar preview information from query
+   */
+  private extractCalendarPreview(query: string): any {
+    const titleMatch = query.match(/(?:meeting|event).*?(?:about|for|with)\s+([^,\n]+)/i);
+    const timeMatch = query.match(/(?:at|on|tomorrow|today|next)\s+([^,\n]+)/i);
+    
+    return {
+      title: titleMatch ? titleMatch[1]?.trim() : 'Meeting',
+      time: timeMatch ? timeMatch[1]?.trim() : 'Not specified',
+      type: 'meeting'
     };
   }
 

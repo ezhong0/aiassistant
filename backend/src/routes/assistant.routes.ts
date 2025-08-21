@@ -139,7 +139,7 @@ router.post('/text-command',
     // Get Master Agent response (determines which tools to call)
     const masterResponse = await masterAgent.processUserInput(command, finalSessionId, user.userId);
     
-    // Step 2: Execute tools if needed
+    // Step 2: First run tools in preview mode to check for confirmation needs
     if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
       const executionContext: ToolExecutionContext = {
         sessionId: finalSessionId,
@@ -147,15 +147,16 @@ router.post('/text-command',
         timestamp: new Date()
       };
       
-      // Execute the tools
-      const toolResults = await toolExecutorService.executeTools(
+      // First, run in preview mode to see if confirmation is needed
+      const previewResults = await toolExecutorService.executeTools(
         masterResponse.toolCalls,
         executionContext,
-        accessToken // Pass user's Google access token for Gmail/Calendar operations
+        accessToken,
+        { preview: true } // Run in preview mode
       );
       
       // Check if any tools require confirmation
-      const needsConfirmation = toolResults.some(result => 
+      const needsConfirmation = previewResults.some(result => 
         result.result && typeof result.result === 'object' && 
         'awaitingConfirmation' in result.result
       );
@@ -168,14 +169,21 @@ router.post('/text-command',
           message: 'I need your confirmation before proceeding with this action.',
           data: {
             sessionId: finalSessionId,
-            toolResults,
-            pendingActions: extractPendingActions(toolResults),
-            confirmationPrompt: generateConfirmationPrompt(masterResponse.toolCalls, toolResults),
+            toolResults: previewResults,
+            pendingActions: extractPendingActions(previewResults),
+            confirmationPrompt: generateConfirmationPrompt(masterResponse.toolCalls, previewResults),
             conversationContext: buildConversationContext(command, masterResponse.message, context)
           }
         });
       } else {
-        // Return action completed response
+        // No confirmation needed, execute tools normally
+        const toolResults = await toolExecutorService.executeTools(
+          masterResponse.toolCalls,
+          executionContext,
+          accessToken,
+          { preview: false } // Execute normally
+        );
+        
         const executionStats = toolExecutorService.getExecutionStats(toolResults);
         return res.json({
           success: true,
@@ -252,7 +260,7 @@ router.post('/confirm-action',
       }
 
       // Execute the confirmed action
-      const result = await executeConfirmedAction(actionId, parameters, user.userId, sessionId);
+      const result = await executeConfirmedAction(actionId, parameters, user.userId, sessionId, req.body.accessToken);
 
       return res.json({
         success: result.success,
@@ -692,7 +700,8 @@ async function handleActionConfirmation(
     pendingAction.actionId,
     pendingAction.parameters,
     req.user!.userId,
-    sessionId
+    sessionId,
+    req.body.accessToken
   );
 
   return res.json({
@@ -766,23 +775,82 @@ async function executeConfirmedAction(
   actionId: string,
   parameters: any,
   userId: string,
-  sessionId?: string
+  sessionId?: string,
+  accessToken?: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   try {
-    // In a real implementation, you'd retrieve the stored action details
-    // For now, we'll return a placeholder
     logger.info('Executing confirmed action', { actionId, userId, sessionId });
     
-    return {
-      success: true,
-      message: 'Action completed successfully',
-      data: { actionId, completedAt: new Date().toISOString() }
+    // Extract action details from parameters
+    const actionType = parameters?.type || 'unknown';
+    const query = parameters?.query || parameters?.originalQuery;
+    
+    if (!query) {
+      return {
+        success: false,
+        message: 'Cannot execute action: missing query information',
+        data: { actionId }
+      };
+    }
+
+    // Create execution context
+    const executionContext: ToolExecutionContext = {
+      sessionId: sessionId || `session-${userId}-${Date.now()}`,
+      userId,
+      timestamp: new Date()
     };
+
+    // Create tool call based on action type
+    let toolCall: any;
+    if (actionType === 'email') {
+      toolCall = {
+        name: 'emailAgent',
+        parameters: { query }
+      };
+    } else if (actionType === 'calendar') {
+      toolCall = {
+        name: 'calendarAgent', 
+        parameters: { query }
+      };
+    } else {
+      return {
+        success: false,
+        message: `Unknown action type: ${actionType}`,
+        data: { actionId, actionType }
+      };
+    }
+
+    // Execute the tool normally (not in preview mode)
+    const toolResult = await toolExecutorService.executeTool(
+      toolCall,
+      executionContext,
+      accessToken,
+      { preview: false }
+    );
+
+    if (toolResult.success) {
+      return {
+        success: true,
+        message: toolResult.result?.message || 'Action completed successfully',
+        data: { 
+          actionId, 
+          result: toolResult.result,
+          executionTime: toolResult.executionTime
+        }
+      };
+    } else {
+      return {
+        success: false,
+        message: toolResult.error || 'Action execution failed',
+        data: { actionId, error: toolResult.error }
+      };
+    }
   } catch (error) {
     logger.error('Failed to execute confirmed action:', error);
     return {
       success: false,
-      message: 'Failed to execute action'
+      message: 'Failed to execute action',
+      data: { actionId, error: error instanceof Error ? error.message : 'Unknown error' }
     };
   }
 }
