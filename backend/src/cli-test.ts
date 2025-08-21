@@ -4,9 +4,10 @@ import * as readline from 'readline';
 import { MasterAgent } from './agents/master.agent';
 import logger from './utils/logger';
 import * as dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from main project root directory
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 // Colors for terminal output
 const colors = {

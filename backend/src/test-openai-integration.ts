@@ -3,8 +3,8 @@ import logger from './utils/logger';
 import * as dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables from root directory
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+// Load environment variables from main project root directory
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 async function testOpenAIIntegration() {
   logger.info('Starting OpenAI Integration test...');

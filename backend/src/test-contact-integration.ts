@@ -1,12 +1,13 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import logger from './utils/logger';
 import { masterAgent } from './agents/master.agent';
 import { toolExecutorService } from './services/tool-executor.service';
 import { contactAgent } from './agents/contact.agent';
 import { ContactAgent } from './agents/contact.agent';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from main project root directory
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 /**
  * Test the complete contact resolution + email flow

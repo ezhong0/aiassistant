@@ -1,8 +1,10 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load environment variables from root directory
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+// Load environment variables from main project root directory
+// Calculate path relative to the backend directory
+const envPath = path.resolve(__dirname, '../../.env');
+dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
 import configService from './config/config.service';
