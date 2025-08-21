@@ -411,4 +411,9 @@ extension AuthenticationManager {
     var shouldShowDebugInfo: Bool {
         return config.shouldShowDebugUI
     }
+    
+    /// Get current Google access token for API calls
+    var googleAccessToken: String? {
+        return GIDSignIn.sharedInstance.currentUser?.accessToken.tokenString
+    }
 }

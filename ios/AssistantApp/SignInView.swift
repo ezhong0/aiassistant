@@ -9,7 +9,7 @@ import SwiftUI
 import GoogleSignIn
 
 struct SignInView: View {
-    @StateObject private var authManager = AuthenticationManager()
+    @EnvironmentObject var authManager: AuthenticationManager
     
     var body: some View {
         NavigationView {
@@ -135,39 +135,19 @@ struct SignInView: View {
                     .foregroundColor(.secondary)
             }
             
-            // Action buttons
+            // Success message
             VStack(spacing: 12) {
-                Button(action: {
-                    // Navigate to main app
-                }) {
-                    HStack {
-                        Image(systemName: "arrow.right.circle.fill")
-                        Text("Continue to App")
-                    }
+                Text("Successfully signed in!")
                     .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .cornerRadius(10)
-                }
+                    .foregroundColor(.green)
                 
-                Button(action: {
-                    Task {
-                        await authManager.signOut()
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "power")
-                        Text("Sign Out")
-                    }
+                Text("Taking you to your assistant...")
                     .font(.subheadline)
-                    .foregroundColor(.red)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(10)
-                }
+                    .foregroundColor(.secondary)
+                
+                ProgressView()
+                    .scaleEffect(0.8)
+                    .padding(.top, 8)
             }
         }
     }

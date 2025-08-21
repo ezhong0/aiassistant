@@ -15,8 +15,7 @@ class APIService: ObservableObject {
     /// Send a text command to the assistant
     func sendTextCommand(_ command: String, sessionId: String? = nil) async throws -> TextCommandResponse {
         let endpoint = "api/assistant/text-command"
-        
-        var body: [String: Any] = [
+        let body: [String: Any] = [
             "command": command,
             "sessionId": sessionId ?? UUID().uuidString,
             "context": [
@@ -25,11 +24,6 @@ class APIService: ObservableObject {
                 ]
             ]
         ]
-        
-        // Add Google access token if available
-        if let googleAccessToken = authManager.googleAccessToken {
-            body["accessToken"] = googleAccessToken
-        }
         
         let data = try await authManager.makeAuthenticatedRequest(
             to: endpoint,

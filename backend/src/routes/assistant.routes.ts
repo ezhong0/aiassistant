@@ -29,7 +29,26 @@ const router = express.Router();
 router.use(assistantApiLogging);
 
 // Initialize services
-// const masterAgent = new MasterAgent(); // Temporarily disabled due to startup crash
+let masterAgent: MasterAgent | null = null;
+
+// Initialize MasterAgent with OpenAI if available
+try {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  if (openaiApiKey) {
+    masterAgent = new MasterAgent({
+      openaiApiKey,
+      model: 'gpt-4o-mini'
+    });
+    logger.info('MasterAgent initialized with OpenAI integration');
+  } else {
+    masterAgent = new MasterAgent();
+    logger.info('MasterAgent initialized with rule-based routing only');
+  }
+} catch (error) {
+  logger.error('Failed to initialize MasterAgent:', error);
+  logger.warn('Assistant will operate in fallback mode');
+}
+
 const sessionService = new SessionService();
 
 // Validation schemas
@@ -41,6 +60,9 @@ const textCommandSchema = z.object({
   sessionId: z.string()
     .optional()
     .transform(val => val ? sanitizeString(val, 100) : undefined),
+  accessToken: z.string()
+    .optional()
+    .transform(val => val ? sanitizeString(val, 2000) : undefined),
   context: z.object({
     conversationHistory: z.array(z.object({
       role: z.enum(['user', 'assistant']),
@@ -82,7 +104,7 @@ router.post('/text-command',
   validate({ body: textCommandSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { command, sessionId, context } = req.validatedBody as z.infer<typeof textCommandSchema>;
+    const { command, sessionId, accessToken, context } = req.validatedBody as z.infer<typeof textCommandSchema>;
     const user = req.user!;
 
     const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
@@ -92,6 +114,7 @@ router.post('/text-command',
       command: command.substring(0, 100) + (command.length > 100 ? '...' : ''),
       sessionId: finalSessionId,
       hasContext: !!context,
+      hasAccessToken: !!accessToken,
       pendingActions: context?.pendingActions?.length || 0
     });
 
@@ -103,20 +126,82 @@ router.post('/text-command',
       }
     }
 
-    // Step 1: Temporary placeholder response for testing
-    // TODO: Fix MasterAgent initialization and restore full functionality
-    return res.json({
-      success: true,
-      type: 'response',
-      message: `I received your command: "${command}". The assistant is currently in testing mode.`,
-      data: {
-        response: `Echo: ${command}`,
-        toolCalls: [],
-        toolResults: [],
+    // Step 1: Process command with MasterAgent
+    if (!masterAgent) {
+      return res.status(503).json({
+        success: false,
+        type: 'error',
+        message: 'Assistant is currently unavailable. Please try again later.',
+        error: 'MASTER_AGENT_UNAVAILABLE'
+      });
+    }
+
+    // Get Master Agent response (determines which tools to call)
+    const masterResponse = await masterAgent.processUserInput(command, finalSessionId, user.userId);
+    
+    // Step 2: Execute tools if needed
+    if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
+      const executionContext: ToolExecutionContext = {
         sessionId: finalSessionId,
-        conversationContext: buildConversationContext(command, `Echo: ${command}`, context)
+        userId: user.userId,
+        timestamp: new Date()
+      };
+      
+      // Execute the tools
+      const toolResults = await toolExecutorService.executeTools(
+        masterResponse.toolCalls,
+        executionContext,
+        accessToken // Pass user's Google access token for Gmail/Calendar operations
+      );
+      
+      // Check if any tools require confirmation
+      const needsConfirmation = toolResults.some(result => 
+        result.result && typeof result.result === 'object' && 
+        'awaitingConfirmation' in result.result
+      );
+      
+      if (needsConfirmation) {
+        // Return confirmation required response
+        return res.json({
+          success: true,
+          type: 'confirmation_required',
+          message: 'I need your confirmation before proceeding with this action.',
+          data: {
+            sessionId: finalSessionId,
+            toolResults,
+            pendingActions: extractPendingActions(toolResults),
+            confirmationPrompt: generateConfirmationPrompt(masterResponse.toolCalls, toolResults),
+            conversationContext: buildConversationContext(command, masterResponse.message, context)
+          }
+        });
+      } else {
+        // Return action completed response
+        const executionStats = toolExecutorService.getExecutionStats(toolResults);
+        return res.json({
+          success: true,
+          type: 'action_completed', 
+          message: generateCompletionMessage(toolResults),
+          data: {
+            sessionId: finalSessionId,
+            toolResults,
+            executionStats,
+            conversationContext: buildConversationContext(command, masterResponse.message, context)
+          }
+        });
       }
-    });
+    } else {
+      // No tools needed, just return the response
+      return res.json({
+        success: true,
+        type: 'response',
+        message: masterResponse.message,
+        data: {
+          response: masterResponse.message,
+          sessionId: finalSessionId,
+          conversationContext: buildConversationContext(command, masterResponse.message, context)
+        }
+      });
+    }
 
   } catch (error) {
     logger.error('Assistant text command error:', error);
@@ -809,6 +894,58 @@ function buildConversationContext(
     ],
     lastActivity: new Date().toISOString()
   };
+}
+
+// Helper functions
+function extractPendingActions(toolResults: any[]): any[] {
+  return toolResults
+    .filter(result => result.result && typeof result.result === 'object' && 'actionId' in result.result)
+    .map(result => ({
+      actionId: result.result.actionId || `action-${Date.now()}`,
+      type: result.toolName,
+      parameters: result.result.parameters || {},
+      awaitingConfirmation: true
+    }));
+}
+
+function generateConfirmationPrompt(toolCalls: any[], toolResults: any[]): string {
+  const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
+  if (!mainAction) {
+    return 'Would you like me to proceed with this action?';
+  }
+  
+  if (mainAction.name === 'emailAgent') {
+    return 'I\'m about to send an email. Would you like me to proceed?';
+  } else if (mainAction.name === 'calendarAgent') {
+    return 'I\'m about to create a calendar event. Would you like me to proceed?';
+  }
+  
+  return 'Would you like me to proceed with this action?';
+}
+
+function generateCompletionMessage(toolResults: any[]): string {
+  const successfulResults = toolResults.filter(r => r.success);
+  const failedResults = toolResults.filter(r => !r.success);
+  
+  if (failedResults.length === 0) {
+    // All successful
+    const emailResults = successfulResults.filter(r => r.toolName === 'emailAgent');
+    const calendarResults = successfulResults.filter(r => r.toolName === 'calendarAgent');
+    const contactResults = successfulResults.filter(r => r.toolName === 'contactAgent');
+    
+    if (emailResults.length > 0) {
+      return 'Email operation completed successfully!';
+    } else if (calendarResults.length > 0) {
+      return 'Calendar event created successfully!';
+    } else if (contactResults.length > 0) {
+      return 'Contact lookup completed successfully!';
+    } else {
+      return 'Task completed successfully!';
+    }
+  } else {
+    // Some failures
+    return `Task completed with ${successfulResults.length} successful and ${failedResults.length} failed operations.`;
+  }
 }
 
 export default router;
