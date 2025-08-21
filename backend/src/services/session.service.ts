@@ -1,4 +1,3 @@
-import logger from '../utils/logger';
 import { 
   SessionContext, 
   ConversationEntry, 
@@ -7,31 +6,52 @@ import {
   SessionExpiredError 
 } from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config';
+import { BaseService } from './base-service';
 import { serviceManager } from './service-manager';
+import logger from '../utils/logger';
 
-export class SessionService {
+export class SessionService extends BaseService {
   private sessions: Map<string, SessionContext> = new Map();
   private readonly defaultTimeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes;
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(timeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes) {
+    super('SessionService');
     this.defaultTimeoutMinutes = timeoutMinutes;
-    
+  }
+
+  /**
+   * Service-specific initialization
+   */
+  protected async onInitialize(): Promise<void> {
     // Clean up expired sessions using configured interval
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSessions();
     }, TIMEOUTS.sessionCleanup);
 
-    // Register for graceful shutdown
-    serviceManager.registerService(this);
+    this.logInfo(`SessionService initialized with ${this.defaultTimeoutMinutes} minute timeout`);
+  }
 
-    logger.info(`SessionService initialized with ${timeoutMinutes} minute timeout`);
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+
+    // Clear all sessions
+    this.sessions.clear();
+    this.logInfo('SessionService destroyed, all sessions cleared');
   }
 
   /**
    * Create a new session or return existing one
    */
   createSession(sessionId: string, userId?: string): SessionContext {
+    this.assertReady();
+    
     const now = new Date();
     const expiresAt = new Date(now.getTime() + (this.defaultTimeoutMinutes * 60 * 1000));
 
@@ -39,38 +59,16 @@ export class SessionService {
       sessionId,
       userId,
       createdAt: now,
+      expiresAt,
       lastActivity: now,
       conversationHistory: [],
-      toolExecutionHistory: [],
-      expiresAt
+      toolCalls: [],
+      toolResults: []
     };
 
     this.sessions.set(sessionId, session);
-    logger.info(`Created new session: ${sessionId}${userId ? ` for user: ${userId}` : ''}`);
+    this.logDebug('Created new session', { sessionId, userId, expiresAt });
     
-    return session;
-  }
-
-  /**
-   * Get an existing session
-   */
-  getSession(sessionId: string): SessionContext | null {
-    const session = this.sessions.get(sessionId);
-    
-    if (!session) {
-      return null;
-    }
-
-    // Check if session has expired
-    if (new Date() > session.expiresAt) {
-      this.deleteSession(sessionId);
-      throw new SessionExpiredError(sessionId);
-    }
-
-    // Update last activity and extend expiration
-    session.lastActivity = new Date();
-    session.expiresAt = new Date(session.lastActivity.getTime() + (this.defaultTimeoutMinutes * 60 * 1000));
-
     return session;
   }
 
@@ -78,211 +76,274 @@ export class SessionService {
    * Get or create a session
    */
   getOrCreateSession(sessionId: string, userId?: string): SessionContext {
-    let session = this.getSession(sessionId);
+    this.assertReady();
+    
+    let session = this.sessions.get(sessionId);
     
     if (!session) {
       session = this.createSession(sessionId, userId);
+    } else {
+      // Update last activity
+      session.lastActivity = new Date();
+      session.userId = userId || session.userId;
     }
-
+    
     return session;
   }
 
   /**
-   * Add conversation entry to session
+   * Get an existing session
    */
-  addConversationEntry(
-    sessionId: string,
-    userInput: string,
-    agentResponse: string,
-    toolCalls: ToolCall[] = [],
-    toolResults: ToolResult[] = []
-  ): void {
-    const session = this.getSession(sessionId);
+  getSession(sessionId: string): SessionContext | undefined {
+    this.assertReady();
     
+    const session = this.sessions.get(sessionId);
+    if (session && this.isSessionExpired(session)) {
+      this.logWarn('Session expired', { sessionId, expiresAt: session.expiresAt });
+      this.sessions.delete(sessionId);
+      return undefined;
+    }
+    
+    return session;
+  }
+
+  /**
+   * Check if a session exists and is valid
+   */
+  hasValidSession(sessionId: string): boolean {
+    this.assertReady();
+    
+    const session = this.sessions.get(sessionId);
+    return session !== undefined && !this.isSessionExpired(session);
+  }
+
+  /**
+   * Add a conversation entry to a session
+   */
+  addConversationEntry(sessionId: string, entry: ConversationEntry): void {
+    this.assertReady();
+    
+    const session = this.getSession(sessionId);
     if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    const entry: ConversationEntry = {
-      timestamp: new Date(),
-      userInput,
-      agentResponse,
-      toolCalls,
-      toolResults
-    };
+    // Check conversation history limits
+    if (session.conversationHistory.length >= REQUEST_LIMITS.conversation.maxHistory) {
+      // Remove oldest entry
+      session.conversationHistory.shift();
+    }
+
+    // Check content length limits
+    if (entry.content && entry.content.length > REQUEST_LIMITS.conversation.maxContentLength) {
+      entry.content = entry.content.substring(0, REQUEST_LIMITS.conversation.maxContentLength) + '...';
+    }
 
     session.conversationHistory.push(entry);
-
-    // Keep only last 10 conversation entries to prevent memory bloat
-    if (session.conversationHistory.length > 10) {
-      session.conversationHistory = session.conversationHistory.slice(-10);
-    }
-
-    logger.info(`Added conversation entry to session ${sessionId}`);
-  }
-
-  /**
-   * Add tool execution result to session
-   */
-  addToolResult(sessionId: string, toolResult: ToolResult): void {
-    const session = this.getSession(sessionId);
+    session.lastActivity = new Date();
     
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    session.toolExecutionHistory.push(toolResult);
-
-    // Keep only last 20 tool results
-    if (session.toolExecutionHistory.length > 20) {
-      session.toolExecutionHistory = session.toolExecutionHistory.slice(-20);
-    }
-
-    logger.info(`Added tool result for ${toolResult.toolName} to session ${sessionId}`);
-  }
-
-  /**
-   * Update session with new data
-   */
-  updateSession(sessionId: string, updates: Partial<SessionContext>): void {
-    let session = this.getSession(sessionId);
-    
-    if (!session) {
-      // Create session if it doesn't exist
-      logger.info(`Session ${sessionId} not found, creating new one`);
-      session = this.createSession(sessionId, updates.userId);
-    }
-
-    Object.assign(session, updates);
-    logger.info(`Updated session ${sessionId}`);
-  }
-
-  /**
-   * Get conversation context for AI
-   */
-  getConversationContext(sessionId: string): string {
-    const session = this.getSession(sessionId);
-    
-    if (!session || session.conversationHistory.length === 0) {
-      return '';
-    }
-
-    // Build context from recent conversation history
-    const contextParts: string[] = [];
-    
-    contextParts.push('Previous conversation context:');
-    
-    session.conversationHistory.slice(-5).forEach((entry, index) => {
-      contextParts.push(`${index + 1}. User: ${entry.userInput}`);
-      contextParts.push(`   Assistant: ${entry.agentResponse}`);
-      
-      if (entry.toolCalls.length > 0) {
-        contextParts.push(`   Tools used: ${entry.toolCalls.map(tc => tc.name).join(', ')}`);
-      }
+    this.logDebug('Added conversation entry', { 
+      sessionId, 
+      entryType: entry.type,
+      contentLength: entry.content?.length || 0
     });
-
-    return contextParts.join('\n');
   }
 
   /**
-   * Get recent tool results that might be relevant
+   * Add tool calls to a session
    */
-  getRecentToolResults(sessionId: string, toolName?: string): ToolResult[] {
-    const session = this.getSession(sessionId);
+  addToolCalls(sessionId: string, toolCalls: ToolCall[]): void {
+    this.assertReady();
     
+    const session = this.getSession(sessionId);
     if (!session) {
-      return [];
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    let results = session.toolExecutionHistory.slice(-10); // Last 10 results
+    session.toolCalls.push(...toolCalls);
+    session.lastActivity = new Date();
+    
+    this.logDebug('Added tool calls to session', { 
+      sessionId, 
+      toolCallCount: toolCalls.length,
+      toolNames: toolCalls.map(tc => tc.name)
+    });
+  }
 
-    if (toolName) {
-      results = results.filter(result => result.toolName === toolName);
+  /**
+   * Add tool results to a session
+   */
+  addToolResults(sessionId: string, toolResults: ToolResult[]): void {
+    this.assertReady();
+    
+    const session = this.getSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    return results;
+    session.toolResults.push(...toolResults);
+    session.lastActivity = new Date();
+    
+    this.logDebug('Added tool results to session', { 
+      sessionId, 
+      resultCount: toolResults.length,
+      successfulResults: toolResults.filter(r => r.success).length
+    });
+  }
+
+  /**
+   * Get conversation context for a session
+   */
+  getConversationContext(sessionId: string): string | null {
+    this.assertReady();
+    
+    const session = this.getSession(sessionId);
+    if (!session || session.conversationHistory.length === 0) {
+      return null;
+    }
+
+    // Get recent conversation entries
+    const recentEntries = session.conversationHistory
+      .slice(-5) // Last 5 entries
+      .map(entry => `${entry.type}: ${entry.content}`)
+      .join('\n');
+
+    return recentEntries;
+  }
+
+  /**
+   * Extend session timeout
+   */
+  extendSession(sessionId: string, additionalMinutes: number): void {
+    this.assertReady();
+    
+    const session = this.getSession(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const maxExtension = EXECUTION_CONFIG.session.maxTimeoutMinutes - this.defaultTimeoutMinutes;
+    const actualExtension = Math.min(additionalMinutes, maxExtension);
+    
+    session.expiresAt = new Date(session.expiresAt.getTime() + (actualExtension * 60 * 1000));
+    session.lastActivity = new Date();
+    
+    this.logInfo('Extended session timeout', { 
+      sessionId, 
+      additionalMinutes: actualExtension,
+      newExpiresAt: session.expiresAt
+    });
   }
 
   /**
    * Delete a session
    */
   deleteSession(sessionId: string): boolean {
+    this.assertReady();
+    
     const deleted = this.sessions.delete(sessionId);
-    
     if (deleted) {
-      logger.info(`Deleted session: ${sessionId}`);
+      this.logInfo('Session deleted', { sessionId });
     }
-    
     return deleted;
   }
 
   /**
-   * Get session statistics
+   * Get all active sessions
    */
-  getSessionStats(sessionId: string): any {
-    const session = this.getSession(sessionId);
+  getAllSessions(): SessionContext[] {
+    this.assertReady();
     
-    if (!session) {
-      return null;
-    }
-
-    const toolUsage = session.toolExecutionHistory.reduce((acc, result) => {
-      acc[result.toolName] = (acc[result.toolName] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return {
-      sessionId: session.sessionId,
-      userId: session.userId,
-      createdAt: session.createdAt,
-      lastActivity: session.lastActivity,
-      expiresAt: session.expiresAt,
-      conversationCount: session.conversationHistory.length,
-      toolExecutionCount: session.toolExecutionHistory.length,
-      toolUsage,
-      minutesActive: Math.round((session.lastActivity.getTime() - session.createdAt.getTime()) / 60000)
-    };
+    return Array.from(this.sessions.values())
+      .filter(session => !this.isSessionExpired(session));
   }
 
   /**
-   * Get all active sessions (for monitoring)
+   * Get session count
    */
-  getActiveSessions(): string[] {
-    return Array.from(this.sessions.keys());
+  getSessionCount(): number {
+    this.assertReady();
+    
+    return this.sessions.size;
+  }
+
+  /**
+   * Get active session count
+   */
+  getActiveSessionCount(): number {
+    this.assertReady();
+    
+    return Array.from(this.sessions.values())
+      .filter(session => !this.isSessionExpired(session))
+      .length;
+  }
+
+  /**
+   * Check if a session is expired
+   */
+  private isSessionExpired(session: SessionContext): boolean {
+    return new Date() > session.expiresAt;
   }
 
   /**
    * Clean up expired sessions
    */
   private cleanupExpiredSessions(): void {
+    this.assertNotDestroyed();
+    
+    const beforeCount = this.sessions.size;
     const now = new Date();
-    let cleanedCount = 0;
-
+    
     for (const [sessionId, session] of this.sessions.entries()) {
-      if (now > session.expiresAt) {
+      if (this.isSessionExpired(session)) {
         this.sessions.delete(sessionId);
-        cleanedCount++;
+        this.logDebug('Cleaned up expired session', { sessionId, expiresAt: session.expiresAt });
       }
     }
-
+    
+    const afterCount = this.sessions.size;
+    const cleanedCount = beforeCount - afterCount;
+    
     if (cleanedCount > 0) {
-      logger.info(`Cleaned up ${cleanedCount} expired sessions`);
+      this.logInfo('Session cleanup completed', { 
+        cleanedCount, 
+        remainingSessions: afterCount 
+      });
     }
   }
 
   /**
-   * Cleanup when service is destroyed
+   * Get session statistics
    */
-  destroy(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
+  getSessionStats(): {
+    totalSessions: number;
+    activeSessions: number;
+    expiredSessions: number;
+    averageSessionAge: number;
+  } {
+    this.assertReady();
     
-    // Unregister from service manager
-    serviceManager.unregisterService(this);
+    const now = new Date();
+    const sessions = Array.from(this.sessions.values());
+    const activeSessions = sessions.filter(s => !this.isSessionExpired(s));
+    const expiredSessions = sessions.filter(s => this.isSessionExpired(s));
     
-    this.sessions.clear();
-    logger.info('SessionService destroyed');
+    const totalAge = activeSessions.reduce((sum, session) => {
+      return sum + (now.getTime() - session.createdAt.getTime());
+    }, 0);
+    
+    const averageSessionAge = activeSessions.length > 0 
+      ? totalAge / activeSessions.length 
+      : 0;
+    
+    return {
+      totalSessions: sessions.length,
+      activeSessions: activeSessions.length,
+      expiredSessions: expiredSessions.length,
+      averageSessionAge
+    };
   }
 }
+
+// Export the class for registration with ServiceManager
+export { SessionService };

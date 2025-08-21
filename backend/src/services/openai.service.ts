@@ -1,16 +1,12 @@
 import OpenAI from 'openai';
-import logger from '../utils/logger';
-import { ToolCall } from '../types/tools';
+import { ToolCall, ToolExecutionContext } from '../types/tools';
 import { aiConfigService } from '../config/ai-config';
+import { BaseService } from './base-service';
+import logger from '../utils/logger';
 
 export interface OpenAIConfig {
   apiKey: string;
   model?: string;
-}
-
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
 }
 
 export interface FunctionCallResponse {
@@ -18,11 +14,13 @@ export interface FunctionCallResponse {
   message: string;
 }
 
-export class OpenAIService {
+export class OpenAIService extends BaseService {
   private client: OpenAI;
   private model: string;
 
   constructor(config: OpenAIConfig) {
+    super('OpenAIService');
+    
     this.client = new OpenAI({
       apiKey: config.apiKey,
     });
@@ -31,293 +29,325 @@ export class OpenAIService {
     try {
       const aiOpenAIConfig = aiConfigService.getOpenAIConfig('routing');
       this.model = config.model || aiOpenAIConfig.model;
-      logger.info(`OpenAI service initialized with model: ${this.model} (from AI config)`);
+      this.logInfo(`OpenAI service initialized with model: ${this.model} (from AI config)`);
     } catch (error) {
       this.model = config.model || 'gpt-4o-mini';
-      logger.warn(`Using fallback model: ${this.model} (AI config not available)`);
+      this.logWarn(`Using fallback model: ${this.model} (AI config not available)`);
     }
+  }
+
+  /**
+   * Service-specific initialization
+   */
+  protected async onInitialize(): Promise<void> {
+    // OpenAI client is already initialized in constructor
+    this.logInfo('OpenAI service initialized successfully');
+  }
+
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    this.logInfo('OpenAI service destroyed');
   }
 
   /**
    * Generate tool calls from user input using the master agent prompt
    */
   async generateToolCalls(
-    userInput: string,
-    systemPrompt: string,
+    userInput: string, 
+    systemPrompt: string, 
     sessionId: string
   ): Promise<FunctionCallResponse> {
+    this.assertReady();
+    
     try {
-      logger.info(`OpenAI generating tool calls for session: ${sessionId}`);
-
-      const messages: ChatMessage[] = [
-        {
-          role: 'system',
-          content: systemPrompt
-        },
-        {
-          role: 'user',
-          content: userInput
-        }
-      ];
-
-      // Define the available tools/functions
-      const tools = [
-        {
-          type: 'function' as const,
-          function: {
-            name: 'Think',
-            description: 'Use this to think deeply or if you get stuck',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The thought process or analysis to perform'
-                }
-              },
-              required: ['query']
-            }
-          }
-        },
-        {
-          type: 'function' as const,
-          function: {
-            name: 'emailAgent',
-            description: 'Use this tool to take action in email',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The email action to perform'
-                }
-              },
-              required: ['query']
-            }
-          }
-        },
-        {
-          type: 'function' as const,
-          function: {
-            name: 'calendarAgent',
-            description: 'Use this tool to take action in calendar',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The calendar action to perform'
-                }
-              },
-              required: ['query']
-            }
-          }
-        },
-        {
-          type: 'function' as const,
-          function: {
-            name: 'contactAgent',
-            description: 'Use this tool to get, update, or add contacts',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The contact action to perform'
-                }
-              },
-              required: ['query']
-            }
-          }
-        },
-        {
-          type: 'function' as const,
-          function: {
-            name: 'contentCreator',
-            description: 'Use this tool to create blog posts',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The content creation request'
-                }
-              },
-              required: ['query']
-            }
-          }
-        },
-        {
-          type: 'function' as const,
-          function: {
-            name: 'Tavily',
-            description: 'Use this tool to search the web',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'The web search query'
-                }
-              },
-              required: ['query']
-            }
-          }
-        }
-      ];
-
-      // Get AI configuration for routing
-      const routingConfig = aiConfigService.getOpenAIConfig('routing');
-      
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: messages as any,
-        tools: tools,
-        tool_choice: 'auto',
-        temperature: routingConfig.temperature,
-        max_tokens: routingConfig.max_tokens,
-      }, {
-        timeout: routingConfig.timeout,
+      this.logDebug('Generating tool calls', { 
+        userInputLength: userInput.length,
+        systemPromptLength: systemPrompt.length,
+        sessionId 
       });
 
-      const choice = response.choices[0];
-      
-      if (!choice) {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userInput }
+        ],
+        tools: this.getToolDefinitions(),
+        tool_choice: 'auto',
+        temperature: 0.1,
+        max_tokens: 1000
+      });
+
+      const assistantMessage = response.choices[0]?.message;
+      if (!assistantMessage) {
         throw new Error('No response from OpenAI');
       }
 
-      let toolCalls: ToolCall[] = [];
-      let message = '';
-
-      // Check if the assistant made tool calls
-      if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
-        toolCalls = choice.message.tool_calls.map(toolCall => {
-          const func = (toolCall as any).function;
-          return {
-            name: func.name,
-            parameters: JSON.parse(func.arguments)
-          };
-        });
-
-        message = `I'm processing your request using the following tools: ${toolCalls.map(tc => tc.name).join(', ')}`;
-      } else {
-        // If no tool calls, use the assistant's message
-        message = choice.message.content || 'I need more information to help you.';
-      }
-
-      // Ensure Think tool is always called (as per the rules)
-      const hasThinkTool = toolCalls.some(tc => tc.name === 'Think');
-      if (!hasThinkTool) {
-        toolCalls.push({
-          name: 'Think',
-          parameters: {
-            query: `Verify that the correct steps were taken for the user request: "${userInput}"`
+      const toolCalls: ToolCall[] = [];
+      if (assistantMessage.tool_calls) {
+        for (const toolCall of assistantMessage.tool_calls) {
+          if (toolCall.function) {
+            try {
+              const parameters = JSON.parse(toolCall.function.arguments);
+              toolCalls.push({
+                name: toolCall.function.name,
+                parameters
+              });
+            } catch (error) {
+              this.logWarn('Failed to parse tool call parameters', { 
+                toolName: toolCall.function.name,
+                arguments: toolCall.function.arguments,
+                error 
+              });
+            }
           }
-        });
+        }
       }
 
-      logger.info(`OpenAI generated ${toolCalls.length} tool calls:`, toolCalls.map(tc => tc.name));
+      this.logInfo('Tool calls generated successfully', { 
+        toolCallCount: toolCalls.length,
+        toolNames: toolCalls.map(tc => tc.name),
+        sessionId 
+      });
 
       return {
         toolCalls,
-        message
+        message: assistantMessage.content || 'I\'ll help you with that.'
       };
-
     } catch (error) {
-      logger.error('Error in OpenAI service:', error);
-      
-      // Fallback to rule-based routing on OpenAI failure
-      return {
-        toolCalls: [
-          {
-            name: 'Think',
-            parameters: {
-              query: `OpenAI service failed, falling back to rule-based routing for: "${userInput}"`
-            }
-          }
-        ],
-        message: 'I encountered an issue with my AI processing, but I can still help you.'
-      };
+      this.handleError(error, 'generateToolCalls');
     }
   }
 
   /**
-   * Simple completion for basic text generation (if needed)
+   * Generate a simple text response
    */
   async generateText(
-    prompt: string,
-    maxTokens?: number
+    userInput: string, 
+    systemPrompt: string,
+    options: {
+      temperature?: number;
+      maxTokens?: number;
+    } = {}
   ): Promise<string> {
+    this.assertReady();
+    
     try {
-      // Get AI configuration for content generation
-      const contentConfig = aiConfigService.getOpenAIConfig('content');
-      
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens || contentConfig.max_tokens,
-        temperature: contentConfig.temperature,
-      }, {
-        timeout: contentConfig.timeout,
+      this.logDebug('Generating text response', { 
+        userInputLength: userInput.length,
+        temperature: options.temperature || 0.7,
+        maxTokens: options.maxTokens || 500
       });
 
-      return response.choices[0]?.message?.content || '';
-      
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userInput }
+        ],
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 500
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content in OpenAI response');
+      }
+
+      this.logDebug('Text response generated successfully', { 
+        responseLength: content.length 
+      });
+
+      return content;
     } catch (error) {
-      logger.error('Error in OpenAI text generation:', error);
-      throw error;
+      this.handleError(error, 'generateText');
     }
   }
 
   /**
-   * Create a chat completion with messages array
+   * Generate structured data using function calling
    */
-  async createChatCompletion(
-    messages: ChatMessage[],
-    maxTokens?: number
-  ): Promise<{ content: string }> {
+  async generateStructuredData<T>(
+    userInput: string,
+    systemPrompt: string,
+    schema: any,
+    options: {
+      temperature?: number;
+      maxTokens?: number;
+    } = {}
+  ): Promise<T> {
+    this.assertReady();
+    
     try {
-      // Get AI configuration for analysis
-      const analysisConfig = aiConfigService.getOpenAIConfig('analysis');
-      
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
-        max_tokens: maxTokens || analysisConfig.max_tokens,
-        temperature: analysisConfig.temperature,
-      }, {
-        timeout: analysisConfig.timeout,
+      this.logDebug('Generating structured data', { 
+        userInputLength: userInput.length,
+        schemaType: typeof schema,
+        temperature: options.temperature || 0.1
       });
 
-      return {
-        content: response.choices[0]?.message?.content || ''
-      };
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userInput }
+        ],
+        tools: [{
+          type: 'function',
+          function: {
+            name: 'extract_data',
+            description: 'Extract structured data from user input',
+            parameters: schema
+          }
+        }],
+        tool_choice: { type: 'function', function: { name: 'extract_data' } },
+        temperature: options.temperature || 0.1,
+        max_tokens: options.maxTokens || 1000
+      });
+
+      const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+      if (!toolCall?.function?.arguments) {
+        throw new Error('No structured data in OpenAI response');
+      }
+
+      const data = JSON.parse(toolCall.function.arguments);
       
+      this.logDebug('Structured data generated successfully', { 
+        dataKeys: Object.keys(data) 
+      });
+
+      return data as T;
     } catch (error) {
-      logger.error('Error in OpenAI chat completion:', error);
-      throw error;
+      this.handleError(error, 'generateStructuredData');
     }
   }
 
   /**
-   * Health check for the OpenAI service
+   * Get tool definitions for OpenAI function calling
    */
-  async healthCheck(): Promise<boolean> {
+  private getToolDefinitions(): any[] {
     try {
-      // Get AI configuration for general use
-      const generalConfig = aiConfigService.getOpenAIConfig('general');
-      
-      await this.client.chat.completions.create({
-        model: this.model,
-        messages: [{ role: 'user', content: 'Hello' }],
-        max_tokens: 5,
-      }, {
-        timeout: generalConfig.timeout,
-      });
-      return true;
+      // This would typically come from AgentFactory or a tool registry
+      // For now, return a basic set of tools
+      return [
+        {
+          type: 'function',
+          function: {
+            name: 'emailAgent',
+            description: 'Send emails using Gmail API',
+            parameters: {
+              type: 'object',
+              properties: {
+                to: { type: 'string', description: 'Recipient email address' },
+                subject: { type: 'string', description: 'Email subject' },
+                body: { type: 'string', description: 'Email body content' }
+              },
+              required: ['to', 'subject', 'body']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'contactAgent',
+            description: 'Search and manage contacts',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query for contacts' },
+                operation: { type: 'string', enum: ['search', 'create', 'update'], description: 'Operation to perform' }
+              },
+              required: ['query']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'Think',
+            description: 'Analyze and verify tool usage decisions',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Analysis query or verification request' }
+              },
+              required: ['query']
+            }
+          }
+        }
+      ];
     } catch (error) {
-      logger.error('OpenAI health check failed:', error);
+      this.logWarn('Failed to get tool definitions', { error });
+      return [];
+    }
+  }
+
+  /**
+   * Update the model being used
+   */
+  updateModel(newModel: string): void {
+    this.assertReady();
+    
+    this.model = newModel;
+    this.logInfo('OpenAI model updated', { newModel });
+  }
+
+  /**
+   * Get current model configuration
+   */
+  getModelConfig(): { model: string; availableModels: string[] } {
+    return {
+      model: this.model,
+      availableModels: ['gpt-4', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo']
+    };
+  }
+
+  /**
+   * Test OpenAI API connectivity
+   */
+  async testConnection(): Promise<boolean> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Testing OpenAI API connection');
+      
+      const response = await this.client.models.list();
+      const isConnected = response.data && response.data.length > 0;
+      
+      this.logInfo('OpenAI API connection test completed', { 
+        connected: isConnected,
+        availableModels: response.data?.length || 0 
+      });
+      
+      return isConnected;
+    } catch (error) {
+      this.logError('OpenAI API connection test failed', error);
       return false;
     }
   }
+
+  /**
+   * Get service health status
+   */
+  getHealth(): { healthy: boolean; details?: any } {
+    try {
+      const healthy = this.isReady() && !!this.client;
+      const details = {
+        client: !!this.client,
+        model: this.model,
+        apiKeyConfigured: !!this.client.auth.apiKey
+      };
+
+      return { healthy, details };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        details: { error: error instanceof Error ? error.message : 'Unknown error' }
+      };
+    }
+  }
 }
+
+// Export the class for registration with ServiceManager
+export { OpenAIService };

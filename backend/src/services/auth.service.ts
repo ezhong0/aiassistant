@@ -15,13 +15,21 @@ import {
   retryOAuthOperation
 } from '../utils/auth-errors';
 import configService from '../config/config.service';
+import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
-export class AuthService {
+export class AuthService extends BaseService {
   private oauth2Client: OAuth2Client;
   private readonly config = configService;
 
   constructor() {
+    super('AuthService');
+  }
+
+  /**
+   * Service-specific initialization
+   */
+  protected async onInitialize(): Promise<void> {
     // Validate configuration
     this.config.validate();
     
@@ -31,11 +39,18 @@ export class AuthService {
       this.config.googleRedirectUri
     );
 
-    logger.info('Auth service initialized successfully', {
+    this.logInfo('Auth service initialized successfully', {
       environment: this.config.nodeEnv,
       jwtIssuer: this.config.jwtIssuer,
       jwtExpiresIn: this.config.jwtExpiresIn
     });
+  }
+
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    this.logInfo('Auth service destroyed');
   }
 
   /**
@@ -49,83 +64,53 @@ export class AuthService {
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/contacts.readonly'
   ]): string {
-    return this.oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: scopes,
-      prompt: 'consent',
-      state: this.generateState(),
-    });
+    this.assertReady();
+    
+    try {
+      const url = this.oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: scopes,
+        prompt: 'consent'
+      });
+      
+      this.logDebug('Generated OAuth URL', { scopes, urlLength: url.length });
+      return url;
+    } catch (error) {
+      this.handleError(error, 'generateAuthUrl');
+    }
   }
 
   /**
    * Exchange authorization code for tokens
    */
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
+    this.assertReady();
+    
     try {
-      validateTokenFormat(code);
+      this.logDebug('Exchanging authorization code for tokens');
       
-      logger.info('Exchanging authorization code for tokens');
+      const { tokens } = await this.oauth2Client.getToken(code);
       
-      const result = await retryOAuthOperation(async () => {
-        const { tokens } = await this.oauth2Client.getToken(code);
-        
-        if (!tokens.access_token) {
-          throw AuthErrors.tokenExchangeFailed(new Error('No access token received from Google'));
-        }
+      if (!tokens.access_token) {
+        throw new Error('No access token received from Google');
+      }
 
-        return {
-          access_token: tokens.access_token,
-          refresh_token: tokens.refresh_token || undefined,
-          id_token: tokens.id_token || undefined,
-          token_type: tokens.token_type || 'Bearer',
-          expires_in: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
-          scope: tokens.scope,
-          expiry_date: tokens.expiry_date || undefined
-        };
+      const googleTokens: GoogleTokens = {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || null,
+        expires_in: tokens.expires_in || 3600,
+        token_type: tokens.token_type || 'Bearer',
+        scope: tokens.scope || ''
+      };
+
+      this.logInfo('Successfully exchanged code for tokens', {
+        hasRefreshToken: !!googleTokens.refresh_token,
+        expiresIn: googleTokens.expires_in
       });
-      
-      logger.info('Token exchange successful');
-      return result;
+
+      return googleTokens;
     } catch (error) {
-      throw handleOAuthError('token_exchange', error, { codeLength: code?.length });
-    }
-  }
-
-  /**
-   * Refresh access token using refresh token
-   */
-  async refreshAccessToken(refreshToken: string): Promise<GoogleTokens> {
-    try {
-      validateTokenFormat(refreshToken);
-      
-      logger.info('Refreshing access token');
-      
-      const result = await retryOAuthOperation(async () => {
-        this.oauth2Client.setCredentials({
-          refresh_token: refreshToken,
-        });
-
-        const { credentials } = await this.oauth2Client.refreshAccessToken();
-
-        if (!credentials.access_token) {
-          throw AuthErrors.tokenRefreshFailed(new Error('No access token received during refresh'));
-        }
-
-        return {
-          access_token: credentials.access_token,
-          refresh_token: credentials.refresh_token || refreshToken,
-          id_token: credentials.id_token || undefined,
-          token_type: credentials.token_type || 'Bearer',
-          expires_in: credentials.expiry_date ? Math.floor((credentials.expiry_date - Date.now()) / 1000) : 3600,
-          scope: credentials.scope,
-          expiry_date: credentials.expiry_date || undefined
-        };
-      });
-      
-      logger.info('Token refresh successful');
-      return result;
-    } catch (error) {
-      throw handleOAuthError('token_refresh', error, { refreshTokenLength: refreshToken?.length });
+      this.handleError(error, 'exchangeCodeForTokens');
     }
   }
 
@@ -133,208 +118,247 @@ export class AuthService {
    * Validate Google access token
    */
   async validateGoogleToken(accessToken: string): Promise<TokenValidationResult> {
+    this.assertReady();
+    
     try {
-      // Verify token with Google
-      this.oauth2Client.setCredentials({ access_token: accessToken });
-      const tokenInfo = await this.oauth2Client.getTokenInfo(accessToken);
-
-      return {
-        valid: true,
-        payload: tokenInfo,
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        error: error instanceof Error ? error.message : 'Token validation failed',
-      };
-    }
-  }
-
-  /**
-   * Validate Google ID token
-   */
-  async validateIdToken(idToken: string): Promise<TokenValidationResult> {
-    try {
-      const ticket = await this.oauth2Client.verifyIdToken({
-        idToken,
-        audience: this.config.googleClientId,
-      });
-
+      this.logDebug('Validating Google access token');
+      
+      const ticket = await this.oauth2Client.verifyIdToken(accessToken);
       const payload = ticket.getPayload();
+      
       if (!payload) {
-        return {
-          valid: false,
-          error: 'No payload in ID token',
-        };
+        return { valid: false, error: 'No payload in token' };
       }
 
+      const userInfo: GoogleUserInfo = {
+        sub: payload.sub!,
+        email: payload.email!,
+        name: payload.name || '',
+        picture: payload.picture || '',
+        email_verified: payload.email_verified || false
+      };
+
+      // Validate user info
+      const validationResult = validateGoogleUserInfo(userInfo);
+      if (!validationResult.valid) {
+        return { valid: false, error: validationResult.errors.join(', ') };
+      }
+
+      this.logDebug('Google token validated successfully', { email: userInfo.email });
+      
       return {
         valid: true,
-        payload,
+        userInfo
       };
     } catch (error) {
-      return {
-        valid: false,
-        error: error instanceof Error ? error.message : 'ID token validation failed',
-      };
+      this.logWarn('Google token validation failed', { error });
+      return { valid: false, error: 'Token validation failed' };
     }
   }
 
   /**
-   * Get user information from Google using access token
+   * Generate JWT token for authenticated user
    */
-  async getUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+  generateJWT(userId: string, email: string, additionalClaims: Record<string, any> = {}): string {
+    this.assertReady();
+    
     try {
-      validateTokenFormat(accessToken);
-      
-      logger.info('Fetching user information from Google');
-      
-      const result = await retryOAuthOperation(async () => {
-        const response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          timeout: 10000, // 10 second timeout
-        });
-
-        const userInfo = response.data as GoogleUserInfo;
-        validateGoogleUserInfo(userInfo);
-        
-        return userInfo;
-      });
-      
-      logger.info('User information retrieved successfully', { 
-        userId: result.id, 
-        email: result.email 
-      });
-      return result;
-    } catch (error) {
-      throw handleOAuthError('user_info', error, { accessTokenLength: accessToken?.length });
-    }
-  }
-
-  /**
-   * Generate JWT token for internal use
-   */
-  generateJWT(payload: JWTPayload, expiresIn?: string | number): string {
-    try {
-      const jwtPayload: JWTPayload = {
-        ...payload,
-        iat: Math.floor(Date.now() / 1000)
+      const payload: JWTPayload = {
+        sub: userId,
+        email,
+        iss: this.config.jwtIssuer,
+        aud: this.config.jwtAudience,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(this.config.jwtExpiresIn),
+        ...additionalClaims
       };
+
+      const options: SignOptions = {
+        algorithm: 'HS256'
+      };
+
+      const token = jwt.sign(payload, this.config.jwtSecret, options);
       
-      const token = jwt.sign(jwtPayload, this.config.jwtSecret, { 
-        expiresIn: expiresIn || this.config.jwtExpiresIn,
-        issuer: this.config.jwtIssuer,
-        audience: this.config.jwtAudience,
-        algorithm: 'HS256' // Explicitly set algorithm
-      } as SignOptions);
-      
-      logger.info('JWT generated successfully', { 
-        userId: payload.userId,
-        expiresIn: expiresIn || this.config.jwtExpiresIn,
-        issuer: this.config.jwtIssuer
+      this.logDebug('Generated JWT token', { 
+        userId, 
+        email, 
+        expiresIn: this.config.jwtExpiresIn 
       });
       
       return token;
     } catch (error) {
-      logger.error('JWT generation failed', { error, payload: { userId: payload.userId } });
-      throw new Error('Failed to generate JWT token');
+      this.handleError(error, 'generateJWT');
     }
   }
 
   /**
-   * Validate internal JWT token
+   * Verify JWT token
    */
-  validateJWT(token: string): TokenValidationResult {
+  verifyJWT(token: string): JWTPayload {
+    this.assertReady();
+    
     try {
-      validateTokenFormat(token);
-      
-      const payload = jwt.verify(token, this.config.jwtSecret, {
+      // Validate token format first
+      const formatValidation = validateTokenFormat(token);
+      if (!formatValidation.valid) {
+        throw new Error(`Invalid token format: ${formatValidation.error}`);
+      }
+
+      const decoded = jwt.verify(token, this.config.jwtSecret, {
         issuer: this.config.jwtIssuer,
-        audience: this.config.jwtAudience,
-        algorithms: ['HS256'] // Explicitly specify allowed algorithms
+        audience: this.config.jwtAudience
       }) as JWTPayload;
-      
-      // Additional payload validation
-      if (!payload.userId || !payload.email) {
-        return {
-          valid: false,
-          error: 'Invalid token payload: missing required fields'
-        };
-      }
-      
-      // Check token expiration more explicitly
-      const now = Math.floor(Date.now() / 1000);
-      if (payload.exp && payload.exp < now) {
-        return {
-          valid: false,
-          error: 'Token has expired'
-        };
-      }
-      
-      logger.debug('JWT validated successfully', { 
-        userId: payload.userId,
-        expiresAt: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'never'
+
+      this.logDebug('JWT token verified successfully', { 
+        userId: decoded.sub, 
+        email: decoded.email 
       });
       
-      return {
-        valid: true,
-        payload,
-      };
+      return decoded;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'JWT validation failed';
-      logger.warn('JWT validation failed', { 
-        error: errorMessage,
-        tokenLength: token?.length || 0
-      });
+      this.logWarn('JWT token verification failed', { error });
+      throw new Error('Invalid or expired token');
+    }
+  }
+
+  /**
+   * Refresh Google access token
+   */
+  async refreshGoogleToken(refreshToken: string): Promise<GoogleTokens> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Refreshing Google access token');
       
-      return {
-        valid: false,
-        error: errorMessage,
+      this.oauth2Client.setCredentials({
+        refresh_token: refreshToken
+      });
+
+      const { credentials } = await this.oauth2Client.refreshAccessToken();
+      
+      if (!credentials.access_token) {
+        throw new Error('No access token received during refresh');
+      }
+
+      const googleTokens: GoogleTokens = {
+        access_token: credentials.access_token,
+        refresh_token: credentials.refresh_token || refreshToken,
+        expires_in: credentials.expires_in || 3600,
+        token_type: credentials.token_type || 'Bearer',
+        scope: credentials.scope || ''
       };
+
+      this.logInfo('Successfully refreshed Google tokens', {
+        expiresIn: googleTokens.expires_in
+      });
+
+      return googleTokens;
+    } catch (error) {
+      this.handleError(error, 'refreshGoogleToken');
     }
   }
 
   /**
    * Revoke Google tokens
    */
-  async revokeTokens(accessToken: string): Promise<void> {
+  async revokeGoogleTokens(accessToken: string): Promise<void> {
+    this.assertReady();
+    
     try {
+      this.logDebug('Revoking Google tokens');
+      
       await this.oauth2Client.revokeToken(accessToken);
+      
+      this.logInfo('Successfully revoked Google tokens');
     } catch (error) {
-      throw new Error(`Failed to revoke tokens: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logWarn('Failed to revoke Google tokens', { error });
+      // Don't throw error for revocation failure
     }
   }
 
   /**
-   * Check if token is expired
+   * Get user info from Google
    */
-  isTokenExpired(expiryDate: number): boolean {
-    return Date.now() >= expiryDate;
+  async getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Fetching user info from Google');
+      
+      const response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      const userInfo: GoogleUserInfo = {
+        sub: response.data.id,
+        email: response.data.email,
+        name: response.data.name || '',
+        picture: response.data.picture || '',
+        email_verified: response.data.verified_email || false
+      };
+
+      // Validate user info
+      const validationResult = validateGoogleUserInfo(userInfo);
+      if (!validationResult.valid) {
+        throw new Error(`Invalid user info: ${validationResult.errors.join(', ')}`);
+      }
+
+      this.logDebug('Successfully fetched Google user info', { email: userInfo.email });
+      
+      return userInfo;
+    } catch (error) {
+      this.handleError(error, 'getGoogleUserInfo');
+    }
   }
 
   /**
-   * Generate secure random state parameter
+   * Parse JWT expiration string to seconds
    */
-  private generateState(): string {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  private parseJWTExpiration(expiration: string): number {
+    const match = expiration.match(/^(\d+)([smhd])$/);
+    if (!match) {
+      return 24 * 60 * 60; // Default to 24 hours
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    switch (unit) {
+      case 's': return value;
+      case 'm': return value * 60;
+      case 'h': return value * 60 * 60;
+      case 'd': return value * 24 * 60 * 60;
+      default: return 24 * 60 * 60;
+    }
   }
 
   /**
-   * Validate state parameter
+   * Get service health status
    */
-  validateState(state: string, expectedState: string): boolean {
-    return state === expectedState;
-  }
+  getHealth(): { healthy: boolean; details?: any } {
+    try {
+      const healthy = this.isReady() && !!this.oauth2Client;
+      const details = {
+        oauth2Client: !!this.oauth2Client,
+        config: {
+          hasGoogleClientId: !!this.config.googleClientId,
+          hasGoogleClientSecret: !!this.config.googleClientSecret,
+          hasGoogleRedirectUri: !!this.config.googleRedirectUri,
+          hasJWTSecret: !!this.config.jwtSecret
+        }
+      };
 
-  /**
-   * Get OAuth client instance (for advanced usage)
-   */
-  getOAuth2Client(): OAuth2Client {
-    return this.oauth2Client;
+      return { healthy, details };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        details: { error: error instanceof Error ? error.message : 'Unknown error' }
+      };
+    }
   }
 }
 
-// Export singleton instance
-export const authService = new AuthService();
+// Export the class for registration with ServiceManager
+export { AuthService };

@@ -10,6 +10,7 @@ import express, { Request, Response } from 'express';
 import configService from './config/config.service';
 import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
+import { initializeServices } from './services/service-registry';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 
@@ -27,13 +28,24 @@ import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 
-// Initialize AgentFactory before anything else
-try {
-  initializeAgentFactory();
-  logger.info('AgentFactory initialized successfully');
-} catch (error) {
-  logger.error('Failed to initialize AgentFactory:', error);
-  // Continue anyway - the app can still function with basic routing
+// Initialize services and AgentFactory
+async function initializeApplication(): Promise<void> {
+  try {
+    // Initialize services first
+    logger.info('Initializing application services...');
+    await initializeServices();
+    logger.info('Application services initialized successfully');
+
+    // Initialize AgentFactory after services
+    logger.info('Initializing AgentFactory...');
+    initializeAgentFactory();
+    logger.info('AgentFactory initialized successfully');
+
+    logger.info('Application initialization completed successfully');
+  } catch (error) {
+    logger.error('Failed to initialize application:', error);
+    // Continue anyway - the app can still function with basic routing
+  }
 }
 
 const app = express();
@@ -79,79 +91,65 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-
 // Error handling middleware (must be last)
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const server = app.listen(port, () => {
-  logger.info('Server started successfully', {
-    port,
-    environment: configService.nodeEnv,
-    nodeVersion: process.version,
-    pid: process.pid,
-    timestamp: new Date().toISOString()
-  });
-});
+// Start server and initialize services
+async function startServer(): Promise<void> {
+  try {
+    // Initialize application services
+    await initializeApplication();
 
-// Enhanced error handling
-server.on('error', (err: NodeJS.ErrnoException) => {
-  if (err.code === 'EADDRINUSE') {
-    logger.error(`Port ${port} is already in use. Please check if another instance is running.`);
-  } else {
-    logger.error('Server error:', err);
-  }
-  process.exit(1);
-});
+    // Start the server
+    const server = app.listen(port, () => {
+      logger.info('Server started successfully', {
+        port,
+        environment: configService.nodeEnv,
+        nodeVersion: process.version,
+        pid: process.pid,
+        timestamp: new Date().toISOString()
+      });
+    });
 
-// Graceful shutdown handling
-const gracefulShutdown = (signal: string) => {
-  logger.info(`Received ${signal}. Starting graceful shutdown...`);
-  
-  server.close((err) => {
-    if (err) {
-      logger.error('Error during server shutdown:', err);
-      process.exit(1);
-    }
-    
-    logger.info('Server closed successfully');
-    process.exit(0);
-  });
-  
-  // Force shutdown after 10 seconds
-  setTimeout(() => {
-    logger.error('Forced shutdown due to timeout');
-    process.exit(1);
-  }, 10000);
-};
+    // Enhanced error handling
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`Port ${port} is already in use. Please check if another instance is running.`);
+        process.exit(1);
+      } else {
+        logger.error('Server error:', err);
+        process.exit(1);
+      }
+    });
 
-// Handle shutdown signals
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    // Graceful shutdown handling
+    const gracefulShutdown = async (signal: string) => {
+      logger.info(`Received ${signal}. Starting graceful shutdown...`);
+      
+      server.close(() => {
+        logger.info('HTTP server closed');
+        process.exit(0);
+      });
 
-// Enhanced error handling
-process.on('uncaughtException', (err: Error) => {
-  logger.error('Uncaught Exception - shutting down:', {
-    error: err.message,
-    stack: err.stack
-  });
-  process.exit(1);
-});
+      // Force exit after 30 seconds
+      setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+      }, 30000);
+    };
 
-process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-  logger.error('Unhandled Rejection:', {
-    reason,
-    promise
-  });
-  // Don't exit on unhandled promise rejection in production
-  if (configService.isDevelopment) {
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+  } catch (error) {
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
-});
+}
 
-logger.info('Server setup complete', {
-  environment: configService.nodeEnv,
-  configuration: 'loaded',
-  security: 'enabled',
-  rateLimit: 'enabled'
+// Start the application
+startServer().catch((error) => {
+  logger.error('Fatal error during application startup:', error);
+  process.exit(1);
 });

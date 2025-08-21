@@ -1,13 +1,8 @@
-import logger from '../utils/logger';
-import { AgentFactory } from '../framework/agent-factory';
-import { 
-  ToolCall, 
-  ToolResult, 
-  ToolExecutionContext,
-  ToolExecutionError,
-  TOOL_NAMES 
-} from '../types/tools';
+import { ToolCall, ToolResult, ToolExecutionContext } from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG } from '../config/app-config';
+import { AgentFactory } from '../framework/agent-factory';
+import { BaseService } from './base-service';
+import logger from '../utils/logger';
 
 export interface ToolExecutorConfig {
   timeout?: number;
@@ -18,15 +13,29 @@ export interface ExecutionMode {
   preview: boolean; // If true, prepare action but don't execute
 }
 
-export class ToolExecutorService {
+export class ToolExecutorService extends BaseService {
   private config: ToolExecutorConfig;
 
   constructor(config: ToolExecutorConfig = {}) {
+    super('ToolExecutorService');
     this.config = {
       timeout: config.timeout || TIMEOUTS.toolExecution,
       retryCount: config.retryCount || EXECUTION_CONFIG.toolExecution.defaultRetryCount
     };
-    logger.info('ToolExecutorService initialized', { config: this.config });
+  }
+
+  /**
+   * Service-specific initialization
+   */
+  protected async onInitialize(): Promise<void> {
+    this.logInfo('ToolExecutorService initialized', { config: this.config });
+  }
+
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    this.logInfo('ToolExecutorService destroyed');
   }
 
   /**
@@ -38,10 +47,12 @@ export class ToolExecutorService {
     accessToken?: string,
     mode: ExecutionMode = { preview: false }
   ): Promise<ToolResult> {
+    this.assertReady();
+    
     const startTime = Date.now();
     
     try {
-      logger.info(`Executing tool: ${toolCall.name}`, { 
+      this.logInfo(`Executing tool: ${toolCall.name}`, { 
         toolName: toolCall.name, 
         sessionId: context.sessionId 
       });
@@ -56,7 +67,7 @@ export class ToolExecutorService {
       if (mode.preview && needsConfirmation) {
         // In preview mode for confirmation-required tools, return action preview
         // TODO: Implement preview functionality in AgentFactory if needed
-        logger.info(`Tool ${toolCall.name} requires confirmation, but preview not implemented yet`);
+        this.logInfo(`Tool ${toolCall.name} requires confirmation, but preview not implemented yet`);
         result = { success: true, message: `Preview for ${toolCall.name}: ${toolCall.parameters.query || 'action'}` };
       } else {
         // Execute the tool using AgentFactory
@@ -82,7 +93,7 @@ export class ToolExecutorService {
         executionTime
       };
 
-      logger.info(`Tool execution completed: ${toolCall.name}`, { 
+      this.logInfo(`Tool execution completed: ${toolCall.name}`, { 
         success, 
         executionTime,
         hasError: !!error 
@@ -92,26 +103,26 @@ export class ToolExecutorService {
 
     } catch (err) {
       const executionTime = Date.now() - startTime;
-      const error = err instanceof Error ? err.message : 'Unknown error occurred';
+      const errorMessage = err instanceof Error ? err.message : String(err);
       
-      logger.error(`Tool execution failed: ${toolCall.name}`, { 
-        error, 
-        executionTime,
-        sessionId: context.sessionId 
+      this.logError(`Tool execution failed: ${toolCall.name}`, err, {
+        toolName: toolCall.name,
+        sessionId: context.sessionId,
+        executionTime
       });
 
       return {
         toolName: toolCall.name,
         result: null,
         success: false,
-        error,
+        error: errorMessage,
         executionTime
       };
     }
   }
 
   /**
-   * Execute multiple tool calls sequentially
+   * Execute multiple tool calls
    */
   async executeTools(
     toolCalls: ToolCall[], 
@@ -119,57 +130,82 @@ export class ToolExecutorService {
     accessToken?: string,
     mode: ExecutionMode = { preview: false }
   ): Promise<ToolResult[]> {
-    const results: ToolResult[] = [];
+    this.assertReady();
     
-    logger.info(`Executing ${toolCalls.length} tools`, { 
+    this.logInfo(`Executing ${toolCalls.length} tools`, {
+      toolNames: toolCalls.map(tc => tc.name),
       sessionId: context.sessionId,
-      tools: toolCalls.map(tc => tc.name) 
+      mode
     });
 
+    const results: ToolResult[] = [];
+    
     for (const toolCall of toolCalls) {
       try {
         const result = await this.executeTool(toolCall, context, accessToken, mode);
         results.push(result);
-
-        // If a critical tool fails, we might want to stop execution
+        
+        // If a tool fails and it's critical, we might want to stop execution
         if (!result.success && this.isCriticalTool(toolCall.name)) {
-          logger.warn(`Critical tool failed, stopping execution: ${toolCall.name}`);
+          this.logWarn(`Critical tool ${toolCall.name} failed, stopping execution`, {
+            error: result.error,
+            completedTools: results.length,
+            totalTools: toolCalls.length
+          });
           break;
         }
-
+        
       } catch (error) {
-        logger.error(`Failed to execute tool: ${toolCall.name}`, error);
+        this.logError(`Unexpected error executing tool ${toolCall.name}`, error, {
+          toolName: toolCall.name,
+          sessionId: context.sessionId
+        });
+        
         results.push({
           toolName: toolCall.name,
           result: null,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : String(error),
           executionTime: 0
         });
       }
     }
 
+    this.logInfo(`Completed execution of ${toolCalls.length} tools`, {
+      successfulTools: results.filter(r => r.success).length,
+      failedTools: results.filter(r => !r.success).length,
+      sessionId: context.sessionId
+    });
+
     return results;
   }
 
-
   /**
-   * Determine if a tool needs user confirmation before execution
+   * Check if a tool needs confirmation
    */
   private toolNeedsConfirmation(toolName: string): boolean {
-    return AgentFactory.toolNeedsConfirmation(toolName);
+    try {
+      return AgentFactory.toolNeedsConfirmation(toolName);
+    } catch (error) {
+      this.logWarn(`Could not determine confirmation requirement for ${toolName}`, { error });
+      return false; // Default to no confirmation required
+    }
   }
 
-
   /**
-   * Determine if a tool is critical for the workflow
+   * Check if a tool is critical
    */
   private isCriticalTool(toolName: string): boolean {
-    return AgentFactory.isCriticalTool(toolName);
+    try {
+      return AgentFactory.isCriticalTool(toolName);
+    } catch (error) {
+      this.logWarn(`Could not determine critical status for ${toolName}`, { error });
+      return false; // Default to non-critical
+    }
   }
 
   /**
-   * Get execution statistics
+   * Get execution statistics from results
    */
   getExecutionStats(results: ToolResult[]): {
     total: number;
@@ -178,10 +214,12 @@ export class ToolExecutorService {
     averageExecutionTime: number;
     totalExecutionTime: number;
   } {
+    this.assertReady();
+    
     const total = results.length;
     const successful = results.filter(r => r.success).length;
     const failed = total - successful;
-    const totalExecutionTime = results.reduce((sum, r) => sum + (r.executionTime || 0), 0);
+    const totalExecutionTime = results.reduce((sum, r) => sum + r.executionTime, 0);
     const averageExecutionTime = total > 0 ? totalExecutionTime / total : 0;
 
     return {
@@ -192,7 +230,24 @@ export class ToolExecutorService {
       totalExecutionTime
     };
   }
+
+  /**
+   * Get service configuration
+   */
+  getConfig(): ToolExecutorConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Update service configuration
+   */
+  updateConfig(newConfig: Partial<ToolExecutorConfig>): void {
+    this.assertReady();
+    
+    this.config = { ...this.config, ...newConfig };
+    this.logInfo('ToolExecutorService configuration updated', { newConfig: this.config });
+  }
 }
 
-// Export singleton instance
-export const toolExecutorService = new ToolExecutorService();
+// Export the class for registration with ServiceManager
+export { ToolExecutorService };

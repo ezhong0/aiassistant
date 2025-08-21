@@ -1,527 +1,440 @@
-import { google, gmail_v1 } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
-import { authService } from './auth.service';
+import { google } from 'googleapis';
+import { GmailServiceError } from '../types/gmail.types';
+import { BaseService } from './base-service';
 import logger from '../utils/logger';
-import { 
-  GmailMessage, 
-  GmailThread, 
-  SendEmailRequest, 
-  SearchEmailsRequest,
-  ReplyEmailRequest,
-  EmailAttachment,
-  GmailServiceError
-} from '../types/gmail.types';
 
-export class GmailService {
-  private gmail: gmail_v1.Gmail;
+export class GmailService extends BaseService {
+  private gmailService: any;
+  private initialized = false;
 
   constructor() {
-    this.gmail = google.gmail('v1');
-    logger.info('Gmail service initialized');
+    super('GmailService');
   }
 
   /**
-   * Get authenticated Gmail client for a user
+   * Service-specific initialization
    */
-  private getAuthenticatedClient(accessToken: string): OAuth2Client {
-    const oauth2Client = authService.getOAuth2Client();
-    oauth2Client.setCredentials({ access_token: accessToken });
-    return oauth2Client;
-  }
-
-  /**
-   * Set authentication for Gmail API
-   */
-  private setAuth(accessToken: string): void {
-    const oauth2Client = this.getAuthenticatedClient(accessToken);
-    google.options({ auth: oauth2Client });
-  }
-
-  /**
-   * Send an email
-   */
-  async sendEmail(accessToken: string, emailRequest: SendEmailRequest): Promise<GmailMessage> {
+  protected async onInitialize(): Promise<void> {
     try {
-      this.setAuth(accessToken);
+      // Initialize Gmail API service
+      this.gmailService = google.gmail('v1');
+      this.initialized = true;
       
-      logger.info('Sending email', { 
-        to: emailRequest.to, 
-        subject: emailRequest.subject 
+      this.logInfo('Gmail service initialized successfully');
+    } catch (error) {
+      this.logError('Failed to initialize Gmail service', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    this.initialized = false;
+    this.logInfo('Gmail service destroyed');
+  }
+
+  /**
+   * Send an email using Gmail API
+   */
+  async sendEmail(
+    accessToken: string,
+    to: string,
+    subject: string,
+    body: string,
+    options: {
+      from?: string;
+      replyTo?: string;
+      cc?: string[];
+      bcc?: string[];
+      attachments?: Array<{
+        filename: string;
+        content: string;
+        contentType: string;
+      }>;
+    } = {}
+  ): Promise<{ messageId: string; threadId: string }> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Sending email', { 
+        to, 
+        subject, 
+        hasAttachments: !!(options.attachments?.length) 
       });
 
-      // Create the email message
-      const emailBody = this.createEmailBody(emailRequest);
-      
-      const response = await this.gmail.users.messages.send({
+      // Build email message
+      const message = this.buildEmailMessage({
+        to,
+        subject,
+        body,
+        from: options.from,
+        replyTo: options.replyTo,
+        cc: options.cc,
+        bcc: options.bcc,
+        attachments: options.attachments
+      });
+
+      // Send the email
+      const response = await this.gmailService.users.messages.send({
         userId: 'me',
-        requestBody: {
-          raw: emailBody
-        }
+        requestBody: { raw: message },
+        access_token: accessToken
       });
 
-      if (!response.data) {
+      if (!response.data.id) {
         throw new GmailServiceError('No response data from Gmail API', 'SEND_FAILED');
       }
 
-      logger.info('Email sent successfully', { 
+      const result = {
         messageId: response.data.id,
-        threadId: response.data.threadId 
-      });
-
-      return this.formatGmailMessage(response.data);
-    } catch (error) {
-      logger.error('Failed to send email', { error, to: emailRequest.to });
-      throw this.handleGmailError(error, 'SEND_FAILED');
-    }
-  }
-
-  /**
-   * Get emails with optional search criteria
-   */
-  async getEmails(
-    accessToken: string, 
-    options: SearchEmailsRequest = {}
-  ): Promise<{ messages: GmailMessage[]; nextPageToken?: string }> {
-    try {
-      this.setAuth(accessToken);
-      
-      logger.info('Fetching emails', { query: options.query, maxResults: options.maxResults });
-
-      const response = await this.gmail.users.messages.list({
-        userId: 'me',
-        q: options.query,
-        maxResults: options.maxResults || 20,
-        pageToken: options.pageToken,
-        labelIds: options.labelIds,
-        includeSpamTrash: options.includeSpamTrash || false
-      });
-
-      if (!response.data.messages) {
-        return { messages: [] };
-      }
-
-      // Get full message details for each message
-      const messages = await Promise.all(
-        response.data.messages.map(async (message) => {
-          if (!message.id) return null;
-          
-          const fullMessage = await this.gmail.users.messages.get({
-            userId: 'me',
-            id: message.id,
-            format: 'full'
-          });
-          
-          return this.formatGmailMessage(fullMessage.data);
-        })
-      );
-
-      const filteredMessages = messages.filter(Boolean) as GmailMessage[];
-
-      logger.info('Emails fetched successfully', { 
-        count: filteredMessages.length,
-        hasNextPage: !!response.data.nextPageToken 
-      });
-
-      return {
-        messages: filteredMessages,
-        nextPageToken: response.data.nextPageToken || undefined
+        threadId: response.data.threadId || response.data.id
       };
+
+      this.logInfo('Email sent successfully', { 
+        messageId: result.messageId,
+        threadId: result.threadId,
+        to 
+      });
+
+      return result;
     } catch (error) {
-      logger.error('Failed to fetch emails', { error, query: options.query });
-      throw this.handleGmailError(error, 'FETCH_FAILED');
+      this.handleError(error, 'sendEmail');
     }
   }
 
   /**
-   * Get a specific email by ID
+   * Get an email by ID
    */
-  async getEmailById(accessToken: string, messageId: string): Promise<GmailMessage> {
+  async getEmail(accessToken: string, messageId: string): Promise<any> {
+    this.assertReady();
+    
     try {
-      this.setAuth(accessToken);
-      
-      logger.info('Fetching email by ID', { messageId });
+      this.logDebug('Getting email', { messageId });
 
-      const response = await this.gmail.users.messages.get({
+      const response = await this.gmailService.users.messages.get({
         userId: 'me',
         id: messageId,
-        format: 'full'
+        format: 'full',
+        access_token: accessToken
       });
 
       if (!response.data) {
         throw new GmailServiceError(`Email not found: ${messageId}`, 'NOT_FOUND');
       }
 
-      return this.formatGmailMessage(response.data);
+      this.logDebug('Email retrieved successfully', { 
+        messageId, 
+        subject: response.data.payload?.headers?.find((h: any) => h.name === 'Subject')?.value 
+      });
+
+      return response.data;
     } catch (error) {
-      logger.error('Failed to fetch email by ID', { error, messageId });
-      throw this.handleGmailError(error, 'FETCH_FAILED');
+      this.handleError(error, 'getEmail');
     }
   }
 
   /**
    * Reply to an email
    */
-  async replyToEmail(accessToken: string, replyRequest: ReplyEmailRequest): Promise<GmailMessage> {
+  async replyToEmail(
+    accessToken: string,
+    messageId: string,
+    replyBody: string,
+    options: {
+      attachments?: Array<{
+        filename: string;
+        content: string;
+        contentType: string;
+      }>;
+    } = {}
+  ): Promise<{ messageId: string; threadId: string }> {
+    this.assertReady();
+    
     try {
-      this.setAuth(accessToken);
-      
-      logger.info('Replying to email', { 
-        messageId: replyRequest.messageId, 
-        threadId: replyRequest.threadId 
+      this.logDebug('Replying to email', { 
+        messageId, 
+        hasAttachments: !!(options.attachments?.length) 
       });
 
-      // Get original message to extract references for proper threading
-      const originalMessage = await this.getEmailById(accessToken, replyRequest.messageId);
+      // Get the original email to extract headers
+      const originalEmail = await this.getEmail(accessToken, messageId);
       
-      const emailBody = this.createReplyEmailBody(replyRequest, originalMessage);
-      
-      const response = await this.gmail.users.messages.send({
+      if (!originalEmail.payload?.headers) {
+        throw new GmailServiceError('Invalid email format', 'INVALID_EMAIL');
+      }
+
+      // Extract headers for reply
+      const headers = originalEmail.payload.headers;
+      const subject = headers.find((h: any) => h.name === 'Subject')?.value || 'Re: No Subject';
+      const from = headers.find((h: any) => h.name === 'From')?.value || '';
+      const to = headers.find((h: any) => h.name === 'To')?.value || '';
+      const references = headers.find((h: any) => h.name === 'Message-ID')?.value || '';
+      const inReplyTo = headers.find((h: any) => h.name === 'Message-ID')?.value || '';
+
+      // Build reply message
+      const message = this.buildEmailMessage({
+        to: from, // Reply to sender
+        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+        body: replyBody,
+        references,
+        inReplyTo,
+        attachments: options.attachments
+      });
+
+      // Send the reply
+      const response = await this.gmailService.users.messages.send({
         userId: 'me',
-        requestBody: {
-          raw: emailBody,
-          threadId: replyRequest.threadId
-        }
+        requestBody: { raw: message },
+        access_token: accessToken
       });
 
-      if (!response.data) {
+      if (!response.data.id) {
         throw new GmailServiceError('No response data from Gmail API', 'REPLY_FAILED');
       }
 
-      logger.info('Reply sent successfully', { 
+      const result = {
         messageId: response.data.id,
-        threadId: response.data.threadId 
+        threadId: response.data.threadId || response.data.id
+      };
+
+      this.logInfo('Reply sent successfully', { 
+        messageId: result.messageId,
+        threadId: result.threadId,
+        originalMessageId: messageId 
       });
 
-      return this.formatGmailMessage(response.data);
+      return result;
     } catch (error) {
-      logger.error('Failed to reply to email', { error, messageId: replyRequest.messageId });
-      throw this.handleGmailError(error, 'REPLY_FAILED');
+      this.handleError(error, 'replyToEmail');
     }
-  }
-
-  /**
-   * Search emails with advanced query
-   */
-  async searchEmails(accessToken: string, searchRequest: SearchEmailsRequest): Promise<{ messages: GmailMessage[]; nextPageToken?: string }> {
-    return this.getEmails(accessToken, searchRequest);
   }
 
   /**
    * Get email thread
    */
-  async getThread(accessToken: string, threadId: string): Promise<GmailThread> {
+  async getEmailThread(accessToken: string, threadId: string): Promise<any> {
+    this.assertReady();
+    
     try {
-      this.setAuth(accessToken);
-      
-      logger.info('Fetching email thread', { threadId });
+      this.logDebug('Getting email thread', { threadId });
 
-      const response = await this.gmail.users.threads.get({
+      const response = await this.gmailService.users.threads.get({
         userId: 'me',
         id: threadId,
-        format: 'full'
+        format: 'full',
+        access_token: accessToken
       });
 
-      if (!response.data || !response.data.messages) {
+      if (!response.data) {
         throw new GmailServiceError(`Thread not found: ${threadId}`, 'NOT_FOUND');
       }
 
-      const messages = response.data.messages.map(message => this.formatGmailMessage(message));
-
-      return {
-        id: response.data.id!,
-        historyId: response.data.historyId!,
-        messages,
-        snippet: response.data.snippet || undefined
-      };
-    } catch (error) {
-      logger.error('Failed to fetch thread', { error, threadId });
-      throw this.handleGmailError(error, 'FETCH_FAILED');
-    }
-  }
-
-  /**
-   * Mark email as read
-   */
-  async markAsRead(accessToken: string, messageId: string): Promise<void> {
-    try {
-      this.setAuth(accessToken);
-      
-      await this.gmail.users.messages.modify({
-        userId: 'me',
-        id: messageId,
-        requestBody: {
-          removeLabelIds: ['UNREAD']
-        }
+      this.logDebug('Email thread retrieved successfully', { 
+        threadId, 
+        messageCount: response.data.messages?.length || 0 
       });
 
-      logger.info('Email marked as read', { messageId });
+      return response.data;
     } catch (error) {
-      logger.error('Failed to mark email as read', { error, messageId });
-      throw this.handleGmailError(error, 'UPDATE_FAILED');
+      this.handleError(error, 'getEmailThread');
     }
   }
 
   /**
-   * Mark email as unread
+   * Search emails
    */
-  async markAsUnread(accessToken: string, messageId: string): Promise<void> {
+  async searchEmails(
+    accessToken: string,
+    query: string,
+    options: {
+      maxResults?: number;
+      includeSpamTrash?: boolean;
+    } = {}
+  ): Promise<any[]> {
+    this.assertReady();
+    
     try {
-      this.setAuth(accessToken);
-      
-      await this.gmail.users.messages.modify({
-        userId: 'me',
-        id: messageId,
-        requestBody: {
-          addLabelIds: ['UNREAD']
-        }
+      this.logDebug('Searching emails', { 
+        query, 
+        maxResults: options.maxResults || 10 
       });
 
-      logger.info('Email marked as unread', { messageId });
-    } catch (error) {
-      logger.error('Failed to mark email as unread', { error, messageId });
-      throw this.handleGmailError(error, 'UPDATE_FAILED');
-    }
-  }
-
-  /**
-   * Delete email
-   */
-  async deleteEmail(accessToken: string, messageId: string): Promise<void> {
-    try {
-      this.setAuth(accessToken);
-      
-      await this.gmail.users.messages.delete({
+      const response = await this.gmailService.users.messages.list({
         userId: 'me',
-        id: messageId
+        q: query,
+        maxResults: options.maxResults || 10,
+        includeSpamTrash: options.includeSpamTrash || false,
+        access_token: accessToken
       });
 
-      logger.info('Email deleted', { messageId });
+      if (!response.data.messages) {
+        this.logDebug('No emails found', { query });
+        return [];
+      }
+
+      this.logInfo('Email search completed', { 
+        query, 
+        foundCount: response.data.messages.length 
+      });
+
+      return response.data.messages;
     } catch (error) {
-      logger.error('Failed to delete email', { error, messageId });
-      throw this.handleGmailError(error, 'DELETE_FAILED');
+      this.handleError(error, 'searchEmails');
     }
   }
 
   /**
-   * Create email body for sending
+   * Get email attachments
    */
-  private createEmailBody(emailRequest: SendEmailRequest): string {
-    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  async getAttachment(
+    accessToken: string,
+    messageId: string,
+    attachmentId: string
+  ): Promise<{ data: string; contentType: string; filename?: string }> {
+    this.assertReady();
     
-    let email = [
-      `To: ${Array.isArray(emailRequest.to) ? emailRequest.to.join(', ') : emailRequest.to}`,
-      emailRequest.cc ? `Cc: ${Array.isArray(emailRequest.cc) ? emailRequest.cc.join(', ') : emailRequest.cc}` : '',
-      emailRequest.bcc ? `Bcc: ${Array.isArray(emailRequest.bcc) ? emailRequest.bcc.join(', ') : emailRequest.bcc}` : '',
-      `Subject: ${emailRequest.subject}`,
-      emailRequest.replyTo ? `Reply-To: ${emailRequest.replyTo}` : '',
-      'MIME-Version: 1.0',
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
-      '',
-      `--${boundary}`,
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      Buffer.from(emailRequest.body).toString('base64'),
-      ''
-    ].filter(Boolean).join('\r\n');
-
-    // Add attachments if any
-    if (emailRequest.attachments && emailRequest.attachments.length > 0) {
-      for (const attachment of emailRequest.attachments) {
-        email += [
-          `--${boundary}`,
-          `Content-Type: ${attachment.mimeType}`,
-          `Content-Disposition: attachment; filename="${attachment.filename}"`,
-          'Content-Transfer-Encoding: base64',
-          '',
-          attachment.data,
-          ''
-        ].join('\r\n');
-      }
-    }
-
-    email += `--${boundary}--`;
-
-    return Buffer.from(email).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  /**
-   * Create reply email body
-   */
-  private createReplyEmailBody(replyRequest: ReplyEmailRequest, originalMessage: GmailMessage): string {
-    const subject = originalMessage.subject.startsWith('Re: ') 
-      ? originalMessage.subject 
-      : `Re: ${originalMessage.subject}`;
-
-    const email = [
-      `To: ${replyRequest.to || originalMessage.from}`,
-      replyRequest.cc ? `Cc: ${Array.isArray(replyRequest.cc) ? replyRequest.cc.join(', ') : replyRequest.cc}` : '',
-      `Subject: ${subject}`,
-      `In-Reply-To: ${originalMessage.messageId}`,
-      `References: ${originalMessage.messageId}`,
-      'Content-Type: text/html; charset=UTF-8',
-      '',
-      replyRequest.body
-    ].filter(Boolean).join('\r\n');
-
-    return Buffer.from(email).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  /**
-   * Format Gmail message response
-   */
-  private formatGmailMessage(gmailMessage: gmail_v1.Schema$Message): GmailMessage {
-    const headers = gmailMessage.payload?.headers || [];
-    const getHeader = (name: string) => headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
-
-    return {
-      id: gmailMessage.id!,
-      threadId: gmailMessage.threadId!,
-      messageId: getHeader('message-id'),
-      subject: getHeader('subject'),
-      from: getHeader('from'),
-      to: getHeader('to'),
-      cc: getHeader('cc'),
-      bcc: getHeader('bcc'),
-      date: getHeader('date'),
-      body: this.extractEmailBody(gmailMessage),
-      snippet: gmailMessage.snippet || '',
-      labelIds: gmailMessage.labelIds || [],
-      attachments: this.extractAttachments(gmailMessage),
-      isUnread: gmailMessage.labelIds?.includes('UNREAD') || false,
-      historyId: gmailMessage.historyId!,
-      internalDate: gmailMessage.internalDate || '',
-      sizeEstimate: gmailMessage.sizeEstimate || 0
-    };
-  }
-
-  /**
-   * Extract email body from Gmail message
-   */
-  private extractEmailBody(gmailMessage: gmail_v1.Schema$Message): string {
-    const payload = gmailMessage.payload;
-    if (!payload) return '';
-
-    // Single part message
-    if (payload.body?.data) {
-      return Buffer.from(payload.body.data, 'base64').toString();
-    }
-
-    // Multipart message
-    if (payload.parts) {
-      return this.extractBodyFromParts(payload.parts);
-    }
-
-    return '';
-  }
-
-  /**
-   * Extract body from message parts (recursive)
-   */
-  private extractBodyFromParts(parts: gmail_v1.Schema$MessagePart[]): string {
-    for (const part of parts) {
-      // Check for text/html or text/plain
-      if (part.mimeType === 'text/html' || part.mimeType === 'text/plain') {
-        if (part.body?.data) {
-          return Buffer.from(part.body.data, 'base64').toString();
-        }
-      }
-      
-      // Recursive search in nested parts
-      if (part.parts) {
-        const nestedBody = this.extractBodyFromParts(part.parts);
-        if (nestedBody) return nestedBody;
-      }
-    }
-    
-    return '';
-  }
-
-  /**
-   * Extract attachments from Gmail message
-   */
-  private extractAttachments(gmailMessage: gmail_v1.Schema$Message): EmailAttachment[] {
-    const attachments: EmailAttachment[] = [];
-    const payload = gmailMessage.payload;
-    
-    if (!payload?.parts) return attachments;
-
-    const extractFromParts = (parts: gmail_v1.Schema$MessagePart[]) => {
-      for (const part of parts) {
-        if (part.filename && part.filename.length > 0 && part.body?.attachmentId) {
-          attachments.push({
-            id: part.body.attachmentId,
-            filename: part.filename,
-            mimeType: part.mimeType || 'application/octet-stream',
-            size: part.body.size || 0
-          });
-        }
-        
-        if (part.parts) {
-          extractFromParts(part.parts);
-        }
-      }
-    };
-
-    extractFromParts(payload.parts);
-    return attachments;
-  }
-
-  /**
-   * Download attachment
-   */
-  async downloadAttachment(accessToken: string, messageId: string, attachmentId: string): Promise<Buffer> {
     try {
-      this.setAuth(accessToken);
-      
-      const response = await this.gmail.users.messages.attachments.get({
+      this.logDebug('Getting email attachment', { messageId, attachmentId });
+
+      const response = await this.gmailService.users.messages.attachments.get({
         userId: 'me',
         messageId,
-        id: attachmentId
+        id: attachmentId,
+        access_token: accessToken
       });
 
       if (!response.data.data) {
         throw new GmailServiceError('No attachment data received', 'DOWNLOAD_FAILED');
       }
 
-      return Buffer.from(response.data.data, 'base64');
+      const attachment = {
+        data: response.data.data,
+        contentType: response.data.mimeType || 'application/octet-stream',
+        filename: response.data.filename
+      };
+
+      this.logInfo('Attachment retrieved successfully', { 
+        messageId, 
+        attachmentId,
+        contentType: attachment.contentType,
+        filename: attachment.filename 
+      });
+
+      return attachment;
     } catch (error) {
-      logger.error('Failed to download attachment', { error, messageId, attachmentId });
-      throw this.handleGmailError(error, 'DOWNLOAD_FAILED');
+      this.handleError(error, 'getAttachment');
     }
   }
 
   /**
-   * Handle Gmail API errors
+   * Build email message in RFC 2822 format
+   */
+  private buildEmailMessage(options: {
+    to: string;
+    subject: string;
+    body: string;
+    from?: string;
+    replyTo?: string;
+    cc?: string[];
+    bcc?: string[];
+    references?: string;
+    inReplyTo?: string;
+    attachments?: Array<{
+      filename: string;
+      content: string;
+      contentType: string;
+    }>;
+  }): string {
+    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    let message = '';
+    
+    // Headers
+    message += `To: ${options.to}\r\n`;
+    message += `Subject: ${options.subject}\r\n`;
+    if (options.from) message += `From: ${options.from}\r\n`;
+    if (options.replyTo) message += `Reply-To: ${options.replyTo}\r\n`;
+    if (options.cc?.length) message += `Cc: ${options.cc.join(', ')}\r\n`;
+    if (options.bcc?.length) message += `Bcc: ${options.bcc.join(', ')}\r\n`;
+    if (options.references) message += `References: ${options.references}\r\n`;
+    if (options.inReplyTo) message += `In-Reply-To: ${options.inReplyTo}\r\n`;
+    message += `MIME-Version: 1.0\r\n`;
+    
+    if (options.attachments?.length) {
+      message += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+      
+      // Text body
+      message += `--${boundary}\r\n`;
+      message += `Content-Type: text/plain; charset="UTF-8"\r\n\r\n`;
+      message += `${options.body}\r\n\r\n`;
+      
+      // Attachments
+      for (const attachment of options.attachments) {
+        message += `--${boundary}\r\n`;
+        message += `Content-Type: ${attachment.contentType}\r\n`;
+        message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n`;
+        message += `Content-Transfer-Encoding: base64\r\n\r\n`;
+        message += `${attachment.content}\r\n\r\n`;
+      }
+      
+      message += `--${boundary}--\r\n`;
+    } else {
+      message += `Content-Type: text/plain; charset="UTF-8"\r\n\r\n`;
+      message += `${options.body}\r\n`;
+    }
+    
+    return Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  /**
+   * Get service health status
+   */
+  getHealth(): { healthy: boolean; details?: any } {
+    try {
+      const healthy = this.isReady() && this.initialized && !!this.gmailService;
+      const details = {
+        initialized: this.initialized,
+        gmailService: !!this.gmailService,
+        googleapis: !!google
+      };
+
+      return { healthy, details };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        details: { error: error instanceof Error ? error.message : 'Unknown error' }
+      };
+    }
+  }
+
+  /**
+   * Handle Gmail service errors
    */
   private handleGmailError(error: any, operation: string): GmailServiceError {
-    if (error instanceof GmailServiceError) {
-      return error;
-    }
+    let message = 'Unknown error occurred';
+    let code = 'UNKNOWN_ERROR';
 
-    let message = error?.message || 'Unknown Gmail API error';
-    let code = error?.code || operation;
-    
-    // Handle specific Google API error responses
-    if (error?.response?.data?.error) {
-      const apiError = error.response.data.error;
-      message = apiError.message || message;
-      code = apiError.code || code;
+    if (error instanceof Error) {
+      message = error.message;
       
-      // Check for scope issues
-      if (apiError.code === 403 && 
-          (apiError.message?.includes('insufficient authentication scopes') || 
-           apiError.status === 'PERMISSION_DENIED')) {
-        message = 'Insufficient Gmail permissions. Please re-authenticate with Gmail access.';
-        code = 'INSUFFICIENT_SCOPE';
+      if (message.includes('not found')) {
+        code = 'NOT_FOUND';
+      } else if (message.includes('permission')) {
+        code = 'PERMISSION_DENIED';
+      } else if (message.includes('invalid')) {
+        code = 'INVALID_INPUT';
+      } else if (message.includes('quota')) {
+        code = 'QUOTA_EXCEEDED';
+      } else if (message.includes('rate limit')) {
+        code = 'RATE_LIMIT_EXCEEDED';
       }
     }
-    
-    logger.error('Gmail API error', { operation, error: message, code, originalError: error });
-    
+
     return new GmailServiceError(message, code);
   }
 }
 
-// Export singleton instance
-export const gmailService = new GmailService();
+// Export the class for registration with ServiceManager
+export { GmailService };
