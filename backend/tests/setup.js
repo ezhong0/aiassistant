@@ -19,6 +19,11 @@ process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only-must-be-at-least-
 process.env.OPENAI_API_KEY = 'test-openai-key';
 process.env.TAVILY_API_KEY = 'test-tavily-key';
 
+// Set required configuration values as strings
+process.env.RATE_LIMIT_WINDOW_MS = '900000';
+process.env.RATE_LIMIT_MAX_REQUESTS = '100';
+process.env.BCRYPT_SALT_ROUNDS = '12';
+
 // Reduce console output during tests for cleaner output
 const originalError = console.error;
 const originalWarn = console.warn;
@@ -30,7 +35,7 @@ beforeAll(async () => {
     if (typeof message === 'string' && (
       message.includes('FAIL') || 
       message.includes('Error:') ||
-      message.includes('FATAL')
+      message.includes('CRITICAL')
     )) {
       originalError(message, ...args);
     }

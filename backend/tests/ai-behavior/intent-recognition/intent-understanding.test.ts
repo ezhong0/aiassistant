@@ -5,7 +5,7 @@
  * Focuses on understanding quality, ambiguity resolution, and context awareness.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import {
   AIBehaviorValidator,
   describeBehavior,
@@ -15,6 +15,14 @@ import {
 
 describeBehavior('Intent Recognition & Understanding', () => {
   let validator: AIBehaviorValidator;
+
+  beforeAll(async () => {
+    await AIBehaviorValidator.initializeServices();
+  });
+
+  afterAll(async () => {
+    await AIBehaviorValidator.cleanupServices();
+  });
 
   beforeEach(() => {
     validator = new AIBehaviorValidator();
@@ -60,7 +68,17 @@ describeBehavior('Intent Recognition & Understanding', () => {
     ];
 
     primaryIntents.forEach(intent => {
-      itShouldUnderstand(intent.context || 'Intent test', intent, validator);
+      it(`should understand: ${intent.context}`, async () => {
+        const result = await validator.validateIntent(intent);
+        
+        expect(result.success).toBe(true);
+        expect(result.intentAccuracy).toBeGreaterThan(0.7); // 70% accuracy threshold
+        
+        if (!result.success) {
+          console.log(`❌ Intent validation failed: ${result.details}`);
+          console.log(`🎯 Accuracy: ${(result.intentAccuracy * 100).toFixed(1)}%`);
+        }
+      });
     });
   });
 

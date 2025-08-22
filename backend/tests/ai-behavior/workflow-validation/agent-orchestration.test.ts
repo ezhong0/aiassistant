@@ -5,7 +5,7 @@
  * Focuses on workflow orchestration, agent coordination, and end-to-end intelligence.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import {
   AIBehaviorValidator,
   describeBehavior,
@@ -15,6 +15,14 @@ import {
 
 describeBehavior('Multi-Agent Workflow Orchestration', () => {
   let validator: AIBehaviorValidator;
+
+  beforeAll(async () => {
+    await AIBehaviorValidator.initializeServices();
+  });
+
+  afterAll(async () => {
+    await AIBehaviorValidator.cleanupServices();
+  });
 
   beforeEach(() => {
     validator = new AIBehaviorValidator();
@@ -58,7 +66,21 @@ describeBehavior('Multi-Agent Workflow Orchestration', () => {
     ];
 
     sequentialWorkflows.forEach(workflow => {
-      itShouldOrchestrate(workflow.scenario, workflow, validator);
+      it(`should orchestrate: ${workflow.scenario}`, async () => {
+        const result = await validator.validateWorkflow(workflow);
+        
+        expect(result.success).toBe(true);
+        expect(result.workflowCoherence).toBeGreaterThan(0.8); // 80% coherence threshold
+        
+        if (!result.success) {
+          console.log(`❌ Workflow validation failed`);
+          result.stepResults.forEach(step => {
+            if (!step.success) {
+              console.log(`  Step ${step.step}: ${step.details}`);
+            }
+          });
+        }
+      });
     });
   });
 
@@ -111,7 +133,21 @@ describeBehavior('Multi-Agent Workflow Orchestration', () => {
     ];
 
     complexJourneys.forEach(workflow => {
-      itShouldOrchestrate(`${workflow.name}: ${workflow.scenario}`, workflow, validator);
+      it(`should orchestrate: ${workflow.name}: ${workflow.scenario}`, async () => {
+        const result = await validator.validateWorkflow(workflow);
+        
+        expect(result.success).toBe(true);
+        expect(result.workflowCoherence).toBeGreaterThan(0.8); // 80% coherence threshold
+        
+        if (!result.success) {
+          console.log(`❌ Workflow validation failed`);
+          result.stepResults.forEach(step => {
+            if (!step.success) {
+              console.log(`  Step ${step.step}: ${step.details}`);
+            }
+          });
+        }
+      });
     });
   });
 
@@ -254,7 +290,7 @@ describeBehavior('Multi-Agent Workflow Orchestration', () => {
       
       results.forEach((result, index) => {
         const workflow = performanceWorkflows[index];
-        if (workflow) {
+        if (workflow && result) {
           console.log(`   ${workflow.name}: ${(result.workflowCoherence * 100).toFixed(1)}% coherence`);
         }
       });
@@ -296,11 +332,17 @@ describeBehavior('Multi-Agent Workflow Orchestration', () => {
       expect(result.workflowCoherence).toBeGreaterThan(0.6);
       
       // Each step should involve appropriate agents
-      result.stepResults.forEach((step, index) => {
-        expect(step.agents.length).toBeGreaterThan(0);
-        expect(step.agents).toContain('Think'); // Every step should include thinking
-        console.log(`🚀 Journey Step ${index + 1}: ${step.agents.join(', ')}`);
-      });
+      if (result.stepResults && result.stepResults.length > 0) {
+        result.stepResults.forEach((step, index) => {
+          expect(step.agents.length).toBeGreaterThan(0);
+          expect(step.agents).toContain('Think'); // Every step should include thinking
+          console.log(`🚀 Journey Step ${index + 1}: ${step.agents.join(', ')}`);
+        });
+      } else {
+        console.log('⚠️ No step results available for workflow validation');
+        // If no step results, the workflow validation likely failed
+        expect(result.success).toBe(false);
+      }
 
       console.log(`🚀 Complete Journey Coherence: ${(result.workflowCoherence * 100).toFixed(1)}%`);
     });

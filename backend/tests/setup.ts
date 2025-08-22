@@ -18,11 +18,27 @@ process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only-must-be-at-least-
 process.env.OPENAI_API_KEY = 'test-openai-key';
 process.env.TAVILY_API_KEY = 'test-tavily-key';
 
+// Import service initialization for tests
+let serviceInitialized = false;
+
 // Reduce console output during tests for cleaner output
 const originalError = console.error;
 const originalWarn = console.warn;
 
 beforeAll(async () => {
+  // Initialize services for tests if not already done
+  if (!serviceInitialized) {
+    try {
+      const { initializeAllCoreServices } = await import('../src/services/service-initialization');
+      await initializeAllCoreServices();
+      serviceInitialized = true;
+      console.log('✅ Services initialized for tests');
+    } catch (error) {
+      console.error('❌ Failed to initialize services for tests:', error);
+      // Continue with tests even if services fail to initialize
+    }
+  }
+
   // Suppress non-critical console output
   console.error = (message: any, ...args: any[]) => {
     // Only show actual test failures and critical errors
@@ -48,6 +64,18 @@ afterAll(async () => {
   console.error = originalError;
   console.warn = originalWarn;
   
+  // Cleanup services if they were initialized
+  if (serviceInitialized) {
+    try {
+      const { serviceManager } = await import('../src/services/service-manager');
+      await serviceManager.getInstance().shutdown();
+      serviceInitialized = false;
+      console.log('✅ Services cleaned up after tests');
+    } catch (error) {
+      console.error('❌ Failed to cleanup services after tests:', error);
+    }
+  }
+  
   // Give time for final cleanup
   await new Promise(resolve => setTimeout(resolve, 50));
 });
@@ -57,6 +85,30 @@ afterEach(async () => {
   // Clear all mocks
   jest.clearAllMocks();
   jest.clearAllTimers();
+  
+  // Reset service state between tests if services are initialized
+  if (serviceInitialized) {
+    try {
+      const { serviceManager } = await import('../src/services/service-manager');
+      const manager = serviceManager.getInstance();
+      // Reset service states without full shutdown
+      for (const serviceName of manager.getRegisteredServices()) {
+        const service = manager.getService(serviceName);
+        if (service && service.state !== 'destroyed') {
+          // Reset to initial state if possible
+          if (service.initialize && typeof service.initialize === 'function') {
+            try {
+              await service.initialize();
+            } catch (error) {
+              // Ignore initialization errors during cleanup
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  }
   
   // Force garbage collection between tests if available
   if (global.gc) {

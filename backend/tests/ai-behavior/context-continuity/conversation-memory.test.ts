@@ -5,7 +5,7 @@
  * Validates that the system maintains coherent context across interactions.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import {
   AIBehaviorValidator,
   describeBehavior,
@@ -14,6 +14,14 @@ import {
 
 describeBehavior('Conversation Context & Memory', () => {
   let validator: AIBehaviorValidator;
+
+  beforeAll(async () => {
+    await AIBehaviorValidator.initializeServices();
+  });
+
+  afterAll(async () => {
+    await AIBehaviorValidator.cleanupServices();
+  });
 
   beforeEach(() => {
     validator = new AIBehaviorValidator();

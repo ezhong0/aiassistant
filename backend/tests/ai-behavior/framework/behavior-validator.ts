@@ -5,8 +5,9 @@
  * Focuses on intelligence validation, workflow orchestration, and decision quality.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import { MasterAgent } from '../../../src/agents/master.agent';
+import { TestHelper } from '../../test-helper';
 
 export interface IntentExpectation {
   userInput: string;
@@ -64,6 +65,20 @@ export class AIBehaviorValidator {
 
   constructor() {
     this.masterAgent = new MasterAgent();
+  }
+
+  /**
+   * Initialize services for this validator
+   */
+  static async initializeServices(): Promise<void> {
+    await TestHelper.initializeServices();
+  }
+
+  /**
+   * Cleanup services for this validator
+   */
+  static async cleanupServices(): Promise<void> {
+    await TestHelper.cleanupServices();
   }
 
   /**
