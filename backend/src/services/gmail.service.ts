@@ -5,7 +5,6 @@ import logger from '../utils/logger';
 
 export class GmailService extends BaseService {
   private gmailService: any;
-  private initialized = false;
 
   constructor() {
     super('GmailService');
@@ -18,7 +17,6 @@ export class GmailService extends BaseService {
     try {
       // Initialize Gmail API service
       this.gmailService = google.gmail('v1');
-      this.initialized = true;
       
       this.logInfo('Gmail service initialized successfully');
     } catch (error) {
@@ -31,7 +29,6 @@ export class GmailService extends BaseService {
    * Service-specific cleanup
    */
   protected async onDestroy(): Promise<void> {
-    this.initialized = false;
     this.logInfo('Gmail service destroyed');
   }
 
@@ -437,4 +434,3 @@ export class GmailService extends BaseService {
 }
 
 // Export the class for registration with ServiceManager
-export { GmailService };

@@ -16,7 +16,8 @@ import { CONFIRMATION_WORDS } from '../config/agent-config';
 import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
-import { toolExecutorService } from '../services/tool-executor.service';
+import { getService } from '../services/service-registry';
+import { ToolExecutorService } from '../services/tool-executor.service';
 import { SessionService } from '../services/session.service';
 import { ToolExecutionContext, SessionExpiredError } from '../types/tools';
 import { 
@@ -57,7 +58,19 @@ try {
   logger.warn('Assistant will operate in fallback mode');
 }
 
-const sessionService = new SessionService();
+// Remove manual session service creation - use service registry instead
+// const sessionService = new SessionService();
+
+/**
+ * Helper function to safely get the session service
+ */
+function getSessionService(): SessionService {
+  const service = getService<SessionService>('sessionService');
+  if (!service) {
+    throw new Error('SessionService not available. Ensure services are initialized.');
+  }
+  return service;
+}
 
 // Validation schemas
 const textCommandSchema = z.object({
@@ -120,8 +133,8 @@ router.post('/text-command',
 
     const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
     
-    // Get session context from backend session service (includes pending actions)
-    const sessionContext = sessionService.getSession(finalSessionId);
+          // Get session context from backend session service (includes pending actions)
+      const sessionContext = getSessionService().getSession(finalSessionId);
     
     logger.info('Session context retrieved', {
       sessionId: finalSessionId,
@@ -200,6 +213,10 @@ router.post('/text-command',
       };
       
       // First, run in preview mode to see if confirmation is needed
+      const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+      if (!toolExecutorService) {
+        throw new Error('Tool executor service not available');
+      }
       const previewResults = await toolExecutorService.executeTools(
         masterResponse.toolCalls,
         executionContext,
@@ -225,12 +242,8 @@ router.post('/text-command',
           previewResultsAwaitingConfirmation: previewResults.filter(r => r.result?.awaitingConfirmation).length
         });
         
-        // Update session with pending actions
-        await sessionService.updateSession(finalSessionId, {
-          lastActivity: new Date(),
-          pendingActions: pendingActions,
-          conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
-        });
+        // Note: SessionService doesn't have updateSession method
+        // The session is automatically updated when adding conversation entries or tool calls
         
         // Generate dynamic confirmation message
         const confirmationMessage = await generateDynamicConfirmationMessage(masterResponse.toolCalls, previewResults, command);
@@ -254,6 +267,10 @@ router.post('/text-command',
         return res.json(confirmationResponse);
       } else {
         // No confirmation needed, execute tools normally
+        const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+        if (!toolExecutorService) {
+          throw new Error('Tool executor service not available');
+        }
         const toolResults = await toolExecutorService.executeTools(
           masterResponse.toolCalls,
           executionContext,
@@ -391,8 +408,8 @@ router.get('/session/:id',
         userId: user.userId 
       });
 
-      try {
-        const session = sessionService.getSession(sessionId);
+              try {
+          const session = getSessionService().getSession(sessionId);
         
         if (!session) {
           return res.status(404).json({
@@ -419,20 +436,20 @@ router.get('/session/:id',
           });
         }
 
-        // Get session statistics
-        const stats = sessionService.getSessionStats(sessionId);
+                  // Get session statistics
+          const stats = getSessionService().getSessionStats();
 
         // Format conversation history for client
         const formattedHistory = session.conversationHistory.map(entry => ({
           timestamp: entry.timestamp.toISOString(),
-          userInput: entry.userInput,
-          agentResponse: entry.agentResponse,
-          toolsUsed: entry.toolCalls.map(tc => tc.name),
-          success: entry.toolResults.every(tr => tr.success)
+          userInput: entry.type === 'user' ? entry.content : '',
+          agentResponse: entry.type === 'agent' ? entry.content : '',
+          toolsUsed: entry.toolCalls?.map(tc => tc.name) || [],
+          success: entry.toolResults?.every(tr => tr.success) || false
         }));
 
         // Format recent tool results
-        const recentToolResults = session.toolExecutionHistory.slice(-10).map(result => ({
+        const recentToolResults = session.toolResults.slice(-10).map((result: any) => ({
           toolName: result.toolName,
           success: result.success,
           timestamp: new Date().toISOString(), // Note: ToolResult doesn't have timestamp in current schema
@@ -443,7 +460,7 @@ router.get('/session/:id',
         logger.info('Session retrieved successfully', { 
           sessionId, 
           conversationCount: session.conversationHistory.length,
-          toolExecutionCount: session.toolExecutionHistory.length
+          toolExecutionCount: session.toolResults.length
         });
 
         return res.json({
@@ -510,10 +527,10 @@ router.delete('/session/:id',
         userId: user.userId 
       });
 
-      // First check if session exists and get it for authorization
-      let session;
-      try {
-        session = sessionService.getSession(sessionId);
+              // First check if session exists and get it for authorization
+        let session;
+        try {
+          session = getSessionService().getSession(sessionId);
       } catch (error) {
         if (error instanceof SessionExpiredError) {
           // Session already expired and cleaned up
@@ -551,18 +568,18 @@ router.delete('/session/:id',
         });
       }
 
-      // Get session stats before deletion for response
-      const statsBeforeDeletion = sessionService.getSessionStats(sessionId);
+              // Get session stats before deletion for response
+        const statsBeforeDeletion = getSessionService().getSessionStats();
 
-      // Delete the session
-      const deleted = sessionService.deleteSession(sessionId);
+        // Delete the session
+        const deleted = getSessionService().deleteSession(sessionId);
 
       if (deleted) {
         logger.info('Session deleted successfully', { 
           sessionId,
           userId: user.userId,
-          conversationCount: statsBeforeDeletion?.conversationCount || 0,
-          toolExecutionCount: statsBeforeDeletion?.toolExecutionCount || 0
+          totalSessions: statsBeforeDeletion?.totalSessions || 0,
+          activeSessions: statsBeforeDeletion?.activeSessions || 0
         });
 
         return res.json({
@@ -572,8 +589,8 @@ router.delete('/session/:id',
           data: {
             sessionId,
             deletedAt: new Date().toISOString(),
-            conversationCount: statsBeforeDeletion?.conversationCount || 0,
-            toolExecutionCount: statsBeforeDeletion?.toolExecutionCount || 0
+            totalSessions: statsBeforeDeletion?.totalSessions || 0,
+            activeSessions: statsBeforeDeletion?.activeSessions || 0
           }
         });
       } else {
@@ -630,6 +647,10 @@ router.post('/email/send', authenticateToken, async (req: AuthenticatedRequest, 
     });
 
     // Use email agent directly
+    const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+    if (!toolExecutorService) {
+      throw new Error('Tool executor service not available');
+    }
     const result = await toolExecutorService.executeTool(
       {
         name: 'emailAgent',
@@ -698,6 +719,10 @@ router.get('/email/search', authenticateToken, async (req: AuthenticatedRequest,
       maxResults: limit 
     });
 
+    const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+    if (!toolExecutorService) {
+      throw new Error('Tool executor service not available');
+    }
     const result = await toolExecutorService.executeTool(
       {
         name: 'emailAgent',
@@ -911,6 +936,10 @@ async function executeConfirmedAction(
     }
 
     // Execute the tool normally (not in preview mode)
+    const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+    if (!toolExecutorService) {
+      throw new Error('Tool executor service not available');
+    }
     const toolResult = await toolExecutorService.executeTool(
       toolCall,
       executionContext,
@@ -957,6 +986,10 @@ async function formatAssistantResponse(
   formattedResponse: { message: string; data?: any };
   responseType: 'response' | 'action_completed' | 'partial_success' | 'error';
 }> {
+  const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+  if (!toolExecutorService) {
+    throw new Error('Tool executor service not available');
+  }
   const stats = toolExecutorService.getExecutionStats(toolResults);
   const hasErrors = toolResults.some(result => !result.success);
   const successfulResults = toolResults.filter(r => r.success && r.toolName !== 'Think');

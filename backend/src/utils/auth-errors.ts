@@ -284,18 +284,20 @@ export const retryOAuthOperation = async <T>(
 /**
  * Validation helpers
  */
-export const validateTokenFormat = (token: string): void => {
+export const validateTokenFormat = (token: string): { valid: boolean; error?: string } => {
   if (!token) {
-    throw AuthErrors.missingToken();
+    return { valid: false, error: 'No token provided' };
   }
   
   if (typeof token !== 'string') {
-    throw AuthErrors.invalidToken({ reason: 'Token must be a string' });
+    return { valid: false, error: 'Token must be a string' };
   }
   
   if (token.length < 10) {
-    throw AuthErrors.invalidToken({ reason: 'Token too short' });
+    return { valid: false, error: 'Token too short' };
   }
+  
+  return { valid: true };
 };
 
 export const validateEmailFormat = (email: string): boolean => {
@@ -303,24 +305,31 @@ export const validateEmailFormat = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-export const validateGoogleUserInfo = (userInfo: any): void => {
+export const validateGoogleUserInfo = (userInfo: any): { valid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
   if (!userInfo) {
-    throw AuthErrors.userInfoFailed(new Error('No user info received'));
+    errors.push('No user info received');
   }
   
-  if (!userInfo.id) {
-    throw AuthErrors.userInfoFailed(new Error('Missing user ID'));
+  if (!userInfo.sub) {
+    errors.push('Missing user ID');
   }
   
   if (!userInfo.email) {
-    throw AuthErrors.userInfoFailed(new Error('Missing user email'));
+    errors.push('Missing user email');
   }
   
-  if (!validateEmailFormat(userInfo.email)) {
-    throw AuthErrors.userInfoFailed(new Error('Invalid email format'));
+  if (userInfo.email && !validateEmailFormat(userInfo.email)) {
+    errors.push('Invalid email format');
   }
   
-  if (!userInfo.verified_email) {
-    throw AuthErrors.userInfoFailed(new Error('Email not verified'));
+  if (userInfo.email_verified === false) {
+    errors.push('Email not verified');
   }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
 };

@@ -1,6 +1,7 @@
 import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
-import { contactService } from '../services/contact.service';
+import { getService } from '../services/service-registry';
+import { ContactService } from '../services/contact.service';
 import {
   Contact,
   ContactSearchRequest,
@@ -141,7 +142,11 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
 
     // Use retry mechanism from BaseAgent for reliability
     const searchResult = await this.withRetries(async () => {
-      return await contactService.searchContacts(params.accessToken, searchRequest);
+      const contactService = getService<ContactService>('contactService');
+      if (!contactService) {
+        throw new Error('Contact service not available');
+      }
+      return await contactService.searchContacts(searchParams.searchTerm, params.accessToken);
     });
 
     this.logger.info('Contact search completed successfully', {

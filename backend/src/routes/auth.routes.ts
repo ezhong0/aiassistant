@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
-import { authService } from '../services/auth.service';
+import { getService } from '../services/service-registry';
+import { AuthService } from '../services/auth.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {
   GoogleTokens,
@@ -39,6 +40,10 @@ router.get('/google', authRateLimit, (req: Request, res: Response) => {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/contacts.readonly'
     ];
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
     const authUrl = authService.generateAuthUrl(scopes);
     
     logger.info('Generated Google OAuth URL for user authentication');
@@ -80,15 +85,17 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
     }
 
     // Exchange code for tokens
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
     const tokens: GoogleTokens = await authService.exchangeCodeForTokens(code);
     
     // Get user info
-    const userInfo: GoogleUserInfo = await authService.getUserInfo(tokens.access_token);
+    const userInfo: GoogleUserInfo = await authService.getGoogleUserInfo(tokens.access_token);
     
     // Generate internal JWT token
-    const jwtToken = authService.generateJWT({
-      userId: userInfo.id,
-      email: userInfo.email,
+    const jwtToken = authService.generateJWT(userInfo.sub, userInfo.email, {
       name: userInfo.name,
       picture: userInfo.picture
     });
@@ -142,15 +149,17 @@ router.post('/refresh', authRateLimit, validateTokenRefresh, async (req: Request
     }
 
     // Refresh the access token
-    const newTokens: GoogleTokens = await authService.refreshAccessToken(refresh_token);
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
+    const newTokens: GoogleTokens = await authService.refreshGoogleToken(refresh_token);
     
     // Get updated user info with new access token
-    const userInfo: GoogleUserInfo = await authService.getUserInfo(newTokens.access_token);
+    const userInfo: GoogleUserInfo = await authService.getGoogleUserInfo(newTokens.access_token);
     
     // Generate new JWT token
-    const jwtToken = authService.generateJWT({
-      userId: userInfo.id,
-      email: userInfo.email,
+    const jwtToken = authService.generateJWT(userInfo.sub, userInfo.email, {
       name: userInfo.name,
       picture: userInfo.picture
     });
@@ -194,7 +203,11 @@ router.post('/logout', async (req: AuthenticatedRequest, res: Response) => {
     
     if (tokenToRevoke) {
       try {
-        await authService.revokeTokens(tokenToRevoke);
+        const authService = getService<AuthService>('authService');
+        if (!authService) {
+          throw new Error('Auth service not available');
+        }
+        await authService.revokeGoogleTokens(tokenToRevoke);
         logger.info('User tokens revoked successfully', { 
           userId: req.user?.userId,
           everywhere 
@@ -239,17 +252,21 @@ router.get('/validate', (req: Request, res: Response) => {
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    const validation = authService.validateJWT(token);
-
-    if (validation.valid) {
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
+    
+    try {
+      const payload = authService.verifyJWT(token);
       return res.json({
         valid: true,
-        payload: validation.payload
+        payload
       });
-    } else {
+    } catch (error) {
       return res.status(401).json({
         valid: false,
-        error: validation.error
+        error: 'Invalid or expired token'
       });
     }
 
@@ -284,6 +301,11 @@ router.post('/exchange-mobile-tokens', authRateLimit, validateMobileTokenExchang
     }
 
     // Validate the access token with Google
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
+    
     const tokenValidation = await authService.validateGoogleToken(access_token);
     if (!tokenValidation.valid) {
       const authError = new AuthenticationError(
@@ -296,19 +318,17 @@ router.post('/exchange-mobile-tokens', authRateLimit, validateMobileTokenExchang
     }
 
     // Get user info from Google
-    const userInfo: GoogleUserInfo = await authService.getUserInfo(access_token);
+    const userInfo: GoogleUserInfo = await authService.getGoogleUserInfo(access_token);
     
     // Generate internal JWT token
-    const jwtToken = authService.generateJWT({
-      userId: userInfo.id,
-      email: userInfo.email,
+    const jwtToken = authService.generateJWT(userInfo.sub, userInfo.email, {
       name: userInfo.name,
       picture: userInfo.picture
     });
 
     logger.info(`Mobile token exchange successful for user: ${userInfo.email}`, {
       platform,
-      userId: userInfo.id
+      userId: userInfo.sub
     });
 
     return res.json({

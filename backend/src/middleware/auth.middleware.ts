@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { authService } from '../services/auth.service';
+import { getService } from '../services/service-registry';
+import { AuthService } from '../services/auth.service';
 import logger from '../utils/logger';
 
 export interface AuthenticatedUser {
@@ -70,27 +71,16 @@ export const authenticateToken = (
     }
 
     // Validate the JWT token
-    const validation = authService.validateJWT(token);
-    
-    if (!validation.valid) {
-      logger.warn('Authentication failed: Invalid token', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path,
-        error: validation.error
-      });
-      
-      res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid or expired token'
-      });
-      return;
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
     }
-
-    // Extract user information from the token payload
-    const payload = validation.payload as any;
+    const validation = authService.verifyJWT(token);
     
-    if (!payload.userId || !payload.email) {
+    // Extract user information from the token payload
+    const payload = validation;
+    
+    if (!payload.sub || !payload.email) {
       logger.warn('Authentication failed: Invalid token payload', {
         ip: req.ip,
         userAgent: req.get('User-Agent'),
@@ -106,15 +96,15 @@ export const authenticateToken = (
 
     // Attach user information to the request
     req.user = {
-      userId: payload.userId,
+      userId: payload.sub,
       email: payload.email,
-      name: payload.name,
-      picture: payload.picture
+      name: payload.email,
+      picture: undefined
     };
     req.token = token;
 
     logger.info('User authenticated successfully', {
-      userId: payload.userId,
+      userId: payload.sub,
       email: payload.email,
       path: req.path
     });
@@ -161,26 +151,34 @@ export const optionalAuth = (
     }
 
     // Validate the JWT token
-    const validation = authService.validateJWT(token);
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      // Don't fail on service unavailability for optional auth
+      next();
+      return;
+    }
     
-    if (validation.valid) {
-      const payload = validation.payload as any;
+    try {
+      const payload = authService.verifyJWT(token);
       
-      if (payload.userId && payload.email) {
+      if (payload.sub && payload.email) {
         req.user = {
-          userId: payload.userId,
+          userId: payload.sub,
           email: payload.email,
-          name: payload.name,
-          picture: payload.picture
+          name: payload.email,
+          picture: undefined
         };
         req.token = token;
         
         logger.info('Optional authentication successful', {
-          userId: payload.userId,
+          userId: payload.sub,
           email: payload.email,
           path: req.path
         });
       }
+    } catch (error) {
+      // Token validation failed, but that's okay for optional auth
+      logger.debug('Optional authentication failed', { error });
     }
 
     next();

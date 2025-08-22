@@ -4,7 +4,7 @@ import configService from '../config/config.service';
 import logger from '../utils/logger';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
-import { serviceManager } from '../services/service-manager';
+import { serviceManager, IService, ServiceState } from '../services/service-manager';
 
 interface RateLimitData {
   count: number;
@@ -23,7 +23,9 @@ interface RateLimitOptions {
   legacyHeaders?: boolean; // Send legacy X-RateLimit headers
 }
 
-class RateLimitStore {
+class RateLimitStore implements IService {
+  public readonly name = 'RateLimitStore';
+  private _state: ServiceState = ServiceState.INITIALIZING;
   private store = new Map<string, RateLimitData>();
   private cleanupInterval: NodeJS.Timeout | null = null;
   
@@ -32,6 +34,43 @@ class RateLimitStore {
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, TIMEOUTS.rateLimitCleanup);
+    
+    this._state = ServiceState.READY;
+  }
+  
+  get state(): ServiceState {
+    return this._state;
+  }
+  
+  async initialize(): Promise<void> {
+    // Already initialized in constructor
+  }
+  
+  isReady(): boolean {
+    return this._state === ServiceState.READY;
+  }
+  
+  async destroy(): Promise<void> {
+    this._state = ServiceState.SHUTTING_DOWN;
+    
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.store.clear();
+    
+    this._state = ServiceState.DESTROYED;
+  }
+  
+  getHealth(): { healthy: boolean; details?: any } {
+    return {
+      healthy: this.isReady(),
+      details: {
+        state: this._state,
+        totalEntries: this.store.size,
+        hasCleanupInterval: !!this.cleanupInterval
+      }
+    };
   }
   
   get(key: string): RateLimitData | undefined {
@@ -85,23 +124,14 @@ class RateLimitStore {
     };
   }
   
-  destroy(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.store.clear();
-    
-    // Unregister from service manager
-    serviceManager.unregisterService(this);
-  }
+
 }
 
 // Global rate limit store
 const rateLimitStore = new RateLimitStore();
 
 // Register with service manager for graceful shutdown
-serviceManager.registerService(rateLimitStore);
+serviceManager.registerService('rateLimitStore', rateLimitStore);
 
 /**
  * Generic rate limiting middleware

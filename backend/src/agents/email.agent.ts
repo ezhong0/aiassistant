@@ -1,6 +1,7 @@
 import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
-import { gmailService } from '../services/gmail.service';
+import { getService } from '../services/service-registry';
+import { GmailService } from '../services/gmail.service';
 import { EmailParser } from '../utils/email-parser';
 import { ThreadManager } from '../utils/thread-manager';
 import { OpenAIService } from '../services/openai.service';
@@ -169,17 +170,30 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
 
     // Use retry mechanism from BaseAgent for reliability
     const sentEmail = await this.withRetries(async () => {
-      return await gmailService.sendEmail(params.accessToken, emailRequest);
+      const gmailService = getService<GmailService>('gmailService');
+      if (!gmailService) {
+        throw new Error('Gmail service not available');
+      }
+      return await gmailService.sendEmail(
+        params.accessToken,
+        (Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to) || '',
+        emailRequest.subject,
+        emailRequest.body,
+        {
+          cc: Array.isArray(emailRequest.cc) ? emailRequest.cc : emailRequest.cc ? [emailRequest.cc] : undefined,
+          bcc: Array.isArray(emailRequest.bcc) ? emailRequest.bcc : emailRequest.bcc ? [emailRequest.bcc] : undefined
+        }
+      );
     });
 
     this.logger.info('Email sent successfully', { 
-      messageId: sentEmail.id, 
+      messageId: sentEmail.messageId, 
       threadId: sentEmail.threadId,
       to: Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to
     });
 
     return {
-      messageId: sentEmail.id,
+      messageId: sentEmail.messageId,
       threadId: sentEmail.threadId,
       action: 'send',
       recipient: Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to,
@@ -198,16 +212,24 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
     }
 
     const replyEmail = await this.withRetries(async () => {
-      return await gmailService.replyToEmail(params.accessToken, replyRequest);
+      const gmailService = getService<GmailService>('gmailService');
+      if (!gmailService) {
+        throw new Error('Gmail service not available');
+      }
+      return await gmailService.replyToEmail(
+        params.accessToken,
+        replyRequest.messageId,
+        replyRequest.body
+      );
     });
 
     this.logger.info('Email reply sent successfully', { 
-      messageId: replyEmail.id, 
+      messageId: replyEmail.messageId, 
       threadId: replyEmail.threadId 
     });
 
         return {
-      messageId: replyEmail.id,
+      messageId: replyEmail.messageId,
       threadId: replyEmail.threadId,
       action: 'reply'
     };
@@ -224,17 +246,28 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
     };
 
     const searchResult = await this.withRetries(async () => {
-      return await gmailService.searchEmails(params.accessToken, searchRequest);
+      const gmailService = getService<GmailService>('gmailService');
+      if (!gmailService) {
+        throw new Error('Gmail service not available');
+      }
+      return await gmailService.searchEmails(
+        params.accessToken,
+        searchRequest.query || '',
+        {
+          maxResults: searchRequest.maxResults,
+          includeSpamTrash: searchRequest.includeSpamTrash
+        }
+      );
     });
 
     this.logger.info('Email search completed', { 
       query: searchRequest.query, 
-      count: searchResult.messages.length 
+      count: searchResult.length 
     });
 
     return {
-      emails: searchResult.messages,
-      count: searchResult.messages.length,
+      emails: searchResult,
+      count: searchResult.length,
       action: 'search'
     };
   }
@@ -277,9 +310,13 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
       throw this.createError('Message ID is required to get email', 'MISSING_MESSAGE_ID');
     }
 
-    const email = await this.withRetries(async () => {
-      return await gmailService.getEmailById(params.accessToken, actionParams.messageId);
-    });
+          const email = await this.withRetries(async () => {
+        const gmailService = getService<GmailService>('gmailService');
+        if (!gmailService) {
+          throw new Error('Gmail service not available');
+        }
+        return await gmailService.getEmail(params.accessToken, actionParams.messageId);
+      });
 
     this.logger.info('Email retrieved successfully', { messageId: actionParams.messageId });
 

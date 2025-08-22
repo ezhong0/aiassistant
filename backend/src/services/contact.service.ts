@@ -5,7 +5,6 @@ import logger from '../utils/logger';
 
 export class ContactService extends BaseService {
   private peopleService: any;
-  private initialized = false;
 
   constructor() {
     super('ContactService');
@@ -18,7 +17,6 @@ export class ContactService extends BaseService {
     try {
       // Initialize Google People API service
       this.peopleService = google.people('v1');
-      this.initialized = true;
       
       this.logInfo('Contact service initialized successfully');
     } catch (error) {
@@ -31,7 +29,6 @@ export class ContactService extends BaseService {
    * Service-specific cleanup
    */
   protected async onDestroy(): Promise<void> {
-    this.initialized = false;
     this.logInfo('Contact service destroyed');
   }
 
@@ -55,8 +52,11 @@ export class ContactService extends BaseService {
         this.logDebug('No contacts found', { query });
         return {
           contacts: [],
+          totalCount: 0,
           totalResults: 0,
-          query
+          searchQuery: query,
+          query,
+          hasMore: false
         };
       }
 
@@ -64,7 +64,8 @@ export class ContactService extends BaseService {
         id: person.resourceName,
         name: person.names?.[0]?.displayName || 'Unknown',
         email: person.emailAddresses?.[0]?.value || '',
-        photo: person.photos?.[0]?.url || null
+        photo: person.photos?.[0]?.url || null,
+        source: 'contacts'
       }));
 
       this.logInfo('Contact search completed', { 
@@ -74,8 +75,11 @@ export class ContactService extends BaseService {
 
       return {
         contacts,
+        totalCount: contacts.length,
         totalResults: contacts.length,
-        query
+        searchQuery: query,
+        query,
+        hasMore: false
       };
     } catch (error) {
       this.handleError(error, 'searchContacts');
@@ -107,7 +111,8 @@ export class ContactService extends BaseService {
         id: person.resourceName,
         name: person.names?.[0]?.displayName || 'Unknown',
         email: person.emailAddresses?.[0]?.value || '',
-        photo: person.photos?.[0]?.url || null
+        photo: person.photos?.[0]?.url || null,
+        source: 'contacts'
       };
 
       this.logDebug('Contact retrieved successfully', { 
@@ -152,7 +157,8 @@ export class ContactService extends BaseService {
         id: response.data.resourceName,
         name: contactData.name,
         email: contactData.email || '',
-        photo: contactData.photo
+        photo: contactData.photo,
+        source: 'contacts'
       };
 
       this.logInfo('Contact created successfully', { 
@@ -210,7 +216,8 @@ export class ContactService extends BaseService {
         id: contactId,
         name: updates.name ?? currentContact.name,
         email: updates.email ?? currentContact.email,
-        photo: updates.photo ?? currentContact.photo
+        photo: updates.photo ?? currentContact.photo,
+        source: 'contacts'
       };
 
       this.logInfo('Contact updated successfully', { 
@@ -275,7 +282,8 @@ export class ContactService extends BaseService {
           id: person.resourceName,
           name: person.names?.[0]?.displayName || 'Unknown',
           email: person.emailAddresses?.[0]?.value || '',
-          photo: person.photos?.[0]?.url || null
+          photo: person.photos?.[0]?.url || null,
+          source: 'contacts'
         }));
 
       this.logInfo('Email search completed', { 
@@ -374,4 +382,3 @@ export class ContactService extends BaseService {
 }
 
 // Export the class for registration with ServiceManager
-export { ContactService };

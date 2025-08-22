@@ -250,4 +250,3 @@ export class ToolExecutorService extends BaseService {
 }
 
 // Export the class for registration with ServiceManager
-export { ToolExecutorService };

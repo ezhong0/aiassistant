@@ -4,6 +4,7 @@ import { SessionService } from '../services/session.service';
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { initializeAgentFactory } from '../config/agent-factory-init';
+import { getService } from '../services/service-registry';
 
 export interface MasterAgentResponse {
   message: string;
@@ -14,12 +15,13 @@ export interface MasterAgentResponse {
 
 export class MasterAgent {
   private openaiService: OpenAIService | null = null;
-  private sessionService: SessionService;
+  private sessionService: SessionService | null = null;
   private useOpenAI: boolean = false;
   private systemPrompt: string;
 
   constructor(config?: MasterAgentConfig) {
-    this.sessionService = new SessionService(config?.sessionTimeoutMinutes);
+    // Don't create SessionService here - it will be obtained from the service registry
+    // this.sessionService = new SessionService(config?.sessionTimeoutMinutes);
     
     // Initialize AgentFactory if not already done
     if (!AgentFactory.getStats().totalTools) {
@@ -42,14 +44,34 @@ export class MasterAgent {
   }
 
   /**
+   * Get or initialize the session service from the registry
+   */
+  private getSessionService(): SessionService {
+    if (!this.sessionService) {
+      const service = getService<SessionService>('sessionService');
+      if (!service) {
+        throw new Error('SessionService not available from service registry. Ensure services are initialized.');
+      }
+      if (!service.isReady()) {
+        throw new Error(`SessionService is not ready. Current state: ${service.state}. Ensure services are fully initialized.`);
+      }
+      this.sessionService = service;
+    }
+    return this.sessionService;
+  }
+
+  /**
    * Process user input and determine which tools to call
    */
   async processUserInput(userInput: string, sessionId: string, userId?: string): Promise<MasterAgentResponse> {
     try {
       logger.info(`MasterAgent processing input: "${userInput}" for session: ${sessionId}`);
       
+      // Get session service from registry
+      const sessionService = this.getSessionService();
+      
       // Get or create session
-      const session = this.sessionService.getOrCreateSession(sessionId, userId);
+      const session = sessionService.getOrCreateSession(sessionId, userId);
       
       let toolCalls: ToolCall[];
       let message: string;
@@ -57,7 +79,7 @@ export class MasterAgent {
       // Use OpenAI if available, otherwise fall back to rule-based routing
       if (this.useOpenAI && this.openaiService) {
         try {
-          const context = this.sessionService.getConversationContext(sessionId);
+          const context = sessionService.getConversationContext(sessionId);
           const systemPromptWithContext = context ? 
             `${this.systemPrompt}\n\n${context}` : 
             this.systemPrompt;

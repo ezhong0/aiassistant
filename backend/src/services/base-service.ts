@@ -8,8 +8,8 @@ import logger from '../utils/logger';
 export abstract class BaseService implements IService {
   public readonly name: string;
   protected _state: ServiceState = ServiceState.INITIALIZING;
-  protected initialized = false;
-  protected destroyed = false;
+  public initialized = false;
+  public destroyed = false;
 
   constructor(name: string) {
     this.name = name;

@@ -27,12 +27,10 @@ export interface TokenRefreshResponse {
  */
 
 export interface GoogleUserInfo {
-  id: string;
+  sub: string;
   email: string;
-  verified_email: boolean;
+  email_verified: boolean;
   name: string;
-  given_name: string;
-  family_name: string;
   picture: string;
   locale?: string;
   hd?: string; // Hosted domain for G Suite users
@@ -50,10 +48,10 @@ export interface AuthenticatedUser {
 }
 
 export interface JWTPayload {
-  userId: string;
+  sub: string;
   email: string;
-  name: string;
-  picture?: string;
+  iss?: string;
+  aud?: string;
   iat?: number;
   exp?: number;
 }
@@ -84,7 +82,7 @@ export type AuthResponse = AuthSuccessResponse | AuthErrorResponse;
 
 export interface TokenValidationResult {
   valid: boolean;
-  payload?: object | string;
+  userInfo?: GoogleUserInfo;
   error?: string;
 }
 

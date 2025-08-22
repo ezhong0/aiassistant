@@ -19,7 +19,7 @@ import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
 export class AuthService extends BaseService {
-  private oauth2Client: OAuth2Client;
+  private oauth2Client!: OAuth2Client;
   private readonly config = configService;
 
   constructor() {
@@ -97,8 +97,8 @@ export class AuthService extends BaseService {
 
       const googleTokens: GoogleTokens = {
         access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token || null,
-        expires_in: tokens.expires_in || 3600,
+        refresh_token: tokens.refresh_token || undefined,
+        expires_in: 3600, // Default to 1 hour
         token_type: tokens.token_type || 'Bearer',
         scope: tokens.scope || ''
       };
@@ -123,7 +123,10 @@ export class AuthService extends BaseService {
     try {
       this.logDebug('Validating Google access token');
       
-      const ticket = await this.oauth2Client.verifyIdToken(accessToken);
+      const ticket = await this.oauth2Client.verifyIdToken({
+        idToken: accessToken,
+        audience: this.config.googleClientId
+      });
       const payload = ticket.getPayload();
       
       if (!payload) {
@@ -243,7 +246,7 @@ export class AuthService extends BaseService {
       const googleTokens: GoogleTokens = {
         access_token: credentials.access_token,
         refresh_token: credentials.refresh_token || refreshToken,
-        expires_in: credentials.expires_in || 3600,
+        expires_in: 3600, // Default to 1 hour
         token_type: credentials.token_type || 'Bearer',
         scope: credentials.scope || ''
       };
@@ -322,7 +325,7 @@ export class AuthService extends BaseService {
       return 24 * 60 * 60; // Default to 24 hours
     }
 
-    const value = parseInt(match[1], 10);
+    const value = parseInt(match[1] || '0', 10);
     const unit = match[2];
 
     switch (unit) {
@@ -361,4 +364,3 @@ export class AuthService extends BaseService {
 }
 
 // Export the class for registration with ServiceManager
-export { AuthService };

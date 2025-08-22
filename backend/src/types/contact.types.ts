@@ -3,6 +3,7 @@ export interface Contact {
   name: string;
   email: string;
   phone?: string;
+  photo?: string | null;
   source: 'contacts' | 'other_contacts';
   lastInteraction?: Date;
   interactionCount?: number;
@@ -18,7 +19,9 @@ export interface ContactSearchRequest {
 export interface ContactSearchResult {
   contacts: Contact[];
   totalCount: number;
+  totalResults: number;
   searchQuery: string;
+  query: string;
   hasMore: boolean;
 }
 

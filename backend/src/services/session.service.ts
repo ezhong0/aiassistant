@@ -7,7 +7,6 @@ import {
 } from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config';
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
 import logger from '../utils/logger';
 
 export class SessionService extends BaseService {
@@ -24,12 +23,15 @@ export class SessionService extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
+    this.logInfo('Starting SessionService initialization...');
+    
     // Clean up expired sessions using configured interval
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSessions();
     }, TIMEOUTS.sessionCleanup);
 
     this.logInfo(`SessionService initialized with ${this.defaultTimeoutMinutes} minute timeout`);
+    this.logInfo('SessionService initialization completed successfully');
   }
 
   /**
@@ -212,30 +214,6 @@ export class SessionService extends BaseService {
   }
 
   /**
-   * Extend session timeout
-   */
-  extendSession(sessionId: string, additionalMinutes: number): void {
-    this.assertReady();
-    
-    const session = this.getSession(sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
-
-    const maxExtension = EXECUTION_CONFIG.session.maxTimeoutMinutes - this.defaultTimeoutMinutes;
-    const actualExtension = Math.min(additionalMinutes, maxExtension);
-    
-    session.expiresAt = new Date(session.expiresAt.getTime() + (actualExtension * 60 * 1000));
-    session.lastActivity = new Date();
-    
-    this.logInfo('Extended session timeout', { 
-      sessionId, 
-      additionalMinutes: actualExtension,
-      newExpiresAt: session.expiresAt
-    });
-  }
-
-  /**
    * Delete a session
    */
   deleteSession(sessionId: string): boolean {
@@ -249,33 +227,12 @@ export class SessionService extends BaseService {
   }
 
   /**
-   * Get all active sessions
-   */
-  getAllSessions(): SessionContext[] {
-    this.assertReady();
-    
-    return Array.from(this.sessions.values())
-      .filter(session => !this.isSessionExpired(session));
-  }
-
-  /**
    * Get session count
    */
   getSessionCount(): number {
     this.assertReady();
     
     return this.sessions.size;
-  }
-
-  /**
-   * Get active session count
-   */
-  getActiveSessionCount(): number {
-    this.assertReady();
-    
-    return Array.from(this.sessions.values())
-      .filter(session => !this.isSessionExpired(session))
-      .length;
   }
 
   /**
@@ -319,31 +276,19 @@ export class SessionService extends BaseService {
     totalSessions: number;
     activeSessions: number;
     expiredSessions: number;
-    averageSessionAge: number;
   } {
     this.assertReady();
     
-    const now = new Date();
     const sessions = Array.from(this.sessions.values());
     const activeSessions = sessions.filter(s => !this.isSessionExpired(s));
     const expiredSessions = sessions.filter(s => this.isSessionExpired(s));
     
-    const totalAge = activeSessions.reduce((sum, session) => {
-      return sum + (now.getTime() - session.createdAt.getTime());
-    }, 0);
-    
-    const averageSessionAge = activeSessions.length > 0 
-      ? totalAge / activeSessions.length 
-      : 0;
-    
     return {
       totalSessions: sessions.length,
       activeSessions: activeSessions.length,
-      expiredSessions: expiredSessions.length,
-      averageSessionAge
+      expiredSessions: expiredSessions.length
     };
   }
 }
 
 // Export the class for registration with ServiceManager
-export { SessionService };

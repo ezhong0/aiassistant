@@ -8,7 +8,7 @@ export interface ToolResult {
   result: any;
   success: boolean;
   error?: string;
-  executionTime?: number;
+  executionTime: number;
 }
 
 export interface ToolExecutionContext {
@@ -37,7 +37,8 @@ export interface SessionContext {
   createdAt: Date;
   lastActivity: Date;
   conversationHistory: ConversationEntry[];
-  toolExecutionHistory: ToolResult[];
+  toolCalls: ToolCall[];
+  toolResults: ToolResult[];
   pendingActions?: any[];
   conversationContext?: any;
   expiresAt: Date;
@@ -45,10 +46,10 @@ export interface SessionContext {
 
 export interface ConversationEntry {
   timestamp: Date;
-  userInput: string;
-  agentResponse: string;
-  toolCalls: ToolCall[];
-  toolResults: ToolResult[];
+  type: string;
+  content: string;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
 }
 
 // Specific agent parameter types

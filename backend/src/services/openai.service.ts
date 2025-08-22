@@ -88,20 +88,18 @@ export class OpenAIService extends BaseService {
       const toolCalls: ToolCall[] = [];
       if (assistantMessage.tool_calls) {
         for (const toolCall of assistantMessage.tool_calls) {
-          if (toolCall.function) {
-            try {
-              const parameters = JSON.parse(toolCall.function.arguments);
-              toolCalls.push({
-                name: toolCall.function.name,
-                parameters
-              });
-            } catch (error) {
-              this.logWarn('Failed to parse tool call parameters', { 
-                toolName: toolCall.function.name,
-                arguments: toolCall.function.arguments,
-                error 
-              });
-            }
+          try {
+            const parameters = JSON.parse((toolCall as any).function?.arguments || '{}');
+            toolCalls.push({
+              name: (toolCall as any).function?.name || 'unknown',
+              parameters
+            });
+          } catch (error) {
+            this.logWarn('Failed to parse tool call parameters', { 
+              toolName: (toolCall as any).function?.name || 'unknown',
+              arguments: (toolCall as any).function?.arguments || '',
+              error 
+            });
           }
         }
       }
@@ -207,11 +205,11 @@ export class OpenAIService extends BaseService {
       });
 
       const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-      if (!toolCall?.function?.arguments) {
+      if (!(toolCall as any)?.function?.arguments) {
         throw new Error('No structured data in OpenAI response');
       }
 
-      const data = JSON.parse(toolCall.function.arguments);
+      const data = JSON.parse((toolCall as any).function.arguments);
       
       this.logDebug('Structured data generated successfully', { 
         dataKeys: Object.keys(data) 
@@ -304,6 +302,43 @@ export class OpenAIService extends BaseService {
   }
 
   /**
+   * Create a chat completion (for backward compatibility)
+   */
+  async createChatCompletion(
+    messages: Array<{ role: string; content: string }>,
+    maxTokens?: number
+  ): Promise<{ content: string }> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Creating chat completion', { 
+        messageCount: messages.length,
+        maxTokens: maxTokens || 500
+      });
+
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: messages as any,
+        max_tokens: maxTokens || 500,
+        temperature: 0.7
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content in OpenAI response');
+      }
+
+      this.logDebug('Chat completion created successfully', { 
+        responseLength: content.length 
+      });
+
+      return { content };
+    } catch (error) {
+      this.handleError(error, 'createChatCompletion');
+    }
+  }
+
+  /**
    * Test OpenAI API connectivity
    */
   async testConnection(): Promise<boolean> {
@@ -336,7 +371,7 @@ export class OpenAIService extends BaseService {
       const details = {
         client: !!this.client,
         model: this.model,
-        apiKeyConfigured: !!this.client.auth.apiKey
+        apiKeyConfigured: !!this.client.apiKey
       };
 
       return { healthy, details };
@@ -350,4 +385,3 @@ export class OpenAIService extends BaseService {
 }
 
 // Export the class for registration with ServiceManager
-export { OpenAIService };

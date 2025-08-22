@@ -1,11 +1,44 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import { MasterAgent } from '../../src/agents/master.agent';
+import { initializeServices } from '../../src/services/service-registry';
 
 describe('MasterAgent Comprehensive Integration Tests', () => {
   let masterAgent: MasterAgent;
 
+  beforeAll(async () => {
+    // Initialize services before running tests
+    try {
+      await initializeServices();
+      
+      // Wait a bit to ensure all services are fully ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify services are ready
+      const { getServicesHealth } = await import('../../src/services/service-registry');
+      const health = getServicesHealth();
+      
+      // Check if SessionService is ready
+      if (health.sessionService && !health.sessionService.ready) {
+        throw new Error(`SessionService not ready: ${JSON.stringify(health.sessionService)}`);
+      }
+    } catch (error) {
+      console.error('Failed to initialize services for tests:', error);
+      throw error; // Don't continue if services aren't ready
+    }
+  });
+
   beforeEach(() => {
     masterAgent = new MasterAgent();
+  });
+
+  afterAll(async () => {
+    // Cleanup services after all tests
+    try {
+      const { serviceRegistry } = await import('../../src/services/service-registry');
+      await serviceRegistry.forceCleanup();
+    } catch (error) {
+      console.error('Failed to cleanup services after tests:', error);
+    }
   });
 
   describe('Rule-based routing accuracy', () => {

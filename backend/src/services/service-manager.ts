@@ -105,12 +105,8 @@ export class ServiceManager {
       autoStart: registration.autoStart
     });
 
-    // Auto-start if enabled and no dependencies
-    if (registration.autoStart && registration.dependencies.length === 0) {
-      this.initializeService(name).catch(error => {
-        logger.error(`Failed to auto-start service ${name}:`, error);
-      });
-    }
+    // Note: Auto-start is disabled during registration to ensure proper initialization order
+    // Services will be initialized in dependency order by initializeAllServices()
   }
 
   /**
@@ -180,13 +176,17 @@ export class ServiceManager {
     }
 
     logger.info(`Initializing ${this.services.size} services...`);
+    logger.info('Registered services:', Array.from(this.services.keys()));
 
     // Calculate initialization order based on dependencies
     this.calculateInitializationOrder();
+    logger.info('Initialization order:', this.initializationOrder);
 
     // Initialize services in order
     for (const serviceName of this.initializationOrder) {
+      logger.info(`Starting initialization of service: ${serviceName}`);
       await this.initializeService(serviceName);
+      logger.info(`Completed initialization of service: ${serviceName}`);
     }
 
     logger.info('All services initialized successfully');
@@ -206,8 +206,8 @@ export class ServiceManager {
       return;
     }
 
-    if (registration.service.state === ServiceState.INITIALIZING) {
-      logger.debug(`Service ${name} already initializing`);
+    if (registration.service.state === ServiceState.INITIALIZING && registration.service.isReady()) {
+      logger.debug(`Service ${name} already initializing and ready`);
       return;
     }
 
@@ -227,6 +227,14 @@ export class ServiceManager {
     try {
       logger.debug(`Initializing service: ${name}`);
       await registration.service.initialize();
+      
+      // Wait a moment and verify the service is actually ready
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      if (!registration.service.isReady()) {
+        throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
+      }
+      
       logger.info(`Service initialized successfully: ${name}`);
     } catch (error) {
       logger.error(`Failed to initialize service ${name}:`, error);
@@ -267,7 +275,9 @@ export class ServiceManager {
       .sort(([, a], [, b]) => a.priority - b.priority);
 
     for (const [name] of sortedServices) {
-      visit(name);
+      if (!visited.has(name)) {
+        visit(name);
+      }
     }
   }
 
