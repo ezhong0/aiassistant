@@ -237,11 +237,9 @@ export class OpenAIService extends BaseService {
             parameters: {
               type: 'object',
               properties: {
-                to: { type: 'string', description: 'Recipient email address' },
-                subject: { type: 'string', description: 'Email subject' },
-                body: { type: 'string', description: 'Email body content' }
+                query: { type: 'string', description: 'User request for email action (e.g., "send email to john@example.com asking if they want to have dinner")' }
               },
-              required: ['to', 'subject', 'body']
+              required: ['query']
             }
           }
         },

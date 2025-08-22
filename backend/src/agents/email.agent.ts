@@ -46,7 +46,6 @@ export interface EmailAgentRequest extends EmailAgentParams {
  * Handles all email operations via Gmail API with consistent error handling and logging
  */
 export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
-  private openAIService?: OpenAIService;
 
   constructor() {
     super({
@@ -58,12 +57,20 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
     });
     
     // Initialize OpenAI service if available
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (openaiApiKey) {
-      this.openAIService = new OpenAIService({
-        apiKey: openaiApiKey,
-        model: 'gpt-4o-mini'
-      });
+    // OpenAI service will be retrieved from service registry when needed
+  }
+
+  /**
+   * Get OpenAI service from the service registry
+   */
+  private getOpenAIService(): OpenAIService | null {
+    try {
+      const { getService } = require('../services/service-manager');
+      const openaiService = getService('openaiService') as OpenAIService | null;
+      return openaiService || null;
+    } catch (error) {
+      this.logger.warn('Failed to get OpenAI service from registry', { error });
+      return null;
     }
   }
   
@@ -451,7 +458,8 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
     subject?: string;
     body?: string;
   }> {
-    if (!this.openAIService) {
+    const openAIService = this.getOpenAIService();
+    if (!openAIService) {
       // Fallback to basic extraction if OpenAI not available
       return this.extractEmailContentBasic(query, contacts);
     }
@@ -487,7 +495,7 @@ Guidelines:
         { role: 'user' as const, content: extractionPrompt }
       ];
 
-      const response = await this.openAIService.createChatCompletion(messages);
+      const response = await openAIService.createChatCompletion(messages);
       
       try {
         // Clean the response content to extract JSON

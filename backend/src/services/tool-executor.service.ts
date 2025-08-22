@@ -71,7 +71,7 @@ export class ToolExecutorService extends BaseService {
         result = { success: true, message: `Preview for ${toolCall.name}: ${toolCall.parameters.query || 'action'}` };
       } else {
         // Execute the tool using AgentFactory
-        result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context);
+        result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context, accessToken);
       }
 
       // Check if the tool execution was successful

@@ -121,25 +121,14 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
-      this.logDebug('Validating Google access token');
+      this.logDebug('Validating Google access token via userinfo endpoint');
       
-      const ticket = await this.oauth2Client.verifyIdToken({
-        idToken: accessToken,
-        audience: this.config.googleClientId
-      });
-      const payload = ticket.getPayload();
+      // Validate access token by calling Google's userinfo endpoint
+      const userInfo = await this.getGoogleUserInfo(accessToken);
       
-      if (!payload) {
-        return { valid: false, error: 'No payload in token' };
+      if (!userInfo || !userInfo.sub) {
+        return { valid: false, error: 'Unable to fetch user info with provided access token' };
       }
-
-      const userInfo: GoogleUserInfo = {
-        sub: payload.sub!,
-        email: payload.email!,
-        name: payload.name || '',
-        picture: payload.picture || '',
-        email_verified: payload.email_verified || false
-      };
 
       // Validate user info
       const validationResult = validateGoogleUserInfo(userInfo);

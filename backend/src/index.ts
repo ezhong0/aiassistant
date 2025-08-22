@@ -81,6 +81,11 @@ app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 app.use('/api/assistant', assistantRoutes);
 
+// Simple test endpoint for debugging
+app.get('/test', (req: Request, res: Response) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
   res.json({ 

@@ -137,7 +137,8 @@ export class AgentFactory {
   static async executeAgent(
     name: string, 
     parameters: any, 
-    context: ToolExecutionContext
+    context: ToolExecutionContext,
+    accessToken?: string
   ): Promise<ToolResult> {
     const agent = this.getAgent(name);
     
@@ -164,8 +165,13 @@ export class AgentFactory {
         userId: context.userId
       });
       
+      // Add access token to parameters if provided
+      const executionParameters = accessToken 
+        ? { ...parameters, accessToken }
+        : parameters;
+      
       // Execute the framework BaseAgent
-      return await agent.execute(parameters, context);
+      return await agent.execute(executionParameters, context);
       
     } catch (error) {
       const errorResult: ToolResult = {

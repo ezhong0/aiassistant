@@ -11,8 +11,9 @@ import logger from '../utils/logger';
  * Register and initialize all core application services
  */
 export const initializeAllCoreServices = async (): Promise<void> => {
-  if (serviceManager.getServiceCount() > 0) {
-    logger.debug('Services already registered');
+  // Check if core services are already registered (not just any services)
+  if (serviceManager.getService('sessionService')) {
+    logger.debug('Core services already registered');
     return;
   }
 

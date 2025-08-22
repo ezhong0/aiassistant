@@ -1105,8 +1105,8 @@ const extractPendingActions = (toolResults: any[]): any[] => {
 
 const generateDynamicConfirmationMessage = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
   try {
-    if (masterAgent && masterAgent['openaiService']) {
-      const openaiService = masterAgent['openaiService'];
+    const openaiService = masterAgent?.getOpenAIService();
+    if (openaiService) {
       const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
       
       const messages = [
@@ -1133,8 +1133,8 @@ const generateDynamicConfirmationMessage = async (toolCalls: any[], toolResults:
 
 const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
   try {
-    if (masterAgent && masterAgent['openaiService']) {
-      const openaiService = masterAgent['openaiService'];
+    const openaiService = masterAgent?.getOpenAIService();
+    if (openaiService) {
       const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
       
       const messages = [
@@ -1182,8 +1182,8 @@ const generateConfirmationPrompt = (toolCalls: any[], toolResults: any[]): strin
 
 const generateDynamicCompletionMessage = async (toolResults: any[], userCommand: string): Promise<string> => {
   try {
-    if (masterAgent && masterAgent['openaiService']) {
-      const openaiService = masterAgent['openaiService'];
+    const openaiService = masterAgent?.getOpenAIService();
+    if (openaiService) {
       const successfulResults = toolResults.filter(r => r.success && r.toolName !== 'Think');
       const failedResults = toolResults.filter(r => !r.success);
       
@@ -1213,8 +1213,8 @@ const generateDynamicCompletionMessage = async (toolResults: any[], userCommand:
 
 const generateDynamicCancelMessage = async (actionId: string): Promise<string> => {
   try {
-    if (masterAgent && masterAgent['openaiService']) {
-      const openaiService = masterAgent['openaiService'];
+    const openaiService = masterAgent?.getOpenAIService();
+    if (openaiService) {
       
       const messages = [
         {
