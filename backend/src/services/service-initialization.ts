@@ -10,7 +10,7 @@ import logger from '../utils/logger';
 /**
  * Register and initialize all core application services
  */
-export async function initializeAllCoreServices(): Promise<void> {
+export const initializeAllCoreServices = async (): Promise<void> => {
   if (serviceManager.getServiceCount() > 0) {
     logger.debug('Services already registered');
     return;
@@ -35,7 +35,7 @@ export async function initializeAllCoreServices(): Promise<void> {
 /**
  * Register core services with their dependencies
  */
-async function registerCoreServices(): Promise<void> {
+const registerCoreServices = async (): Promise<void> => {
   try {
     // 1. SessionService - No dependencies, highest priority
     const sessionService = new SessionService();

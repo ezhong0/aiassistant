@@ -5,7 +5,7 @@ import { AgentFactory } from '../framework/agent-factory';
  * Simple initialization function that only uses AgentFactory
  * This provides a clean, consolidated agent initialization system
  */
-export function initializeAgentFactory(): void {
+export const initializeAgentFactory = (): void => {
   try {
     logger.info('Initializing AgentFactory...');
     
@@ -40,14 +40,14 @@ export function initializeAgentFactory(): void {
 /**
  * Get the initialized AgentFactory instance
  */
-export function getAgentFactory() {
+export const getAgentFactory = () => {
   return AgentFactory;
 }
 
 /**
  * Check if AgentFactory is properly initialized
  */
-export function isAgentFactoryInitialized(): boolean {
+export const isAgentFactoryInitialized = (): boolean => {
   const stats = AgentFactory.getStats();
   return stats.totalAgents > 0 && stats.totalTools > 0;
 }

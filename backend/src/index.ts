@@ -29,7 +29,7 @@ import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 
 // Initialize services and AgentFactory
-async function initializeApplication(): Promise<void> {
+const initializeApplication = async (): Promise<void> => {
   try {
     // Initialize services first
     logger.info('Initializing application services...');
@@ -96,7 +96,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server and initialize services
-async function startServer(): Promise<void> {
+const startServer = async (): Promise<void> => {
   try {
     // Initialize application services
     await initializeApplication();

@@ -670,14 +670,14 @@ export class AgentFactory {
 /**
  * Convenience function to initialize the factory
  */
-export function initializeAgentFactory(): void {
+export const initializeAgentFactory = (): void => {
   AgentFactory.initialize();
 }
 
 /**
  * Convenience function to get an agent
  */
-export function getAgent(name: string): BaseAgent | undefined {
+export const getAgent = (name: string): BaseAgent | undefined => {
   return AgentFactory.getAgent(name);
 }
 

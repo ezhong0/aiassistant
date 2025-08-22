@@ -1,5 +1,6 @@
 import { AuthError, AuthErrorCode } from '../types/auth.types';
 import logger from './logger';
+import { setTimeout as delay } from 'timers/promises';
 
 /**
  * Custom Authentication Error Class
@@ -274,7 +275,7 @@ export const retryOAuthOperation = async <T>(
         maxRetries
       });
       
-      await new Promise(resolve => (globalThis as any).setTimeout(resolve, delayMs * attempt));
+      await delay(delayMs * attempt);
     }
   }
   

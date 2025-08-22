@@ -8,7 +8,7 @@ const router = express.Router();
 /**
  * Check service health by attempting a simple operation
  */
-async function checkServiceHealth(serviceName: string, checkFunction: () => Promise<void>): Promise<ServiceStatus> {
+const checkServiceHealth = async (serviceName: string, checkFunction: () => Promise<void>): Promise<ServiceStatus> => {
   const startTime = Date.now();
   
   try {

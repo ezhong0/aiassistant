@@ -177,11 +177,11 @@ export const apiLoggingMiddleware = (options: {
 /**
  * Sanitize object by removing or masking sensitive fields
  */
-function sanitizeObject(
+const sanitizeObject = (
   obj: unknown, 
   sensitiveFields: string[], 
   maxLength?: number
-): unknown {
+): unknown => {
   if (!obj || typeof obj !== 'object') {
     if (typeof obj === 'string' && maxLength && obj.length > maxLength) {
       return obj.substring(0, maxLength) + '... [truncated]';
@@ -215,10 +215,10 @@ function sanitizeObject(
 /**
  * Sanitize headers by removing sensitive information
  */
-function sanitizeHeaders(
+const sanitizeHeaders = (
   headers: Record<string, unknown>, 
   sensitiveFields: string[]
-): Record<string, string> {
+): Record<string, string> => {
   const sanitized: Record<string, string> = {};
   
   for (const [key, value] of Object.entries(headers)) {
@@ -237,7 +237,7 @@ function sanitizeHeaders(
 /**
  * Determine log level based on status code and response time
  */
-function getLogLevel(statusCode: number, responseTime: number): 'info' | 'warn' | 'error' {
+const getLogLevel = (statusCode: number, responseTime: number): 'info' | 'warn' | 'error' => {
   if (statusCode >= 500) {
     return 'error';
   }
@@ -305,14 +305,14 @@ export const authApiLogging = apiLoggingMiddleware({
 /**
  * Get request summary for correlation with external logs
  */
-export function getRequestSummary(req: Request): {
+export const getRequestSummary = (req: Request): {
   requestId: string;
   method: string;
   path: string;
   userId?: string;
   ip: string;
   timestamp: string;
-} {
+} => {
   return {
     requestId: req.requestId || 'unknown',
     method: req.method,

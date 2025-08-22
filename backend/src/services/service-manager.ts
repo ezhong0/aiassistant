@@ -1,4 +1,5 @@
 import logger from '../utils/logger';
+import { setTimeout as delay } from 'timers/promises';
 
 /**
  * Service lifecycle states
@@ -229,7 +230,7 @@ export class ServiceManager {
       await registration.service.initialize();
       
       // Wait a moment and verify the service is actually ready
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await delay(10);
       
       if (!registration.service.isReady()) {
         throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
@@ -412,15 +413,15 @@ export class ServiceManager {
 export const serviceManager = ServiceManager.getInstance();
 
 // Convenience functions for easier consumption
-export async function initializeServices(): Promise<void> {
+export const initializeServices = async (): Promise<void> => {
   const { initializeAllCoreServices } = await import('./service-initialization');
   return initializeAllCoreServices();
 }
 
-export function getService<T extends IService>(name: string): T | undefined {
+export const getService = <T extends IService>(name: string): T | undefined => {
   return serviceManager.getService<T>(name);
 }
 
-export function getServicesHealth(): Record<string, any> {
+export const getServicesHealth = (): Record<string, any> => {
   return serviceManager.getAllServicesHealth();
 }

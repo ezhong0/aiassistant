@@ -2,6 +2,7 @@ import { Logger } from 'winston';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import logger from '../utils/logger';
 import { aiConfigService } from '../config/ai-config';
+import { setTimeout as sleep } from 'timers/promises';
 
 /**
  * Abstract base class that eliminates boilerplate code for all agents
@@ -283,7 +284,7 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
           });
           
           // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+          await sleep(retryDelay * attempt);
         }
         
         return await operation();
@@ -317,10 +318,10 @@ export type AgentExecutor<TParams, TResult> = (
 /**
  * Factory function for creating agent instances
  */
-export function createAgent<TParams, TResult>(
+export const createAgent = <TParams, TResult>(
   AgentClass: new (config: AgentConfig) => BaseAgent<TParams, TResult>,
   config: AgentConfig
-): BaseAgent<TParams, TResult> {
+): BaseAgent<TParams, TResult> => {
   return new AgentClass(config);
 }
 

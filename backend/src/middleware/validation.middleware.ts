@@ -101,7 +101,7 @@ export const validate = (schemas: {
 /**
  * Format Zod validation errors
  */
-function formatZodError(error: ZodError, source: string): string[] {
+const formatZodError = (error: ZodError, source: string): string[] => {
   return error.issues.map((err: any) => {
     const path = err.path.length > 0 ? err.path.join('.') : 'root';
     return `${source}.${path}: ${err.message}`;
@@ -111,7 +111,7 @@ function formatZodError(error: ZodError, source: string): string[] {
 /**
  * Handle validation errors consistently
  */
-function handleValidationError(res: Response, errors: string[], req: Request): void {
+const handleValidationError = (res: Response, errors: string[], req: Request): void => {
   logger.warn('Request validation failed', {
     path: req.path,
     method: req.method,

@@ -294,22 +294,22 @@ export interface RateLimitResponse extends ApiErrorResponse {
  * Type Guards
  */
 
-export function isAuthSuccessResponse(response: AuthResponse): response is AuthSuccessResponse {
+export const isAuthSuccessResponse = (response: AuthResponse): response is AuthSuccessResponse => {
   return response.success === true;
 }
 
-export function isAuthErrorResponse(response: AuthResponse): response is AuthErrorResponse {
+export const isAuthErrorResponse = (response: AuthResponse): response is AuthErrorResponse => {
   return response.success === false;
 }
 
-export function isAuthError(error: any): error is AuthError {
+export const isAuthError = (error: any): error is AuthError => {
   return error instanceof Error && 'code' in error && 'statusCode' in error;
 }
 
-export function isApiSuccessResponse<T>(response: ApiResponse<T>): response is ApiSuccessResponse<T> {
+export const isApiSuccessResponse = <T>(response: ApiResponse<T>): response is ApiSuccessResponse<T> => {
   return response.success === true;
 }
 
-export function isApiErrorResponse<T>(response: ApiResponse<T>): response is ApiErrorResponse {
+export const isApiErrorResponse = <T>(response: ApiResponse<T>): response is ApiErrorResponse => {
   return response.success === false;
 }

@@ -64,7 +64,7 @@ try {
 /**
  * Helper function to safely get the session service
  */
-function getSessionService(): SessionService {
+const getSessionService = (): SessionService => {
   const service = getService<SessionService>('sessionService');
   if (!service) {
     throw new Error('SessionService not available. Ensure services are initialized.');
@@ -778,7 +778,7 @@ router.get('/status', authenticateToken, (req: AuthenticatedRequest, res: Respon
 /**
  * Check if command is a confirmation response (yes/no/confirm/cancel)
  */
-function isConfirmationResponse(command: string): boolean {
+const isConfirmationResponse = (command: string): boolean => {
   const lowerCommand = command.toLowerCase().trim();
   return CONFIRMATION_WORDS.confirm.includes(lowerCommand as any) || 
          CONFIRMATION_WORDS.reject.includes(lowerCommand as any);
@@ -787,13 +787,13 @@ function isConfirmationResponse(command: string): boolean {
 /**
  * Handle action confirmation from natural language
  */
-async function handleActionConfirmation(
+const handleActionConfirmation = async (
   req: AuthenticatedRequest,
   res: Response,
   pendingAction: any,
   command: string,
   sessionId: string
-): Promise<Response> {
+): Promise<Response> => {
   const lowerCommand = command.toLowerCase().trim();
   const confirmed = CONFIRMATION_WORDS.confirm.includes(lowerCommand as any);
 
@@ -835,11 +835,11 @@ async function handleActionConfirmation(
 /**
  * Check if tool calls require user confirmation
  */
-async function checkForConfirmationRequirements(toolCalls: any[], command: string): Promise<{
+const checkForConfirmationRequirements = async (toolCalls: any[], command: string): Promise<{
   message: string;
   prompt: string;
   action: any;
-} | null> {
+} | null> => {
   // Check for potentially destructive or sensitive operations
   const sensitiveOperations = toolCalls.filter(tc => {
     if (tc.name === 'emailAgent') {
@@ -886,13 +886,13 @@ async function checkForConfirmationRequirements(toolCalls: any[], command: strin
 /**
  * Execute a confirmed action
  */
-async function executeConfirmedAction(
+const executeConfirmedAction = async (
   actionId: string,
   parameters: any,
   userId: string,
   sessionId?: string,
   accessToken?: string
-): Promise<{ success: boolean; message: string; data?: any }> {
+): Promise<{ success: boolean; message: string; data?: any }> => {
   try {
     logger.info('Executing confirmed action', { actionId, userId, sessionId });
     
@@ -977,7 +977,7 @@ async function executeConfirmedAction(
 /**
  * Format assistant response based on results and user preferences
  */
-async function formatAssistantResponse(
+const formatAssistantResponse = async (
   masterResponse: any,
   toolResults: any[],
   originalCommand: string,
@@ -985,7 +985,7 @@ async function formatAssistantResponse(
 ): Promise<{
   formattedResponse: { message: string; data?: any };
   responseType: 'response' | 'action_completed' | 'partial_success' | 'error';
-}> {
+}> => {
   const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
   if (!toolExecutorService) {
     throw new Error('Tool executor service not available');
@@ -1058,11 +1058,11 @@ async function formatAssistantResponse(
 /**
  * Build conversation context for client state management
  */
-function buildConversationContext(
+const buildConversationContext = (
   userCommand: string,
   assistantResponse: string,
   existingContext?: any
-): any {
+): any => {
   const newEntry = {
     role: 'user' as const,
     content: userCommand,
@@ -1088,7 +1088,7 @@ function buildConversationContext(
 }
 
 // Helper functions
-function extractPendingActions(toolResults: any[]): any[] {
+const extractPendingActions = (toolResults: any[]): any[] => {
   return toolResults
     .filter(result => result.result && typeof result.result === 'object' && 'awaitingConfirmation' in result.result)
     .map(result => ({
@@ -1103,7 +1103,7 @@ function extractPendingActions(toolResults: any[]): any[] {
     }));
 }
 
-async function generateDynamicConfirmationMessage(toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> {
+const generateDynamicConfirmationMessage = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
   try {
     if (masterAgent && masterAgent['openaiService']) {
       const openaiService = masterAgent['openaiService'];
@@ -1131,7 +1131,7 @@ async function generateDynamicConfirmationMessage(toolCalls: any[], toolResults:
   return 'I need your confirmation before proceeding with this action.';
 }
 
-async function generateDynamicConfirmationPrompt(toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> {
+const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
   try {
     if (masterAgent && masterAgent['openaiService']) {
       const openaiService = masterAgent['openaiService'];
@@ -1165,7 +1165,7 @@ async function generateDynamicConfirmationPrompt(toolCalls: any[], toolResults: 
   return 'Reply with "yes" to proceed or "no" to cancel.';
 }
 
-function generateConfirmationPrompt(toolCalls: any[], toolResults: any[]): string {
+const generateConfirmationPrompt = (toolCalls: any[], toolResults: any[]): string => {
   const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
   if (!mainAction) {
     return 'Would you like me to proceed with this action?';
@@ -1180,7 +1180,7 @@ function generateConfirmationPrompt(toolCalls: any[], toolResults: any[]): strin
   return 'Would you like me to proceed with this action?';
 }
 
-async function generateDynamicCompletionMessage(toolResults: any[], userCommand: string): Promise<string> {
+const generateDynamicCompletionMessage = async (toolResults: any[], userCommand: string): Promise<string> => {
   try {
     if (masterAgent && masterAgent['openaiService']) {
       const openaiService = masterAgent['openaiService'];
@@ -1211,7 +1211,7 @@ async function generateDynamicCompletionMessage(toolResults: any[], userCommand:
   return generateCompletionMessage(toolResults);
 }
 
-async function generateDynamicCancelMessage(actionId: string): Promise<string> {
+const generateDynamicCancelMessage = async (actionId: string): Promise<string> => {
   try {
     if (masterAgent && masterAgent['openaiService']) {
       const openaiService = masterAgent['openaiService'];
@@ -1238,7 +1238,7 @@ async function generateDynamicCancelMessage(actionId: string): Promise<string> {
   return 'Action cancelled.';
 }
 
-function generateCompletionMessage(toolResults: any[]): string {
+const generateCompletionMessage = (toolResults: any[]): string => {
   const successfulResults = toolResults.filter(r => r.success);
   const failedResults = toolResults.filter(r => !r.success);
   

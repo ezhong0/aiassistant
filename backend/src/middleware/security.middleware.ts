@@ -9,24 +9,24 @@ import logger from '../utils/logger';
  * CORS configuration
  */
 export const corsMiddleware = cors({
-  origin: (origin, callback) => {
+  origin: (origin) => {
     const allowedOrigins = configService.corsOrigin.split(',').map(o => o.trim());
     
     // Allow requests with no origin (mobile apps, etc.)
-    if (!origin) return callback(null, true);
+    if (!origin) return true;
     
     // Allow all origins in development
     if (configService.isDevelopment) {
-      return callback(null, true);
+      return true;
     }
     
     // Check if origin is allowed
     if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-      return callback(null, true);
+      return true;
     }
     
     logger.warn('CORS origin blocked', { origin, allowedOrigins });
-    return callback(new Error('Not allowed by CORS'), false);
+    throw new Error('Not allowed by CORS');
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

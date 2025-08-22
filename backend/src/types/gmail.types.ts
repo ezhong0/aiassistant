@@ -386,19 +386,19 @@ export interface EmailSearchResult {
  * Type Guards
  */
 
-export function isGmailMessage(obj: any): obj is GmailMessage {
+export const isGmailMessage = (obj: any): obj is GmailMessage => {
   return obj && typeof obj.id === 'string' && typeof obj.threadId === 'string';
 }
 
-export function isGmailThread(obj: any): obj is GmailThread {
+export const isGmailThread = (obj: any): obj is GmailThread => {
   return obj && typeof obj.id === 'string' && Array.isArray(obj.messages);
 }
 
-export function isEmailAttachment(obj: any): obj is EmailAttachment {
+export const isEmailAttachment = (obj: any): obj is EmailAttachment => {
   return obj && typeof obj.id === 'string' && typeof obj.filename === 'string';
 }
 
-export function isGmailServiceError(error: any): error is GmailServiceError {
+export const isGmailServiceError = (error: any): error is GmailServiceError => {
   return error instanceof GmailServiceError;
 }
 
