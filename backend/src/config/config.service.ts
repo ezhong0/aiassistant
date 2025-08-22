@@ -4,7 +4,7 @@ import logger from '../utils/logger';
 // Environment schema validation
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().regex(/^\d+$/).transform(Number).default(() => 3000),
+  PORT: z.string().regex(/^\d+$/).transform(Number).default('3000'),
   
   // Google OAuth
   GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
@@ -26,11 +26,11 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   
   // Rate Limiting
-  RATE_LIMIT_WINDOW_MS: z.string().regex(/^\d+$/).transform(Number).default(() => 900000), // 15 minutes
-  RATE_LIMIT_MAX_REQUESTS: z.string().regex(/^\d+$/).transform(Number).default(() => 100),
+  RATE_LIMIT_WINDOW_MS: z.string().regex(/^\d+$/).transform(Number).default('900000'), // 15 minutes
+  RATE_LIMIT_MAX_REQUESTS: z.string().regex(/^\d+$/).transform(Number).default('100'),
   
   // Security
-  BCRYPT_SALT_ROUNDS: z.string().regex(/^\d+$/).transform(Number).default(() => 12),
+  BCRYPT_SALT_ROUNDS: z.string().regex(/^\d+$/).transform(Number).default('12'),
   
   // Database (for future use)
   DATABASE_URL: z.string().optional(),

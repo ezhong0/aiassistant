@@ -175,8 +175,8 @@ export const commonSchemas = {
   
   // Pagination schemas
   pagination: z.object({
-    page: z.string().regex(/^\d+$/, 'Page must be a number').transform(Number).optional().default(() => 1),
-    limit: z.string().regex(/^\d+$/, 'Limit must be a number').transform(Number).optional().default(() => 10),
+    page: z.string().regex(/^\d+$/, 'Page must be a number').transform(Number).optional().default('1'),
+    limit: z.string().regex(/^\d+$/, 'Limit must be a number').transform(Number).optional().default('10'),
     sort: z.enum(['asc', 'desc']).optional().default('desc'),
     sortBy: z.string().optional().default('createdAt')
   })
