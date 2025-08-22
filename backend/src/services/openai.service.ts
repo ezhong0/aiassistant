@@ -226,7 +226,7 @@ export class OpenAIService extends BaseService {
    */
   private getToolDefinitions(): any[] {
     try {
-      // This would typically come from AgentFactory or a tool registry
+      // This would typically come from AgentFactory
       // For now, return a basic set of tools
       return [
         {

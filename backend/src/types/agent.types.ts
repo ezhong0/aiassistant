@@ -57,16 +57,3 @@ export interface ToolMetadata {
   agentClass?: new () => BaseAgent<any, any>;
 }
 
-/**
- * Configuration for tool registry
- */
-export interface ToolRegistryConfig {
-  /** Whether to enable OpenAI function calling */
-  enableOpenAI: boolean;
-  
-  /** Whether to enable rule-based fallback routing */
-  enableFallback: boolean;
-  
-  /** Maximum number of tools to suggest for a query */
-  maxSuggestions?: number;
-}

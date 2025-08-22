@@ -7,14 +7,14 @@ The migration to BaseAgent framework has been completed successfully! This guide
 ## Architecture Overview
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   MasterAgent   │    │  ToolRegistry   │    │  AgentFactory   │
-│  (Orchestrator) │────│   (Legacy)      │────│  (New System)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌────────┼────────┐             │
-         │              │                 │             │
-         ▼              ▼                 ▼             ▼
+┌─────────────────┐    ┌─────────────────┐
+│   MasterAgent   │    │  AgentFactory   │
+│  (Orchestrator) │────│  (Tool System)  │
+└─────────────────┘    └─────────────────┘
+         │                       │
+         │              ┌────────┼────────┐
+         │              │                 │
+         ▼              ▼                 ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   BaseAgent     │    │   BaseAgent     │    │   BaseAgent     │
 │  (EmailAgent)   │    │ (ContactAgent)  │    │ (FutureAgents)  │
@@ -43,16 +43,15 @@ The migration to BaseAgent framework has been completed successfully! This guide
 
 ```typescript
 import { AgentFactory, initializeAgentFactory } from '../framework/agent-factory';
-import { toolRegistry } from '../registry/tool.registry';
 
-// Initialize both systems
+// Initialize the AgentFactory system
 initializeAgentFactory();
-toolRegistry.initializeAgentFactory();
 
 // Verify initialization
 console.log('System stats:', {
   factory: AgentFactory.getStats(),
-  registry: toolRegistry.getCombinedStats()
+  agents: AgentFactory.getAllAgentNames(),
+  metadata: AgentFactory.getAllToolMetadata()
 });
 ```
 
@@ -81,10 +80,10 @@ const contactResult = await executeAgent('contactAgent', {
 }, context);
 ```
 
-### 3. Use via Tool Registry (Legacy Interface)
+### 3. Use via AgentFactory Tool Interface
 
 ```typescript
-import { toolRegistry } from '../registry/tool.registry';
+import { AgentFactory } from '../framework/agent-factory';
 
 const toolCall = {
   name: 'emailAgent',
@@ -94,7 +93,7 @@ const toolCall = {
   }
 };
 
-const result = await toolRegistry.executeTool(toolCall, context);
+const result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context);
 ```
 
 ## Code Comparison
@@ -301,9 +300,10 @@ console.log(`${stats.enabledAgents} agents enabled`);
 const result = await executeAgent('emailAgent', params, context);
 console.log(`Execution took ${result.executionTime}ms`);
 
-// Combined system stats
-const combined = toolRegistry.getCombinedStats();
-console.log(`Total tools available: ${combined.totalAvailable}`);
+// System stats
+const stats = AgentFactory.getStats();
+console.log(`Total agents available: ${stats.totalAgents}`);
+console.log(`Active agents: ${stats.activeAgents}`);
 ```
 
 ## Best Practices

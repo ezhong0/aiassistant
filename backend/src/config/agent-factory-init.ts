@@ -3,7 +3,7 @@ import { AgentFactory } from '../framework/agent-factory';
 
 /**
  * Simple initialization function that only uses AgentFactory
- * This replaces the complex tool registry initialization
+ * This provides a clean, consolidated agent initialization system
  */
 export function initializeAgentFactory(): void {
   try {
