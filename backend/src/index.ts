@@ -10,7 +10,7 @@ import express, { Request, Response } from 'express';
 import configService from './config/config.service';
 import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
-import { initializeServices } from './services/service-registry';
+import { initializeServices } from './services/service-manager';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 

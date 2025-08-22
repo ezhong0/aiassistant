@@ -1,6 +1,6 @@
 import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
-import { getService } from '../services/service-registry';
+import { getService } from '../services/service-manager';
 import { GmailService } from '../services/gmail.service';
 import { EmailParser } from '../utils/email-parser';
 import { ThreadManager } from '../utils/thread-manager';

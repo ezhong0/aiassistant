@@ -1,6 +1,6 @@
 import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
-import { getService } from '../services/service-registry';
+import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
 import {
   Contact,

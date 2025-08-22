@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { getService } from '../services/service-registry';
+import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {

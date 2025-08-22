@@ -16,7 +16,7 @@ import { CONFIRMATION_WORDS } from '../config/agent-config';
 import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
-import { getService } from '../services/service-registry';
+import { getService } from '../services/service-manager';
 import { ToolExecutorService } from '../services/tool-executor.service';
 import { SessionService } from '../services/session.service';
 import { ToolExecutionContext, SessionExpiredError } from '../types/tools';

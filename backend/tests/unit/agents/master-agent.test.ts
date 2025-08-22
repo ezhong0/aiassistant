@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import { MasterAgent } from '../../../src/agents/master.agent';
-import { initializeServices } from '../../../src/services/service-registry';
+import { initializeServices } from '../../../src/services/service-manager';
 
 describe('MasterAgent', () => {
   let masterAgent: MasterAgent;
@@ -14,7 +14,7 @@ describe('MasterAgent', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       // Verify services are ready
-      const { getServicesHealth } = await import('../../../src/services/service-registry');
+      const { getServicesHealth } = await import('../../../src/services/service-manager');
       const health = getServicesHealth();
       console.log('Service health status:', health);
       
@@ -44,8 +44,8 @@ describe('MasterAgent', () => {
   afterAll(async () => {
     // Cleanup services after all tests
     try {
-      const { serviceRegistry } = await import('../../../src/services/service-registry');
-      await serviceRegistry.forceCleanup();
+      const { serviceManager } = await import('../../../src/services/service-manager');
+      await serviceManager.forceCleanup();
     } catch (error) {
       console.error('Failed to cleanup services after tests:', error);
     }

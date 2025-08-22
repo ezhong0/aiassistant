@@ -4,7 +4,7 @@ import { SessionService } from '../services/session.service';
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { initializeAgentFactory } from '../config/agent-factory-init';
-import { getService } from '../services/service-registry';
+import { getService } from '../services/service-manager';
 
 export interface MasterAgentResponse {
   message: string;

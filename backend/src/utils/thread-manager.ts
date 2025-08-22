@@ -1,4 +1,4 @@
-import { getService } from '../services/service-registry';
+import { getService } from '../services/service-manager';
 import { GmailService } from '../services/gmail.service';
 import { EmailParser } from './email-parser';
 import {

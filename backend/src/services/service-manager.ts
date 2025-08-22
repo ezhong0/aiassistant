@@ -346,6 +346,46 @@ export class ServiceManager {
     logger.info('Service manager graceful shutdown handlers configured');
   }
 
+
+  /**
+   * Get all registered services
+   */
+  getAllServices(): Map<string, IService> {
+    return new Map(this.serviceInstances);
+  }
+
+  /**
+   * Check if all services are healthy
+   */
+  areAllServicesHealthy(): boolean {
+    const health = this.getAllServicesHealth();
+    return Object.values(health).every(service => service.healthy);
+  }
+
+  /**
+   * Get service statistics
+   */
+  getServiceStats(): {
+    totalServices: number;
+    healthyServices: number;
+    unhealthyServices: number;
+    readyServices: number;
+    initializingServices: number;
+    errorServices: number;
+  } {
+    const health = this.getAllServicesHealth();
+    const services = Object.values(health);
+
+    return {
+      totalServices: services.length,
+      healthyServices: services.filter(s => s.healthy).length,
+      unhealthyServices: services.filter(s => !s.healthy).length,
+      readyServices: services.filter(s => s.state === 'ready').length,
+      initializingServices: services.filter(s => s.state === 'initializing').length,
+      errorServices: services.filter(s => s.state === 'error').length
+    };
+  }
+
   /**
    * Force cleanup of all services (for testing)
    */
@@ -370,3 +410,17 @@ export class ServiceManager {
 
 // Export singleton instance
 export const serviceManager = ServiceManager.getInstance();
+
+// Convenience functions for easier consumption
+export async function initializeServices(): Promise<void> {
+  const { initializeAllCoreServices } = await import('./service-initialization');
+  return initializeAllCoreServices();
+}
+
+export function getService<T extends IService>(name: string): T | undefined {
+  return serviceManager.getService<T>(name);
+}
+
+export function getServicesHealth(): Record<string, any> {
+  return serviceManager.getAllServicesHealth();
+}
