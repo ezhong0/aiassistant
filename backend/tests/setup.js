@@ -1,5 +1,6 @@
 /**
  * Jest setup file - minimal and isolated to prevent memory leaks
+ * Supports both JavaScript and TypeScript tests
  */
 
 // Set test environment variables
@@ -24,7 +25,7 @@ const originalWarn = console.warn;
 
 beforeAll(async () => {
   // Suppress non-critical console output
-  console.error = (message: any, ...args: any[]) => {
+  console.error = (message, ...args) => {
     // Only show actual test failures and critical errors
     if (typeof message === 'string' && (
       message.includes('FAIL') || 
@@ -35,7 +36,7 @@ beforeAll(async () => {
     }
   };
   
-  console.warn = (message: any, ...args: any[]) => {
+  console.warn = (message, ...args) => {
     // Suppress warnings unless they're test-critical
     if (typeof message === 'string' && message.includes('CRITICAL')) {
       originalWarn(message, ...args);

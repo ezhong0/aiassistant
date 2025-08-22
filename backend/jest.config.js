@@ -1,62 +1,35 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   
-  // Test file patterns
-  testMatch: [
-    '**/tests/**/*.test.ts',
-    '**/tests/**/*.spec.ts'
-  ],
-  
-  // Module file extensions
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  
-  // Transform TypeScript files
   transform: {
-    '^.+\\.ts$': 'ts-jest'
+    '^.+\\.(ts|tsx)$': ['ts-jest', {
+      sourceMap: false
+    }]
   },
   
-  // Coverage configuration
-  collectCoverage: false, // Enable manually when needed
-  coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.d.ts',
-    '!src/index.ts'
+  testMatch: [
+    '**/tests/**/*.(test|spec).(ts|tsx|js|jsx)',
+    '**/__tests__/**/*.(test|spec).(ts|tsx|js|jsx)'
   ],
   
-  // Setup files
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
-  
-  // Module path mapping (if needed)
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   
-  // Test timeout
-  testTimeout: 30000,
-  
-  // Clear mocks between tests
+  testTimeout: 10000,
   clearMocks: true,
   restoreMocks: true,
+  verbose: false,
   
-  // Verbose output
-  verbose: true,
-  
-  // MEMORY AND PERFORMANCE OPTIMIZATIONS
-  // Run tests sequentially to avoid memory issues
+  // Memory optimization
   maxWorkers: 1,
-  
-  // Force garbage collection between test suites
-  logHeapUsage: true,
-  
-  // Detect open handles that prevent Jest from exiting
+  workerIdleMemoryLimit: '128MB',
+  logHeapUsage: false,
   detectOpenHandles: true,
-  
-  // Force exit after tests complete
   forceExit: true,
-  
-  // Limit concurrent tests
-  maxConcurrency: 1
+  maxConcurrency: 1,
+  cache: false,
+  collectCoverage: false
 };
