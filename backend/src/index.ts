@@ -2,9 +2,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables from main project root directory
-// Calculate path relative to the backend directory
-const envPath = path.resolve(__dirname, '../../.env');
-dotenv.config({ path: envPath });
+// Use absolute path to ensure it works from any directory
+const envPath = path.join(process.cwd(), '..', '.env');
+const result = dotenv.config({ path: envPath });
+
+console.log('Environment loading:', {
+  envPath,
+  exists: require('fs').existsSync(envPath),
+  result: result.error ? result.error.message : 'success',
+  jwtLength: process.env.JWT_SECRET?.length || 0
+});
 
 import express, { Request, Response } from 'express';
 import configService from './config/config.service';

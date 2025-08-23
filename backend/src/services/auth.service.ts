@@ -196,6 +196,14 @@ export class AuthService extends BaseService {
         throw new Error(`Invalid token format: ${formatValidation.error}`);
       }
 
+      console.log('JWT verification debug:', {
+        tokenLength: token.length,
+        secretLength: this.config.jwtSecret?.length || 0,
+        issuer: this.config.jwtIssuer,
+        audience: this.config.jwtAudience,
+        tokenStart: token.substring(0, 20)
+      });
+
       const decoded = jwt.verify(token, this.config.jwtSecret, {
         issuer: this.config.jwtIssuer,
         audience: this.config.jwtAudience
