@@ -2,7 +2,7 @@
 //  AssistantAppApp.swift
 //  AssistantApp
 //
-//  Created by Edward Zhong on 8/18/25.
+//  Created by Assistant on 8/23/25.
 //
 
 import SwiftUI
@@ -12,25 +12,17 @@ import GoogleSignIn
 struct AssistantAppApp: App {
     
     init() {
-        configureGoogleSignIn()
+        // Configure Google Sign-In
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let plist = NSDictionary(contentsOfFile: path),
+           let clientId = plist["CLIENT_ID"] as? String {
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientId)
+        }
     }
     
     var body: some Scene {
         WindowGroup {
-            MainAppView()
-                .onOpenURL { url in
-                    GIDSignIn.sharedInstance.handle(url)
-                }
+            ContentView()
         }
-    }
-    
-    private func configureGoogleSignIn() {
-        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let plist = NSDictionary(contentsOfFile: path),
-              let clientID = plist["CLIENT_ID"] as? String else {
-            fatalError("GoogleService-Info.plist not found or CLIENT_ID missing")
-        }
-        
-        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
     }
 }

@@ -27,9 +27,7 @@ class ChatViewModel: ObservableObject {
         
         do {
             let response = try await sendTextCommand(text)
-            // Use message from response, or data.response as fallback
-            let responseText = response.message.isEmpty ? (response.data?.response ?? "No response") : response.message
-            let assistantMessage = Message(content: responseText, isFromUser: false)
+            let assistantMessage = Message(content: response.response, isFromUser: false)
             messages.append(assistantMessage)
         } catch {
             errorMessage = "Failed to send message: \(error.localizedDescription)"
@@ -43,52 +41,27 @@ class ChatViewModel: ObservableObject {
             throw APIError.noAuthToken
         }
         
-        // Get access token for Google API operations
-        guard let accessToken = authManager?.user?.accessToken.tokenString else {
-            throw APIError.noAccessToken
-        }
-        
         let url = URL(string: "\(baseURL)/api/assistant/text-command")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         
-        let body: [String: Any] = [
+        let body = [
             "command": command,
-            "sessionId": sessionId,
-            "accessToken": accessToken
+            "sessionId": sessionId
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse else {
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
             throw APIError.invalidResponse
         }
         
-        // Log response for debugging
-        if let dataString = String(data: data, encoding: .utf8) {
-            print("Response status: \(httpResponse.statusCode)")
-            print("Response data: \(dataString)")
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            // Try to parse error response
-            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = errorData["message"] as? String {
-                throw APIError.serverError(errorMessage)
-            }
-            throw APIError.invalidResponse
-        }
-        
-        do {
-            return try JSONDecoder().decode(TextCommandResponse.self, from: data)
-        } catch {
-            print("JSON decode error: \(error)")
-            throw APIError.invalidResponse
-        }
+        return try JSONDecoder().decode(TextCommandResponse.self, from: data)
     }
 }
 
@@ -100,44 +73,20 @@ struct Message: Identifiable {
 
 struct TextCommandResponse: Codable {
     let success: Bool
-    let type: String?
-    let message: String
-    let data: ResponseData?
-    
-    struct ResponseData: Codable {
-        let response: String?
-        let sessionId: String?
-        let conversationContext: ConversationContext?
-    }
-    
-    struct ConversationContext: Codable {
-        let conversationHistory: [ConversationEntry]?
-        let lastActivity: String?
-    }
-    
-    struct ConversationEntry: Codable {
-        let role: String
-        let content: String
-        let timestamp: String
-    }
+    let response: String
+    let sessionId: String
 }
 
 enum APIError: LocalizedError {
     case noAuthToken
-    case noAccessToken
     case invalidResponse
-    case serverError(String)
     
     var errorDescription: String? {
         switch self {
         case .noAuthToken:
             return "No authentication token available"
-        case .noAccessToken:
-            return "Google access token not available"
         case .invalidResponse:
             return "Invalid response from server"
-        case .serverError(let message):
-            return "Server error: \(message)"
         }
     }
 }

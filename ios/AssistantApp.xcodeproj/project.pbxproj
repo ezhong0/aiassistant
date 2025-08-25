@@ -7,37 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E23021642E566CA700FA32C7 /* Staging.plist in Resources */ = {isa = PBXBuildFile; fileRef = E23021622E566CA700FA32C7 /* Staging.plist */; };
-		E23021652E566CA700FA32C7 /* GoogleClient-Development.plist in Resources */ = {isa = PBXBuildFile; fileRef = E230215E2E566CA700FA32C7 /* GoogleClient-Development.plist */; };
-		E23021662E566CA700FA32C7 /* Development.plist in Resources */ = {isa = PBXBuildFile; fileRef = E230215D2E566CA700FA32C7 /* Development.plist */; };
-		E23021672E566CA700FA32C7 /* GoogleClient-Staging.plist in Resources */ = {isa = PBXBuildFile; fileRef = E23021602E566CA700FA32C7 /* GoogleClient-Staging.plist */; };
-		E23021682E566CA700FA32C7 /* Production.plist in Resources */ = {isa = PBXBuildFile; fileRef = E23021612E566CA700FA32C7 /* Production.plist */; };
-		E23021692E566CA700FA32C7 /* GoogleClient-Production.plist in Resources */ = {isa = PBXBuildFile; fileRef = E230215F2E566CA700FA32C7 /* GoogleClient-Production.plist */; };
-		E230216A2E566CA700FA32C7 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230215C2E566CA700FA32C7 /* AppConfiguration.swift */; };
-		E230216C2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230216B2E56BC8500FA32C7 /* MessageBubbleView.swift */; };
-		E230216D2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230216B2E56BC8500FA32C7 /* MessageBubbleView.swift */; };
-		E230216E2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230216B2E56BC8500FA32C7 /* MessageBubbleView.swift */; };
-		E23021702E56BCA000FA32C7 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */; };
-		E23021712E56BCA000FA32C7 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */; };
-		E23021722E56BCA000FA32C7 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */; };
-		E23021742E56BD3400FA32C7 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021732E56BD3400FA32C7 /* APIModels.swift */; };
-		E23021752E56BD3400FA32C7 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021732E56BD3400FA32C7 /* APIModels.swift */; };
-		E23021762E56BD3400FA32C7 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021732E56BD3400FA32C7 /* APIModels.swift */; };
-		E23021782E56BD8E00FA32C7 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021772E56BD8E00FA32C7 /* APIService.swift */; };
-		E23021792E56BD8E00FA32C7 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021772E56BD8E00FA32C7 /* APIService.swift */; };
-		E230217A2E56BD8E00FA32C7 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021772E56BD8E00FA32C7 /* APIService.swift */; };
-		E230218A2E576C3900FA32C7 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021892E576C3900FA32C7 /* DebugView.swift */; };
-		E230218B2E576C3900FA32C7 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021892E576C3900FA32C7 /* DebugView.swift */; };
-		E230218C2E576C3900FA32C7 /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E23021892E576C3900FA32C7 /* DebugView.swift */; };
-		E230218E2E576C4A00FA32C7 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230218D2E576C4A00FA32C7 /* SecurityManager.swift */; };
-		E230218F2E576C4A00FA32C7 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230218D2E576C4A00FA32C7 /* SecurityManager.swift */; };
-		E23021902E576C4A00FA32C7 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E230218D2E576C4A00FA32C7 /* SecurityManager.swift */; };
+		E22D0F342E5CEDA900D2F1E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
+		E22D0F3C2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */; };
+		E22D0F3D2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */; };
+		E22D0F3E2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */; };
 		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
 		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
-		E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */; };
-		E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F32E53A25D00139AA3 /* MainAppView.swift */; };
+		E2DB26FC2E53A25D00139AA3 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthManager.swift */; };
+		E2DB26FD2E53A25D00139AA3 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F32E53A25D00139AA3 /* ChatView.swift */; };
 		E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F42E53A25D00139AA3 /* SignInView.swift */; };
-		E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
+		E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
 		E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */; };
 		E2F9343D2E5534AD00660204 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = E2DB27012E53A25E00139AA3 /* GoogleSignIn */; };
 		E2F9343E2E5534AD00660204 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = E2DB27022E53A25E00139AA3 /* GoogleSignInSwift */; };
@@ -61,26 +40,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		E230215C2E566CA700FA32C7 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
-		E230215D2E566CA700FA32C7 /* Development.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Development.plist; sourceTree = "<group>"; };
-		E230215E2E566CA700FA32C7 /* GoogleClient-Development.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleClient-Development.plist"; sourceTree = "<group>"; };
-		E230215F2E566CA700FA32C7 /* GoogleClient-Production.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleClient-Production.plist"; sourceTree = "<group>"; };
-		E23021602E566CA700FA32C7 /* GoogleClient-Staging.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleClient-Staging.plist"; sourceTree = "<group>"; };
-		E23021612E566CA700FA32C7 /* Production.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Production.plist; sourceTree = "<group>"; };
-		E23021622E566CA700FA32C7 /* Staging.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Staging.plist; sourceTree = "<group>"; };
-		E230216B2E56BC8500FA32C7 /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
-		E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
-		E23021732E56BD3400FA32C7 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
-		E23021772E56BD8E00FA32C7 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
-		E23021892E576C3900FA32C7 /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
-		E230218D2E576C4A00FA32C7 /* SecurityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityManager.swift; sourceTree = "<group>"; };
+		E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		E2DB26C22E53A25B00139AA3 /* AssistantApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AssistantApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26D02E53A25C00139AA3 /* AssistantAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26DA2E53A25C00139AA3 /* AssistantAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantAppApp.swift; sourceTree = "<group>"; };
 		E2DB26F12E53A25D00139AA3 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
-		E2DB26F32E53A25D00139AA3 /* MainAppView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainAppView.swift; sourceTree = "<group>"; };
+		E2DB26F22E53A25D00139AA3 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
+		E2DB26F32E53A25D00139AA3 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		E2DB26F42E53A25D00139AA3 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		E2DB26F52E53A25D00139AA3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
@@ -128,29 +95,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		E23021632E566CA700FA32C7 /* Configuration */ = {
-			isa = PBXGroup;
-			children = (
-				E230215C2E566CA700FA32C7 /* AppConfiguration.swift */,
-				E230215D2E566CA700FA32C7 /* Development.plist */,
-				E230215E2E566CA700FA32C7 /* GoogleClient-Development.plist */,
-				E230215F2E566CA700FA32C7 /* GoogleClient-Production.plist */,
-				E23021602E566CA700FA32C7 /* GoogleClient-Staging.plist */,
-				E23021612E566CA700FA32C7 /* Production.plist */,
-				E23021622E566CA700FA32C7 /* Staging.plist */,
-			);
-			path = Configuration;
-			sourceTree = "<group>";
-		};
 		E2DB26B92E53A25B00139AA3 = {
 			isa = PBXGroup;
 			children = (
-				E230218D2E576C4A00FA32C7 /* SecurityManager.swift */,
-				E23021892E576C3900FA32C7 /* DebugView.swift */,
-				E23021772E56BD8E00FA32C7 /* APIService.swift */,
-				E23021732E56BD3400FA32C7 /* APIModels.swift */,
-				E230216F2E56BCA000FA32C7 /* ChatViewModel.swift */,
-				E230216B2E56BC8500FA32C7 /* MessageBubbleView.swift */,
+				E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */,
 				E2DB26C42E53A25B00139AA3 /* AssistantApp */,
 				E2DB26D32E53A25C00139AA3 /* AssistantAppTests */,
 				E2DB26DD2E53A25C00139AA3 /* AssistantAppUITests */,
@@ -173,9 +121,8 @@
 			children = (
 				E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */,
 				E2DB26F12E53A25D00139AA3 /* ContentView.swift */,
-				E23021632E566CA700FA32C7 /* Configuration */,
-				E2DB26F22E53A25D00139AA3 /* AuthenticationManager.swift */,
-				E2DB26F32E53A25D00139AA3 /* MainAppView.swift */,
+				E2DB26F22E53A25D00139AA3 /* AuthManager.swift */,
+				E2DB26F32E53A25D00139AA3 /* ChatView.swift */,
 				E2DB26F42E53A25D00139AA3 /* SignInView.swift */,
 				E2DB26F52E53A25D00139AA3 /* Assets.xcassets */,
 				E2DB26F62E53A25D00139AA3 /* GoogleService-Info.plist */,
@@ -315,13 +262,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Resources */,
-				E23021642E566CA700FA32C7 /* Staging.plist in Resources */,
-				E23021652E566CA700FA32C7 /* GoogleClient-Development.plist in Resources */,
-				E23021662E566CA700FA32C7 /* Development.plist in Resources */,
-				E23021672E566CA700FA32C7 /* GoogleClient-Staging.plist in Resources */,
-				E23021682E566CA700FA32C7 /* Production.plist in Resources */,
-				E23021692E566CA700FA32C7 /* GoogleClient-Production.plist in Resources */,
+				E22D0F342E5CEDA900D2F1E1 /* Assets.xcassets in Resources */,
 				E2DB270026553A25D00139AA3 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -347,18 +288,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E23021752E56BD3400FA32C7 /* APIModels.swift in Sources */,
-				E230216A2E566CA700FA32C7 /* AppConfiguration.swift in Sources */,
 				E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */,
-				E23021702E56BCA000FA32C7 /* ChatViewModel.swift in Sources */,
+				E22D0F3C2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */,
 				E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */,
-				E2DB26FC2E53A25D00139AA3 /* AuthenticationManager.swift in Sources */,
-				E23021792E56BD8E00FA32C7 /* APIService.swift in Sources */,
-				E2DB26FD2E53A25D00139AA3 /* MainAppView.swift in Sources */,
-				E230216E2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */,
+				E2DB26FC2E53A25D00139AA3 /* AuthManager.swift in Sources */,
+				E2DB26FD2E53A25D00139AA3 /* ChatView.swift in Sources */,
 				E2DB26FE2E53A25D00139AA3 /* SignInView.swift in Sources */,
-				E230218A2E576C3900FA32C7 /* DebugView.swift in Sources */,
-				E23021902E576C4A00FA32C7 /* SecurityManager.swift in Sources */,
+				E2DB26FF2E53A25D00139AA3 /* Assets.xcassets in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,12 +302,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E230218C2E576C3900FA32C7 /* DebugView.swift in Sources */,
-				E23021762E56BD3400FA32C7 /* APIModels.swift in Sources */,
-				E23021782E56BD8E00FA32C7 /* APIService.swift in Sources */,
-				E230216D2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */,
-				E23021722E56BCA000FA32C7 /* ChatViewModel.swift in Sources */,
-				E230218E2E576C4A00FA32C7 /* SecurityManager.swift in Sources */,
+				E22D0F3D2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -379,12 +310,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E23021742E56BD3400FA32C7 /* APIModels.swift in Sources */,
-				E23021712E56BCA000FA32C7 /* ChatViewModel.swift in Sources */,
-				E230217A2E56BD8E00FA32C7 /* APIService.swift in Sources */,
-				E230218F2E576C4A00FA32C7 /* SecurityManager.swift in Sources */,
-				E230218B2E576C3900FA32C7 /* DebugView.swift in Sources */,
-				E230216C2E56BC8500FA32C7 /* MessageBubbleView.swift in Sources */,
+				E22D0F3E2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
