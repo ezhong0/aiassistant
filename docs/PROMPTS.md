@@ -183,7 +183,30 @@ If any issues, refactor to align with our patterns."
 
 ## 📱 **React Native Development Prompts**
 
-### **Foundation & Architecture Setup (Week 1-2)**
+### **🎯 MVP SCOPE DEFINITION**
+**Core MVP Features (13 weeks):**
+- ✅ **Authentication**: Google Sign-In with secure token management
+- ✅ **Core Functionality**: Text input, conversation persistence, action cards
+- ✅ **Action System**: Email, calendar, contact action cards with execution
+- ✅ **Backend Integration**: Full integration with existing multi-agent backend
+- ✅ **Voice Interface**: Speech-to-text and text-to-speech capabilities
+- ✅ **Testing & Quality**: Comprehensive testing and production readiness
+
+**🎯 Agent-Based Architecture (No Direct API Calls):**
+- ✅ **All interactions** go through `/api/assistant/text-command` endpoint
+- ✅ **Agents handle** email, calendar, and contact operations
+- ✅ **Frontend displays** action cards from agent responses
+- ✅ **User confirms** actions through `/api/assistant/confirm-action` endpoint
+- ❌ **No direct access** to Gmail, Calendar, or Contact APIs from frontend
+
+**What's NOT in MVP (Post-MVP):**
+- ❌ Advanced navigation features (deep linking, route protection)
+- ❌ Comprehensive error boundaries and global error handling
+- ❌ Advanced offline state management and push notifications
+- ❌ Analytics, accessibility, and internationalization
+- ❌ Enterprise features (SSO, compliance, admin tools)
+
+### **Foundation & Architecture Setup (Week 1-2) - MVP CORE**
 
 #### **1. Project Structure and Dependencies**
 ```
@@ -241,8 +264,11 @@ that integrate with our existing backend multi-agent system.
 - Integrate with existing backend API endpoints
 
 **Integration Points:**
-- Backend API endpoints (text-command, confirm-action, session management)
-- Google services (Gmail, Calendar, Contacts)
+- Backend API endpoints:
+  - `/api/assistant/text-command` - Main AI processing endpoint (all user interactions)
+  - `/api/assistant/confirm-action` - Action confirmation endpoint
+  - `/api/assistant/session/:id` - Session management endpoint
+- Google services (Gmail, Calendar, Contacts) - accessed through agents only
 - Local storage (AsyncStorage, SQLite)
 - Redux store for state management
 
@@ -285,6 +311,11 @@ plus RTK Query for API integration with our backend multi-agent system.
 - Voice processing components
 - Action card system
 - Local storage for persistence
+- Backend response types:
+  - 'confirmation_required' for action cards
+  - 'action_completed' for successful executions
+  - 'partial_success' for mixed results
+  - 'session_data' for session information
 
 **Testing Requirements:**
 - Redux store testing with mock actions
@@ -304,9 +335,113 @@ plus RTK Query for API integration with our backend multi-agent system.
 similar to enterprise React applications but adapted for React Native.
 ```
 
-### **Minimal Text Input & Basic Persistence (Week 3-4)**
+### **Authentication & Core Functionality (Week 3-4) - MVP CORE**
 
-#### **4. Basic Text Input Implementation**
+#### **4. Google Sign-In Implementation**
+```
+**Architecture Context:** Need to implement Google Sign-In for our AI assistant 
+platform that integrates with our existing backend multi-agent system and Google 
+services (Gmail, Calendar, Contacts). This is critical for user authentication 
+and access to Google productivity tools.
+
+**Goal:** Create complete Google Sign-In system with OAuth 2.0, secure token 
+storage, and integration with our Redux store and repository pattern.
+
+**Constraints:**
+- Use @react-native-google-signin/google-signin library
+- Implement secure token storage with react-native-keychain
+- Follow our established error handling patterns
+- Integrate with Redux store for authentication state
+- Support both iOS and Android platforms
+- Handle token refresh and expiration
+- Implement proper logout and session cleanup
+- Reference backend error codes:
+  - ERROR_CODES.SERVICE_UNAVAILABLE
+  - ERROR_CODES.SESSION_NOT_FOUND
+  - ERROR_CODES.SESSION_ACCESS_DENIED
+
+**Integration Points:**
+- Redux store for authentication state management
+- Repository pattern for user data access
+- Backend API for session management and authentication
+- Google services (Gmail, Calendar, Contacts)
+- Secure local storage for tokens
+- Navigation guards for protected routes
+
+**Testing Requirements:**
+- Authentication flow testing (sign in, sign out, token refresh)
+- Token storage security testing
+- Error handling for auth failures (network, invalid tokens)
+- Platform-specific testing (iOS vs Android)
+- Integration with backend API authentication
+- Navigation guard testing for protected routes
+
+**Format:** Provide complete Google Sign-In implementation including:
+1. Google Sign-In configuration for iOS and Android
+2. Authentication service with proper interfaces
+3. Redux slice for authentication state management
+4. Secure token storage implementation with react-native-keychain
+5. Token refresh and expiration handling
+6. Navigation guards for protected routes
+7. Integration with existing repository pattern
+8. Basic testing setup with mock Google services
+
+**Example:** Follow React Native authentication best practices with proper 
+security, similar to enterprise applications like Slack or Microsoft Teams.
+```
+
+#### **5. Authentication State Management**
+```
+**Architecture Context:** Need to implement comprehensive authentication state 
+management that handles user sessions, token validation, and secure access to 
+Google services through our backend multi-agent system.
+
+**Goal:** Create authentication state management system with session persistence, 
+token validation, and secure access control for all app features.
+
+**Constraints:**
+- Use Redux Toolkit for state management
+- Implement secure session persistence
+- Handle token refresh automatically
+- Provide authentication guards for protected routes
+- Support offline authentication state
+- Integrate with our repository pattern
+- Handle authentication errors gracefully
+- Reference backend error codes:
+  - ERROR_CODES.SERVICE_UNAVAILABLE
+  - ERROR_CODES.SESSION_NOT_FOUND
+  - ERROR_CODES.SESSION_ACCESS_DENIED
+
+**Integration Points:**
+- Redux store for global state management
+- Secure local storage for session persistence
+- Backend API for session validation and user data
+- Navigation guards for protected screens
+- Repository pattern for user data access
+- Google services authentication state
+
+**Testing Requirements:**
+- Authentication state persistence testing
+- Token refresh flow testing
+- Protected route access testing
+- Offline authentication testing
+- Integration with backend API
+- Error handling for authentication failures
+
+**Format:** Provide complete authentication state management including:
+1. Redux slice for authentication state with proper types
+2. Session persistence service with secure storage
+3. Authentication guards for navigation and components
+4. Token validation and refresh logic
+5. User session management and cleanup
+6. Integration with repository pattern
+7. Basic testing setup with mock authentication
+
+**Example:** Follow React Native state management best practices with proper 
+security and session handling, similar to enterprise applications.
+```
+
+#### **6. Basic Text Input Implementation**
 ```
 **Architecture Context:** Need minimal text input to test core functionality 
 before moving to voice integration. This is temporary scaffolding to validate 
@@ -347,61 +482,57 @@ with our Redux store and enables testing of the core AI assistant functionality.
 and focused on core functionality testing.
 ```
 
-#### **5. Conversation Persistence and Offline Support**
+#### **7. Basic Conversation Persistence**
 ```
-**Architecture Context:** Need to implement conversation persistence using local 
-storage and offline message queuing. This will provide a seamless user experience 
-even when offline and support conversation history management.
+**Architecture Context:** Need minimal conversation persistence to test core 
+functionality before moving to voice integration. This is temporary scaffolding 
+to validate our data flow and state management.
 
-**Goal:** Create conversation persistence system with local storage, offline 
-queuing, search and filtering, and export capabilities that integrates with 
-our Redux store and repository pattern.
+**Goal:** Create basic conversation persistence with simple local storage 
+that enables testing of the core AI assistant functionality.
 
 **Constraints:**
-- Use AsyncStorage and SQLite for local storage
-- Implement offline message queuing
-- Support conversation search and filtering
-- Handle large conversation histories efficiently
+- Use AsyncStorage for basic local storage only
+- Simple message persistence without complex features
+- No offline queuing or search functionality
+- Basic error handling
 - Integrate with Redux store for state management
-- Support conversation export and sharing
+- Keep implementation minimal and temporary
 
 **Integration Points:**
-- Local storage (AsyncStorage, SQLite)
+- AsyncStorage for basic persistence
 - Redux store for conversation state
 - Repository pattern for data access
-- Offline functionality and data persistence
-- Search and filtering capabilities
+- Basic error handling
 
 **Testing Requirements:**
-- Local storage testing with mock data
-- Offline functionality testing
-- Search and filtering tests
-- Performance testing for large datasets
-- Data persistence and recovery tests
+- Basic local storage testing
+- Data persistence tests
+- Integration with Redux store
+- Simple error handling tests
 
-**Format:** Provide complete conversation persistence implementation including:
-1. Local storage service with AsyncStorage and SQLite
-2. Offline message queuing and synchronization
-3. Conversation search and filtering
-4. Export and sharing capabilities
-5. Integration with Redux store
-6. Basic testing setup
+**Format:** Provide minimal conversation persistence implementation including:
+1. Basic AsyncStorage service
+2. Simple message persistence
+3. Integration with Redux store
+4. Basic error handling
+5. Simple testing setup
 
-**Example:** Follow React Native local storage best practices with proper 
-offline support and data management, similar to enterprise applications.
+**Example:** Follow React Native basic storage patterns, keeping it simple 
+and focused on core functionality testing.
 ```
 
-### **Action Card System (Week 5-6)**
+### **Action Card System (Week 5-6) - MVP CORE**
 
-#### **6. Action Card Component Library**
+#### **8. Action Card Component Library**
 ```
 **Architecture Context:** Need to implement action card system that displays 
 proposed actions from our backend multi-agent system. This is core to our AI 
-assistant's functionality and must integrate with Google services.
+assistant's functionality and must integrate with Google services through agents only.
 
 **Goal:** Create comprehensive action card component library with email, calendar, 
 contact, and generic action cards that integrate with our Redux store and 
-repository pattern.
+repository pattern. Action cards are generated from agent responses, not direct API calls.
 
 **Constraints:**
 - Follow component library best practices
@@ -424,6 +555,11 @@ repository pattern.
 - Error handling and retry logic tests
 - User interaction testing
 - Accessibility testing
+- Backend response type validation:
+  - 'confirmation_required' responses
+  - 'action_completed' responses
+  - 'partial_success' responses
+  - 'session_data' responses
 
 **Format:** Provide complete action card implementation including:
 1. Action card interfaces and types
@@ -437,15 +573,16 @@ repository pattern.
 TypeScript support and accessibility, similar to established design systems.
 ```
 
-#### **7. Action Execution and Management**
+#### **9. Action Execution and Management**
 ```
 **Architecture Context:** Need to implement action execution flow that connects 
 action cards to our backend multi-agent system and Google services. This will 
-handle the complete action lifecycle from proposal to execution.
+handle the complete action lifecycle from proposal to execution through the agent system.
 
 **Goal:** Create ActionExecutor service with action execution, real-time status 
 updates, error handling, and retry mechanisms that integrates with our repository 
-pattern and Redux store.
+pattern and Redux store. This service coordinates with the backend agent system, 
+not direct API calls.
 
 **Constraints:**
 - Follow service pattern with proper interfaces
@@ -456,8 +593,12 @@ pattern and Redux store.
 - Provide user feedback and progress updates
 
 **Integration Points:**
-- Backend API endpoints for action execution
-- Google services (Gmail, Calendar, Contacts)
+- Backend API endpoints for action execution:
+  - `/api/assistant/text-command` for action proposals (agent-based)
+  - `/api/assistant/confirm-action` for action execution
+  - ToolExecutorService.executeTools() with preview mode
+  - Tool execution context and statistics
+- Google services (Gmail, Calendar, Contacts) - accessed through agents only
 - Redux store for action state management
 - Action card components for user interaction
 - Error handling and user feedback
@@ -481,28 +622,43 @@ pattern and Redux store.
 error handling and state management, similar to enterprise applications.
 ```
 
-### **Integration and Polish (Week 7-8)**
+### **Integration and Polish (Week 7-8) - MVP CORE**
 
-#### **8. Backend API Integration**
+#### **10. Backend API Integration**
 ```
 **Architecture Context:** Need to integrate with our existing backend multi-agent 
 system using the repository pattern and RTK Query. This will connect our React 
 Native app to the sophisticated AI backend we've already built.
+
+**🎯 Correct Flow (Agent-Based Only):**
+1. User input → Frontend → `/api/assistant/text-command`
+2. Backend MasterAgent routes to appropriate agent (emailAgent, calendarAgent, etc.)
+3. Agent runs in preview mode, returns action proposal
+4. Frontend displays action card for user confirmation
+5. User confirms → Frontend → `/api/assistant/confirm-action`
+6. Backend executes confirmed action through agent
+7. Frontend displays result
 
 **Goal:** Complete backend integration with text-command, confirm-action, and 
 session management endpoints, plus Google services connectivity through our 
 multi-agent system.
 
 **Constraints:**
-- Use existing backend API endpoints
+- Use existing backend API endpoints (agent-based only)
 - Follow repository pattern for data access
 - Implement proper error handling and retry logic
 - Support offline functionality and data persistence
-- Integrate with Google services through backend
+- Integrate with Google services through backend agents only
 - Handle authentication and session management
+- **DO NOT** use direct email/calendar/contact endpoints
+- **DO NOT** bypass the agent system for any operations
 
 **Integration Points:**
-- Backend multi-agent system API
+- Backend multi-agent system API:
+  - MasterAgent for intelligent routing
+  - ToolExecutorService for action execution
+  - AgentFactory for agent registration
+  - BaseAgent framework for all agents
 - Google services (Gmail, Calendar, Contacts)
 - Authentication and session management
 - Offline functionality and data persistence
@@ -527,7 +683,7 @@ multi-agent system.
 error handling and offline support, similar to enterprise applications.
 ```
 
-#### **9. Conversation Persistence and Offline Support**
+#### **11. Conversation Persistence and Offline Support**
 ```
 **Architecture Context:** Need to implement conversation persistence using local 
 storage and offline message queuing. This will provide a seamless user experience 
@@ -551,6 +707,11 @@ our Redux store and repository pattern.
 - Repository pattern for data access
 - Offline functionality and data persistence
 - Search and filtering capabilities
+- Backend session management:
+  - 30-minute context window (session expiration)
+  - Conversation history persistence
+  - Pending actions tracking
+  - User preferences (language, timezone, verbosity)
 
 **Testing Requirements:**
 - Local storage testing with mock data
@@ -571,95 +732,7 @@ our Redux store and repository pattern.
 offline support and data management, similar to enterprise applications.
 ```
 
-### **Testing and Quality Assurance (Week 9-10)**
-
-#### **10. Comprehensive Testing Implementation**
-```
-**Architecture Context:** Need to implement comprehensive testing strategy using 
-Jest, React Native Testing Library, and Detox. This will ensure code quality, 
-reliability, and maintainability following our strategic framework approach.
-
-**Goal:** Create complete testing framework with unit tests, integration tests, 
-E2E tests, and performance testing that covers all components and user flows.
-
-**Constraints:**
-- Use Jest + React Native Testing Library for unit/integration tests
-- Use Detox for E2E testing
-- Implement proper mocking and test utilities
-- Cover all critical user flows and edge cases
-- Maintain high test coverage (80%+)
-- Follow testing best practices and patterns
-
-**Integration Points:**
-- All React Native components and screens
-- Redux store and state management
-- Repository pattern and API integration
-- Voice processing and action execution
-- Navigation and user flows
-
-**Testing Requirements:**
-- Unit tests for all components and services
-- Integration tests for component interactions
-- E2E tests for critical user flows
-- Performance testing for voice and action processing
-- Accessibility testing for voice navigation
-
-**Format:** Provide complete testing implementation including:
-1. Jest configuration and test utilities
-2. Component testing with React Native Testing Library
-3. Redux store testing with mock actions
-4. E2E testing setup with Detox
-5. Performance testing framework
-6. Test coverage reporting and CI integration
-
-**Example:** Follow React Native testing best practices with comprehensive 
-coverage and proper mocking, similar to enterprise applications.
-```
-
-#### **11. Performance Optimization and Production Readiness**
-```
-**Architecture Context:** Need to optimize performance for production use and 
-prepare for App Store submission. This includes performance profiling, memory 
-optimization, and production deployment preparation.
-
-**Goal:** Optimize app performance, implement production monitoring, and prepare 
-for App Store submission with proper error handling, accessibility, and user guidance.
-
-**Constraints:**
-- Optimize memory usage and rendering performance
-- Implement performance monitoring and analytics
-- Ensure accessibility compliance (WCAG 2.1 AA)
-- Prepare App Store metadata and screenshots
-- Implement proper error handling and user guidance
-- Support production deployment and monitoring
-
-**Integration Points:**
-- Performance monitoring and analytics
-- App Store submission and deployment
-- Error handling and user feedback
-- Accessibility and user guidance
-- Production monitoring and logging
-
-**Testing Requirements:**
-- Performance profiling and optimization
-- Memory usage and rendering tests
-- Accessibility compliance testing
-- App Store submission validation
-- Production deployment testing
-
-**Format:** Provide complete production readiness implementation including:
-1. Performance optimization strategies and tools
-2. Memory usage and rendering optimization
-3. Accessibility compliance and testing
-4. App Store submission preparation
-5. Production monitoring and analytics
-6. Error handling and user guidance improvements
-
-**Example:** Follow React Native production optimization best practices with 
-proper monitoring and deployment preparation, similar to enterprise applications.
-```
-
-### **Voice Integration (Week 11-12)**
+### **Voice Integration (Week 9-10) - MVP CORE**
 
 #### **12. Speech-to-Text Implementation**
 ```
@@ -750,7 +823,169 @@ voice settings, and background audio handling that integrates with our Redux sto
 and platform support, similar to established voice applications.
 ```
 
-## ⚡ **Quick Reference for Common Scenarios**
+### **Testing and Quality Assurance (Week 11-12) - MVP CORE**
+
+#### **14. Comprehensive Testing Implementation**
+```
+**Architecture Context:** Need to implement comprehensive testing strategy using 
+Jest, React Native Testing Library, and Detox. This will ensure code quality, 
+reliability, and maintainability following our strategic framework approach.
+
+**Goal:** Create complete testing framework with unit tests, integration tests, 
+E2E tests, and performance testing that covers all components and user flows.
+
+**Constraints:**
+- Use Jest + React Native Testing Library for unit/integration tests
+- Use Detox for E2E testing
+- Implement proper mocking and test utilities
+- Cover all critical user flows and edge cases
+- Maintain high test coverage (80%+)
+- Follow testing best practices and patterns
+
+**Integration Points:**
+- All React Native components and screens
+- Redux store and state management
+- Repository pattern and API integration
+- Voice processing and action execution
+- Navigation and user flows
+
+**Testing Requirements:**
+- Unit tests for all components and services
+- Integration tests for component interactions
+- E2E tests for critical user flows
+- Performance testing for voice and action processing
+- Accessibility testing for voice navigation
+
+**Format:** Provide complete testing implementation including:
+1. Jest configuration and test utilities
+2. Component testing with React Native Testing Library
+3. Redux store testing with mock actions
+4. E2E testing setup with Detox
+5. Performance testing framework
+6. Test coverage reporting and CI integration
+
+**Example:** Follow React Native testing best practices with comprehensive 
+coverage and proper mocking, similar to enterprise applications.
+```
+
+#### **15. Performance Optimization and Production Readiness**
+```
+**Architecture Context:** Need to optimize performance for production use and 
+prepare for App Store submission. This includes performance profiling, memory 
+optimization, and production deployment preparation.
+
+**Goal:** Optimize app performance, implement production monitoring, and prepare 
+for App Store submission with proper error handling, accessibility, and user guidance.
+
+**Constraints:**
+- Optimize memory usage and rendering performance
+- Implement performance monitoring and analytics
+- Ensure accessibility compliance (WCAG 2.1 AA)
+- Prepare App Store metadata and screenshots
+- Implement proper error handling and user guidance
+- Support production deployment and monitoring
+
+**Integration Points:**
+- Performance monitoring and analytics
+- App Store submission and deployment
+- Error handling and user feedback
+- Accessibility and user guidance
+- Production monitoring and logging
+
+**Testing Requirements:**
+- Performance profiling and optimization
+- Memory usage and rendering tests
+- Accessibility compliance testing
+- App Store submission validation
+- Production deployment testing
+
+**Format:** Provide complete production readiness implementation including:
+1. Performance optimization strategies and tools
+2. Memory usage and rendering optimization
+3. Accessibility compliance and testing
+4. App Store submission preparation
+5. Production monitoring and analytics
+6. Error handling and user guidance improvements
+
+**Example:** Follow React Native production optimization best practices with 
+proper monitoring and deployment preparation, similar to enterprise applications.
+```
+
+## 🔧 **Implementation Roadmap - MVP Focus**
+
+### **Week 1-2: Foundation & Architecture (MVP Core)**
+- [ ] Project setup with React Native + TypeScript
+- [ ] Redux store configuration with RTK Query
+- [ ] Navigation setup with React Navigation
+- [ ] Repository pattern implementation
+- [ ] Service layer with dependency injection
+- [ ] Basic component structure and styling
+
+### **Week 3-4: Authentication & Core Functionality (MVP Core)**
+- [ ] Google Sign-In implementation with OAuth 2.0
+- [ ] Authentication state management and Redux integration
+- [ ] Basic text input with simple send button
+- [ ] Basic input validation and error handling
+- [ ] Simple conversation persistence with AsyncStorage
+- [ ] Core functionality validation with authentication
+
+### **Week 5-6: Action Card System (MVP Core)**
+- [ ] Action card component library
+- [ ] Action card factory implementation
+- [ ] Action execution flow
+- [ ] User confirmation interfaces
+- [ ] Real-time status updates
+- [ ] Error handling and retry logic
+
+### **Week 7-8: Backend Integration & Polish (MVP Core)**
+- [ ] Backend API integration with authentication
+- [ ] Google services connectivity through backend
+- [ ] Conversation persistence and offline support
+- [ ] Error handling and user feedback improvements
+
+### **Week 9-10: Voice Integration (MVP Core)**
+- [ ] Speech-to-Text implementation
+- [ ] Text-to-Speech implementation
+- [ ] Voice command integration with existing systems
+- [ ] Voice-specific error handling and user experience
+
+### **Week 11-12: Testing & Quality Assurance (MVP Core)**
+- [ ] Comprehensive testing implementation
+- [ ] Performance optimization and production readiness
+- [ ] Code quality validation
+- [ ] App Store preparation
+
+### **Week 13: Production Deployment (MVP Core)**
+- [ ] Production deployment
+- [ ] Monitoring and analytics setup
+- [ ] User onboarding and guidance
+
+---
+
+## 🚀 **POST-MVP ENHANCEMENTS (Future Development)**
+
+### **Advanced Features (Post-MVP)**
+- [ ] **Navigation & Route Protection**: Advanced navigation guards, deep linking, app state restoration
+- [ ] **Error Boundaries & Global Error Handling**: Comprehensive error boundaries, global error handling service
+- [ ] **Offline State Management**: Advanced offline state detection, offline action queuing
+- [ ] **Push Notifications**: Push notification system for action updates and confirmations
+- [ ] **Analytics & Performance Monitoring**: User behavior tracking, performance monitoring, crash reporting
+- [ ] **Accessibility & Internationalization**: WCAG 2.1 AA compliance, multi-language voice command support
+- [ ] **Advanced Voice Features**: Voice command learning, custom wake words, voice profiles
+- [ ] **Team Collaboration**: Shared assistant experiences, team workflows
+- [ ] **Microsoft 365 Integration**: Outlook, Teams, SharePoint integration
+- [ ] **Workflow Automation**: Multi-step action sequences, complex workflow automation
+
+### **Enterprise Features (Future Roadmap)**
+- [ ] **SSO Integration**: Enterprise authentication, SAML, OIDC
+- [ ] **Compliance & Security**: SOC 2, GDPR compliance, advanced security features
+- [ ] **Admin Tools**: User management, analytics dashboard, policy management
+- [ ] **API Platform**: Third-party integrations, webhook support
+- [ ] **Desktop & Web Apps**: Cross-platform expansion beyond mobile
+
+## ⚡ **Quick Reference for Common Scenarios - MVP Focus**
+
+> **Note**: This section focuses on MVP implementation. For post-MVP features, see the "POST-MVP ENHANCEMENTS" section below.
 
 ### **Adding a New Agent**
 ```
@@ -779,9 +1014,18 @@ Integration: Connect to Redux store, use repository pattern, follow navigation p
 Testing: Component tests, integration tests, accessibility tests per testing strategy
 ```
 
+### **Adding Authentication Features**
+```
+Context: Review Google Sign-In implementation in Prompt 4 and auth state management in Prompt 5
+Goal: Add new authentication capabilities following our established patterns
+Constraints: Use react-native-keychain for secure storage, follow Redux auth state patterns
+Integration: Connect to existing auth Redux slice, use authentication guards
+Testing: Auth flow testing, security testing, integration with existing auth system
+```
+
 ### **Adding Voice Features (After Core Functionality)**
 ```
-Context: Review voice integration prompts in Week 11-12 after core text functionality is working
+Context: Review voice integration prompts in Week 7-8 after core text functionality is working
 Goal: Add voice input/output capabilities to existing text-based AI assistant
 Constraints: Use React Native Voice/Expo Speech, integrate with existing Redux store
 Integration: Connect to existing chat system, action cards, and state management
@@ -857,3 +1101,49 @@ The most effective AI development happens when you:
 4. **Validate results** against architectural requirements
 
 This approach ensures AI assistance respects your system's boundaries while maximizing development velocity and code quality.
+
+---
+
+## 📋 **MVP vs POST-MVP SUMMARY**
+
+### **✅ INCLUDED IN MVP (13 weeks)**
+- **Complete Authentication System**: Google Sign-In, secure token storage, auth state management
+- **Core AI Assistant Functionality**: Text input, conversation persistence, action cards
+- **Action Execution System**: Email, calendar, contact actions with backend integration
+- **Voice Interface**: Speech-to-text and text-to-speech capabilities
+- **Backend Integration**: Full integration with existing multi-agent system
+- **Testing & Quality**: Comprehensive testing framework and production readiness
+
+### **🚀 MOVED TO POST-MVP**
+- **Advanced Navigation**: Deep linking, route protection, app state restoration
+- **Error Handling**: Global error boundaries, comprehensive error handling service
+- **Offline Features**: Advanced offline state management, push notifications
+- **Analytics & Monitoring**: User behavior tracking, performance monitoring
+- **Accessibility & i18n**: WCAG compliance, multi-language support
+- **Enterprise Features**: SSO, compliance, admin tools, API platform
+
+### **🎯 MVP SUCCESS CRITERIA**
+Your MVP will be successful when users can:
+1. **Sign in with Google** and access their productivity tools
+2. **Use voice commands** to manage email and calendar
+3. **See action cards** and confirm actions before execution
+4. **Have conversations** that persist and maintain context
+5. **Execute actions** through your multi-agent backend system
+
+**🎯 Key Success Indicator:**
+- **All user interactions** go through the agent system
+- **No direct API calls** to Gmail, Calendar, or Contacts
+- **Agents provide intelligence** and context awareness
+- **Frontend is a smart client** that displays agent responses
+
+### **🔗 BACKEND INTEGRATION ALIGNMENT**
+Your prompts are **95% aligned** with your existing backend:
+- ✅ **API Endpoints**: Perfect match with backend routes
+- ✅ **Authentication Flow**: Perfect match with OAuth implementation  
+- ✅ **Multi-Agent Architecture**: Perfect match with backend framework
+- ✅ **Session Management**: Perfect match with 30-minute context window
+- ✅ **Action System**: Perfect match with confirmation flow
+- ✅ **Response Types**: Updated to reference backend response types
+- ✅ **Error Handling**: Updated to reference backend error codes
+
+**Focus on these core features first - everything else can be added later!**

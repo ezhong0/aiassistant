@@ -29,14 +29,26 @@ export class MockRepositoryFactory implements IRepositoryFactory {
     return this.userRepository;
   }
 
-  // Method to reset all mock repositories
-  resetAllMocks(): void {
+  /**
+   * Set authentication token for all repositories (no-op for mocks)
+   */
+  setAuthToken(token: string | null): void {
+    // Mock repositories don't need real authentication
+    console.log('Mock factory: Setting auth token:', token ? '***' : 'null');
+  }
+
+  /**
+   * Reset all repositories (useful for testing)
+   */
+  resetRepositories(): void {
     this.chatRepository = null;
     this.actionRepository = null;
     this.userRepository = null;
   }
 
-  // Method to get specific mock instances for advanced testing
+  /**
+   * Get mock repository instances for direct testing
+   */
   getMockChatRepository(): MockChatRepository {
     return this.createChatRepository() as MockChatRepository;
   }
@@ -47,6 +59,24 @@ export class MockRepositoryFactory implements IRepositoryFactory {
 
   getMockUserRepository(): MockUserRepository {
     return this.createUserRepository() as MockUserRepository;
+  }
+
+  /**
+   * Reset all mock data in repositories
+   */
+  resetAllMockData(): void {
+    if (this.chatRepository) {
+      (this.chatRepository as MockChatRepository).setMockMessages([]);
+      (this.chatRepository as MockChatRepository).setMockResponses([]);
+    }
+    
+    if (this.actionRepository) {
+      (this.actionRepository as MockActionRepository).resetMockData();
+    }
+    
+    if (this.userRepository) {
+      (this.userRepository as MockUserRepository).resetMockData();
+    }
   }
 }
 

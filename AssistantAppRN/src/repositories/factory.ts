@@ -2,6 +2,7 @@ import type { IRepositoryFactory, IChatRepository, IActionRepository, IUserRepos
 import { ChatRepository } from './implementations/chat.repository';
 import { ActionRepository } from './implementations/action.repository';
 import { UserRepository } from './implementations/user.repository';
+import { httpService } from '../services/http.service';
 
 export class RepositoryFactory implements IRepositoryFactory {
   private static instance: RepositoryFactory;
@@ -39,7 +40,16 @@ export class RepositoryFactory implements IRepositoryFactory {
     return this.userRepository;
   }
 
-  // Method to reset repositories (useful for testing)
+  /**
+   * Set authentication token for all repositories
+   */
+  setAuthToken(token: string | null): void {
+    httpService.setAuthToken(token);
+  }
+
+  /**
+   * Method to reset repositories (useful for testing)
+   */
   resetRepositories(): void {
     this.chatRepository = null;
     this.actionRepository = null;

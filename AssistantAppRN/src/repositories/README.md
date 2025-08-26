@@ -1,51 +1,99 @@
 # Repository Pattern Implementation
 
-This directory contains the implementation of the repository pattern for the Assistant App React Native project, following clean architecture principles.
+This directory contains the complete repository pattern implementation for the React Native AI Assistant app, following clean architecture principles and integrating with the backend multi-agent system.
 
-## Overview
+## Architecture Overview
 
-The repository pattern provides a clean abstraction layer between the data access logic and business logic, making the code more testable, maintainable, and following the dependency inversion principle.
+The repository pattern provides a clean abstraction layer between the data access logic and business logic, enabling:
 
-## Architecture
+- **Separation of Concerns**: Clear boundaries between data access and business logic
+- **Testability**: Easy mocking and testing with mock implementations
+- **Flexibility**: Easy switching between different data sources
+- **Offline Support**: Built-in caching and offline queuing
+- **Error Handling**: Comprehensive error handling with retry logic
+
+## Repository Structure
 
 ```
 src/repositories/
-├── interfaces/           # Repository interfaces (contracts)
-├── implementations/      # Concrete implementations
-├── mocks/               # Mock implementations for testing
-├── factory.ts           # Repository factory for dependency injection
-└── index.ts             # Public exports
+├── base.repository.ts          # Base repository with common functionality
+├── interfaces.ts               # Repository interfaces and contracts
+├── factory.ts                  # Repository factory for dependency injection
+├── implementations/            # Concrete repository implementations
+│   ├── chat.repository.ts      # Chat and AI interaction repository
+│   ├── action.repository.ts    # Action execution repository
+│   └── user.repository.ts      # User authentication repository
+├── mocks/                      # Mock implementations for testing
+│   ├── mock-chat.repository.ts
+│   ├── mock-action.repository.ts
+│   ├── mock-user.repository.ts
+│   └── mock-factory.ts
+├── __tests__/                  # Repository tests
+└── index.ts                    # Public exports
 ```
 
 ## Core Components
 
-### 1. Repository Interfaces
+### 1. BaseRepository
 
-- **`IBaseRepository<T>`**: Generic interface for common CRUD operations
-- **`IChatRepository`**: Chat and messaging operations
-- **`IActionRepository`**: Action card management and execution
-- **`IUserRepository`**: User authentication and profile management
-- **`IRepositoryFactory`**: Factory interface for dependency injection
+The `BaseRepository` class provides common functionality for all repositories:
 
-### 2. Concrete Implementations
+- **Retry Logic**: Automatic retry with exponential backoff
+- **Caching**: In-memory caching with TTL and size limits
+- **Offline Queuing**: Queue operations when offline
+- **Error Handling**: Standardized error types and handling
 
-- **`ChatRepository`**: Implements chat operations using RTK Query
-- **`ActionRepository`**: Handles action cards and execution
-- **`UserRepository`**: Manages user authentication and profiles
+```typescript
+export abstract class BaseRepository {
+  protected retryConfig: RetryConfig;
+  protected cacheConfig: CacheConfig;
+  protected offlineQueue: OfflineQueueItem[];
+  
+  // Execute operations with retry logic
+  protected async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    context?: any
+  ): Promise<T>;
+}
+```
 
-### 3. Mock Implementations
+### 2. Repository Interfaces
 
-- **`MockChatRepository`**: In-memory chat operations for testing
-- **`MockActionRepository`**: Mock action card operations
-- **`MockUserRepository`**: Simulated user authentication
-- **`MockRepositoryFactory`**: Factory providing mock implementations
+Clear contracts for each repository type:
 
-### 4. Repository Factory
+```typescript
+export interface IChatRepository {
+  sendMessage(message: string, sessionId?: string): Promise<APIResponse<BackendResponse>>;
+  getConversationHistory(limit?: number): Promise<APIResponse<Message[]>>;
+  clearConversation(): Promise<APIResponse<boolean>>;
+  getSession(sessionId: string): Promise<APIResponse<BackendResponse>>;
+}
 
-The `RepositoryFactory` implements the singleton pattern and provides:
-- Centralized repository creation
-- Dependency injection support
-- Easy switching between real and mock implementations
+export interface IActionRepository {
+  getActionCards(): Promise<APIResponse<ActionCard[]>>;
+  executeAction(actionId: string, data: any, sessionId?: string): Promise<APIResponse<BackendResponse>>;
+  confirmAction(actionId: string, data: any, sessionId?: string): Promise<APIResponse<BackendResponse>>;
+  // ... other methods
+}
+```
+
+### 3. HTTP Service
+
+Centralized HTTP client with:
+
+- **Authentication**: Automatic token management
+- **Error Handling**: HTTP status code handling
+- **Timeout Management**: Configurable request timeouts
+- **Header Management**: Automatic content-type and auth headers
+
+```typescript
+export class HTTPService {
+  async request<T>(method: string, url: string, data?: any): Promise<HTTPResponse<T>>;
+  setAuthToken(token: string | null): void;
+  // ... other methods
+}
+```
 
 ## Usage Examples
 
@@ -59,100 +107,177 @@ const chatRepo = repositoryFactory.createChatRepository();
 const actionRepo = repositoryFactory.createActionRepository();
 const userRepo = repositoryFactory.createUserRepository();
 
-// Use repositories
-const result = await chatRepo.sendMessage('Hello, AI!');
-const actions = await actionRepo.getActionCards();
-const user = await userRepo.getCurrentUser();
-```
-
-### Using RTK Query Hooks
-
-```typescript
-import { useSendMessageMutation, useGetActionCardsQuery } from '../store/api';
-
-function ChatComponent() {
-  const [sendMessage, { isLoading }] = useSendMessageMutation();
-  const { data: actions, isLoading: actionsLoading } = useGetActionCardsQuery();
-
-  const handleSendMessage = async (message: string) => {
-    try {
-      const result = await sendMessage({ message }).unwrap();
-      console.log('Message sent:', result);
-    } catch (error) {
-      console.error('Failed to send message:', error);
-    }
-  };
-
-  // Component JSX...
+// Send message to AI assistant
+const response = await chatRepo.sendMessage('Schedule a meeting tomorrow');
+if (response.success && response.data?.actions) {
+  // Handle action cards from AI response
+  const actions = response.data.actions;
+  // Display action cards to user
 }
 ```
 
-### Testing with Mock Repositories
+### Authentication Integration
 
 ```typescript
-import { mockRepositoryFactory } from '../repositories/mocks/mock-factory';
+// Set auth token for all repositories
+repositoryFactory.setAuthToken('user_jwt_token');
 
-describe('Chat Repository Tests', () => {
-  let chatRepo: IChatRepository;
-
-  beforeEach(() => {
-    mockRepositoryFactory.resetAllMocks();
-    chatRepo = mockRepositoryFactory.createChatRepository();
-  });
-
-  it('should send message successfully', async () => {
-    const result = await chatRepo.sendMessage('Test message');
-    expect(result.success).toBe(true);
-  });
-});
+// Now all repository calls will include authentication
+const user = await userRepo.getCurrentUser();
 ```
 
-## Benefits
+### Error Handling
 
-1. **Separation of Concerns**: Clear separation between data access and business logic
-2. **Testability**: Easy to mock repositories for unit testing
-3. **Maintainability**: Centralized data access logic
-4. **Flexibility**: Easy to switch implementations (real API vs mock)
-5. **Dependency Injection**: Loose coupling between components
-6. **Type Safety**: Full TypeScript support with proper interfaces
+```typescript
+try {
+  const result = await chatRepo.sendMessage('Hello');
+  // Handle success
+} catch (error) {
+  if (error.retryable) {
+    // Operation can be retried
+    console.log('Retryable error:', error.message);
+  } else {
+    // Non-retryable error
+    console.log('Fatal error:', error.message);
+  }
+}
+```
 
-## Integration with RTK Query
+## Backend Integration
 
-The repositories are designed to work seamlessly with RTK Query:
-- Automatic caching and invalidation
-- Optimistic updates
-- Background refetching
-- Error handling and retry logic
+The repositories integrate with the backend multi-agent system through these endpoints:
 
-## Error Handling
+- **`/api/assistant/text-command`**: Main AI processing endpoint (all user interactions)
+- **`/api/assistant/confirm-action`**: Action confirmation and execution
+- **`/api/assistant/session/:id`**: Session management and validation
+- **`/api/auth/*`**: Authentication endpoints
 
-All repository methods return `APIResponse<T>` which includes:
-- `success`: Boolean indicating operation success
-- `data`: The actual data on success
-- `error`: Error message on failure
+### Agent-Based Architecture
 
-## Future Enhancements
+**Important**: All operations go through the agent system, not direct API calls:
 
-1. **Offline Support**: Implement offline-first architecture with local storage
-2. **Caching Strategy**: Advanced caching with TTL and invalidation
-3. **Retry Logic**: Exponential backoff for failed requests
-4. **Real-time Updates**: WebSocket integration for live data
-5. **Background Sync**: Sync data when app comes online
+1. **User Input** → Frontend → `/api/assistant/text-command`
+2. **AI Processing** → Backend routes to appropriate agent (email, calendar, contacts)
+3. **Action Proposal** → Agent returns action cards for user confirmation
+4. **User Confirmation** → Frontend → `/api/assistant/confirm-action`
+5. **Action Execution** → Backend executes through agent system
 
 ## Testing
 
-Run the repository tests:
+### Mock Repositories
+
+Use mock repositories for testing:
+
+```typescript
+import { mockRepositoryFactory } from '../repositories';
+
+// Get mock repositories
+const mockChatRepo = mockRepositoryFactory.getMockChatRepository();
+const mockActionRepo = mockRepositoryFactory.getMockActionRepository();
+
+// Set up test data
+mockChatRepo.setMockMessages([/* test messages */]);
+mockActionRepo.setMockActionCards([/* test actions */]);
+
+// Run tests
+const result = await mockChatRepo.sendMessage('test message');
+expect(result.success).toBe(true);
+```
+
+### Running Tests
 
 ```bash
+# Run repository tests
 npm test -- src/repositories/__tests__/repository-pattern.test.ts
+
+# Run all tests
+npm test
 ```
+
+## Configuration
+
+### Retry Configuration
+
+```typescript
+const repository = new ChatRepository(
+  {
+    maxRetries: 3,
+    retryDelay: 1000,
+    backoffMultiplier: 2,
+  },
+  {
+    ttl: 5 * 60 * 1000, // 5 minutes
+    maxSize: 50,
+  }
+);
+```
+
+### HTTP Service Configuration
+
+```typescript
+import { HTTPService } from '../services/http.service';
+
+const httpService = new HTTPService({
+  baseURL: 'http://localhost:3000',
+  timeout: 30000, // 30 seconds
+  headers: {
+    'X-Client-Version': '1.0.0',
+  },
+});
+```
+
+## Offline Support
+
+The repository pattern includes built-in offline support:
+
+- **Offline Queuing**: Operations are queued when offline
+- **Automatic Sync**: Queued operations execute when back online
+- **Cache Management**: Intelligent caching with TTL and size limits
+- **Data Persistence**: TODO: AsyncStorage integration for offline data
+
+## Performance Considerations
+
+- **Caching**: Responses are cached to reduce API calls
+- **Lazy Loading**: Repositories are created on-demand
+- **Connection Pooling**: HTTP service manages connection reuse
+- **Request Batching**: TODO: Implement request batching for multiple operations
+
+## Security Features
+
+- **Token Management**: Secure token storage and refresh
+- **Request Validation**: Input validation and sanitization
+- **Error Sanitization**: Sensitive information is not exposed in errors
+- **HTTPS Only**: All API calls use secure connections
+
+## Future Enhancements
+
+- [ ] **AsyncStorage Integration**: Persistent offline queue and cache
+- [ ] **Request Batching**: Batch multiple operations for efficiency
+- [ ] **Background Sync**: Automatic background synchronization
+- [ ] **Conflict Resolution**: Handle data conflicts when syncing
+- [ ] **Metrics Collection**: Performance and usage metrics
+- [ ] **Circuit Breaker**: Prevent cascade failures
 
 ## Contributing
 
 When adding new repositories:
-1. Define the interface in `interfaces.ts`
-2. Implement the concrete class in `implementations/`
-3. Create mock implementation in `mocks/`
-4. Add to the factory
-5. Write comprehensive tests
-6. Update this documentation
+
+1. **Extend BaseRepository**: Inherit from BaseRepository for common functionality
+2. **Implement Interface**: Follow the established interface patterns
+3. **Add Tests**: Include comprehensive tests for new functionality
+4. **Update Documentation**: Keep this README up to date
+5. **Follow Patterns**: Use established error handling and retry patterns
+
+## Dependencies
+
+- **TypeScript**: For type safety and interfaces
+- **React Native**: For platform-specific functionality
+- **Jest**: For testing framework
+- **React Native Testing Library**: For component testing
+
+## Related Documentation
+
+- [Architecture Overview](../docs/ARCHITECTURE.md)
+- [Testing Strategy](../docs/TESTING.md)
+- [Development Workflow](../docs/DEVELOPMENT.md)
+- [API Documentation](../docs/SERVICES.md)

@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { APIResponse, Message, ActionCard, User } from '../types';
+import type { APIResponse, Message, ActionCard, User, BackendResponse } from '../types';
 
 // Base API configuration
 export const api = createApi({
@@ -15,39 +15,67 @@ export const api = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Chat', 'Actions', 'User'],
+  tagTypes: ['Chat', 'Actions', 'User', 'Session'],
   endpoints: (builder) => ({
-    // Chat endpoints
-    sendMessage: builder.mutation<APIResponse<Message>, { message: string }>({
+    // Main AI processing endpoint - all user interactions go through this
+    sendTextCommand: builder.mutation<BackendResponse, { message: string; sessionId?: string }>({
       query: (body) => ({
-        url: '/assistant/chat',
+        url: '/api/assistant/text-command',
         method: 'POST',
         body,
       }),
-      invalidatesTags: ['Chat'],
+      invalidatesTags: ['Chat', 'Actions'],
     }),
 
-    // Action endpoints
-    getActionCards: builder.query<APIResponse<ActionCard[]>, void>({
-      query: () => '/assistant/actions',
-      providesTags: ['Actions'],
-    }),
-
-    executeAction: builder.mutation<APIResponse<any>, { actionId: string; data: any }>({
-      query: ({ actionId, data }) => ({
-        url: `/assistant/actions/${actionId}/execute`,
+    // Action confirmation endpoint
+    confirmAction: builder.mutation<BackendResponse, { actionId: string; data: any; sessionId?: string }>({
+      query: (body) => ({
+        url: '/api/assistant/confirm-action',
         method: 'POST',
-        body: data,
+        body,
       }),
-      invalidatesTags: ['Actions'],
+      invalidatesTags: ['Actions', 'Chat'],
     }),
 
-    // Auth endpoints
+    // Session management endpoints
+    getSession: builder.query<BackendResponse, string>({
+      query: (sessionId) => `/api/assistant/session/${sessionId}`,
+      providesTags: (result, error, sessionId) => [{ type: 'Session', id: sessionId }],
+    }),
+
+    validateSession: builder.query<{ valid: boolean }, string>({
+      query: (sessionId) => `/api/assistant/session/${sessionId}/validate`,
+      providesTags: (result, error, sessionId) => [{ type: 'Session', id: sessionId }],
+    }),
+
+    // Authentication endpoints
     signInWithGoogle: builder.mutation<APIResponse<{ token: string; user: User }>, { idToken: string }>({
       query: (body) => ({
-        url: '/auth/google',
+        url: '/api/auth/google',
         method: 'POST',
         body,
+      }),
+      invalidatesTags: ['User'],
+    }),
+
+    getCurrentUser: builder.query<User, void>({
+      query: () => '/api/auth/me',
+      providesTags: ['User'],
+    }),
+
+    updateProfile: builder.mutation<User, Partial<User>>({
+      query: (body) => ({
+        url: '/api/auth/profile',
+        method: 'PUT',
+        body,
+      }),
+      invalidatesTags: ['User'],
+    }),
+
+    refreshToken: builder.mutation<{ token: string }, void>({
+      query: () => ({
+        url: '/api/auth/refresh',
+        method: 'POST',
       }),
     }),
 
@@ -59,9 +87,13 @@ export const api = createApi({
 });
 
 export const {
-  useSendMessageMutation,
-  useGetActionCardsQuery,
-  useExecuteActionMutation,
+  useSendTextCommandMutation,
+  useConfirmActionMutation,
+  useGetSessionQuery,
+  useValidateSessionQuery,
   useSignInWithGoogleMutation,
+  useGetCurrentUserQuery,
+  useUpdateProfileMutation,
+  useRefreshTokenMutation,
   useHealthCheckQuery,
 } = api;

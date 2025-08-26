@@ -2,79 +2,156 @@ import type { IUserRepository } from '../interfaces';
 import type { APIResponse, User } from '../../types';
 
 export class MockUserRepository implements IUserRepository {
-  private currentUser: User | null = null;
-  private authToken: string | null = null;
+  private mockUser: User | null = null;
+  private mockToken: string | null = null;
+  private isAuthenticated: boolean = false;
+
+  constructor() {
+    this.initializeMockData();
+  }
+
+  private initializeMockData(): void {
+    // Mock user data
+    this.mockUser = {
+      id: 'user_123',
+      email: 'john.doe@example.com',
+      name: 'John Doe',
+      avatar: 'https://example.com/avatar.jpg',
+    };
+    
+    this.mockToken = 'mock_jwt_token_12345';
+    this.isAuthenticated = false;
+  }
 
   async signInWithGoogle(idToken: string): Promise<APIResponse<{ token: string; user: User }>> {
-    // Simulate successful Google sign-in
-    const mockUser: User = {
-      id: 'user_123',
-      email: 'test@example.com',
-      name: 'Test User',
-      avatar: 'https://via.placeholder.com/150',
-    };
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 150));
 
-    const mockToken = 'mock_jwt_token_' + Date.now();
+    // Validate mock Google ID token
+    if (!idToken || idToken.length < 10) {
+      return {
+        success: false,
+        error: 'Invalid Google ID token',
+      };
+    }
+
+    // Simulate successful authentication
+    this.isAuthenticated = true;
     
-    this.currentUser = mockUser;
-    this.authToken = mockToken;
-
-    return {
-      success: true,
-      data: { token: mockToken, user: mockUser },
+    const response = {
+      token: this.mockToken!,
+      user: this.mockUser!,
     };
+
+    return { success: true, data: response };
   }
 
   async signOut(): Promise<APIResponse<boolean>> {
-    this.currentUser = null;
-    this.authToken = null;
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Clear authentication state
+    this.isAuthenticated = false;
+    this.mockToken = null;
+
     return { success: true, data: true };
   }
 
   async getCurrentUser(): Promise<APIResponse<User>> {
-    if (!this.currentUser) {
-      return { success: false, error: 'No user signed in' };
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    if (!this.isAuthenticated || !this.mockUser) {
+      return {
+        success: false,
+        error: 'User not authenticated',
+      };
     }
-    return { success: true, data: this.currentUser };
+
+    return { success: true, data: this.mockUser };
   }
 
   async updateProfile(data: Partial<User>): Promise<APIResponse<User>> {
-    if (!this.currentUser) {
-      return { success: false, error: 'No user signed in' };
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    if (!this.isAuthenticated || !this.mockUser) {
+      return {
+        success: false,
+        error: 'User not authenticated',
+      };
     }
 
-    const updatedUser = { ...this.currentUser, ...data };
-    this.currentUser = updatedUser;
+    // Update mock user data
+    const updatedUser: User = {
+      ...this.mockUser,
+      ...data,
+    };
+
+    this.mockUser = updatedUser;
 
     return { success: true, data: updatedUser };
   }
 
   async refreshToken(): Promise<APIResponse<{ token: string }>> {
-    if (!this.authToken) {
-      return { success: false, error: 'No token to refresh' };
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 80));
+
+    if (!this.isAuthenticated) {
+      return {
+        success: false,
+        error: 'User not authenticated',
+      };
     }
 
-    // Simulate token refresh
-    const newToken = 'mock_jwt_token_refreshed_' + Date.now();
-    this.authToken = newToken;
+    // Generate new mock token
+    this.mockToken = `mock_jwt_token_${Date.now()}`;
 
-    return { success: true, data: { token: newToken } };
+    return { success: true, data: { token: this.mockToken } };
+  }
+
+  async validateSession(sessionId: string): Promise<APIResponse<boolean>> {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    if (!this.isAuthenticated) {
+      return { success: true, data: false };
+    }
+
+    // Mock session validation - always valid for authenticated users
+    const isValid = this.isAuthenticated && sessionId.length > 0;
+
+    return { success: true, data: isValid };
   }
 
   // Helper methods for testing
-  isAuthenticated(): boolean {
-    return this.currentUser !== null && this.authToken !== null;
+  getMockUser(): User | null {
+    return this.mockUser ? { ...this.mockUser } : null;
   }
 
-  getCurrentToken(): string | null {
-    return this.authToken;
+  setMockUser(user: User | null): void {
+    this.mockUser = user ? { ...user } : null;
   }
 
-  setMockUser(user: User): void {
-    this.currentUser = user;
+  getMockToken(): string | null {
+    return this.mockToken;
   }
 
-  setMockToken(token: string): void {
-    this.authToken = token;
+  setMockToken(token: string | null): void {
+    this.mockToken = token;
+  }
+
+  isUserAuthenticated(): boolean {
+    return this.isAuthenticated;
+  }
+
+  setAuthenticationState(authenticated: boolean): void {
+    this.isAuthenticated = authenticated;
+  }
+
+  resetMockData(): void {
+    this.mockUser = null;
+    this.mockToken = null;
+    this.isAuthenticated = false;
   }
 }

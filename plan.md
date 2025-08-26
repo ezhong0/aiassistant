@@ -148,13 +148,13 @@ Conversation Features:
 - [ ] Service layer with dependency injection
 - [ ] Basic component structure and styling
 
-### **Week 3-4: Enhanced Text Experience & Persistence**
-- [ ] Enhanced text input features (auto-resize, formatting, suggestions)
-- [ ] Link detection and previews
-- [ ] File attachment support
-- [ ] Conversation persistence with local storage
-- [ ] Offline message queuing
-- [ ] Search and filtering capabilities
+### **Week 3-4: Minimal Text Input & Basic Persistence**
+- [ ] Basic text input with simple send button
+- [ ] Basic input validation and error handling
+- [ ] Simple conversation persistence with AsyncStorage
+- [ ] Basic local storage for testing
+- [ ] Core functionality validation
+- [ ] Prepare for voice integration
 
 ### **Week 5-6: Action Card System**
 - [ ] Action card component library
@@ -164,31 +164,15 @@ Conversation Features:
 - [ ] Real-time status updates
 - [ ] Error handling and retry logic
 
-### **Week 7-8: Integration & Polish**
+### **Week 9-10: Backend Integration & Testing**
 - [ ] Backend API integration
 - [ ] Google services connectivity
-- [ ] Conversation persistence
-- [ ] Offline functionality
-- [ ] Performance optimization
 - [ ] Comprehensive testing
-
-### **Week 9-10: Testing & Quality Assurance**
-- [ ] Unit and integration testing
-- [ ] E2E testing with Detox
-- [ ] Performance profiling
-- [ ] Accessibility compliance testing
-- [ ] Code quality and architecture validation
 - [ ] Performance optimization
+- [ ] Code quality validation
+- [ ] Prepare for production
 
-### **Week 11-12: Voice Integration**
-- [ ] Speech-to-Text implementation
-- [ ] Text-to-Speech implementation
-- [ ] Voice input/output components
-- [ ] Voice processing error handling
-- [ ] Background audio management
-- [ ] Voice settings and preferences
-
-### **Week 13: Production Deployment**
+### **Week 11: Production Deployment**
 - [ ] App store preparation
 - [ ] Production deployment
 - [ ] Monitoring and analytics setup
