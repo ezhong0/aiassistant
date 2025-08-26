@@ -416,6 +416,7 @@ export interface ApiDocumentation {
 // ============================================================================
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       validatedBody?: unknown;

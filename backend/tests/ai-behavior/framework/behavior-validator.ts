@@ -64,7 +64,9 @@ export class AIBehaviorValidator {
   private conversationContext: Map<string, any> = new Map();
 
   constructor() {
-    this.masterAgent = new MasterAgent();
+    this.masterAgent = new MasterAgent({
+      openaiApiKey: process.env.OPENAI_API_KEY || 'test-openai-key'
+    });
   }
 
   /**

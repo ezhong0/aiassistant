@@ -2,7 +2,6 @@ import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { getService } from '../services/service-manager';
 import { GmailService } from '../services/gmail.service';
-import { EmailParser } from '../utils/email-parser';
 import { ThreadManager } from '../utils/thread-manager';
 import { OpenAIService } from '../services/openai.service';
 import { 
@@ -10,8 +9,7 @@ import {
   SearchEmailsRequest, 
   ReplyEmailRequest,
   GmailMessage,
-  EmailDraft,
-  GmailServiceError 
+  EmailDraft
 } from '../types/gmail.types';
 import { EMAIL_CONSTANTS } from '../config/constants';
 
@@ -65,7 +63,6 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
    */
   private getOpenAIService(): OpenAIService | null {
     try {
-      const { getService } = require('../services/service-manager');
       const openaiService = getService('openaiService') as OpenAIService | null;
       return openaiService || null;
     } catch (error) {
@@ -77,8 +74,9 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
   /**
    * Core email processing logic - no boilerplate!
    */
-  protected async processQuery(params: EmailAgentRequest, context: ToolExecutionContext): Promise<EmailResult> {
-    const { query, accessToken, contacts } = params;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected async processQuery(params: EmailAgentRequest, _context: ToolExecutionContext): Promise<EmailResult> {
+    const { query } = params;
     
     // Determine action type from query
     const action = this.determineAction(query);

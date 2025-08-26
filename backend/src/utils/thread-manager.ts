@@ -257,7 +257,7 @@ export class ThreadManager {
       const thread = await gmailService.getEmailThread(accessToken, updateRequest.threadId);
       
       // Update each message in the thread
-      for (const message of thread.messages) {
+      for (const _message of thread.messages) {
         // Note: markAsRead/markAsUnread methods not implemented in GmailService
         // if (updateRequest.markAsRead !== undefined) {
         //   if (updateRequest.markAsRead) {

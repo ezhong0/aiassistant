@@ -12,6 +12,7 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var actionCardsManager = ActionCardsManager()
     
     var authManager: AuthManager?
     private let baseURL = "http://localhost:3000"
@@ -65,28 +66,4 @@ class ChatViewModel: ObservableObject {
     }
 }
 
-struct Message: Identifiable {
-    let id = UUID()
-    let content: String
-    let isFromUser: Bool
-}
-
-struct TextCommandResponse: Codable {
-    let success: Bool
-    let response: String
-    let sessionId: String
-}
-
-enum APIError: LocalizedError {
-    case noAuthToken
-    case invalidResponse
-    
-    var errorDescription: String? {
-        switch self {
-        case .noAuthToken:
-            return "No authentication token available"
-        case .invalidResponse:
-            return "Invalid response from server"
-        }
-    }
-}
+// Models imported from Message.swift

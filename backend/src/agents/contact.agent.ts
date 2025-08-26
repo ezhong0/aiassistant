@@ -4,8 +4,7 @@ import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
 import {
   Contact,
-  ContactSearchRequest,
-  ContactServiceError
+  ContactSearchRequest
 } from '../types/contact.types';
 import { CONTACT_CONSTANTS } from '../config/constants';
 
@@ -46,8 +45,9 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   /**
    * Core contact processing logic - simplified and focused
    */
-  protected async processQuery(params: ContactAgentRequest, context: ToolExecutionContext): Promise<ContactResult> {
-    const { query, accessToken } = params;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected async processQuery(params: ContactAgentRequest, _context: ToolExecutionContext): Promise<ContactResult> {
+    const { query } = params;
     
     // Determine the operation type
     const operation = params.operation || this.determineOperation(query);
@@ -146,7 +146,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
       if (!contactService) {
         throw new Error('Contact service not available');
       }
-      return await contactService.searchContacts(searchParams.searchTerm, params.accessToken);
+      return await contactService.searchContacts(searchRequest.query, params.accessToken);
     });
 
     this.logger.info('Contact search completed successfully', {

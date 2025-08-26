@@ -28,7 +28,7 @@ export interface StandardAgentResponse {
 }
 
 /**
- * Tool metadata for registry
+ * Tool metadata used by AgentFactory
  */
 export interface ToolMetadata {
   /** Tool name (matches agent name) */

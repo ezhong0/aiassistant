@@ -81,7 +81,8 @@ export class MasterAgent {
       const sessionService = this.getSessionService();
       
       // Get or create session
-      const session = sessionService.getOrCreateSession(sessionId, userId);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _session = sessionService.getOrCreateSession(sessionId, userId);
       
       let toolCalls: ToolCall[];
       let message: string;

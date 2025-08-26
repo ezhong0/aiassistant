@@ -260,27 +260,13 @@ protected async processQuery(params: MyParams, context: ToolExecutionContext): P
 }
 ```
 
-### Agent Registry Usage
+### AgentFactory Usage
 ```typescript
-import { AgentRegistry } from '../framework/base-agent';
+import { AgentFactory } from '../framework/agent-factory';
 
-const registry = new AgentRegistry();
-
-// Register agents
-registry.register('email', EmailAgent, {
-  description: 'Email operations',
-  enabled: true,
-  timeout: 30000
-});
-
-registry.register('contact', ContactAgent, {
-  description: 'Contact management', 
-  enabled: true,
-  timeout: 15000
-});
-
-// Use agents
-const emailAgent = registry.get('email');
+// Agents are automatically registered during initialization
+// Access agents through the factory
+const emailAgent = AgentFactory.getAgent('emailAgent');
 if (emailAgent?.isEnabled()) {
   const result = await emailAgent.execute(params, context);
 }

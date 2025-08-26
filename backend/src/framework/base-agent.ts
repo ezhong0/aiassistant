@@ -325,31 +325,3 @@ export const createAgent = <TParams, TResult>(
   return new AgentClass(config);
 }
 
-/**
- * Agent registry for managing multiple agents
- */
-export class AgentRegistry {
-  private agents = new Map<string, BaseAgent>();
-  
-  register<TParams, TResult>(
-    name: string, 
-    AgentClass: new (config: AgentConfig) => BaseAgent<TParams, TResult>,
-    config: Omit<AgentConfig, 'name'>
-  ): void {
-    const fullConfig = { ...config, name };
-    const agent = new AgentClass(fullConfig);
-    this.agents.set(name, agent);
-  }
-  
-  get(name: string): BaseAgent | undefined {
-    return this.agents.get(name);
-  }
-  
-  getEnabled(): BaseAgent[] {
-    return Array.from(this.agents.values()).filter(agent => agent.isEnabled());
-  }
-  
-  list(): string[] {
-    return Array.from(this.agents.keys());
-  }
-}

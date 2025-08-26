@@ -8,9 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		E22D0F342E5CEDA900D2F1E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E2DB26F52E53A25D00139AA3 /* Assets.xcassets */; };
-		E22D0F3C2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */; };
-		E22D0F3D2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */; };
-		E22D0F3E2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */; };
 		E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F02E53A25D00139AA3 /* AssistantAppApp.swift */; };
 		E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F12E53A25D00139AA3 /* ContentView.swift */; };
 		E2DB26FC2E53A25D00139AA3 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DB26F22E53A25D00139AA3 /* AuthManager.swift */; };
@@ -40,7 +37,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		E2DB26C22E53A25B00139AA3 /* AssistantApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AssistantApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26D02E53A25C00139AA3 /* AssistantAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2DB26DA2E53A25C00139AA3 /* AssistantAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AssistantAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -98,7 +94,6 @@
 		E2DB26B92E53A25B00139AA3 = {
 			isa = PBXGroup;
 			children = (
-				E22D0F3B2E5CF83E00D2F1E1 /* ChatViewModel.swift */,
 				E2DB26C42E53A25B00139AA3 /* AssistantApp */,
 				E2DB26D32E53A25C00139AA3 /* AssistantAppTests */,
 				E2DB26DD2E53A25C00139AA3 /* AssistantAppUITests */,
@@ -289,7 +284,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				E2DB26FA2E53A25D00139AA3 /* AssistantAppApp.swift in Sources */,
-				E22D0F3C2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */,
 				E2DB26FB2E53A25D00139AA3 /* ContentView.swift in Sources */,
 				E2DB26FC2E53A25D00139AA3 /* AuthManager.swift in Sources */,
 				E2DB26FD2E53A25D00139AA3 /* ChatView.swift in Sources */,
@@ -302,7 +296,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E22D0F3D2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -310,7 +303,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E22D0F3E2E5CF83E00D2F1E1 /* ChatViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

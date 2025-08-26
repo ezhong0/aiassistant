@@ -105,6 +105,10 @@ class AuthManager: ObservableObject {
     func getAuthToken() -> String? {
         return jwtToken
     }
+    
+    func getGoogleAccessToken() -> String? {
+        return user?.accessToken.tokenString
+    }
 }
 
 enum AuthError: LocalizedError {
