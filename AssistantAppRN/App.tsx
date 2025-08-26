@@ -6,9 +6,10 @@
 import React from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
 
 // Store
-import { store } from './src/store';
+import { store, persistor } from './src/store';
 
 // Navigation
 import AppNavigator from './src/navigation/AppNavigator';
@@ -18,8 +19,10 @@ function App() {
 
   return (
     <Provider store={store}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppNavigator />
+      <PersistGate loading={null} persistor={persistor}>
+        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+        <AppNavigator />
+      </PersistGate>
     </Provider>
   );
 }
