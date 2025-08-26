@@ -304,95 +304,91 @@ plus RTK Query for API integration with our backend multi-agent system.
 similar to enterprise React applications but adapted for React Native.
 ```
 
-### **Voice Integration (Week 3-4)**
+### **Minimal Text Input & Basic Persistence (Week 3-4)**
 
-#### **4. Speech-to-Text Implementation**
+#### **4. Basic Text Input Implementation**
 ```
-**Architecture Context:** Need to implement voice-first interface using React Native 
-Voice or Expo Speech. This is core to our AI assistant's user experience and must 
-integrate seamlessly with our existing architecture.
+**Architecture Context:** Need minimal text input to test core functionality 
+before moving to voice integration. This is temporary scaffolding to validate 
+our architecture and action card system.
 
-**Goal:** Create VoiceInput component with speech recognition, voice activation, 
-visual feedback, and proper error handling that integrates with our Redux store 
-and chat system.
+**Goal:** Create basic text input system with minimal features that integrates 
+with our Redux store and enables testing of the core AI assistant functionality.
 
 **Constraints:**
-- Use React Native Voice or Expo Speech for speech recognition
-- Implement continuous listening with voice activation
-- Handle background processing and interruptions
-- Provide visual feedback (waveforms, listening states)
+- Use basic React Native TextInput with minimal enhancements
+- Simple send button and basic validation
+- No complex formatting or suggestions
+- Basic error handling
 - Integrate with Redux store for state management
-- Support both iOS and Android platforms
+- Keep implementation minimal and temporary
 
 **Integration Points:**
-- Redux store for voice state management
-- Chat system for sending voice input
-- Action card system for voice commands
+- Redux store for input state management
+- Chat system for sending text input
+- Action card system for text commands
+- Basic local storage for testing
 - Error handling and user feedback
-- Background audio management
 
 **Testing Requirements:**
-- Component testing with mock voice services
-- Platform-specific testing (iOS vs Android)
-- Error handling and retry logic tests
-- Performance testing for voice processing
-- Accessibility testing for voice navigation
+- Basic component testing
+- Input validation tests
+- Integration with chat system
+- Basic error handling tests
 
-**Format:** Provide complete voice input implementation including:
-1. VoiceInput component with speech recognition
-2. Voice state management in Redux
-3. Visual feedback components (waveforms, listening states)
-4. Error handling and retry mechanisms
-5. Platform-specific adaptations
-6. Integration with chat system
-7. Basic testing setup
+**Format:** Provide minimal text input implementation including:
+1. Basic TextInput component with send button
+2. Simple input validation
+3. Integration with Redux store
+4. Basic error handling
+5. Simple testing setup
 
-**Example:** Follow React Native voice integration best practices with proper 
-error handling and user experience, similar to established voice-first applications.
+**Example:** Follow React Native basic input patterns, keeping it simple 
+and focused on core functionality testing.
 ```
 
-#### **5. Text-to-Speech Implementation**
+#### **5. Conversation Persistence and Offline Support**
 ```
-**Architecture Context:** Need to implement text-to-speech for AI responses using 
-AVSpeechSynthesizer (iOS) and TextToSpeech (Android). This will complete the 
-voice-first experience and integrate with our action card system.
+**Architecture Context:** Need to implement conversation persistence using local 
+storage and offline message queuing. This will provide a seamless user experience 
+even when offline and support conversation history management.
 
-**Goal:** Create VoiceOutput component with TTS capabilities, queue management, 
-voice settings, and background audio handling that integrates with our Redux store.
+**Goal:** Create conversation persistence system with local storage, offline 
+queuing, search and filtering, and export capabilities that integrates with 
+our Redux store and repository pattern.
 
 **Constraints:**
-- Use platform-specific TTS implementations
-- Implement queue management for multiple responses
-- Support voice settings and preferences
-- Handle background audio and interruptions
-- Integrate with action card system
-- Support both iOS and Android platforms
+- Use AsyncStorage and SQLite for local storage
+- Implement offline message queuing
+- Support conversation search and filtering
+- Handle large conversation histories efficiently
+- Integrate with Redux store for state management
+- Support conversation export and sharing
 
 **Integration Points:**
-- Redux store for voice output state
-- Action card system for response reading
-- Chat system for AI responses
-- Voice settings and preferences
-- Background audio management
+- Local storage (AsyncStorage, SQLite)
+- Redux store for conversation state
+- Repository pattern for data access
+- Offline functionality and data persistence
+- Search and filtering capabilities
 
 **Testing Requirements:**
-- Component testing with mock TTS services
-- Platform-specific testing
-- Queue management testing
-- Background audio handling tests
-- Voice settings and preferences tests
+- Local storage testing with mock data
+- Offline functionality testing
+- Search and filtering tests
+- Performance testing for large datasets
+- Data persistence and recovery tests
 
-**Format:** Provide complete voice output implementation including:
-1. VoiceOutput component with TTS capabilities
-2. Voice output state management in Redux
-3. Queue management for multiple responses
-4. Voice settings and preferences
-5. Platform-specific adaptations
-6. Integration with action card system
-7. Basic testing setup
+**Format:** Provide complete conversation persistence implementation including:
+1. Local storage service with AsyncStorage and SQLite
+2. Offline message queuing and synchronization
+3. Conversation search and filtering
+4. Export and sharing capabilities
+5. Integration with Redux store
+6. Basic testing setup
 
-**Example:** Follow React Native TTS best practices with proper queue management 
-and platform support, similar to established voice applications.
+**Example:** Follow React Native local storage best practices with proper 
+offline support and data management, similar to enterprise applications.
 ```
 
 ### **Action Card System (Week 5-6)**
@@ -663,6 +659,97 @@ for App Store submission with proper error handling, accessibility, and user gui
 proper monitoring and deployment preparation, similar to enterprise applications.
 ```
 
+### **Voice Integration (Week 11-12)**
+
+#### **12. Speech-to-Text Implementation**
+```
+**Architecture Context:** Need to implement voice-first interface using React Native 
+Voice or Expo Speech. This will enhance our AI assistant's user experience after 
+the core functionality is working with text input.
+
+**Goal:** Create VoiceInput component with speech recognition, voice activation, 
+visual feedback, and proper error handling that integrates with our Redux store 
+and chat system.
+
+**Constraints:**
+- Use React Native Voice or Expo Speech for speech recognition
+- Implement continuous listening with voice activation
+- Handle background processing and interruptions
+- Provide visual feedback (waveforms, listening states)
+- Integrate with Redux store for state management
+- Support both iOS and Android platforms
+
+**Integration Points:**
+- Redux store for voice state management
+- Chat system for sending voice input
+- Action card system for voice commands
+- Error handling and user feedback
+- Background audio management
+
+**Testing Requirements:**
+- Component testing with mock voice services
+- Platform-specific testing (iOS vs Android)
+- Error handling and retry logic tests
+- Performance testing for voice processing
+- Accessibility testing for voice navigation
+
+**Format:** Provide complete voice input implementation including:
+1. VoiceInput component with speech recognition
+2. Voice state management in Redux
+3. Visual feedback components (waveforms, listening states)
+4. Error handling and retry mechanisms
+5. Platform-specific adaptations
+6. Integration with chat system
+7. Basic testing setup
+
+**Example:** Follow React Native voice integration best practices with proper 
+error handling and user experience, similar to established voice-first applications.
+```
+
+#### **13. Text-to-Speech Implementation**
+```
+**Architecture Context:** Need to implement text-to-speech for AI responses using 
+AVSpeechSynthesizer (iOS) and TextToSpeech (Android). This will complete the 
+voice-first experience and integrate with our action card system.
+
+**Goal:** Create VoiceOutput component with TTS capabilities, queue management, 
+voice settings, and background audio handling that integrates with our Redux store.
+
+**Constraints:**
+- Use platform-specific TTS implementations
+- Implement queue management for multiple responses
+- Support voice settings and preferences
+- Handle background audio and interruptions
+- Integrate with action card system
+- Support both iOS and Android platforms
+
+**Integration Points:**
+- Redux store for voice output state
+- Action card system for response reading
+- Chat system for AI responses
+- Voice settings and preferences
+- Background audio management
+
+**Testing Requirements:**
+- Component testing with mock TTS services
+- Platform-specific testing
+- Queue management testing
+- Background audio handling tests
+- Voice settings and preferences tests
+
+**Format:** Provide complete voice output implementation including:
+1. VoiceOutput component with TTS capabilities
+2. Voice output state management in Redux
+3. Queue management for multiple responses
+4. Voice settings and preferences
+5. Platform-specific adaptations
+6. Integration with action card system
+7. Basic testing setup
+
+**Example:** Follow React Native TTS best practices with proper queue management 
+and platform support, similar to established voice applications.
+```
+
 ## ⚡ **Quick Reference for Common Scenarios**
 
 ### **Adding a New Agent**
@@ -690,6 +777,15 @@ Goal: Create [ComponentName] following our clean architecture approach
 Constraints: Use TypeScript, follow component library patterns, integrate with Redux
 Integration: Connect to Redux store, use repository pattern, follow navigation patterns
 Testing: Component tests, integration tests, accessibility tests per testing strategy
+```
+
+### **Adding Voice Features (After Core Functionality)**
+```
+Context: Review voice integration prompts in Week 11-12 after core text functionality is working
+Goal: Add voice input/output capabilities to existing text-based AI assistant
+Constraints: Use React Native Voice/Expo Speech, integrate with existing Redux store
+Integration: Connect to existing chat system, action cards, and state management
+Testing: Platform-specific testing, voice processing tests, accessibility testing
 ```
 
 ### **Fixing a Bug**
