@@ -1,0 +1,184 @@
+import express from 'express';
+import { ServiceManager } from '../services/service-manager';
+import { SlackService } from '../services/slack.service';
+import logger from '../utils/logger';
+
+/**
+ * Slack routes for handling OAuth callbacks and other Slack-specific endpoints
+ */
+export function createSlackRoutes(serviceManager: ServiceManager): express.Router {
+  const router = express.Router();
+
+  /**
+   * Slack OAuth callback handler
+   */
+  router.get('/oauth/callback', async (req, res) => {
+    try {
+      const { code, state, error } = req.query;
+
+      if (error) {
+        logger.error('Slack OAuth error', { error });
+        return res.status(400).json({ error: 'OAuth authorization failed' });
+      }
+
+      if (!code) {
+        logger.error('No authorization code received');
+        return res.status(400).json({ error: 'No authorization code received' });
+      }
+
+      // TODO: Implement OAuth token exchange
+      // This will be implemented when we add the full OAuth flow
+
+      logger.info('Slack OAuth callback received', { code: typeof code, state });
+      
+      res.send(`
+        <html>
+          <head><title>Slack Installation</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1>🎉 Installation Successful!</h1>
+            <p>AI Assistant has been successfully installed to your Slack workspace.</p>
+            <p>You can now use the <code>/assistant</code> command or mention <code>@AI Assistant</code> in any channel.</p>
+            <p>You can close this tab and return to Slack.</p>
+          </body>
+        </html>
+      `);
+
+    } catch (error) {
+      logger.error('Error in Slack OAuth callback', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * Slack app installation page
+   */
+  router.get('/install', async (req, res) => {
+    try {
+      // TODO: Replace with actual Slack app client ID
+      const clientId = process.env.SLACK_CLIENT_ID;
+      const redirectUri = process.env.SLACK_OAUTH_REDIRECT_URI;
+
+      if (!clientId || !redirectUri) {
+        return res.status(500).json({ error: 'Slack app configuration missing' });
+      }
+
+      const scopes = [
+        'app_mentions:read',
+        'chat:write',
+        'commands',
+        'im:history',
+        'im:read',
+        'im:write',
+        'users:read',
+        'channels:read'
+      ].join(',');
+
+      const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+      res.send(`
+        <html>
+          <head><title>Install AI Assistant</title></head>
+          <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+            <h1>🤖 AI Assistant for Slack</h1>
+            <p>Install AI Assistant to your Slack workspace to get help with:</p>
+            <ul style="text-align: left; max-width: 400px; margin: 20px auto;">
+              <li>📧 Email management</li>
+              <li>📅 Calendar scheduling</li>
+              <li>👤 Contact lookup</li>
+              <li>🤖 Intelligent task assistance</li>
+            </ul>
+            <a href="${slackAuthUrl}" style="display: inline-block; background: #4A154B; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px;">
+              Add to Slack
+            </a>
+          </body>
+        </html>
+      `);
+
+    } catch (error) {
+      logger.error('Error serving Slack install page', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * Health check for Slack integration
+   */
+  router.get('/health', async (req, res) => {
+    try {
+      const slackService = serviceManager.getService<SlackService>('slackService');
+      
+      if (!slackService) {
+        return res.status(503).json({ 
+          status: 'error', 
+          message: 'Slack service not available' 
+        });
+      }
+
+      const health = slackService.getHealth();
+      
+      res.json({
+        status: health.healthy ? 'healthy' : 'unhealthy',
+        service: 'SlackService',
+        details: health.details
+      });
+
+    } catch (error) {
+      logger.error('Error checking Slack service health', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * Webhook verification endpoint (for initial Slack app setup)
+   */
+  router.post('/events/verify', async (req, res) => {
+    try {
+      const { challenge, type } = req.body;
+      
+      if (type === 'url_verification') {
+        logger.info('Slack URL verification challenge received');
+        return res.json({ challenge });
+      }
+      
+      res.status(200).json({ status: 'ok' });
+      
+    } catch (error) {
+      logger.error('Error handling Slack verification', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * Manual event testing endpoint (development only)
+   */
+  if (process.env.NODE_ENV === 'development') {
+    router.post('/test-event', async (req, res) => {
+      try {
+        const slackService = serviceManager.getService<SlackService>('slackService');
+        
+        if (!slackService) {
+          return res.status(503).json({ error: 'Slack service not available' });
+        }
+
+        const { message = 'test message', channel = 'test' } = req.body;
+        
+        logger.info('Testing Slack service with manual event', { message, channel });
+        
+        // Send test message
+        await slackService.sendMessage(channel, `Test: ${message}`);
+        
+        res.json({ 
+          status: 'success', 
+          message: 'Test event processed',
+          data: { message, channel }
+        });
+
+      } catch (error) {
+        logger.error('Error processing test event', error);
+        res.status(500).json({ error: 'Test event failed' });
+      }
+    });
+  }
+
+  return router;
+}

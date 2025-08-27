@@ -22,6 +22,13 @@ export const ENV_VARS = {
   OPENAI_API_KEY: 'OPENAI_API_KEY',
   TAVILY_API_KEY: 'TAVILY_API_KEY',
   
+  // Slack configuration
+  SLACK_SIGNING_SECRET: 'SLACK_SIGNING_SECRET',
+  SLACK_BOT_TOKEN: 'SLACK_BOT_TOKEN',
+  SLACK_CLIENT_ID: 'SLACK_CLIENT_ID',
+  SLACK_CLIENT_SECRET: 'SLACK_CLIENT_SECRET',
+  SLACK_OAUTH_REDIRECT_URI: 'SLACK_OAUTH_REDIRECT_URI',
+  
   // Rate limiting and security
   DISABLE_RATE_LIMITING: 'DISABLE_RATE_LIMITING',
   CORS_ORIGIN: 'CORS_ORIGIN',
@@ -69,6 +76,17 @@ export const ENVIRONMENT = {
   apiKeys: {
     openai: process.env[ENV_VARS.OPENAI_API_KEY] || '',
     tavily: process.env[ENV_VARS.TAVILY_API_KEY] || ''
+  },
+  
+  /**
+   * Slack integration configuration
+   */
+  slack: {
+    signingSecret: process.env[ENV_VARS.SLACK_SIGNING_SECRET] || '',
+    botToken: process.env[ENV_VARS.SLACK_BOT_TOKEN] || '',
+    clientId: process.env[ENV_VARS.SLACK_CLIENT_ID] || '',
+    clientSecret: process.env[ENV_VARS.SLACK_CLIENT_SECRET] || '',
+    redirectUri: process.env[ENV_VARS.SLACK_OAUTH_REDIRECT_URI] || ''
   },
   
   /**
@@ -174,6 +192,16 @@ export const ENV_VALIDATION = {
   },
   
   /**
+   * Check if Slack is properly configured
+   */
+  isSlackConfigured: (): boolean => {
+    return !!(ENVIRONMENT.slack.signingSecret && 
+              ENVIRONMENT.slack.botToken && 
+              ENVIRONMENT.slack.clientId && 
+              ENVIRONMENT.slack.clientSecret);
+  },
+  
+  /**
    * Get configuration summary for logging
    */
   getConfigSummary: () => {
@@ -185,7 +213,8 @@ export const ENV_VALIDATION = {
       services: {
         google: ENV_VALIDATION.isGoogleConfigured(),
         openai: ENV_VALIDATION.isOpenAIConfigured(),
-        tavily: ENV_VALIDATION.isTavilyConfigured()
+        tavily: ENV_VALIDATION.isTavilyConfigured(),
+        slack: ENV_VALIDATION.isSlackConfigured()
       }
     };
   }
@@ -294,6 +323,9 @@ export const ENV_HELPERS = {
       OPENAI_API_KEY: ENV_HELPERS.maskSensitive(ENVIRONMENT.apiKeys.openai),
       TAVILY_API_KEY: ENV_HELPERS.maskSensitive(ENVIRONMENT.apiKeys.tavily),
       JWT_SECRET: ENV_HELPERS.maskSensitive(ENVIRONMENT.jwtSecret),
+      SLACK_BOT_TOKEN: ENV_HELPERS.maskSensitive(ENVIRONMENT.slack.botToken),
+      SLACK_SIGNING_SECRET: ENV_HELPERS.maskSensitive(ENVIRONMENT.slack.signingSecret),
+      SLACK_CLIENT_ID: ENV_HELPERS.maskSensitive(ENVIRONMENT.slack.clientId),
       features: ENVIRONMENT.features
     };
   }

@@ -27,6 +27,9 @@ import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
+// import { createSlackRoutes } from './routes/slack.routes';
+import { serviceManager } from './services/service-manager';
+// import { SlackService } from './services/slack.service';
 
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
@@ -80,6 +83,25 @@ app.use('/health', healthRoutes);
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 app.use('/api/assistant', assistantRoutes);
+
+// Slack routes (temporarily disabled)
+// app.use('/slack', createSlackRoutes(serviceManager));
+
+// Slack Bolt event handler integration (temporarily disabled)
+// const setupSlackEventHandler = () => {
+//   const slackService = serviceManager.getService<SlackService>('slackService');
+//   if (slackService) {
+//     const receiver = slackService.getReceiver();
+//     if (receiver) {
+//       // Use the receiver's router for Slack events
+//       app.use(receiver.router);
+//       logger.info('Slack event handler integrated successfully');
+//     }
+//   }
+// };
+
+// Set up Slack event handler after services are initialized
+// setTimeout(setupSlackEventHandler, 1000);
 
 // Simple test endpoint for debugging
 app.get('/test', (req: Request, res: Response) => {

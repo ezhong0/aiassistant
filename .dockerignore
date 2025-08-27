@@ -1,0 +1,12 @@
+node_modules/
+backend/node_modules/
+backend/dist/
+.git/
+.DS_Store
+*.log
+.env.local
+.env.development  
+.env.test
+README.md
+*.md
+.gitignore
