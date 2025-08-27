@@ -2,6 +2,7 @@ import { App, ExpressReceiver, LogLevel } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
 import { BaseService } from './base-service';
 import { ServiceManager } from './service-manager';
+import { ToolExecutionContext } from '../types/tools';
 import {
   SlackServiceConfig,
   SlackContext,
@@ -216,7 +217,7 @@ export class SlackService extends BaseService {
     // Handle app mentions (@assistant)
     this.app.event('app_mention', async ({ event, say, client }) => {
       try {
-        const context = this.createSlackContext(event as SlackAppMentionEvent, false);
+        const context = await this.createSlackContext(event as SlackAppMentionEvent, false);
         await this.handleSlackEvent(event.text, context, 'app_mention', { say, client });
       } catch (error) {
         this.logError('Error handling app_mention', error);
@@ -229,13 +230,13 @@ export class SlackService extends BaseService {
       try {
         // Only handle direct messages (channel_type === 'im')
         if (message.channel_type === 'im' && 'text' in message && message.text) {
-          const context = this.createSlackContext(message as SlackMessageEvent, true);
+          const context = await this.createSlackContext(message as SlackMessageEvent, true);
           await this.handleSlackEvent(message.text, context, 'message', { say, client });
         }
-      } catch (error) {
-        this.logError('Error handling direct message', error);
-        await say('Sorry, I encountered an error processing your message. Please try again.');
-      }
+              } catch (error) {
+          this.logError('Error handling direct message', error);
+          await say('Sorry, I encountered an error processing your message. Please try again.');
+        }
     });
 
     // Handle slash commands
@@ -275,11 +276,23 @@ export class SlackService extends BaseService {
   /**
    * Create Slack context from event
    */
-  private createSlackContext(event: SlackMessageEvent | SlackAppMentionEvent, isDirectMessage: boolean): SlackContext {
+  private async createSlackContext(event: SlackMessageEvent | SlackAppMentionEvent, isDirectMessage: boolean): Promise<SlackContext> {
+    // Get team ID from the Slack client if available
+    let teamId = '';
+    if (this.client) {
+      try {
+        const authTest = await this.client.auth.test();
+        teamId = authTest.team_id || '';
+      } catch (error) {
+        this.logWarn('Could not get team ID from auth test', error);
+        teamId = '';
+      }
+    }
+    
     return {
       userId: event.user,
       channelId: event.channel,
-      teamId: '', // Will be populated from team context
+      teamId,
       threadTs: event.thread_ts,
       isDirectMessage
     };
@@ -295,6 +308,36 @@ export class SlackService extends BaseService {
       teamId: command.team_id,
       isDirectMessage: command.channel_name === 'directmessage'
     };
+  }
+
+  /**
+   * Create or get session for Slack user
+   */
+  private async createOrGetSession(slackContext: SlackContext): Promise<string> {
+    try {
+      const sessionService = this.serviceManager.getService('sessionService');
+      if (!sessionService) {
+        throw new Error('SessionService not available');
+      }
+
+      // Create unique session ID for Slack context
+      const sessionId = `slack_${slackContext.teamId}_${slackContext.userId}_${slackContext.threadTs || 'main'}`;
+      
+      // Get or create session using existing SessionService
+      const session = (sessionService as any).getOrCreateSession(sessionId, slackContext.userId);
+      
+      this.logDebug('Slack session created/retrieved', { 
+        sessionId, 
+        userId: slackContext.userId,
+        teamId: slackContext.teamId 
+      });
+      
+      return sessionId;
+    } catch (error) {
+      this.logError('Error creating/retrieving Slack session', error);
+      // Fallback to a simple session ID if SessionService fails
+      return `slack_fallback_${slackContext.teamId}_${slackContext.userId}`;
+    }
   }
 
   /**
@@ -360,27 +403,94 @@ export class SlackService extends BaseService {
    */
   private async routeToAgent(request: SlackAgentRequest): Promise<SlackAgentResponse> {
     try {
-      // Get ToolExecutorService to access agents
-      const toolExecutorService = this.serviceManager.getService('ToolExecutorService');
-      
-      if (!toolExecutorService) {
-        throw new Error('ToolExecutorService not available');
-      }
-
-      // TODO: This will need to be integrated with your existing agent system
-      // For now, return a placeholder response
-      
-      this.logInfo('Routing Slack request to agents', { 
+      this.logInfo('Routing Slack request to MasterAgent', { 
         message: request.message,
         eventType: request.eventType 
       });
 
-      // Placeholder response - will be replaced with actual agent integration
+      // Create or get session for Slack user
+      const sessionId = await this.createOrGetSession(request.context);
+      
+      // Import MasterAgent dynamically to avoid circular dependencies
+      const { MasterAgent } = await import('../agents/master.agent');
+      const masterAgent = new MasterAgent();
+      
+      // Route to MasterAgent for intent parsing (existing functionality)
+      const masterResponse = await masterAgent.processUserInput(
+        request.message,
+        sessionId,
+        request.context.userId
+      );
+
+      // If MasterAgent needs to think, handle that first
+      if (masterResponse.needsThinking) {
+        // Execute the Think tool to get final response
+        const toolExecutorService = this.serviceManager.getService('ToolExecutorService');
+        if (toolExecutorService) {
+          const thinkTool = masterResponse.toolCalls?.find(tc => tc.name === 'Think');
+          if (thinkTool) {
+            const executionContext: ToolExecutionContext = {
+              sessionId,
+              userId: request.context.userId,
+              timestamp: new Date(),
+              slackContext: request.context
+            };
+            
+            const thinkResult = await (toolExecutorService as any).executeTool(
+              thinkTool,
+              executionContext
+            );
+            
+            // Use the thinking result to enhance the response
+            if (thinkResult.success && thinkResult.result) {
+              const thinkData = thinkResult.result as any;
+              if (thinkData.message) {
+                masterResponse.message = thinkData.message;
+              }
+            }
+          }
+        }
+      }
+
+      // Execute any other tool calls from MasterAgent
+      if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
+        const toolExecutorService = this.serviceManager.getService('ToolExecutorService');
+        if (toolExecutorService) {
+          const executionContext: ToolExecutionContext = {
+            sessionId,
+            userId: request.context.userId,
+            timestamp: new Date(),
+            slackContext: request.context
+          };
+
+          // Execute all tool calls (except Think which was handled above)
+          const nonThinkTools = masterResponse.toolCalls.filter(tc => tc.name !== 'Think');
+          for (const toolCall of nonThinkTools) {
+            try {
+              const result = await (toolExecutorService as any).executeTool(
+                toolCall,
+                executionContext
+              );
+              
+              if (!result.success) {
+                this.logWarn('Tool execution failed', { 
+                  toolName: toolCall.name, 
+                  error: result.error 
+                });
+              }
+            } catch (error) {
+              this.logError('Error executing tool', error, { toolName: toolCall.name });
+            }
+          }
+        }
+      }
+
+      // Format response for Slack
+      const slackResponse = await this.formatAgentResponseForSlack(masterResponse, request.context);
+      
       return {
         success: true,
-        response: {
-          text: `I received your message: "${request.message}". I'm still being configured to work with your existing agents. This integration will be completed in the next phase.`
-        },
+        response: slackResponse,
         shouldRespond: true
       };
       
@@ -394,6 +504,48 @@ export class SlackService extends BaseService {
         },
         error: error instanceof Error ? error.message : 'Unknown error',
         shouldRespond: true
+      };
+    }
+  }
+
+  /**
+   * Format agent response for Slack
+   */
+  private async formatAgentResponseForSlack(
+    masterResponse: any, 
+    slackContext: SlackContext
+  ): Promise<{ text: string; blocks?: any[] }> {
+    try {
+      // Get SlackFormatterService for rich formatting
+      const slackFormatterService = this.serviceManager.getService('slackFormatterService');
+      
+      if (slackFormatterService && typeof (slackFormatterService as any).formatAgentResponse === 'function') {
+        // Use SlackFormatterService if available
+        return await (slackFormatterService as any).formatAgentResponse(masterResponse, slackContext);
+      }
+      
+      // Fallback to basic text formatting
+      let responseText = masterResponse.message || 'I processed your request successfully.';
+      
+      // Add tool execution results if available
+      if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
+        const results = masterResponse.toolResults
+          .filter((tr: any) => tr.success)
+          .map((tr: any) => tr.result)
+          .filter(Boolean);
+        
+        if (results.length > 0) {
+          responseText += '\n\nResults:\n' + results.map((r: any) => 
+            typeof r === 'string' ? r : JSON.stringify(r, null, 2)
+          ).join('\n');
+        }
+      }
+      
+      return { text: responseText };
+    } catch (error) {
+      this.logError('Error formatting agent response for Slack', error);
+      return { 
+        text: masterResponse.message || 'I processed your request successfully.' 
       };
     }
   }
@@ -427,5 +579,5 @@ export class SlackService extends BaseService {
         this.logError('Error processing follow-up action', error, { action });
       }
     }
-  }
+    }
 }
