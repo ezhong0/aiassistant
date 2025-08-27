@@ -8,7 +8,7 @@ A sophisticated, voice-controlled AI assistant platform that demonstrates **arch
 
 ### **System Architecture**
 ```
-iOS Voice Interface → Backend API → Multi-Agent Orchestration → External Services
+Slack Interface → Backend API → Multi-Agent Orchestration → External Services
      ↓                    ↓              ↓                    ↓
 SwiftUI + Speech    Express + TS    Master Agent +     Google APIs + OpenAI
    Framework         + Middleware    Specialized Agents
@@ -25,7 +25,7 @@ SwiftUI + Speech    Express + TS    Master Agent +     Google APIs + OpenAI
 
 ### **Prerequisites**
 - Node.js 18+ and npm
-- Xcode 15+ (for iOS development)
+- Node.js 18+ (for backend development)
 - Google Cloud Platform account
 - OpenAI API key
 
@@ -37,9 +37,9 @@ cp ../.env.example .env  # Configure your environment
 npm run dev              # Starts on http://localhost:3000
 ```
 
-### **2. iOS Setup**
+### **2. Backend Setup**
 ```bash
-open ios/AssistantApp.xcodeproj
+cd backend && npm install
 # Configure GoogleService-Info.plist with your credentials
 # Build and run (⌘+R)
 ```
@@ -68,11 +68,11 @@ assistantapp/
 │   │   └── 📁 utils/             # Utility functions
 │   ├── 📁 tests/                 # Comprehensive test suite
 │   └── package.json
-├── 📁 ios/                       # iOS SwiftUI application
+├── 📁 backend/                   # Node.js/TypeScript backend
 │   └── 📁 AssistantApp/
 │       ├── 📁 Views/             # SwiftUI view components
 │       ├── 📁 ViewModels/        # MVVM view models
-│       ├── 📁 Services/          # iOS service layer
+│       ├── 📁 Services/          # Backend service layer
 │       ├── 📁 Models/            # Data models
 │       └── 📁 Configuration/     # Environment configs
 ├── 📁 credentials/               # Google Cloud credentials
@@ -91,7 +91,7 @@ npm run test         # Run all tests
 npm run test:watch   # Watch mode for tests
 ```
 
-### **iOS Development**
+### **Backend Development**
 - **Build**: ⌘+B
 - **Run**: ⌘+R
 - **Clean**: ⌘+Shift+K
@@ -136,12 +136,12 @@ This project follows the **Strategic Framework for AI-Assisted Development**:
 - **Backend Foundation**: Express server with TypeScript and middleware
 - **Multi-Agent System**: Master agent with specialized sub-agents
 - **Service Architecture**: Dependency injection and lifecycle management
-- **iOS Foundation**: SwiftUI app with Google Sign-In integration
+- **Backend Foundation**: Node.js/TypeScript with Google OAuth integration
 - **Authentication**: OAuth 2.0 flow with Google services
 - **Testing Framework**: Comprehensive test suite with AI behavior validation
 
 ### **🔄 In Progress**
-- **Voice Integration**: iOS speech-to-text and backend processing
+- **Slack Integration**: Slack bot with natural language processing
 - **Agent Workflows**: Multi-step intelligent workflows
 - **Performance Optimization**: Response time and resource optimization
 
@@ -185,7 +185,7 @@ This project follows the **Strategic Framework for AI-Assisted Development**:
 
 ### **Development Resources**
 - **Backend API**: `http://localhost:3000/health` for health check
-- **iOS Simulator**: Test authentication and basic functionality
+- **Slack Testing**: Test bot functionality and agent responses
 - **Backend Logs**: Comprehensive logging for debugging
 - **Test Suite**: Run `npm run test` for system validation
 

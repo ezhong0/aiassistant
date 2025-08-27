@@ -4,14 +4,14 @@
 
 This document contains **strategic AI prompts** to help you build your Slack AI Assistant step-by-step. Each prompt is designed to leverage your existing architecture while adding Slack-specific functionality.
 
-**Key Principle**: Your existing multi-agent system and services are 80% of what you need. We're just adding the Slack interface layer.
+**Key Principle**: Your existing multi-agent system and services are 80% of what you need. We're just adding the Slack interface layer for now, with room for future web interfaces.
 
 ## 🏗️ **Architecture Approach**
 
 ### **Intent Parsing: Master Agent Only** ✅
 - **Master Agent handles ALL intent parsing** through existing OpenAI integration
 - **Slack service does NOT parse intent** - it only handles events and formatting
-- **Same intent parsing logic** serves both iOS app and Slack interface
+- **Same intent parsing logic** serves Slack interface and future web interfaces
 - **No duplication** of complex intent recognition logic
 
 ### **Flow Architecture**
@@ -24,7 +24,7 @@ Slack Event → SlackService → MasterAgent (intent parsing) → Specialized Ag
 
 ### **Why This Approach Works**
 1. **Single Source of Truth**: Master Agent is the only place intent parsing happens
-2. **Consistent Behavior**: Same logic for iOS and Slack users
+2. **Consistent Behavior**: Same logic for Slack users and future interfaces
 3. **Maintainability**: One place to update intent parsing logic
 4. **Testing**: Test intent parsing once, works everywhere
 5. **Strategic Alignment**: Follows your architecture-first approach
@@ -837,7 +837,7 @@ Show me the metrics implementation and dashboard setup.
 - Mention your Jest testing framework
 - Reference your existing test patterns
 - Include performance and quality requirements
-- **Test intent parsing once in MasterAgent, works for both iOS and Slack**
+- **Test intent parsing once in MasterAgent, works for Slack and future interfaces**
 
 ### **4. Maintain Your Patterns**
 - Follow your BaseService and BaseAgent patterns
@@ -876,7 +876,7 @@ Show me the metrics implementation and dashboard setup.
 
 ---
 
-**Remember: Your existing architecture is 70% of the solution. These prompts help you add the Slack interface layer while maintaining your proven patterns and quality standards.**
+**Remember: Your existing architecture is 70% of the solution. These prompts help you add the Slack interface layer while maintaining your proven patterns and quality standards. The same architecture can support future web interfaces when you're ready to expand.**
 
 ---
 
@@ -1047,13 +1047,13 @@ npm install --save-dev @types/slack__bolt
 
 - Add Slack context handling to existing agents
 - Support Slack user/channel information in tool execution
-- Maintain existing functionality for iOS app
+- Maintain existing functionality for future interfaces
 - NO intent parsing logic - agents only handle execution
 
 #### Master Agent Integration
 
 - **NO changes needed** - existing intent parsing and routing works perfectly
-- Slack events will be processed same as iOS requests
+- Slack events will be processed same as future web requests
 - MasterAgent already handles all the complex logic
 
 ### 4. Environment Configuration
@@ -1100,7 +1100,7 @@ Update src/index.ts:
 
 ### No Breaking Changes ✅
 
-- iOS app continues working unchanged
+- Future web interfaces can be added easily
 - Existing API endpoints remain functional
 - Current agent interfaces preserved
 - MasterAgent continues handling all intent parsing

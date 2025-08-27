@@ -9,7 +9,7 @@ This document establishes the **architectural boundaries** that AI development m
 ### **High-Level Architecture**
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   iOS Client    │    │  Backend API    │    │ External APIs   │
+│   Slack Client  │    │  Backend API    │    │ External APIs   │
 │                 │    │                 │    │                 │
 │ • SwiftUI       │◄──►│ • Express       │◄──►│ • Google APIs   │
 │ • Speech        │    │ • TypeScript    │    │ • OpenAI API    │
@@ -30,7 +30,7 @@ This document establishes the **architectural boundaries** that AI development m
 
 ### **Core Architectural Layers**
 
-#### **1. Presentation Layer (iOS)**
+#### **1. Presentation Layer (Slack)**
 - **Responsibility**: User interface and interaction
 - **Technology**: SwiftUI + MVVM pattern
 - **Boundaries**: No business logic, only UI state management
@@ -189,17 +189,17 @@ export const apiRateLimit = rateLimit({
 
 ### **1. Request Flow**
 ```
-User Input → iOS App → Backend API → Middleware Stack → Route Handler → Service → Agent → External API
+User Input → Slack Bot → Backend API → Middleware Stack → Route Handler → Service → Agent → External API
 ```
 
 ### **2. Response Flow**
 ```
-External API → Agent → Service → Route Handler → Middleware Stack → Backend API → iOS App → User
+External API → Agent → Service → Route Handler → Middleware Stack → Backend API → Slack Bot → User
 ```
 
 ### **3. Error Flow**
 ```
-Error → Agent/Service → Route Handler → Error Middleware → Structured Response → iOS App → User
+Error → Agent/Service → Route Handler → Error Middleware → Structured Response → Slack Bot → User
 ```
 
 ## 🔒 **Security Architecture**
@@ -207,11 +207,11 @@ Error → Agent/Service → Route Handler → Error Middleware → Structured Re
 ### **1. Authentication Flow**
 ```typescript
 // OAuth 2.0 with Google
-1. iOS: Google Sign-In → Access Token
-2. iOS → Backend: Token exchange
+1. Slack: Google OAuth → Access Token
+2. Slack → Backend: Token exchange
 3. Backend: Validate token with Google
 4. Backend: Issue session token
-5. iOS: Store session token securely
+5. Slack: Store session token securely
 ```
 
 ### **2. Authorization Patterns**
