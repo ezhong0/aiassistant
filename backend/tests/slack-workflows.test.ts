@@ -1,6 +1,6 @@
 import './setup/slack-test-setup';
 import { getService } from '../src/services/service-manager';
-import { SlackService } from '../src/services/slack.service';
+import { SlackInterface } from '../src/interfaces/slack.interface';
 import { ToolExecutorService } from '../src/services/tool-executor.service';
 import { EmailAgent } from '../src/agents/email.agent';
 import { ContactAgent } from '../src/agents/contact.agent';
@@ -10,7 +10,7 @@ import { initializeAllCoreServices } from '../src/services/service-initializatio
 import { ToolExecutionContext } from '../src/types/tools';
 
 describe('Slack Workflow Integration Tests', () => {
-  let slackService: SlackService;
+  let slackInterface: SlackInterface;
   let toolExecutor: ToolExecutorService;
   let masterAgent: MasterAgent;
   let emailAgent: EmailAgent;
@@ -33,7 +33,8 @@ describe('Slack Workflow Integration Tests', () => {
     try {
       await initializeAllCoreServices();
       
-      slackService = getService<SlackService>('slackService')!;
+      // Note: SlackInterface is not a service, it's initialized separately
+    // For testing purposes, we'll create it directly
       toolExecutor = getService<ToolExecutorService>('toolExecutorService')!;
       
       // Initialize agents for testing

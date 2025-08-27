@@ -29,7 +29,7 @@ import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 import { createSlackRoutes } from './routes/slack.routes';
 import { serviceManager } from './services/service-manager';
-import { SlackService } from './services/slack.service';
+import { initializeInterfaces, startInterfaces } from './interfaces';
 
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
@@ -88,24 +88,20 @@ app.use('/api/assistant', assistantRoutes);
 // Slack routes
 app.use('/slack', createSlackRoutes(serviceManager));
 
-// Slack Bolt event handler integration
-const setupSlackEventHandler = () => {
+// Slack interface integration
+const setupSlackInterface = async () => {
   try {
-    const slackService = serviceManager.getService<SlackService>('slackService');
-    if (slackService && slackService.isReady()) {
-      const receiver = slackService.getReceiver();
-      if (receiver) {
-        // Use the receiver's router for Slack events
-        app.use(receiver.router);
-        logger.info('Slack event handler integrated successfully');
-      } else {
-        logger.warn('Slack receiver not available - running in development mode');
-      }
+    const interfaces = await initializeInterfaces(serviceManager);
+    if (interfaces.slackInterface) {
+      // Use the Slack interface router for Slack events
+      app.use(interfaces.slackInterface.router);
+      await startInterfaces(interfaces);
+      logger.info('Slack interface integrated successfully');
     } else {
-      logger.warn('Slack service not available - running without Slack integration');
+      logger.warn('Slack interface not available - running without Slack integration');
     }
   } catch (error) {
-    logger.error('Error setting up Slack event handler:', error);
+    logger.error('Error setting up Slack interface:', error);
   }
 };
 
@@ -146,8 +142,8 @@ const startServer = async (): Promise<void> => {
     // Initialize application services
     await initializeApplication();
     
-    // Set up Slack event handler after services are initialized
-    setupSlackEventHandler();
+    // Set up Slack interface after services are initialized
+    await setupSlackInterface();
 
     // Start the server
     const server = app.listen(port, () => {

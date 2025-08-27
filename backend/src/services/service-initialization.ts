@@ -6,7 +6,6 @@ import { ContactService } from './contact.service';
 import { GmailService } from './gmail.service';
 import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
-import { SlackService } from './slack.service';
 import { SlackFormatterService } from './slack-formatter.service';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import logger from '../utils/logger';
@@ -104,29 +103,8 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 9. SlackService - Depends on other services and only if configured
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackService = new SlackService(
-        {
-          signingSecret: ENVIRONMENT.slack.signingSecret,
-          botToken: ENVIRONMENT.slack.botToken,
-          clientId: ENVIRONMENT.slack.clientId,
-          clientSecret: ENVIRONMENT.slack.clientSecret,
-          redirectUri: ENVIRONMENT.slack.redirectUri,
-          development: !ENV_VALIDATION.isProduction()
-        },
-        serviceManager
-      );
-      serviceManager.registerService('slackService', slackService, {
-        dependencies: ['sessionService', 'toolExecutorService', 'authService', 'calendarService', 'slackFormatterService'],
-        priority: 90,
-        autoStart: true
-      });
-
-      logger.info('Slack service registered successfully');
-    } else {
-      logger.warn('Slack service not registered - missing configuration');
-    }
+    // Note: Slack is now an interface layer, not a service
+    // It will be initialized separately in the main application
 
     logger.info('Core services registered successfully', {
       serviceCount: serviceManager.getServiceCount(),

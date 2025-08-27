@@ -25,15 +25,17 @@ This document provides the current status of Slack integration with your existin
 ## 🏗️ **Architecture Overview**
 
 ```
-Slack Event → SlackService → MasterAgent (intent parsing) → Specialized Agents → SlackFormatter → Slack Response
+Slack Event → SlackInterface → MasterAgent (intent parsing) → Specialized Agents → SlackFormatter → Slack Response
      ↓              ↓                    ↓                              ↓                ↓              ↓
   Event        Context            Intent Parsing                    Execution        Formatting      Response
   Handling     Translation        (Already Working)                & Results       for Slack       to User
 ```
 
+**Key Architectural Distinction**: Slack is an **interface layer**, not a service. It routes requests to existing services but doesn't maintain state or provide business logic.
+
 ## 🔧 **Key Components Implemented**
 
-### **1. SlackService (`src/services/slack.service.ts`)**
+### **1. SlackInterface (`src/interfaces/slack.interface.ts`)**
 - ✅ **Event Handling**: App mentions, direct messages, slash commands
 - ✅ **Agent Routing**: Routes to MasterAgent for intent parsing
 - ✅ **Session Management**: Integrates with existing SessionService
@@ -49,10 +51,10 @@ Slack Event → SlackService → MasterAgent (intent parsing) → Specialized Ag
 - ✅ **Type Safety**: Proper TypeScript interfaces
 - ✅ **Backward Compatibility**: Maintains existing functionality
 
-### **4. Service Registration (`src/services/service-initialization.ts`)**
-- ✅ **Dependency Management**: Proper service initialization order
-- ✅ **Slack Service**: Registered with correct dependencies
-- ✅ **Configuration**: Environment-based service registration
+### **4. Interface Layer Initialization (`src/interfaces/index.ts`)**
+- ✅ **Dependency Management**: Receives service manager for access to services
+- ✅ **Slack Interface**: Initialized as interface layer, not service
+- ✅ **Configuration**: Environment-based interface initialization
 
 ## 🚀 **How It Works**
 
@@ -67,7 +69,7 @@ Slack Event → SlackService → MasterAgent (intent parsing) → Specialized Ag
 
 ### **2. Intent Parsing**
 - **MasterAgent**: Handles ALL intent parsing (existing functionality)
-- **Slack Service**: Only handles event reception and response formatting
+- **Slack Interface**: Only handles event reception and response formatting
 - **No Duplication**: Intent parsing logic reused from existing system
 
 ### **3. Context Management**

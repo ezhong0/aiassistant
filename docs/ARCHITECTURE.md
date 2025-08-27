@@ -11,9 +11,9 @@ This document establishes the **architectural boundaries** that AI development m
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Slack Client  │    │  Backend API    │    │ External APIs   │
 │                 │    │                 │    │                 │
-│ • SwiftUI       │◄──►│ • Express       │◄──►│ • Google APIs   │
-│ • Speech        │    │ • TypeScript    │    │ • OpenAI API    │
-│ • MVVM          │    │ • Middleware    │    │ • Tavily API    │
+│ • Slack Bot     │◄──►│ • Express       │◄──►│ • Google APIs   │
+│ • Events        │    │ • TypeScript    │    │ • OpenAI API    │
+│ • Commands      │    │ • Middleware    │    │ • Tavily API    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
                               ▼
@@ -30,10 +30,11 @@ This document establishes the **architectural boundaries** that AI development m
 
 ### **Core Architectural Layers**
 
-#### **1. Presentation Layer (Slack)**
-- **Responsibility**: User interface and interaction
-- **Technology**: SwiftUI + MVVM pattern
-- **Boundaries**: No business logic, only UI state management
+#### **1. Interface Layer (Slack)**
+- **Responsibility**: Input handling and request routing
+- **Technology**: Slack Bolt SDK with Express integration
+- **Boundaries**: Event handling, message routing, response formatting
+- **Key Difference**: Stateless interface layer, not a service
 
 #### **2. API Layer (Backend)**
 - **Responsibility**: HTTP interface and request handling
@@ -80,6 +81,16 @@ export enum ServiceState {
 }
 ```
 
+#### **Interface Layer Initialization**
+```typescript
+// Interface layers are initialized differently - they don't go through service manager
+const slackInterface = new SlackInterface(serviceManager, slackConfig);
+app.use('/slack', slackInterface.router);
+
+// They receive the service manager to access services when needed
+// But they don't maintain their own lifecycle state
+```
+
 #### **Dependency Injection Pattern**
 ```typescript
 // Services declare their dependencies
@@ -90,7 +101,33 @@ serviceManager.registerService('gmailService', gmailService, {
 });
 ```
 
-### **2. Multi-Agent System**
+### **2. Service vs. Interface Layer Architecture**
+
+#### **Core Services (Stateful, Long-Running)**
+```typescript
+// These are true services that maintain state and provide functionality
+- SessionService: Manages user sessions and conversation context
+- AuthService: Handles authentication and authorization
+- GmailService: Manages Gmail API connections and operations
+- CalendarService: Manages Google Calendar API connections
+- ContactService: Manages Google Contacts API operations
+- OpenAIService: Manages OpenAI API connections and rate limiting
+- ToolExecutorService: Executes agent tool calls with context
+```
+
+#### **Interface Layers (Stateless, Event-Driven)**
+```typescript
+// These are interface handlers that route requests to services
+- SlackInterface: Handles Slack events, routes to MasterAgent
+- WebInterface: Future web dashboard interface (planned)
+- APIRouter: REST API endpoint routing
+```
+
+#### **Key Architectural Distinction**
+- **Services**: Maintain state, provide business logic, are initialized and managed
+- **Interfaces**: Handle input/output, route requests, are stateless and event-driven
+
+### **3. Multi-Agent System**
 
 #### **Agent Factory Architecture**
 ```typescript
