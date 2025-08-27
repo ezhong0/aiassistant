@@ -1,21 +1,12 @@
-import './setup/slack-test-setup';
 import { SlackFormatterService } from '../src/services/slack-formatter.service';
-import { initializeAllCoreServices } from '../src/services/service-initialization';
-import { getService } from '../src/services/service-manager';
 
 describe('Slack Formatting Service Tests', () => {
   let slackFormatter: SlackFormatterService;
 
   beforeAll(async () => {
-    try {
-      await initializeAllCoreServices();
-      slackFormatter = getService<SlackFormatterService>('slackFormatterService')!;
-    } catch (error) {
-      console.error('Failed to initialize services for testing:', error);
-      // Create service directly if initialization fails
-      slackFormatter = new SlackFormatterService();
-      await slackFormatter.initialize();
-    }
+    // Create service directly for testing
+    slackFormatter = new SlackFormatterService();
+    await slackFormatter.initialize();
   });
 
   describe('Email Formatting', () => {
