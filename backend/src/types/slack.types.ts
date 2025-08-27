@@ -177,6 +177,17 @@ export interface SlackAgentResponse {
     payload: any;
     delayMs?: number;
   }>;
+  executionMetadata?: {
+    processingTime: number;
+    toolResults: Array<{
+      toolName: string;
+      success: boolean;
+      executionTime: number;
+      error?: string;
+    }>;
+    masterAgentResponse?: string;
+    error?: string;
+  };
 }
 
 /**

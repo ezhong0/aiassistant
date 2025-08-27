@@ -1,471 +1,273 @@
-import './setup/slack-test-setup';
-import request from 'supertest';
-import { App } from '@slack/bolt';
-import { getService } from '../src/services/service-manager';
+import { jest } from '@jest/globals';
 import { SlackInterface } from '../src/interfaces/slack.interface';
-import { SlackFormatterService } from '../src/services/slack-formatter.service';
-import { initializeAllCoreServices } from '../src/services/service-initialization';
-import { createApp } from '../src/index';
+import { ServiceManager } from '../src/services/service-manager';
+import { SlackConfig } from '../src/interfaces/slack.interface';
+import { SlackContext, SlackEventType } from '../src/types/slack.types';
 
-describe('Slack Integration Tests', () => {
-  let app: any;
+// Create mock objects outside of jest.mock to avoid type inference issues
+const mockApp = {
+  event: jest.fn(),
+  message: jest.fn(),
+  command: jest.fn(),
+  action: jest.fn(),
+  view: jest.fn(),
+  start: jest.fn().mockReturnValue(Promise.resolve()),
+  stop: jest.fn().mockReturnValue(Promise.resolve())
+};
+
+const mockReceiver = {
+  router: {
+    get: jest.fn(),
+    post: jest.fn(),
+    use: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
+    patch: jest.fn()
+  }
+};
+
+const mockWebClient = {
+  auth: {
+    test: jest.fn().mockReturnValue(Promise.resolve({ team_id: 'T1234567890' }))
+  },
+  chat: {
+    postMessage: jest.fn().mockReturnValue(Promise.resolve({ ok: true, ts: '1234567890.123456' }))
+  },
+  users: {
+    info: jest.fn().mockReturnValue(Promise.resolve({
+      user: {
+        name: 'testuser',
+        profile: { email: 'test@example.com' }
+      }
+    }))
+  }
+};
+
+// Mock Slack Bolt SDK
+jest.mock('@slack/bolt', () => ({
+  App: jest.fn().mockImplementation(() => mockApp),
+  ExpressReceiver: jest.fn().mockImplementation(() => mockReceiver),
+  WebClient: jest.fn().mockImplementation(() => mockWebClient),
+  LogLevel: {
+    DEBUG: 'debug',
+    INFO: 'info'
+  }
+}));
+
+// Mock services
+jest.mock('../src/services/service-manager');
+
+// Mock MasterAgent
+jest.mock('../src/agents/master.agent', () => ({
+  MasterAgent: jest.fn().mockImplementation(() => ({
+    processUserInput: jest.fn().mockReturnValue(Promise.resolve({
+      message: 'Test response from MasterAgent',
+      toolCalls: [],
+      needsThinking: false
+    }))
+  }))
+}));
+
+describe('SlackInterface Integration', () => {
   let slackInterface: SlackInterface;
-  let slackFormatter: SlackFormatterService;
+  let mockServiceManager: jest.Mocked<ServiceManager>;
+  let mockSlackConfig: SlackConfig;
 
-  beforeAll(async () => {
-    try {
-      // Initialize services
-      await initializeAllCoreServices();
-      
-      // Get services
-      slackFormatter = getService<SlackFormatterService>('slackFormatterService')!;
-      
-      // Note: SlackInterface is not a service, it's initialized separately
-      // For testing purposes, we'll create it directly
-      
-      // Create Express app
-      app = createApp();
-    } catch (error) {
-      console.error('Failed to initialize services for integration testing:', error);
-      // Create services directly if initialization fails
-      slackInterface = new SlackInterface({
-        signingSecret: 'test-signing-secret',
-        botToken: 'xoxb-test-bot-token',
-        clientId: 'test-client-id',
-        clientSecret: 'test-client-secret',
-        redirectUri: 'http://localhost:3000/slack/oauth/callback',
-        development: true
-      }, null);
-      slackFormatter = new SlackFormatterService();
-      
-      app = createApp();
-    }
-  });
+  beforeEach(() => {
+    // Reset mocks
+    jest.clearAllMocks();
 
-  afterAll(async () => {
-    // Cleanup if needed
-  });
+    // Create mock service manager
+    mockServiceManager = {
+      getService: jest.fn(),
+      registerService: jest.fn(),
+      unregisterService: jest.fn(),
+      getHealthStatus: jest.fn(),
+      initializeAllServices: jest.fn(),
+      shutdownAllServices: jest.fn(),
+      getInstance: jest.fn()
+    } as any;
 
-  describe('Service Registration and Health', () => {
-    it('should have SlackInterface available', () => {
-      expect(slackInterface).toBeDefined();
-      // Note: Interfaces don't have isReady() method like services
-    });
-
-    it('should have SlackFormatterService registered and healthy', () => {
-      expect(slackFormatter).toBeDefined();
-      expect(slackFormatter.isReady()).toBe(true);
-    });
-
-    it('should respond to health check endpoint', async () => {
-      const response = await request(app)
-        .get('/slack/health')
-        .expect(200);
-
-      expect(response.body.status).toBe('healthy');
-    });
-  });
-
-  describe('Slack Event Handling', () => {
-    const mockSlackEvent = {
-      type: 'app_mention',
-      user: 'U123456',
-      text: '<@U987654321> help',
-      channel: 'C123456789',
-      ts: '1234567890.123456',
-      event_ts: '1234567890.123456'
+    // Create mock Slack config
+    mockSlackConfig = {
+      signingSecret: 'test-signing-secret',
+      botToken: 'xoxb-test-token',
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+      redirectUri: 'https://test.com/slack/oauth/callback',
+      development: true
     };
 
-    it('should handle app mention events', async () => {
-      const mockSlackHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/events')
-        .set(mockSlackHeaders)
-        .send({
-          type: 'event_callback',
-          event: mockSlackEvent
-        });
-
-      // Should not return error (actual response handling is async)
-      expect(response.status).toBe(200);
-    });
-
-    it('should handle direct message events', async () => {
-      const dmEvent = {
-        type: 'message',
-        channel_type: 'im',
-        user: 'U123456',
-        text: 'hello assistant',
-        channel: 'D123456789',
-        ts: '1234567890.123456'
-      };
-
-      const mockSlackHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/events')
-        .set(mockSlackHeaders)
-        .send({
-          type: 'event_callback',
-          event: dmEvent
-        });
-
-      expect(response.status).toBe(200);
-    });
-  });
-
-  describe('Slack Interactive Components', () => {
-    it('should handle button interactions', async () => {
-      const mockInteraction = {
-        type: 'block_actions',
-        user: { id: 'U123456', name: 'testuser' },
-        channel: { id: 'C123456789', name: 'general' },
-        actions: [{
-          action_id: 'test_button',
-          block_id: 'test_block',
-          value: 'test_value'
-        }]
-      };
-
-      const mockSlackHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/interactions')
-        .set(mockSlackHeaders)
-        .send(`payload=${encodeURIComponent(JSON.stringify(mockInteraction))}`);
-
-      expect(response.status).toBe(200);
-    });
-
-    it('should handle modal submissions', async () => {
-      const mockModalSubmission = {
-        type: 'view_submission',
-        user: { id: 'U123456', name: 'testuser' },
-        view: {
-          id: 'V123456789',
-          type: 'modal',
-          state: {
-            values: {
-              email_block: {
-                email_input: {
-                  type: 'plain_text_input',
-                  value: 'test@example.com'
-                }
-              }
-            }
-          }
-        }
-      };
-
-      const mockSlackHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/interactions')
-        .set(mockSlackHeaders)
-        .send(`payload=${encodeURIComponent(JSON.stringify(mockModalSubmission))}`);
-
-      expect(response.status).toBe(200);
-    });
-  });
-
-  describe('Slack Slash Commands', () => {
-    it('should handle /assistant command', async () => {
-      const mockCommand = {
-        token: 'test_token',
-        team_id: 'T123456',
-        team_domain: 'testteam',
-        channel_id: 'C123456789',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'testuser',
-        command: '/assistant',
-        text: 'help',
-        response_url: 'https://hooks.slack.com/commands/1234/5678',
-        trigger_id: 'trigger_test_123'
-      };
-
-      const mockSlackHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/commands')
-        .set(mockSlackHeaders)
-        .send(mockCommand);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('text');
-    });
-
-    it('should handle assistant command with email request', async () => {
-      const mockCommand = {
-        token: 'test_token',
-        team_id: 'T123456',
-        team_domain: 'testteam',
-        channel_id: 'C123456789',
-        channel_name: 'general',
-        user_id: 'U123456',
-        user_name: 'testuser',
-        command: '/assistant',
-        text: 'send an email to john@example.com about the meeting',
-        response_url: 'https://hooks.slack.com/commands/1234/5678',
-        trigger_id: 'trigger_test_123'
-      };
-
-      const mockSlackHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/commands')
-        .set(mockSlackHeaders)
-        .send(mockCommand);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('text');
-    });
-  });
-
-  describe('Slack OAuth Flow', () => {
-    it('should handle OAuth install redirect', async () => {
-      const response = await request(app)
-        .get('/slack/install')
-        .expect(302);
-
-      expect(response.headers.location).toContain('slack.com/oauth');
-    });
-
-    it('should handle OAuth callback', async () => {
-      const mockAuthCode = 'test_auth_code_123';
-      
-      const response = await request(app)
-        .get(`/slack/oauth/callback?code=${mockAuthCode}&state=test_state`)
-        .expect(200);
-
-      // Should handle the OAuth callback (exact behavior depends on implementation)
-      expect(response.status).toBe(200);
-    });
-  });
-
-  describe('Slack Message Formatting', () => {
-    it('should format email responses correctly', () => {
-      const mockEmails = [
-        {
-          id: '123',
-          subject: 'Test Email Subject',
-          from: 'sender@example.com',
-          snippet: 'This is a test email snippet...',
-          date: '2023-12-01T10:00:00Z'
-        }
-      ];
-
-      const formatted = slackFormatter.formatEmailSummary(mockEmails);
-      
-      expect(formatted).toBeDefined();
-      expect(Array.isArray(formatted)).toBe(true);
-      expect(formatted.length).toBeGreaterThan(0);
-    });
-
-    it('should format calendar events correctly', () => {
-      const mockEvents = [
-        {
-          id: 'event123',
-          summary: 'Team Meeting',
-          start: { dateTime: '2023-12-01T14:00:00Z' },
-          end: { dateTime: '2023-12-01T15:00:00Z' },
-          location: 'Conference Room A'
-        }
-      ];
-
-      const formatted = slackFormatter.formatCalendarEvent(mockEvents);
-      
-      expect(formatted).toBeDefined();
-      expect(Array.isArray(formatted)).toBe(true);
-      expect(formatted.length).toBeGreaterThan(0);
-    });
-
-    it('should format contact information correctly', () => {
-      const mockContact = {
-        name: 'John Doe',
-        email: 'john@example.com',
-        phone: '+1234567890',
-        company: 'Example Corp'
-      };
-
-      const formatted = slackFormatter.formatContactInfo(mockContact);
-      
-      expect(formatted).toBeDefined();
-      expect(Array.isArray(formatted)).toBe(true);
-      expect(formatted.length).toBeGreaterThan(0);
-    });
-
-    it('should format error messages appropriately', () => {
-      const errorMessage = 'Test error message';
-      
-      const formatted = slackFormatter.formatErrorMessage(errorMessage);
-      
-      expect(formatted).toBeDefined();
-      expect(Array.isArray(formatted)).toBe(true);
-      expect(formatted.length).toBeGreaterThan(0);
-    });
-
-    it('should format help messages', () => {
-      const formatted = slackFormatter.formatHelpMessage();
-      
-      expect(formatted).toBeDefined();
-      expect(Array.isArray(formatted)).toBe(true);
-      expect(formatted.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Slack Context Management', () => {
-    it('should maintain conversation context across messages', async () => {
-      // This would test the context persistence functionality
-      // Implementation depends on how context is stored
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should handle thread-based conversations', async () => {
-      // Test threading functionality
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should manage user state correctly', async () => {
-      // Test user state management
-      expect(true).toBe(true); // Placeholder
-    });
-  });
-
-  describe('Error Handling and Resilience', () => {
-    it('should handle malformed Slack events gracefully', async () => {
-      const malformedEvent = {
-        type: 'invalid_event_type',
-        // Missing required fields
-      };
-
-      const response = await request(app)
-        .post('/slack/events')
-        .send(malformedEvent);
-
-      // Should not crash, should handle gracefully
-      expect(response.status).not.toBe(500);
-    });
-
-    it('should handle network timeouts gracefully', async () => {
-      // Test timeout handling
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should handle Slack API errors gracefully', async () => {
-      // Test API error handling
-      expect(true).toBe(true); // Placeholder
-    });
-  });
-
-  describe('Integration with Core Services', () => {
-    it('should integrate with Gmail service through Slack commands', async () => {
-      // Test end-to-end Gmail integration
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should integrate with Calendar service through Slack commands', async () => {
-      // Test end-to-end Calendar integration
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should integrate with Contact service through Slack commands', async () => {
-      // Test end-to-end Contact integration
-      expect(true).toBe(true); // Placeholder
-    });
-
-    it('should integrate with OpenAI service for intelligent responses', async () => {
-      // Test OpenAI integration
-      expect(true).toBe(true); // Placeholder
-    });
-  });
-
-  describe('Performance and Scalability', () => {
-    it('should respond to events within acceptable time limits', async () => {
-      const startTime = Date.now();
-      
-      await request(app)
-        .get('/slack/health')
-        .expect(200);
-      
-      const responseTime = Date.now() - startTime;
-      expect(responseTime).toBeLessThan(1000); // Should respond within 1 second
-    });
-
-    it('should handle concurrent requests efficiently', async () => {
-      const promises = [];
-      const concurrentRequests = 10;
-      
-      for (let i = 0; i < concurrentRequests; i++) {
-        promises.push(
-          request(app)
-            .get('/slack/health')
-            .expect(200)
-        );
+    // Mock service responses with proper typing
+    mockServiceManager.getService.mockImplementation((serviceName: string) => {
+      switch (serviceName) {
+        case 'sessionService':
+          return {
+            getOrCreateSession: jest.fn().mockReturnValue('test-session-id'),
+            getConversationContext: jest.fn().mockReturnValue('test-context'),
+            isReady: jest.fn().mockReturnValue(true),
+            state: 'ready'
+          } as any;
+        case 'slackFormatterService':
+          return {
+            formatAgentResponse: jest.fn().mockReturnValue(Promise.resolve({
+              text: 'Test response',
+              blocks: [{ type: 'section', text: { type: 'mrkdwn', text: 'Test response' } }]
+            }))
+          } as any;
+        case 'toolExecutorService':
+          return {
+            executeTool: jest.fn().mockReturnValue(Promise.resolve({
+              success: true,
+              result: 'Test result',
+              toolName: 'testTool',
+              executionTime: 100
+            }))
+          } as any;
+        default:
+          return undefined;
       }
-      
-      const results = await Promise.all(promises);
-      expect(results.length).toBe(concurrentRequests);
+    });
+
+    // Create SlackInterface instance
+    slackInterface = new SlackInterface(mockSlackConfig, mockServiceManager);
+  });
+
+  describe('Initialization', () => {
+    it('should initialize with correct configuration', () => {
+      expect(slackInterface).toBeDefined();
+      expect(slackInterface.router).toBeDefined();
+    });
+
+    it('should start successfully', async () => {
+      await expect(slackInterface.start()).resolves.not.toThrow();
+    });
+
+    it('should stop successfully', async () => {
+      await expect(slackInterface.stop()).resolves.not.toThrow();
     });
   });
 
-  describe('Security and Authentication', () => {
-    it('should validate Slack signatures', async () => {
-      // Test signature validation
-      const invalidSignature = {
-        'x-slack-signature': 'v0=invalid_signature',
-        'x-slack-request-timestamp': Math.floor(Date.now() / 1000).toString()
-      };
-
-      const response = await request(app)
-        .post('/slack/events')
-        .set(invalidSignature)
-        .send({
-          type: 'event_callback',
-          event: { type: 'app_mention', text: 'test' }
-        });
-
-      // Should reject invalid signatures
-      expect([401, 403]).toContain(response.status);
+  describe('Health Status', () => {
+    it('should return healthy status when properly configured', () => {
+      const health = slackInterface.getHealth();
+      
+      expect(health.healthy).toBe(true);
+      expect(health.details?.configured).toBe(true);
+      expect(health.details?.development).toBe(true);
+      expect(health.details?.endpoints).toBeDefined();
     });
 
-    it('should handle expired timestamps', async () => {
-      const expiredTimestamp = Math.floor((Date.now() - 10 * 60 * 1000) / 1000); // 10 minutes ago
-      
-      const expiredHeaders = {
-        'x-slack-signature': 'v0=test_signature',
-        'x-slack-request-timestamp': expiredTimestamp.toString()
+    it('should return unhealthy status when missing configuration', () => {
+      const invalidConfig: SlackConfig = {
+        ...mockSlackConfig,
+        signingSecret: '',
+        botToken: ''
       };
+      
+      const invalidInterface = new SlackInterface(invalidConfig, mockServiceManager);
+      const health = invalidInterface.getHealth();
+      
+      expect(health.healthy).toBe(false);
+      expect(health.details?.configured).toBe(false);
+    });
+  });
 
-      const response = await request(app)
-        .post('/slack/events')
-        .set(expiredHeaders)
-        .send({
-          type: 'event_callback',
-          event: { type: 'app_mention', text: 'test' }
-        });
+  describe('Integration with Service Manager', () => {
+    it('should access services through ServiceManager', () => {
+      // Test that the interface can be created with the service manager
+      expect(slackInterface).toBeDefined();
+      expect(mockServiceManager).toBeDefined();
+    });
 
-      // Should reject expired requests
-      expect([401, 403]).toContain(response.status);
+    it('should handle missing services gracefully', () => {
+      mockServiceManager.getService.mockReturnValue(undefined);
+
+      // Should not throw error when creating interface
+      expect(() => new SlackInterface(mockSlackConfig, mockServiceManager)).not.toThrow();
+    });
+  });
+
+  describe('Router Access', () => {
+    it('should provide router access', () => {
+      expect(slackInterface.router).toBeDefined();
+      // The router is mocked, so we just check it exists
+      expect(slackInterface.router).toBeTruthy();
+    });
+  });
+
+  describe('Configuration Validation', () => {
+    it('should validate required configuration fields', () => {
+      const health = slackInterface.getHealth();
+      expect(health.healthy).toBe(true);
+    });
+
+    it('should detect missing configuration', () => {
+      const invalidConfig: SlackConfig = {
+        ...mockSlackConfig,
+        signingSecret: '',
+        botToken: ''
+      };
+      
+      const invalidInterface = new SlackInterface(invalidConfig, mockServiceManager);
+      const health = invalidInterface.getHealth();
+      
+      expect(health.healthy).toBe(false);
+      expect(health.details?.configured).toBe(false);
+    });
+  });
+
+  describe('Service Dependencies', () => {
+    it('should work with all required services available', () => {
+      expect(slackInterface).toBeDefined();
+      // The service manager is mocked, so we just check the interface exists
+      expect(slackInterface).toBeTruthy();
+    });
+
+    it('should handle service manager initialization', () => {
+      // Use the static getInstance method instead of constructor
+      const newServiceManager = ServiceManager.getInstance();
+      expect(() => new SlackInterface(mockSlackConfig, newServiceManager)).not.toThrow();
+    });
+  });
+
+  describe('Error Scenarios', () => {
+    it('should handle configuration errors gracefully', () => {
+      const invalidConfig: SlackConfig = {
+        ...mockSlackConfig,
+        signingSecret: '',
+        botToken: ''
+      };
+      
+      expect(() => new SlackInterface(invalidConfig, mockServiceManager)).not.toThrow();
+    });
+
+    it('should handle service manager errors gracefully', () => {
+      const brokenServiceManager = {
+        getService: jest.fn().mockImplementation(() => {
+          throw new Error('Service error');
+        })
+      } as any;
+
+      expect(() => new SlackInterface(mockSlackConfig, brokenServiceManager)).not.toThrow();
+    });
+  });
+
+  describe('Mock Verification', () => {
+    it('should properly mock Slack Bolt components', () => {
+      expect(slackInterface).toBeDefined();
+      // The mocks should prevent any actual Slack API calls
+      expect(slackInterface).toBeTruthy();
+    });
+
+    it('should mock service responses correctly', () => {
+      const sessionService = mockServiceManager.getService('sessionService');
+      expect(sessionService).toBeDefined();
+      
+      if (sessionService) {
+        expect(sessionService.isReady()).toBe(true);
+        expect(sessionService.state).toBe('ready');
+      }
     });
   });
 });

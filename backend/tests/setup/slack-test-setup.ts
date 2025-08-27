@@ -22,10 +22,35 @@ jest.mock('../../src/services/openai.service', () => {
       isReady: () => true,
       initialize: async () => {},
       destroy: async () => {},
-      generateToolCalls: async () => ({
-        toolCalls: [],
-        message: 'Test response'
-      })
+      generateToolCalls: async (userInput: string) => {
+        // Generate realistic tool calls based on user input
+        const toolCalls = [];
+        
+        if (userInput.includes('email') || userInput.includes('send')) {
+          if (userInput.includes('@')) {
+            toolCalls.push({ name: 'emailAgent', parameters: { query: userInput } });
+          } else {
+            toolCalls.push({ name: 'contactAgent', parameters: { query: userInput } });
+            toolCalls.push({ name: 'emailAgent', parameters: { query: userInput } });
+          }
+        }
+        
+        if (userInput.includes('schedule') || userInput.includes('meeting') || userInput.includes('calendar')) {
+          toolCalls.push({ name: 'calendarAgent', parameters: { query: userInput } });
+        }
+        
+        if (userInput.includes('contact') || userInput.includes('find')) {
+          toolCalls.push({ name: 'contactAgent', parameters: { query: userInput } });
+        }
+        
+        // Always include Think tool as specified in MasterAgent rules
+        toolCalls.push({ name: 'Think', parameters: { query: `Verify completion of: ${userInput}` } });
+        
+        return {
+          toolCalls,
+          message: 'I will help you with that request.'
+        };
+      }
     }))
   };
 });
@@ -90,5 +115,53 @@ jest.mock('@slack/bolt', () => ({
     }
   }))
 }));
+
+// Mock service registry
+jest.mock('../../src/services/service-manager', () => {
+  const mockServices = new Map();
+  
+  // Create mock services
+  const mockSessionService = {
+    isReady: () => true,
+    initialize: async () => {},
+    destroy: async () => {},
+    getOrCreateSession: jest.fn((sessionId: string, userId: string) => ({
+      id: sessionId,
+      userId,
+      createdAt: new Date(),
+      lastActivity: new Date()
+    }))
+  };
+  
+  const mockToolExecutorService = {
+    isReady: () => true,
+    initialize: async () => {},
+    destroy: async () => {},
+    executeTool: jest.fn(async () => ({ success: true, result: 'Mock result' }))
+  };
+  
+  const mockSlackFormatterService = {
+    isReady: () => true,
+    initialize: async () => {},
+    destroy: async () => {},
+    formatAgentResponse: jest.fn(async () => ({ text: 'Mock formatted response' }))
+  };
+  
+  // Populate mock services
+  mockServices.set('sessionService', mockSessionService);
+  mockServices.set('toolExecutorService', mockToolExecutorService);
+  mockServices.set('slackFormatterService', mockSlackFormatterService);
+  
+  return {
+    serviceManager: {
+      registerService: jest.fn(),
+      getService: jest.fn((serviceName: string) => mockServices.get(serviceName)),
+      initializeAllServices: jest.fn(async () => {}),
+      getServiceCount: jest.fn(() => mockServices.size),
+      getRegisteredServices: jest.fn(() => Array.from(mockServices.keys()))
+    },
+    getService: jest.fn((serviceName: string) => mockServices.get(serviceName))
+  };
+});
 
 export {};
