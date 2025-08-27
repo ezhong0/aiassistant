@@ -10,7 +10,7 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
   GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
   GOOGLE_REDIRECT_URI: z.string().url('GOOGLE_REDIRECT_URI must be a valid URL'),
-  GOOGLE_IOS_CLIENT_ID: z.string().optional(),
+  GOOGLE_WEB_CLIENT_ID: z.string().optional(),
   
   // JWT Configuration
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters for security'),
@@ -91,7 +91,7 @@ class ConfigService {
   get googleClientId(): string { return this.config.GOOGLE_CLIENT_ID; }
   get googleClientSecret(): string { return this.config.GOOGLE_CLIENT_SECRET; }
   get googleRedirectUri(): string { return this.config.GOOGLE_REDIRECT_URI; }
-  get googleIosClientId(): string | undefined { return this.config.GOOGLE_IOS_CLIENT_ID; }
+  get googleWebClientId(): string | undefined { return this.config.GOOGLE_WEB_CLIENT_ID; }
   
   // JWT
   get jwtSecret(): string { return this.config.JWT_SECRET; }

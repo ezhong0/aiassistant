@@ -143,7 +143,7 @@ Refreshes expired access tokens
 #### `POST /auth/exchange-mobile-tokens`
 Exchanges mobile OAuth tokens for JWT
 - **Rate Limited**: 10 requests per 15 minutes per IP
-- **Body**: `{ \"access_token\": \"string\", \"platform\": \"ios|android\" }`
+- **Body**: `{ \"access_token\": \"string\", \"platform\": \"web|slack\" }`
 - **Response**: JWT token for backend authentication
 
 #### `POST /auth/logout`

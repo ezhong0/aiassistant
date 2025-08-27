@@ -28,7 +28,7 @@ Feature Request → Architecture Review → Implementation → Testing → Valid
 # Required software
 - Node.js 18+ and npm
 - TypeScript 5.0+
-- Xcode 15+ (for iOS development)
+- Node.js 18+ (for backend development)
 - Git with proper configuration
 - VS Code or Cursor (recommended for AI development)
 ```
@@ -47,8 +47,8 @@ npm install
 cp ../.env.example .env
 # Edit .env with your credentials
 
-# 4. Install iOS dependencies
-cd ../ios
+# 4. Install backend dependencies
+cd backend
 open AssistantApp.xcodeproj
 # Configure GoogleService-Info.plist
 ```
@@ -63,7 +63,7 @@ npm run format       # Prettier code formatting
 npm run test         # Run all tests
 npm run test:watch   # Watch mode for tests
 
-# iOS development
+# Backend development
 # Build: ⌘+B
 # Run: ⌘+R
 # Clean: ⌘+Shift+K

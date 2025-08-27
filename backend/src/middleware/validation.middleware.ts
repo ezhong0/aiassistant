@@ -148,7 +148,7 @@ export const commonSchemas = {
     access_token: z.string().min(1, 'Access token is required'),
     refresh_token: z.string().optional(),
     id_token: z.string().optional(),
-    platform: z.enum(['ios', 'android'])
+    platform: z.enum(['web', 'slack'])
   }),
   
   logout: z.object({

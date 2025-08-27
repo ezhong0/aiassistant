@@ -172,7 +172,7 @@ SLACK_OAUTH_REDIRECT_URI=http://localhost:3000/slack/oauth/callback
 
 ### **Architecture Benefits**
 1. **Single Source of Truth**: MasterAgent handles all intent parsing
-2. **Consistent Behavior**: Same logic for iOS app and Slack interface
+2. **Consistent Behavior**: Same logic for Slack interface and future web interfaces
 3. **Maintainability**: One place to update intent parsing logic
 4. **Testability**: Test intent parsing once, works everywhere
 
