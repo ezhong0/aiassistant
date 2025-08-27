@@ -1,3 +1,5 @@
+import { SlackContext } from './slack.types';
+
 export interface ToolCall {
   name: string;
   parameters: any;
@@ -16,6 +18,7 @@ export interface ToolExecutionContext {
   userId?: string;
   timestamp: Date;
   previousResults?: ToolResult[];
+  slackContext?: SlackContext; // 🆕 NEW: Slack context for agent operations
 }
 
 export interface Tool {

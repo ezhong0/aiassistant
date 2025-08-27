@@ -72,6 +72,76 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
+   * Format agent response for Slack
+   */
+  async formatAgentResponse(
+    masterResponse: any, 
+    slackContext: any
+  ): Promise<{ text: string; blocks?: any[] }> {
+    try {
+      // Extract the main message from MasterAgent response
+      let responseText = masterResponse.message || 'I processed your request successfully.';
+      
+      // Add tool execution results if available
+      if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
+        const results = masterResponse.toolResults
+          .filter((tr: any) => tr.success)
+          .map((tr: any) => tr.result)
+          .filter(Boolean);
+        
+        if (results.length > 0) {
+          responseText += '\n\nResults:\n' + results.map((r: any) => 
+            typeof r === 'string' ? r : JSON.stringify(r, null, 2)
+          ).join('\n');
+        }
+      }
+
+      // Create rich Slack blocks for the response
+      const blocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: responseText
+          }
+        }
+      ];
+
+      // Add interactive buttons for common actions if available
+      if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
+        const actionButtons = masterResponse.toolCalls
+          .filter((tc: any) => tc.name !== 'Think')
+          .map((tc: any) => ({
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: `View ${tc.name} Results`
+            },
+            value: tc.name,
+            action_id: `view_${tc.name.toLowerCase()}_results`
+          }));
+
+        if (actionButtons.length > 0) {
+          blocks.push({
+            type: 'actions',
+            elements: actionButtons
+          } as any);
+        }
+      }
+
+      return {
+        text: responseText,
+        blocks
+      };
+    } catch (error) {
+      this.logError('Error formatting agent response', error);
+      return { 
+        text: masterResponse.message || 'I processed your request successfully.' 
+      };
+    }
+  }
+
+  /**
    * Format help message response
    */
   formatHelpMessageResponse(): SlackResponse {
