@@ -228,7 +228,7 @@ export class SlackService extends BaseService {
     this.app.message(async ({ message, say, client }) => {
       try {
         // Only handle direct messages (channel_type === 'im')
-        if (message.channel_type === 'im' && 'text' in message) {
+        if (message.channel_type === 'im' && 'text' in message && message.text) {
           const context = this.createSlackContext(message as SlackMessageEvent, true);
           await this.handleSlackEvent(message.text, context, 'message', { say, client });
         }

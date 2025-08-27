@@ -124,7 +124,7 @@ private needsContactLookup(userInput: string, toolName: string): boolean {
 - **Contact Agent**: Contact resolution and management
 
 #### **2. Productivity Agents**
-- **Calendar Agent**: Event scheduling and calendar management
+- **Calendar Agent**: Event scheduling and calendar management with Google Calendar API
 - **Content Creator**: AI-powered content generation
 
 #### **3. Intelligence Agents**

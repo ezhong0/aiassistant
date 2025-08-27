@@ -12,18 +12,20 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
   /**
    * Slack OAuth callback handler
    */
-  router.get('/oauth/callback', async (req, res) => {
+  router.get('/oauth/callback', async (req, res): Promise<void> => {
     try {
       const { code, state, error } = req.query;
 
       if (error) {
         logger.error('Slack OAuth error', { error });
-        return res.status(400).json({ error: 'OAuth authorization failed' });
+        res.status(400).json({ error: 'OAuth authorization failed' });
+        return;
       }
 
       if (!code) {
         logger.error('No authorization code received');
-        return res.status(400).json({ error: 'No authorization code received' });
+        res.status(400).json({ error: 'No authorization code received' });
+        return;
       }
 
       // TODO: Implement OAuth token exchange
@@ -52,14 +54,15 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
   /**
    * Slack app installation page
    */
-  router.get('/install', async (req, res) => {
+  router.get('/install', async (req, res): Promise<void> => {
     try {
       // TODO: Replace with actual Slack app client ID
       const clientId = process.env.SLACK_CLIENT_ID;
       const redirectUri = process.env.SLACK_OAUTH_REDIRECT_URI;
 
       if (!clientId || !redirectUri) {
-        return res.status(500).json({ error: 'Slack app configuration missing' });
+        res.status(500).json({ error: 'Slack app configuration missing' });
+        return;
       }
 
       const scopes = [
@@ -103,15 +106,16 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
   /**
    * Health check for Slack integration
    */
-  router.get('/health', async (req, res) => {
+  router.get('/health', async (req, res): Promise<void> => {
     try {
       const slackService = serviceManager.getService<SlackService>('slackService');
       
       if (!slackService) {
-        return res.status(503).json({ 
+        res.status(503).json({ 
           status: 'error', 
           message: 'Slack service not available' 
         });
+        return;
       }
 
       const health = slackService.getHealth();
@@ -131,13 +135,14 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
   /**
    * Webhook verification endpoint (for initial Slack app setup)
    */
-  router.post('/events/verify', async (req, res) => {
+  router.post('/events/verify', async (req, res): Promise<void> => {
     try {
       const { challenge, type } = req.body;
       
       if (type === 'url_verification') {
         logger.info('Slack URL verification challenge received');
-        return res.json({ challenge });
+        res.json({ challenge });
+        return;
       }
       
       res.status(200).json({ status: 'ok' });
@@ -152,12 +157,13 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
    * Manual event testing endpoint (development only)
    */
   if (process.env.NODE_ENV === 'development') {
-    router.post('/test-event', async (req, res) => {
+    router.post('/test-event', async (req, res): Promise<void> => {
       try {
         const slackService = serviceManager.getService<SlackService>('slackService');
         
         if (!slackService) {
-          return res.status(503).json({ error: 'Slack service not available' });
+          res.status(503).json({ error: 'Slack service not available' });
+          return;
         }
 
         const { message = 'test message', channel = 'test' } = req.body;

@@ -10,7 +10,7 @@ import express, { Request, Response } from 'express';
 import configService from './config/config.service';
 import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
-import { initializeServices } from './services/service-manager';
+import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 
@@ -27,16 +27,16 @@ import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
-// import { createSlackRoutes } from './routes/slack.routes';
+import { createSlackRoutes } from './routes/slack.routes';
 import { serviceManager } from './services/service-manager';
-// import { SlackService } from './services/slack.service';
+import { SlackService } from './services/slack.service';
 
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
   try {
-    // Initialize services first
+    // Initialize all core services (includes service registration and initialization)
     logger.info('Initializing application services...');
-    await initializeServices();
+    await initializeAllCoreServices();
     logger.info('Application services initialized successfully');
 
     // Initialize AgentFactory after services
@@ -47,12 +47,13 @@ const initializeApplication = async (): Promise<void> => {
     logger.info('Application initialization completed successfully');
   } catch (error) {
     logger.error('Failed to initialize application:', error);
-    // Continue anyway - the app can still function with basic routing
+    throw error; // Don't continue with broken services in production
   }
 }
 
 const app = express();
-const port = configService.port;
+// Railway provides PORT environment variable, use it or fallback to configService
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : configService.port;
 
 // Trust proxy (for proper IP detection behind reverse proxy)
 app.set('trust proxy', 1);
@@ -84,28 +85,45 @@ app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 app.use('/api/assistant', assistantRoutes);
 
-// Slack routes (temporarily disabled)
-// app.use('/slack', createSlackRoutes(serviceManager));
+// Slack routes
+app.use('/slack', createSlackRoutes(serviceManager));
 
-// Slack Bolt event handler integration (temporarily disabled)
-// const setupSlackEventHandler = () => {
-//   const slackService = serviceManager.getService<SlackService>('slackService');
-//   if (slackService) {
-//     const receiver = slackService.getReceiver();
-//     if (receiver) {
-//       // Use the receiver's router for Slack events
-//       app.use(receiver.router);
-//       logger.info('Slack event handler integrated successfully');
-//     }
-//   }
-// };
-
-// Set up Slack event handler after services are initialized
-// setTimeout(setupSlackEventHandler, 1000);
+// Slack Bolt event handler integration
+const setupSlackEventHandler = () => {
+  try {
+    const slackService = serviceManager.getService<SlackService>('slackService');
+    if (slackService && slackService.isReady()) {
+      const receiver = slackService.getReceiver();
+      if (receiver) {
+        // Use the receiver's router for Slack events
+        app.use(receiver.router);
+        logger.info('Slack event handler integrated successfully');
+      } else {
+        logger.warn('Slack receiver not available - running in development mode');
+      }
+    } else {
+      logger.warn('Slack service not available - running without Slack integration');
+    }
+  } catch (error) {
+    logger.error('Error setting up Slack event handler:', error);
+  }
+};
 
 // Simple test endpoint for debugging
 app.get('/test', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Railway health check endpoint
+app.get('/healthz', (req: Request, res: Response) => {
+  const healthStatus = {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    pid: process.pid
+  };
+  res.status(200).json(healthStatus);
 });
 
 // Root endpoint
@@ -127,6 +145,9 @@ const startServer = async (): Promise<void> => {
   try {
     // Initialize application services
     await initializeApplication();
+    
+    // Set up Slack event handler after services are initialized
+    setupSlackEventHandler();
 
     // Start the server
     const server = app.listen(port, () => {
@@ -150,13 +171,22 @@ const startServer = async (): Promise<void> => {
       }
     });
 
+    // Add keep-alive for Railway
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
+
     // Graceful shutdown handling
     const gracefulShutdown = async (signal: string) => {
       logger.info(`Received ${signal}. Starting graceful shutdown...`);
       
-      server.close(() => {
-        logger.info('HTTP server closed');
-        process.exit(0);
+      server.close((err) => {
+        if (err) {
+          logger.error('Error during server shutdown:', err);
+          process.exit(1);
+        } else {
+          logger.info('HTTP server closed');
+          process.exit(0);
+        }
       });
 
       // Force exit after 30 seconds
@@ -168,6 +198,17 @@ const startServer = async (): Promise<void> => {
 
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    
+    // Handle unhandled errors to prevent crashes
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      // Don't exit on unhandled rejection in production
+    });
+    
+    process.on('uncaughtException', (error) => {
+      logger.error('Uncaught Exception:', error);
+      gracefulShutdown('UNCAUGHT_EXCEPTION');
+    });
 
   } catch (error) {
     logger.error('Failed to start server:', error);
