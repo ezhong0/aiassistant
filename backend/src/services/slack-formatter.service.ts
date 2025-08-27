@@ -38,9 +38,17 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
-   * Format error message
+   * Format error message - returns blocks array for testing compatibility
    */
-  formatErrorMessage(error: string): SlackResponse {
+  formatErrorMessage(error: string): SlackBlock[] {
+    const response = this.formatErrorMessageResponse(error);
+    return response.blocks || [];
+  }
+
+  /**
+   * Format error message response
+   */
+  formatErrorMessageResponse(error: string): SlackResponse {
     return {
       text: `❌ Error: ${error}`,
       blocks: [
@@ -56,9 +64,17 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
-   * Format help message
+   * Format help message - returns blocks array for testing compatibility
    */
-  formatHelpMessage(): SlackResponse {
+  formatHelpMessage(): SlackBlock[] {
+    const response = this.formatHelpMessageResponse();
+    return response.blocks || [];
+  }
+
+  /**
+   * Format help message response
+   */
+  formatHelpMessageResponse(): SlackResponse {
     return {
       text: 'AI Assistant Help',
       blocks: [
@@ -112,9 +128,17 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
-   * Format email summary
+   * Format email summary - returns blocks array for testing compatibility
    */
-  formatEmailSummary(emails: any[]): SlackResponse {
+  formatEmailSummary(emails: any[]): SlackBlock[] {
+    const response = this.formatEmailSummaryResponse(emails);
+    return response.blocks || [];
+  }
+
+  /**
+   * Format email summary response
+   */
+  formatEmailSummaryResponse(emails: any[]): SlackResponse {
     if (!emails.length) {
       return {
         text: 'No emails found',
@@ -182,9 +206,17 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
-   * Format calendar events
+   * Format calendar events - returns blocks array for testing compatibility
    */
-  formatCalendarEvents(events: any[]): SlackResponse {
+  formatCalendarEvent(events: any[]): SlackBlock[] {
+    const response = this.formatCalendarEventsResponse(events);
+    return response.blocks || [];
+  }
+
+  /**
+   * Format calendar events response
+   */
+  formatCalendarEventsResponse(events: any[]): SlackResponse {
     if (!events.length) {
       return {
         text: 'No events found',
@@ -255,9 +287,19 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
-   * Format contact information
+   * Format contact information - returns blocks array for testing compatibility
    */
-  formatContactInfo(contacts: any[]): SlackResponse {
+  formatContactInfo(contact: any): SlackBlock[] {
+    // Handle both single contact and array input for backward compatibility
+    const contacts = Array.isArray(contact) ? contact : [contact];
+    const response = this.formatContactInfoResponse(contacts);
+    return response.blocks || [];
+  }
+
+  /**
+   * Format contact information response
+   */
+  formatContactInfoResponse(contacts: any[]): SlackResponse {
     if (!contacts.length) {
       return {
         text: 'No contacts found',
