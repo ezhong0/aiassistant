@@ -2,14 +2,14 @@ import './setup/slack-test-setup';
 import request from 'supertest';
 import { App } from '@slack/bolt';
 import { getService } from '../src/services/service-manager';
-import { SlackService } from '../src/services/slack.service';
+import { SlackInterface } from '../src/interfaces/slack.interface';
 import { SlackFormatterService } from '../src/services/slack-formatter.service';
 import { initializeAllCoreServices } from '../src/services/service-initialization';
 import { createApp } from '../src/index';
 
 describe('Slack Integration Tests', () => {
   let app: any;
-  let slackService: SlackService;
+  let slackInterface: SlackInterface;
   let slackFormatter: SlackFormatterService;
 
   beforeAll(async () => {
@@ -18,15 +18,17 @@ describe('Slack Integration Tests', () => {
       await initializeAllCoreServices();
       
       // Get services
-      slackService = getService<SlackService>('slackService')!;
       slackFormatter = getService<SlackFormatterService>('slackFormatterService')!;
+      
+      // Note: SlackInterface is not a service, it's initialized separately
+      // For testing purposes, we'll create it directly
       
       // Create Express app
       app = createApp();
     } catch (error) {
       console.error('Failed to initialize services for integration testing:', error);
       // Create services directly if initialization fails
-      slackService = new SlackService({
+      slackInterface = new SlackInterface({
         signingSecret: 'test-signing-secret',
         botToken: 'xoxb-test-bot-token',
         clientId: 'test-client-id',
@@ -45,9 +47,9 @@ describe('Slack Integration Tests', () => {
   });
 
   describe('Service Registration and Health', () => {
-    it('should have SlackService registered and healthy', () => {
-      expect(slackService).toBeDefined();
-      expect(slackService.isReady()).toBe(true);
+    it('should have SlackInterface available', () => {
+      expect(slackInterface).toBeDefined();
+      // Note: Interfaces don't have isReady() method like services
     });
 
     it('should have SlackFormatterService registered and healthy', () => {

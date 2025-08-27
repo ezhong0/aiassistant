@@ -4,13 +4,19 @@
 
 This document contains **strategic AI prompts** to help you build your Slack AI Assistant step-by-step. Each prompt is designed to leverage your existing architecture while adding Slack-specific functionality.
 
-**Key Principle**: Your existing multi-agent system and services are 80% of what you need. We're just adding the Slack interface layer for now, with room for future web interfaces.
+**Key Principle**: Your existing multi-agent system and services are 80% of what you need. We're just adding the Slack interface layer (not a service) for now, with room for future web interfaces.
 
 ## 🏗️ **Architecture Approach**
 
+### **Service vs. Interface Layer Distinction** 🎯
+- **Slack is NOT a service** - it's an interface layer
+- **Services** (Gmail, Calendar, Auth) maintain state and provide functionality
+- **Interfaces** (Slack, Web) handle input/output and route requests
+- **Slack routes to existing services** through MasterAgent, doesn't duplicate logic
+
 ### **Intent Parsing: Master Agent Only** ✅
 - **Master Agent handles ALL intent parsing** through existing OpenAI integration
-- **Slack service does NOT parse intent** - it only handles events and formatting
+- **Slack interface does NOT parse intent** - it only handles events and routing
 - **Same intent parsing logic** serves Slack interface and future web interfaces
 - **No duplication** of complex intent recognition logic
 
