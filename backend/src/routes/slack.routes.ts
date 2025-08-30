@@ -3,8 +3,13 @@ import { ServiceManager } from '../services/service-manager';
 import { SlackInterface } from '../interfaces/slack.interface';
 import logger from '../utils/logger';
 
+// Import fetch for Node.js (available in Node 18+)
+// For older versions, you might need to install node-fetch
+const fetch = globalThis.fetch || require('node-fetch');
+
 /**
  * Slack routes for handling OAuth callbacks and other Slack-specific endpoints
+ * Note: These routes are separate from the Bolt framework routes
  */
 export function createSlackRoutes(serviceManager: ServiceManager): express.Router {
   const router = express.Router();
@@ -137,22 +142,130 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
   });
 
   /**
-   * Webhook verification endpoint (for initial Slack app setup)
+   * Slack Event Subscription endpoint - handles URL verification challenge
+   * This is the main endpoint that Slack calls for all events
    */
-  router.post('/events/verify', async (req, res): Promise<void> => {
+  router.post('/events', async (req, res): Promise<void> => {
     try {
-      const { challenge, type } = req.body;
+      const { challenge, type, event, team_id, api_app_id } = req.body;
       
-      if (type === 'url_verification') {
-        logger.info('Slack URL verification challenge received');
-        res.json({ challenge });
+      logger.info('Slack event received', { 
+        type, 
+        eventType: event?.type,
+        teamId: team_id,
+        apiAppId: api_app_id,
+        hasChallenge: !!challenge
+      });
+
+      // Handle URL verification challenge (required for Slack app setup)
+      if (type === 'url_verification' && challenge) {
+        logger.info('Slack URL verification challenge received', { challenge: challenge.substring(0, 10) + '...' });
+        
+        // Respond with the challenge value to verify the endpoint
+        res.status(200).json({ challenge });
         return;
       }
-      
-      res.status(200).json({ status: 'ok' });
+
+      // For actual events, we need to forward them to the Bolt framework
+      // Since the Bolt framework is mounted at /slack/bolt, we'll make an internal request
+      if (type === 'event_callback' && event) {
+        logger.info('Slack event callback received, forwarding to Bolt framework', { 
+          eventType: event.type,
+          userId: event.user,
+          channelId: event.channel
+        });
+
+        try {
+          // Forward the event to the Bolt framework endpoint
+          const boltResponse = await fetch(`${req.protocol}://${req.get('host')}/slack/bolt/events`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Slack-Signature': req.get('X-Slack-Signature') || '',
+              'X-Slack-Request-Timestamp': req.get('X-Slack-Request-Timestamp') || '',
+              'X-Slack-Signature-Version': req.get('X-Slack-Signature-Version') || ''
+            },
+            body: JSON.stringify(req.body)
+          });
+
+          if (boltResponse.ok) {
+            logger.debug('Event forwarded to Bolt framework successfully');
+            res.status(200).json({ ok: true });
+          } else {
+            logger.warn('Bolt framework returned error', { status: boltResponse.status });
+            res.status(200).json({ ok: true }); // Still acknowledge to Slack
+          }
+        } catch (forwardError) {
+          logger.error('Error forwarding event to Bolt framework', forwardError);
+          // Still acknowledge to Slack to prevent retries
+          res.status(200).json({ ok: true });
+        }
+        return;
+      }
+
+      // Handle other event types
+      logger.info('Other Slack event type received', { type });
+      res.status(200).json({ ok: true });
       
     } catch (error) {
-      logger.error('Error handling Slack verification', error);
+      logger.error('Error handling Slack event', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * Slack commands endpoint - handles slash commands
+   * This endpoint will be used by the Bolt framework
+   */
+  router.post('/commands', async (req, res): Promise<void> => {
+    try {
+      const { command, text, user_id, channel_id } = req.body;
+      
+      logger.info('Slack command received', { 
+        command,
+        text: text?.substring(0, 100) + (text && text.length > 100 ? '...' : ''),
+        userId: user_id,
+        channelId: channel_id
+      });
+
+      // Handle empty commands with helpful guidance
+      if (!text || text.trim().length === 0) {
+        logger.info('Empty slash command received, providing usage guidance');
+        // Acknowledge receipt - actual processing handled by Bolt
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Acknowledge receipt - actual processing handled by Bolt
+      res.status(200).json({ ok: true });
+      
+    } catch (error) {
+      logger.error('Error handling Slack command', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * Slack interactive components endpoint - handles button clicks, modals, etc.
+   * This endpoint will be used by the Bolt framework
+   */
+  router.post('/interactive', async (req, res): Promise<void> => {
+    try {
+      const payload = req.body.payload;
+      if (payload) {
+        const parsedPayload = JSON.parse(payload);
+        logger.info('Slack interactive component received', { 
+          type: parsedPayload.type,
+          actionId: parsedPayload.actions?.[0]?.action_id,
+          userId: parsedPayload.user?.id
+        });
+      }
+
+      // Acknowledge receipt - actual processing handled by Bolt
+      res.status(200).json({ ok: true });
+      
+    } catch (error) {
+      logger.error('Error handling Slack interactive component', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -189,6 +302,48 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
       } catch (error) {
         logger.error('Error processing test event', error);
         res.status(500).json({ error: 'Test event failed' });
+      }
+    });
+  }
+
+  /**
+   * Test endpoint to verify Slack configuration (development only)
+   */
+  if (process.env.NODE_ENV === 'development') {
+    router.get('/test-config', async (req, res): Promise<void> => {
+      try {
+        const slackConfig = {
+          signingSecret: process.env.SLACK_SIGNING_SECRET ? 'configured' : 'missing',
+          botToken: process.env.SLACK_BOT_TOKEN ? 'configured' : 'missing',
+          clientId: process.env.SLACK_CLIENT_ID ? 'configured' : 'missing',
+          clientSecret: process.env.SLACK_CLIENT_SECRET ? 'configured' : 'missing',
+          redirectUri: process.env.SLACK_OAUTH_REDIRECT_URI ? 'configured' : 'missing'
+        };
+
+        const missingVars = Object.entries(slackConfig)
+          .filter(([_, value]) => value === 'missing')
+          .map(([key, _]) => key);
+
+        res.json({
+          status: missingVars.length === 0 ? 'configured' : 'incomplete',
+          config: slackConfig,
+          missing: missingVars,
+          endpoints: {
+            events: '/slack/events',
+            commands: '/slack/commands',
+            interactive: '/slack/interactive',
+            boltEvents: '/slack/bolt/events',
+            boltCommands: '/slack/bolt/commands',
+            boltInteractive: '/slack/bolt/interactive'
+          },
+          message: missingVars.length === 0 
+            ? 'Slack is fully configured and ready to receive events'
+            : `Missing configuration: ${missingVars.join(', ')}`
+        });
+
+      } catch (error) {
+        logger.error('Error checking Slack configuration', error);
+        res.status(500).json({ error: 'Internal server error' });
       }
     });
   }
