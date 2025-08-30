@@ -25,13 +25,14 @@ export class SlackInterface {
     this.config = config;
     this.serviceManager = serviceManager;
 
-    // Create Express receiver for Slack
+    // Create Express receiver for Slack with unique endpoint paths
+    // These paths are different from the main app routes to avoid conflicts
     this.receiver = new ExpressReceiver({
       signingSecret: config.signingSecret,
       endpoints: {
-        events: '/slack/events',
-        commands: '/slack/commands',
-        interactive: '/slack/interactive'
+        events: '/slack/bolt/events',
+        commands: '/slack/bolt/commands',
+        interactive: '/slack/bolt/interactive'
       }
     });
 
@@ -214,9 +215,9 @@ export class SlackInterface {
         const context = this.createSlackContextFromCommand(command);
         const parsedCommand = this.parseSlashCommandText(command.text || '');
         
-        // Handle empty commands
+        // Handle empty commands with helpful guidance
         if (!parsedCommand.message.trim()) {
-          const helpResponse = this.formatQuickHelpResponse();
+          const helpResponse = this.formatSlashCommandHelp();
           await respond(helpResponse);
           return;
         }
@@ -254,23 +255,6 @@ export class SlackInterface {
         await respond({
           response_type: 'ephemeral' as const,
           text: 'I apologize, but I encountered an error processing your command. Please try again or contact support if the issue persists.'
-        });
-      }
-    });
-
-    // Dedicated help command
-    this.app.command('/assistant-help', async ({ command, ack, respond }) => {
-      await ack();
-      
-      try {
-        logger.info('Help command received', { user: command.user_id });
-        const helpResponse = this.formatHelpResponse();
-        await respond(helpResponse);
-      } catch (error: any) {
-        logger.error('Error handling help command:', error);
-        await respond({
-          response_type: 'ephemeral' as const,
-          text: 'I apologize, but I encountered an error. Please try again.'
         });
       }
     });
@@ -563,7 +547,7 @@ export class SlackInterface {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "👋 *How can I help you today?*\n\nTry asking me to:\n• Check your email\n• Schedule a meeting\n• Find contact information\n• Or just type `/assistant help` for more options"
+            text: "👋 *How can I help you today?*\n\nJust type `/assistant` followed by what you need:\n• `/assistant check my email`\n• `/assistant schedule a meeting`\n• `/assistant find contact information`\n• Or ask me anything else!"
           }
         },
         {
@@ -602,7 +586,7 @@ export class SlackInterface {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "*Ways to interact with me:*\n• Direct message me\n• Mention me in channels (@AI Assistant)\n• Use the `/assistant` command"
+            text: "*Ways to interact with me:*\n• Direct message me\n• Mention me in channels (@AI Assistant)\n• Use `/assistant` followed by any request"
           }
         },
         {
@@ -612,21 +596,28 @@ export class SlackInterface {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "📧 *Email Management*\n• \"Check my email\"\n• \"Send email to john@company.com about the meeting\"\n• \"Find emails from Sarah about the project\""
+            text: "📧 *Email Management*\n• `/assistant check my email`\n• `/assistant send email to john@company.com about the meeting`\n• `/assistant find emails from Sarah about the project`"
           }
         },
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "📅 *Calendar Management*\n• \"Schedule meeting with team tomorrow at 2pm\"\n• \"Check if I'm free Thursday afternoon\"\n• \"Move my 3pm meeting to 4pm\""
+            text: "📅 *Calendar Management*\n• `/assistant schedule meeting with team tomorrow at 2pm`\n• `/assistant check if I'm free Thursday afternoon`\n• `/assistant move my 3pm meeting to 4pm`"
           }
         },
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "👤 *Contact Management*\n• \"Find contact info for John Smith\"\n• \"Add jane@company.com to my contacts\"\n• \"Who is the contact for Acme Corp?\""
+            text: "👤 *Contact Management*\n• `/assistant find contact info for John Smith`\n• `/assistant add jane@company.com to my contacts`\n• `/assistant who is the contact for Acme Corp?`"
+          }
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "💡 *Pro Tips:*\n• Just type `/assistant` followed by what you need\n• I understand natural language - no need for specific commands\n• Try asking me anything - I'll figure out what you need!"
           }
         },
         {
@@ -634,7 +625,39 @@ export class SlackInterface {
           elements: [
             {
               type: "mrkdwn",
-              text: "💡 *Tip:* I understand natural language, so just tell me what you need!"
+              text: "💡 *Example:* `/assistant help me organize my day` or `/assistant what's the weather like?`"
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  /**
+   * Format help response for slash commands with empty input
+   */
+  private formatSlashCommandHelp(): any {
+    return {
+      response_type: 'ephemeral' as const,
+      text: "👋 How can I help you today?",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "👋 *How can I help you today?*\n\nTry asking me to:\n• Check your email\n• Schedule a meeting\n• Find contact information\n• Or just type `/assistant help` for more options"
+          }
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "Show All Commands"
+              },
+              action_id: "show_full_help"
             }
           ]
         }
@@ -1445,9 +1468,9 @@ Need more help? Just ask!`;
           configured: isConfigured,
           development: this.config.development,
           endpoints: {
-            events: '/slack/events',
-            commands: '/slack/commands',
-            interactive: '/slack/interactive'
+            events: '/slack/bolt/events',
+            commands: '/slack/bolt/commands',
+            interactive: '/slack/bolt/interactive'
           }
         }
       };

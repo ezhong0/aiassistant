@@ -93,8 +93,10 @@ const setupSlackInterface = async () => {
   try {
     const interfaces = await initializeInterfaces(serviceManager);
     if (interfaces.slackInterface) {
-      // Use the Slack interface router for Slack events
-      app.use(interfaces.slackInterface.router);
+      // Mount the Bolt framework routes at /slack/bolt to avoid conflicts
+      // The main /slack/events endpoint handles the URL verification challenge
+      // The Bolt framework handles actual event processing at /slack/bolt/events
+      app.use('/slack/bolt', interfaces.slackInterface.router);
       await startInterfaces(interfaces);
       logger.info('Slack interface integrated successfully');
     } else {
