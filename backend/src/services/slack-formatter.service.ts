@@ -1,5 +1,5 @@
 import { BaseService } from './base-service';
-import { SlackBlock, SlackResponse } from '../types/slack.types';
+import { SlackBlock, SlackResponse, ActionProposal } from '../types/slack.types';
 
 /**
  * Service for formatting responses into Slack Block Kit format
@@ -524,6 +524,773 @@ export class SlackFormatterService extends BaseService {
   }
 
   /**
+   * Format a rich proposal card showing exactly what will happen
+   * This creates detailed proposal cards for confirmation workflows
+   */
+  formatProposalCard(proposal: ActionProposal): SlackResponse {
+    try {
+      const blocks: SlackBlock[] = [];
+      
+      // Header with action type and title
+      blocks.push({
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `${this.getActionEmoji(proposal.type)} ${proposal.title}`
+        }
+      });
+
+      // Summary section
+      if (proposal.summary) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Summary*\n${proposal.summary}`
+          }
+        });
+      }
+
+      // Details section - show exactly what will happen
+      if (proposal.details) {
+        blocks.push({ type: 'divider' });
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*What will happen:*\n${this.formatProposalDetails(proposal.details, proposal.type)}`
+          }
+        });
+      }
+
+      // Risks and considerations
+      if (proposal.risks && proposal.risks.length > 0) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*⚠️ Important:*\n${proposal.risks.map(risk => `• ${risk}`).join('\n')}`
+          }
+        });
+      }
+
+      // Alternative options
+      if (proposal.alternatives && proposal.alternatives.length > 0) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Other options:*\n${proposal.alternatives.map(alt => `• ${alt}`).join('\n')}`
+          }
+        });
+      }
+
+      // Action buttons
+      blocks.push({ type: 'divider' });
+      blocks.push({
+        type: 'actions',
+        elements: proposal.actions.map(action => ({
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: action.text
+          },
+          style: action.style || 'default',
+          action_id: action.actionId,
+          value: action.actionId
+        }))
+      });
+
+      return {
+        text: `${proposal.title}: ${proposal.summary || 'Action requires confirmation'}`,
+        blocks
+      };
+
+    } catch (error) {
+      this.logError('Error formatting proposal card', error);
+      return this.formatErrorMessageResponse('Failed to format proposal card');
+    }
+  }
+
+  /**
+   * Generate a proposal card from tool calls and preview results
+   * This creates rich proposal cards showing exactly what will happen
+   */
+  generateProposalFromToolCalls(
+    toolCalls: any[], 
+    previewResults: any[], 
+    userCommand: string
+  ): ActionProposal | null {
+    try {
+      // Find the main action tool (skip Think and contact lookup tools)
+      const mainAction = toolCalls.find(tc => 
+        tc.name !== 'Think' && 
+        tc.name !== 'contactAgent' &&
+        tc.name !== 'tavilyAgent'
+      );
+      
+      if (!mainAction) {
+        return null;
+      }
+      
+      // Generate proposal based on the main action type
+      switch (mainAction.name) {
+        case 'emailAgent':
+          return this.generateEmailProposal(mainAction, previewResults, userCommand);
+        
+        case 'calendarAgent':
+          return this.generateCalendarProposal(mainAction, previewResults, userCommand);
+        
+        case 'contactAgent':
+          return this.generateContactProposal(mainAction, previewResults, userCommand);
+        
+        case 'contentCreator':
+          return this.generateContentProposal(mainAction, previewResults, userCommand);
+        
+        default:
+          return this.generateGenericProposal(mainAction, previewResults, userCommand);
+      }
+      
+    } catch (error) {
+      this.logError('Error generating proposal from tool calls', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate email proposal card
+   */
+  private generateEmailProposal(mainAction: any, previewResults: any[], userCommand: string): ActionProposal {
+    const emailParams = mainAction.parameters;
+    const contactResults = previewResults.find(r => r.toolName === 'contactAgent');
+    
+    // Determine email type and details
+    let emailType: 'email_send' | 'email_reply' | 'email_forward' | 'email_draft' = 'email_send';
+    let details: any = {};
+    
+    if (emailParams.query?.toLowerCase().includes('reply')) {
+      emailType = 'email_reply';
+      details = {
+        threadId: emailParams.threadId,
+        originalSubject: emailParams.subject,
+        body: emailParams.body,
+        includeOriginal: true
+      };
+    } else if (emailParams.query?.toLowerCase().includes('forward')) {
+      emailType = 'email_forward';
+      details = {
+        to: emailParams.recipients,
+        subject: emailParams.subject,
+        body: emailParams.body
+      };
+    } else if (emailParams.query?.toLowerCase().includes('draft')) {
+      emailType = 'email_draft';
+      details = {
+        to: this.extractRecipients(emailParams, contactResults),
+        subject: emailParams.subject,
+        body: emailParams.body
+      };
+    } else {
+      // Regular email send
+      emailType = 'email_send';
+      details = {
+        to: this.extractRecipients(emailParams, contactResults),
+        subject: emailParams.subject,
+        body: emailParams.body,
+        attachments: emailParams.attachments || [],
+        scheduledTime: emailParams.scheduledTime || 'Send immediately'
+      };
+    }
+    
+    return {
+      type: emailType,
+      title: this.getEmailActionTitle(emailType),
+      summary: `Send email about: ${emailParams.query || 'your request'}`,
+      details,
+      risks: [
+        'Email will be sent immediately and cannot be recalled',
+        'Recipients will see your email address',
+        'Email content will be stored in Gmail'
+      ],
+      alternatives: [
+        'Save as draft for later editing',
+        'Schedule to send later',
+        'Send to yourself first for review'
+      ],
+      actions: [
+        {
+          actionId: 'confirm',
+          text: 'Send Email',
+          style: 'primary'
+        },
+        {
+          actionId: 'edit',
+          text: 'Edit First',
+          style: 'default'
+        },
+        {
+          actionId: 'draft',
+          text: 'Save as Draft',
+          style: 'default'
+        },
+        {
+          actionId: 'cancel',
+          text: 'Cancel',
+          style: 'danger'
+        }
+      ]
+    };
+  }
+
+  /**
+   * Generate calendar proposal card
+   */
+  private generateCalendarProposal(mainAction: any, previewResults: any[], userCommand: string): ActionProposal {
+    const calendarParams = mainAction.parameters;
+    const contactResults = previewResults.find(r => r.toolName === 'contactAgent');
+    
+    // Extract calendar details
+    const details = {
+      title: calendarParams.title || calendarParams.summary || 'Meeting',
+      startTime: calendarParams.startTime || calendarParams.start,
+      endTime: calendarParams.endTime || calendarParams.end,
+      duration: calendarParams.duration,
+      attendees: this.extractAttendees(calendarParams, contactResults),
+      location: calendarParams.location,
+      description: calendarParams.description,
+      reminders: ['15 minutes before', '1 hour before']
+    };
+    
+    return {
+      type: 'calendar_create',
+      title: 'Create Calendar Event',
+      summary: `Schedule: ${details.title}`,
+      details,
+      risks: [
+        'Event will be created immediately',
+        'Attendees will receive invitations',
+        'Event will be visible on your calendar'
+      ],
+      alternatives: [
+        'Create as tentative event',
+        'Schedule for a different time',
+        'Create recurring event'
+      ],
+      actions: [
+        {
+          actionId: 'confirm',
+          text: 'Create Event',
+          style: 'primary'
+        },
+        {
+          actionId: 'edit',
+          text: 'Edit Details',
+          style: 'default'
+        },
+        {
+          actionId: 'tentative',
+          text: 'Mark as Tentative',
+          style: 'default'
+        },
+        {
+          actionId: 'cancel',
+          text: 'Cancel',
+          style: 'danger'
+        }
+      ]
+    };
+  }
+
+  /**
+   * Generate contact proposal card
+   */
+  private generateContactProposal(mainAction: any, previewResults: any[], userCommand: string): ActionProposal {
+    const contactParams = mainAction.parameters;
+    
+    const details = {
+      name: contactParams.name,
+      email: contactParams.email,
+      phone: contactParams.phone,
+      company: contactParams.company,
+      notes: contactParams.notes
+    };
+    
+    return {
+      type: 'contact_create',
+      title: 'Create Contact',
+      summary: `Add new contact: ${details.name || 'Unknown'}`,
+      details,
+      risks: [
+        'Contact will be added to your Google Contacts',
+        'Information will be synced across devices'
+      ],
+      alternatives: [
+        'Search existing contacts first',
+        'Add to a specific contact group',
+        'Import from another source'
+      ],
+      actions: [
+        {
+          actionId: 'confirm',
+          text: 'Create Contact',
+          style: 'primary'
+        },
+        {
+          actionId: 'edit',
+          text: 'Edit Details',
+          style: 'default'
+        },
+        {
+          actionId: 'cancel',
+          text: 'Cancel',
+          style: 'danger'
+        }
+      ]
+    };
+  }
+
+  /**
+   * Generate content creation proposal card
+   */
+  private generateContentProposal(mainAction: any, previewResults: any[], userCommand: string): ActionProposal {
+    const contentParams = mainAction.parameters;
+    
+    const details = {
+      topic: contentParams.topic,
+      format: contentParams.format || 'blog post',
+      length: contentParams.length || 'medium',
+      tone: contentParams.tone || 'professional',
+      outline: contentParams.outline || []
+    };
+    
+    return {
+      type: 'content_create',
+      title: 'Create Content',
+      summary: `Generate ${details.format} about: ${details.topic}`,
+      details,
+      risks: [
+        'Content will be generated using AI',
+        'May require human review and editing',
+        'Content quality depends on input parameters'
+      ],
+      alternatives: [
+        'Start with an outline first',
+        'Use a different tone or style',
+        'Generate multiple versions'
+      ],
+      actions: [
+        {
+          actionId: 'confirm',
+          text: 'Generate Content',
+          style: 'primary'
+        },
+        {
+          actionId: 'outline',
+          text: 'Create Outline First',
+          style: 'default'
+        },
+        {
+          actionId: 'edit',
+          text: 'Edit Parameters',
+          style: 'default'
+        },
+        {
+          actionId: 'cancel',
+          text: 'Cancel',
+          style: 'danger'
+        }
+      ]
+    };
+  }
+
+  /**
+   * Generate generic proposal card
+   */
+  private generateGenericProposal(mainAction: any, previewResults: any[], userCommand: string): ActionProposal {
+    return {
+      type: 'search_perform',
+      title: `Execute ${mainAction.name}`,
+      summary: `Perform action: ${mainAction.parameters.query || 'your request'}`,
+      details: mainAction.parameters,
+      risks: [
+        'Action will be executed immediately',
+        'Results may affect your data or settings'
+      ],
+      alternatives: [
+        'Preview results first',
+        'Execute in test mode',
+        'Cancel the action'
+      ],
+      actions: [
+        {
+          actionId: 'confirm',
+          text: 'Execute',
+          style: 'primary'
+        },
+        {
+          actionId: 'preview',
+          text: 'Preview First',
+          style: 'default'
+        },
+        {
+          actionId: 'cancel',
+          text: 'Cancel',
+          style: 'danger'
+        }
+      ]
+    };
+  }
+
+  /**
+   * Extract recipients from email parameters and contact results
+   */
+  private extractRecipients(emailParams: any, contactResults: any): string[] {
+    const recipients: string[] = [];
+    
+    // Add direct email addresses
+    if (emailParams.contactEmail) {
+      recipients.push(emailParams.contactEmail);
+    }
+    
+    // Add recipients from contact lookup
+    if (contactResults && contactResults.result && contactResults.success) {
+      if (Array.isArray(contactResults.result)) {
+        contactResults.result.forEach((contact: any) => {
+          if (contact.email) {
+            recipients.push(contact.email);
+          }
+        });
+      } else if (contactResults.result.email) {
+        recipients.push(contactResults.result.email);
+      }
+    }
+    
+    // Add any other recipients
+    if (emailParams.recipients && Array.isArray(emailParams.recipients)) {
+      recipients.push(...emailParams.recipients);
+    }
+    
+    return recipients.length > 0 ? recipients : ['Recipient to be determined'];
+  }
+
+  /**
+   * Extract attendees from calendar parameters and contact results
+   */
+  private extractAttendees(calendarParams: any, contactResults: any): string[] {
+    const attendees: string[] = [];
+    
+    // Add direct attendees
+    if (calendarParams.attendees && Array.isArray(calendarParams.attendees)) {
+      attendees.push(...calendarParams.attendees);
+    }
+    
+    // Add attendees from contact lookup
+    if (contactResults && contactResults.result && contactResults.success) {
+      if (Array.isArray(contactResults.result)) {
+        contactResults.result.forEach((contact: any) => {
+          if (contact.email) {
+            attendees.push(contact.email);
+          }
+        });
+      } else if (contactResults.result.email) {
+        attendees.push(contactResults.result.email);
+      }
+    }
+    
+    return attendees.length > 0 ? attendees : ['Attendees to be determined'];
+  }
+
+  /**
+   * Get email action title based on type
+   */
+  private getEmailActionTitle(emailType: string): string {
+    const titles: Record<string, string> = {
+      'email_send': 'Send Email',
+      'email_reply': 'Reply to Email',
+      'email_forward': 'Forward Email',
+      'email_draft': 'Create Email Draft'
+    };
+    
+    return titles[emailType] || 'Email Action';
+  }
+
+  /**
+   * Format proposal details based on action type
+   * This shows exactly what will happen in a user-friendly format
+   */
+  private formatProposalDetails(details: any, actionType: string): string {
+    switch (actionType) {
+      case 'email_send':
+        return this.formatEmailProposalDetails(details);
+      
+      case 'email_reply':
+        return this.formatEmailReplyProposalDetails(details);
+      
+      case 'calendar_create':
+        return this.formatCalendarProposalDetails(details);
+      
+      case 'calendar_update':
+        return this.formatCalendarUpdateProposalDetails(details);
+      
+      case 'contact_create':
+        return this.formatContactProposalDetails(details);
+      
+      case 'content_create':
+        return this.formatContentProposalDetails(details);
+      
+      default:
+        return this.formatGenericProposalDetails(details);
+    }
+  }
+
+  /**
+   * Format email send proposal details
+   * Shows exactly: to, subject, body preview, attachments, etc.
+   */
+  private formatEmailProposalDetails(details: any): string {
+    const lines: string[] = [];
+    
+    if (details.to) {
+      lines.push(`*To:* ${Array.isArray(details.to) ? details.to.join(', ') : details.to}`);
+    }
+    
+    if (details.cc && details.cc.length > 0) {
+      lines.push(`*CC:* ${details.cc.join(', ')}`);
+    }
+    
+    if (details.bcc && details.bcc.length > 0) {
+      lines.push(`*BCC:* ${details.bcc.join(', ')}`);
+    }
+    
+    if (details.subject) {
+      lines.push(`*Subject:* ${details.subject}`);
+    }
+    
+    if (details.body) {
+      const bodyPreview = details.body.length > 200 
+        ? details.body.substring(0, 200) + '...'
+        : details.body;
+      lines.push(`*Body:*\n${bodyPreview}`);
+    }
+    
+    if (details.attachments && details.attachments.length > 0) {
+      lines.push(`*Attachments:* ${details.attachments.length} file(s)`);
+      details.attachments.forEach((att: any, index: number) => {
+        lines.push(`  ${index + 1}. ${att.name || att.filename || 'Unnamed file'} (${att.size || 'Unknown size'})`);
+      });
+    }
+    
+    if (details.scheduledTime) {
+      lines.push(`*Scheduled:* ${details.scheduledTime}`);
+    } else {
+      lines.push(`*Scheduled:* Send immediately`);
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Format email reply proposal details
+   */
+  private formatEmailReplyProposalDetails(details: any): string {
+    const lines: string[] = [];
+    
+    if (details.threadId) {
+      lines.push(`*Reply to:* Thread ${details.threadId.substring(0, 8)}...`);
+    }
+    
+    if (details.originalSubject) {
+      lines.push(`*Original Subject:* ${details.originalSubject}`);
+    }
+    
+    if (details.body) {
+      const bodyPreview = details.body.length > 200 
+        ? details.body.substring(0, 200) + '...'
+        : details.body;
+      lines.push(`*Reply Body:*\n${bodyPreview}`);
+    }
+    
+    if (details.includeOriginal) {
+      lines.push(`*Include original message:* Yes`);
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Format calendar event creation proposal details
+   */
+  private formatCalendarProposalDetails(details: any): string {
+    const lines: string[] = [];
+    
+    if (details.title) {
+      lines.push(`*Event Title:* ${details.title}`);
+    }
+    
+    if (details.startTime) {
+      lines.push(`*Start Time:* ${details.startTime}`);
+    }
+    
+    if (details.endTime) {
+      lines.push(`*End Time:* ${details.endTime}`);
+    }
+    
+    if (details.duration) {
+      lines.push(`*Duration:* ${details.duration} minutes`);
+    }
+    
+    if (details.attendees && details.attendees.length > 0) {
+      lines.push(`*Attendees:* ${details.attendees.join(', ')}`);
+    }
+    
+    if (details.location) {
+      lines.push(`*Location:* ${details.location}`);
+    }
+    
+    if (details.description) {
+      const descPreview = details.description.length > 150 
+        ? details.description.substring(0, 150) + '...'
+        : details.description;
+      lines.push(`*Description:*\n${descPreview}`);
+    }
+    
+    if (details.reminders) {
+      lines.push(`*Reminders:* ${details.reminders.join(', ')}`);
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Format calendar update proposal details
+   */
+  private formatCalendarUpdateProposalDetails(details: any): string {
+    const lines: string[] = [];
+    
+    if (details.eventId) {
+      lines.push(`*Event ID:* ${details.eventId.substring(0, 8)}...`);
+    }
+    
+    if (details.originalTitle) {
+      lines.push(`*Original Title:* ${details.originalTitle}`);
+    }
+    
+    if (details.newTitle) {
+      lines.push(`*New Title:* ${details.newTitle}`);
+    }
+    
+    if (details.changes) {
+      lines.push(`*Changes:*\n${details.changes.map((change: any) => `• ${change.field}: ${change.oldValue} → ${change.newValue}`).join('\n')}`);
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Format contact creation proposal details
+   */
+  private formatContactProposalDetails(details: any): string {
+    const lines: string[] = [];
+    
+    if (details.name) {
+      lines.push(`*Name:* ${details.name}`);
+    }
+    
+    if (details.email) {
+      lines.push(`*Email:* ${details.email}`);
+    }
+    
+    if (details.phone) {
+      lines.push(`*Phone:* ${details.phone}`);
+    }
+    
+    if (details.company) {
+      lines.push(`*Company:* ${details.company}`);
+    }
+    
+    if (details.notes) {
+      lines.push(`*Notes:* ${details.notes}`);
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Format content creation proposal details
+   */
+  private formatContentProposalDetails(details: any): string {
+    const lines: string[] = [];
+    
+    if (details.topic) {
+      lines.push(`*Topic:* ${details.topic}`);
+    }
+    
+    if (details.format) {
+      lines.push(`*Format:* ${details.format}`);
+    }
+    
+    if (details.length) {
+      lines.push(`*Length:* ${details.length}`);
+    }
+    
+    if (details.tone) {
+      lines.push(`*Tone:* ${details.tone}`);
+    }
+    
+    if (details.outline) {
+      lines.push(`*Outline:*\n${details.outline.map((item: any, index: number) => `${index + 1}. ${item}`).join('\n')}`);
+    }
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Format generic proposal details
+   */
+  private formatGenericProposalDetails(details: any): string {
+    if (typeof details === 'string') {
+      return details;
+    }
+    
+    if (typeof details === 'object') {
+      return Object.entries(details)
+        .map(([key, value]) => `*${this.capitalizeFirst(key)}:* ${value}`)
+        .join('\n');
+    }
+    
+    return String(details);
+  }
+
+  /**
+   * Get appropriate emoji for action type
+   */
+  private getActionEmoji(actionType: string): string {
+    const emojiMap = {
+      'email_send': '📧',
+      'email_reply': '↩️',
+      'email_forward': '↪️',
+      'email_draft': '📝',
+      'calendar_create': '📅',
+      'calendar_update': '✏️',
+      'calendar_delete': '🗑️',
+      'contact_create': '👤',
+      'contact_update': '✏️',
+      'content_create': '✍️',
+      'search_perform': '🔍',
+      'default': '⚡'
+    } as const;
+    
+    return (emojiMap[actionType as keyof typeof emojiMap] ?? emojiMap.default) as string;
+  }
+
+  /**
+   * Capitalize first letter of string
+   */
+  private capitalizeFirst(str: string): string {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  /**
    * Utility: Truncate text to specified length
    */
   private truncateText(text: string, maxLength: number): string {
@@ -551,5 +1318,59 @@ export class SlackFormatterService extends BaseService {
       minute: '2-digit',
       hour12: true
     });
+  }
+
+  /**
+   * Demo method to show how proposal cards work
+   * This creates example proposal cards for testing
+   */
+  createDemoProposal(): ActionProposal {
+    return {
+      type: 'email_send',
+      title: 'Send Email',
+      summary: 'Send email about: quarterly review meeting',
+      details: {
+        to: 'john@company.com',
+        subject: 'Q4 Quarterly Review Meeting',
+        body: 'Hi John,\n\nI wanted to schedule our quarterly review meeting for next week. Let me know what time works best for you.\n\nBest regards,\n[Your Name]',
+        attachments: [
+          { name: 'Q4_Review_Agenda.pdf', size: '2.3 MB' },
+          { name: 'Q4_Metrics_Summary.xlsx', size: '1.1 MB' }
+        ],
+        scheduledTime: 'Send immediately'
+      },
+      risks: [
+        'Email will be sent immediately and cannot be recalled',
+        'Recipients will see your email address',
+        'Email content will be stored in Gmail'
+      ],
+      alternatives: [
+        'Save as draft for later editing',
+        'Schedule to send later',
+        'Send to yourself first for review'
+      ],
+      actions: [
+        {
+          actionId: 'confirm',
+          text: 'Send Email',
+          style: 'primary'
+        },
+        {
+          actionId: 'edit',
+          text: 'Edit First',
+          style: 'default'
+        },
+        {
+          actionId: 'draft',
+          text: 'Save as Draft',
+          style: 'default'
+        },
+        {
+          actionId: 'cancel',
+          text: 'Cancel',
+          style: 'danger'
+        }
+      ]
+    };
   }
 }

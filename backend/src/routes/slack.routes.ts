@@ -166,37 +166,28 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
         return;
       }
 
-      // For actual events, we need to forward them to the Bolt framework
-      // Since the Bolt framework is mounted at /slack/bolt, we'll make an internal request
+      // For actual events, handle them directly instead of forwarding
       if (type === 'event_callback' && event) {
-        logger.info('Slack event callback received, forwarding to Bolt framework', { 
+        logger.info('Slack event callback received, processing directly', { 
           eventType: event.type,
           userId: event.user,
           channelId: event.channel
         });
 
         try {
-          // Forward the event to the Bolt framework endpoint
-          const boltResponse = await fetch(`${req.protocol}://${req.get('host')}/slack/bolt/events`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Slack-Signature': req.get('X-Slack-Signature') || '',
-              'X-Slack-Request-Timestamp': req.get('X-Slack-Request-Timestamp') || '',
-              'X-Slack-Signature-Version': req.get('X-Slack-Signature-Version') || ''
-            },
-            body: JSON.stringify(req.body)
-          });
-
-          if (boltResponse.ok) {
-            logger.debug('Event forwarded to Bolt framework successfully');
-            res.status(200).json({ ok: true });
+          // Get the Slack interface from service manager to handle the event
+          const interfaces = await require('../interfaces').initializeInterfaces(serviceManager);
+          if (interfaces.slackInterface) {
+            // Process the event directly using SlackInterface
+            await interfaces.slackInterface.handleEvent(event, team_id);
           } else {
-            logger.warn('Bolt framework returned error', { status: boltResponse.status });
-            res.status(200).json({ ok: true }); // Still acknowledge to Slack
+            logger.warn('SlackInterface not available to process event');
           }
-        } catch (forwardError) {
-          logger.error('Error forwarding event to Bolt framework', forwardError);
+          
+          // Always acknowledge to Slack
+          res.status(200).json({ ok: true });
+        } catch (processError) {
+          logger.error('Error processing Slack event directly', processError);
           // Still acknowledge to Slack to prevent retries
           res.status(200).json({ ok: true });
         }

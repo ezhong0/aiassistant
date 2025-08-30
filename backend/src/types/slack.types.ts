@@ -213,3 +213,49 @@ export interface SlackMiddlewareArgs {
 }
 
 export type SlackEventHandler<T = SlackEventMiddlewareArgs> = (args: T) => Promise<void>;
+
+/**
+ * Action proposal for confirmation workflows
+ * Shows exactly what will happen before user confirms
+ */
+export interface ActionProposal {
+  /** Type of action being proposed */
+  type: 'email_send' | 'email_reply' | 'email_forward' | 'email_draft' | 
+        'calendar_create' | 'calendar_update' | 'calendar_delete' |
+        'contact_create' | 'contact_update' | 'content_create' | 'search_perform';
+  
+  /** Human-readable title for the action */
+  title: string;
+  
+  /** Brief summary of what will happen */
+  summary?: string;
+  
+  /** Detailed information about what will happen */
+  details?: any;
+  
+  /** Risks or important considerations */
+  risks?: string[];
+  
+  /** Alternative options available */
+  alternatives?: string[];
+  
+  /** Available actions for the user */
+  actions: ActionButton[];
+}
+
+/**
+ * Action button for proposal cards
+ */
+export interface ActionButton {
+  /** Unique identifier for the action */
+  actionId: string;
+  
+  /** Text to display on the button */
+  text: string;
+  
+  /** Button style (primary, danger, etc.) */
+  style?: 'primary' | 'danger' | 'default';
+  
+  /** Additional data for the action */
+  value?: string;
+}
