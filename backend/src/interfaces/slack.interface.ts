@@ -970,7 +970,26 @@ export class SlackInterface {
       // 1. Create or get session for Slack user with enhanced context
       const sessionId = await this.createOrGetSession(request.context);
       
-      // 2. Initialize MasterAgent with OpenAI configuration
+      // 2. Get OAuth tokens for this session if available
+      let accessToken: string | undefined;
+      try {
+        const sessionService = this.serviceManager.getService('sessionService');
+        if (sessionService) {
+          accessToken = (sessionService as any).getGoogleAccessToken(sessionId);
+          if (accessToken) {
+            logger.debug('Retrieved Google OAuth access token for Slack user', { 
+              sessionId, 
+              hasToken: !!accessToken 
+            });
+          } else {
+            logger.debug('No Google OAuth access token found for Slack user', { sessionId });
+          }
+        }
+      } catch (error) {
+        logger.warn('Error retrieving OAuth tokens for Slack user', { error, sessionId });
+      }
+      
+      // 3. Initialize MasterAgent with OpenAI configuration
       const { MasterAgent } = await import('../agents/master.agent');
       masterAgent = new MasterAgent({ 
         openaiApiKey: process.env.OPENAI_API_KEY || 'dummy-key' 
@@ -978,7 +997,7 @@ export class SlackInterface {
       
       logger.debug('MasterAgent initialized', { sessionId, useOpenAI: !!process.env.OPENAI_API_KEY });
       
-      // 3. Route to MasterAgent for intent parsing (EXISTING LOGIC - DO NOT DUPLICATE)
+      // 4. Route to MasterAgent for intent parsing (EXISTING LOGIC - DO NOT DUPLICATE)
       const masterResponse = await masterAgent.processUserInput(
         request.message,
         sessionId,
@@ -991,10 +1010,10 @@ export class SlackInterface {
         needsThinking: masterResponse.needsThinking
       });
 
-      // 4. Initialize tool results collection for comprehensive response
+      // 5. Initialize tool results collection for comprehensive response
       const toolResults: ToolResult[] = [];
       
-      // 5. Execute tool calls with enhanced Slack context
+      // 6. Execute tool calls with enhanced Slack context and OAuth token
       if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
         const toolExecutorService = this.serviceManager.getService('toolExecutorService');
         
@@ -1013,15 +1032,33 @@ export class SlackInterface {
 
         logger.debug('Executing tool calls', { 
           toolCount: masterResponse.toolCalls.length,
-          tools: masterResponse.toolCalls.map((tc: any) => tc.name)
+          tools: masterResponse.toolCalls.map((tc: any) => tc.name),
+          hasAccessToken: !!accessToken
         });
 
         // Execute all tool calls in sequence with proper error handling
         for (const toolCall of masterResponse.toolCalls) {
           try {
             logger.debug(`Executing tool: ${toolCall.name}`, { 
-              parameters: Object.keys(toolCall.parameters || {})
+              parameters: Object.keys(toolCall.parameters || {}),
+              hasAccessToken: !!accessToken
             });
+
+            // Check if this tool requires OAuth and we don't have a token
+            if (this.toolRequiresOAuth(toolCall.name) && !accessToken) {
+              logger.warn(`Tool ${toolCall.name} requires OAuth but no access token available`, { sessionId });
+              
+              // Add failed result to collection
+              toolResults.push({
+                toolName: toolCall.name,
+                success: false,
+                error: 'OAuth authentication required. Please authenticate with Gmail first.',
+                result: null,
+                executionTime: 0
+              });
+              
+              continue; // Skip execution and move to next tool
+            }
 
             const executionContext = {
               ...baseExecutionContext,
@@ -1030,7 +1067,8 @@ export class SlackInterface {
 
             const result = await (toolExecutorService as any).executeTool(
               toolCall,
-              executionContext
+              executionContext,
+              accessToken // Pass the OAuth access token to the tool executor
             );
 
             // Collect results for response formatting
@@ -1064,7 +1102,7 @@ export class SlackInterface {
         }
       }
 
-      // 6. Enhance master response with tool execution results
+      // 7. Enhance master response with tool execution results
       const enhancedMasterResponse = {
         ...masterResponse,
         toolResults: toolResults,
@@ -1076,7 +1114,7 @@ export class SlackInterface {
         }
       };
 
-      // 7. Format response for Slack with comprehensive context
+      // 8. Format response for Slack with comprehensive context
       const slackResponse = await this.formatAgentResponseForSlack(
         enhancedMasterResponse, 
         request.context
@@ -1211,6 +1249,46 @@ export class SlackInterface {
           }
         }
 
+        // Handle failed results with OAuth guidance
+        if (failedResults.length > 0) {
+          const oauthFailures = failedResults.filter((fr: any) => 
+            fr.error?.includes('OAuth authentication required') || 
+            fr.error?.includes('Access token is required')
+          );
+          
+          if (oauthFailures.length > 0) {
+            blocks.push({ type: 'divider' });
+            
+            // Add OAuth guidance block
+            blocks.push({
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '*🔐 Authentication Required*\n' +
+                      'To use email, calendar, or contact features, you need to connect your Gmail account first.'
+              },
+              accessory: {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: 'Connect Gmail Account'
+                },
+                style: 'primary',
+                action_id: 'gmail_oauth',
+                url: await this.generateOAuthUrl(slackContext)
+              }
+            });
+            
+            blocks.push({
+              type: 'context',
+              elements: [{
+                type: 'mrkdwn',
+                text: '_Click the button above to securely connect your Gmail account_'
+              }]
+            });
+          }
+        }
+
         // Add execution summary if multiple tools were used
         if (masterResponse.executionMetadata && masterResponse.toolResults.length > 1) {
           const metadata = masterResponse.executionMetadata;
@@ -1265,6 +1343,59 @@ export class SlackInterface {
         text: masterResponse.message || 'I processed your request successfully.' 
       };
     }
+  }
+
+  /**
+   * Check if a tool requires OAuth authentication
+   */
+  private toolRequiresOAuth(toolName: string): boolean {
+    const oauthRequiredTools = [
+      'emailAgent',
+      'calendarAgent', 
+      'contactAgent'
+    ];
+    
+    return oauthRequiredTools.includes(toolName);
+  }
+
+  /**
+   * Generate OAuth URL for Slack user authentication
+   */
+  private async generateOAuthUrl(slackContext: SlackContext): Promise<string> {
+    const { ENVIRONMENT } = await import('../config/environment');
+    const baseUrl = ENVIRONMENT.baseUrl;
+    const clientId = ENVIRONMENT.google.clientId;
+    
+    if (!clientId) {
+      logger.error('Google OAuth client ID not configured');
+      return `${baseUrl}/auth/error?message=OAuth+not+configured`;
+    }
+
+    // Create state parameter with Slack context
+    const state = JSON.stringify({
+      source: 'slack',
+      team_id: slackContext.teamId,
+      user_id: slackContext.userId,
+      channel_id: slackContext.channelId
+    });
+
+    const scopes = [
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/contacts.readonly'
+    ].join(' ');
+
+    const authUrl = `${baseUrl}/auth/init?` + new URLSearchParams({
+      client_id: clientId,
+      scope: scopes,
+      state: state,
+      response_type: 'code',
+      access_type: 'offline',
+      prompt: 'consent'
+    });
+
+    return authUrl;
   }
 
   /**

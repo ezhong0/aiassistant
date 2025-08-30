@@ -49,17 +49,51 @@ export class SlackFormatterService extends BaseService {
    * Format error message response
    */
   formatErrorMessageResponse(error: string): SlackResponse {
+    // Check if this is an authentication error
+    const isAuthError = error.includes('Access token is required') || 
+                       error.includes('authentication') || 
+                       error.includes('unauthorized');
+
+    const blocks: any[] = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `❌ *Error*\n${error}`
+        }
+      }
+    ];
+
+    // Add authentication button for auth errors
+    if (isAuthError) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `🔐 *Authentication Required*\n\nTo send emails, you need to connect your Gmail account. Click the button below to authenticate securely with Google.`
+        }
+      });
+      
+      blocks.push({
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '🔑 Connect Gmail Account'
+            },
+            style: 'primary',
+            action_id: 'gmail_oauth',
+            url: `${process.env.BASE_URL || 'https://aiassistant-production-5333.up.railway.app'}/auth/google/slack`
+          }
+        ]
+      });
+    }
+
     return {
       text: `❌ Error: ${error}`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `❌ *Error*\n${error}`
-          }
-        }
-      ]
+      blocks
     };
   }
 

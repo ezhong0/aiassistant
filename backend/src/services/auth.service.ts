@@ -63,17 +63,24 @@ export class AuthService extends BaseService {
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/contacts.readonly'
-  ]): string {
+  ], state?: string): string {
     this.assertReady();
     
     try {
-      const url = this.oauth2Client.generateAuthUrl({
+      const authOptions: any = {
         access_type: 'offline',
         scope: scopes,
         prompt: 'consent'
-      });
+      };
+
+      // Add state parameter if provided
+      if (state) {
+        authOptions.state = state;
+      }
+
+      const url = this.oauth2Client.generateAuthUrl(authOptions);
       
-      this.logDebug('Generated OAuth URL', { scopes, urlLength: url.length });
+      this.logDebug('Generated OAuth URL', { scopes, state: !!state, urlLength: url.length });
       return url;
     } catch (error) {
       this.handleError(error, 'generateAuthUrl');

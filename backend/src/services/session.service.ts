@@ -289,6 +289,136 @@ export class SessionService extends BaseService {
       expiredSessions: expiredSessions.length
     };
   }
+
+  /**
+   * Store OAuth tokens for a Slack user
+   */
+  storeOAuthTokens(
+    sessionId: string, 
+    tokens: {
+      google?: {
+        access_token: string;
+        refresh_token?: string;
+        expires_in?: number;
+        token_type?: string;
+        scope?: string;
+        expiry_date?: number;
+      };
+      slack?: {
+        access_token?: string;
+        team_id?: string;
+        user_id?: string;
+      };
+    }
+  ): boolean {
+    this.assertReady();
+    
+    const session = this.getSession(sessionId);
+    if (!session) {
+      this.logWarn('Cannot store OAuth tokens - session not found', { sessionId });
+      return false;
+    }
+
+    // Initialize oauthTokens if it doesn't exist
+    if (!session.oauthTokens) {
+      session.oauthTokens = {};
+    }
+
+    // Store Google tokens
+    if (tokens.google) {
+      session.oauthTokens.google = {
+        ...session.oauthTokens.google,
+        ...tokens.google
+      };
+      this.logInfo('Stored Google OAuth tokens', { 
+        sessionId, 
+        hasRefreshToken: !!tokens.google.refresh_token,
+        expiresIn: tokens.google.expires_in 
+      });
+    }
+
+    // Store Slack tokens
+    if (tokens.slack) {
+      session.oauthTokens.slack = {
+        ...session.oauthTokens.slack,
+        ...tokens.slack
+      };
+      this.logInfo('Stored Slack OAuth tokens', { 
+        sessionId, 
+        teamId: tokens.slack.team_id,
+        userId: tokens.slack.user_id 
+      });
+    }
+
+    // Update last activity
+    session.lastActivity = new Date();
+    
+    return true;
+  }
+
+  /**
+   * Get OAuth tokens for a session
+   */
+  getOAuthTokens(sessionId: string): {
+    google?: {
+      access_token: string;
+      refresh_token?: string;
+      expires_in?: number;
+      token_type?: string;
+      scope?: string;
+      expiry_date?: number;
+    };
+    slack?: {
+      access_token?: string;
+      team_id?: string;
+      user_id?: string;
+    };
+  } | null {
+    this.assertReady();
+    
+    const session = this.getSession(sessionId);
+    if (!session || !session.oauthTokens) {
+      return null;
+    }
+
+    return session.oauthTokens;
+  }
+
+  /**
+   * Get Google access token for a session
+   */
+  getGoogleAccessToken(sessionId: string): string | null {
+    this.assertReady();
+    
+    const tokens = this.getOAuthTokens(sessionId);
+    if (!tokens?.google?.access_token) {
+      return null;
+    }
+
+    // Check if token is expired
+    if (tokens.google.expiry_date && Date.now() > tokens.google.expiry_date) {
+      this.logWarn('Google access token is expired', { sessionId });
+      return null;
+    }
+
+    return tokens.google.access_token;
+  }
+
+  /**
+   * Find session by Slack user context
+   */
+  findSessionBySlackUser(teamId: string, userId: string): string | null {
+    this.assertReady();
+    
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.oauthTokens?.slack?.team_id === teamId && 
+          session.oauthTokens?.slack?.user_id === userId) {
+        return sessionId;
+      }
+    }
+    
+    return null;
+  }
 }
 
 // Export the class for registration with ServiceManager

@@ -27,6 +27,58 @@ const router = express.Router();
 
 
 /**
+ * GET /auth/google/slack
+ * Initiate Google OAuth flow specifically for Slack users
+ */
+router.get('/google/slack', authRateLimit, (req: Request, res: Response) => {
+  try {
+    const { user_id, team_id } = req.query;
+    
+    const scopes = [
+      'openid', 
+      'email', 
+      'profile',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/contacts.readonly'
+    ];
+    
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
+    
+    // Add slack context to state parameter
+    const state = JSON.stringify({
+      source: 'slack',
+      user_id: user_id || 'unknown',
+      team_id: team_id || 'unknown'
+    });
+    
+    const authUrl = authService.generateAuthUrl(scopes, state);
+    
+    logger.info('Generated Google OAuth URL for Slack user authentication', {
+      user_id,
+      team_id
+    });
+    
+    res.redirect(authUrl);
+  } catch (error) {
+    logger.error('Error initiating Slack OAuth flow:', error);
+    res.status(500).send(`
+      <html>
+        <head><title>Authentication Error</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>❌ Authentication Error</h1>
+          <p>Sorry, there was an error starting the authentication process.</p>
+          <p>Please try again from Slack.</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+/**
  * GET /auth/google
  * Initiate Google OAuth flow
  */
@@ -59,22 +111,120 @@ router.get('/google', authRateLimit, (req: Request, res: Response) => {
 });
 
 /**
+ * GET /auth/init
+ * General OAuth initiation endpoint that handles both regular and Slack users
+ */
+router.get('/init', authRateLimit, (req: Request, res: Response) => {
+  try {
+    const { client_id, scope, state, response_type, access_type, prompt } = req.query;
+    
+    // Validate required parameters
+    if (!client_id || !scope || !state) {
+      throw new Error('Missing required OAuth parameters');
+    }
+
+    // Parse state to determine if this is a Slack user
+    let slackContext = null;
+    try {
+      slackContext = JSON.parse(state as string);
+    } catch (e) {
+      // Not a Slack user, continue with regular flow
+    }
+
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      throw new Error('Auth service not available');
+    }
+
+    // Use the provided parameters to generate the auth URL
+    const scopesArray = (scope as string).split(' ');
+    const authUrl = authService.generateAuthUrl(
+      scopesArray,
+      state as string
+    );
+    
+    logger.info('Generated Google OAuth URL via /auth/init', {
+      isSlackUser: !!slackContext,
+      slackUserId: slackContext?.user_id,
+      slackTeamId: slackContext?.team_id
+    });
+    
+    res.redirect(authUrl);
+  } catch (error) {
+    logger.error('Error in /auth/init:', error);
+    res.status(500).send(`
+      <html>
+        <head><title>Authentication Error</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>❌ Authentication Error</h1>
+          <p>Sorry, there was an error starting the authentication process.</p>
+          <p>Please try again or contact support if the issue persists.</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+/**
  * GET /auth/callback
  * Handle OAuth callback from Google
  */
 router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Request, res: Response) => {
   try {
-    const { code, error, error_description }: OAuthCallbackQuery = req.query;
+    const { code, error, error_description, state }: OAuthCallbackQuery = req.query;
+
+    // Parse state parameter to detect Slack authentication
+    let slackContext = null;
+    if (state && typeof state === 'string') {
+      try {
+        slackContext = JSON.parse(state);
+      } catch (e) {
+        logger.warn('Failed to parse state parameter:', state);
+      }
+    }
+
+    const isSlackAuth = slackContext?.source === 'slack';
 
     if (error) {
-      logger.error('OAuth callback error:', { error, error_description });
+      logger.error('OAuth callback error:', { error, error_description, isSlackAuth });
+      
+      if (isSlackAuth) {
+        return res.status(400).send(`
+          <html>
+            <head><title>Authentication Failed</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+              <h1>❌ Authentication Failed</h1>
+              <p>Sorry, there was an error connecting your Gmail account:</p>
+              <p><strong>${error_description || error}</strong></p>
+              <p>Please try again from Slack or contact support if the issue persists.</p>
+              <p style="margin-top: 40px; color: #666;">You can close this tab and return to Slack.</p>
+            </body>
+          </html>
+        `);
+      }
+      
       const authError = handleOAuthError('token_exchange', new Error(error), { error_description });
       const errorResponse = formatAuthErrorResponse(authError);
       return res.status(authError.statusCode).json(errorResponse);
     }
 
     if (!code || typeof code !== 'string') {
-      logger.error('No authorization code received in callback');
+      logger.error('No authorization code received in callback', { isSlackAuth });
+      
+      if (isSlackAuth) {
+        return res.status(400).send(`
+          <html>
+            <head><title>Authentication Error</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+              <h1>❌ Authentication Error</h1>
+              <p>No authorization code was received from Google.</p>
+              <p>Please try the authentication process again from Slack.</p>
+              <p style="margin-top: 40px; color: #666;">You can close this tab and return to Slack.</p>
+            </body>
+          </html>
+        `);
+      }
+      
       const authError = new AuthenticationError(
         'INVALID_GRANT' as any,
         'Missing authorization code',
@@ -100,9 +250,86 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
       picture: userInfo.picture
     });
 
-    logger.info(`User authenticated successfully: ${userInfo.email}`);
+    logger.info(`User authenticated successfully: ${userInfo.email}`, { 
+      isSlackAuth, 
+      slackUserId: slackContext?.user_id,
+      slackTeamId: slackContext?.team_id
+    });
 
-    // Return tokens and user info
+    // Store tokens associated with Slack user context for future use
+    if (isSlackAuth && slackContext?.user_id && slackContext?.team_id) {
+      try {
+        const sessionService = getService('sessionService');
+        if (sessionService) {
+          // Create a session ID for the Slack user
+          const slackSessionId = `slack_${slackContext.team_id}_${slackContext.user_id}_oauth`;
+          
+          // Get or create session
+          const session = (sessionService as any).getOrCreateSession(slackSessionId, slackContext.user_id);
+          
+          // Store OAuth tokens in the session
+          const tokensStored = (sessionService as any).storeOAuthTokens(slackSessionId, {
+            google: {
+              access_token: tokens.access_token,
+              refresh_token: tokens.refresh_token,
+              expires_in: tokens.expires_in,
+              token_type: tokens.token_type,
+              scope: tokens.scope,
+              expiry_date: tokens.expiry_date
+            },
+            slack: {
+              team_id: slackContext.team_id,
+              user_id: slackContext.user_id
+            }
+          });
+
+          if (tokensStored) {
+            logger.info('Successfully stored OAuth tokens for Slack user', {
+              sessionId: slackSessionId,
+              teamId: slackContext.team_id,
+              userId: slackContext.user_id
+            });
+          } else {
+            logger.warn('Failed to store OAuth tokens for Slack user', {
+              sessionId: slackSessionId,
+              teamId: slackContext.team_id,
+              userId: slackContext.user_id
+            });
+          }
+        }
+      } catch (error) {
+        logger.error('Error storing OAuth tokens for Slack user', {
+          error,
+          teamId: slackContext.team_id,
+          userId: slackContext.user_id
+        });
+      }
+    }
+
+    if (isSlackAuth) {
+      return res.send(`
+        <html>
+          <head><title>Authentication Successful</title></head>
+          <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1>✅ Gmail Connected Successfully!</h1>
+            <p>Your Gmail account has been successfully connected to the AI Assistant.</p>
+            <p><strong>Email:</strong> ${userInfo.email}</p>
+            <p><strong>Name:</strong> ${userInfo.name}</p>
+            <p style="margin-top: 30px;">You can now:</p>
+            <ul style="text-align: left; max-width: 400px; margin: 20px auto;">
+              <li>📧 Send emails through the AI Assistant</li>
+              <li>📋 Read and manage your Gmail</li>
+              <li>👤 Access your contacts</li>
+            </ul>
+            <p style="margin-top: 40px; color: #666; font-style: italic;">
+              You can close this tab and return to Slack to start using email features!
+            </p>
+          </body>
+        </html>
+      `);
+    }
+
+    // Return JSON response for non-Slack authentication
     const successResponse: AuthSuccessResponse = {
       success: true,
       user: userInfo,
@@ -122,6 +349,33 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
 
   } catch (error) {
     logger.error('OAuth callback processing error:', error);
+    
+    // Parse state for Slack context in error case too
+    let slackContext = null;
+    const { state } = req.query;
+    if (state && typeof state === 'string') {
+      try {
+        slackContext = JSON.parse(state);
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+    const isSlackAuth = slackContext?.source === 'slack';
+    
+    if (isSlackAuth) {
+      return res.status(500).send(`
+        <html>
+          <head><title>Authentication Error</title></head>
+          <body style="font-family: Arial; text-align: center; padding: 50px;">
+            <h1>❌ Authentication Error</h1>
+            <p>Sorry, there was an unexpected error during authentication.</p>
+            <p>Please try again from Slack or contact support if the issue persists.</p>
+            <p style="margin-top: 40px; color: #666;">You can close this tab and return to Slack.</p>
+          </body>
+        </html>
+      `);
+    }
+    
     const authError = error instanceof AuthenticationError 
       ? error 
       : handleOAuthError('token_exchange', error);
