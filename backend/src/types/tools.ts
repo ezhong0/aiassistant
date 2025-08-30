@@ -45,6 +45,22 @@ export interface SessionContext {
   pendingActions?: any[];
   conversationContext?: any;
   expiresAt: Date;
+  // OAuth token storage for Slack users
+  oauthTokens?: {
+    google?: {
+      access_token: string;
+      refresh_token?: string;
+      expires_in?: number;
+      token_type?: string;
+      scope?: string;
+      expiry_date?: number;
+    };
+    slack?: {
+      access_token?: string;
+      team_id?: string;
+      user_id?: string;
+    };
+  };
 }
 
 export interface ConversationEntry {

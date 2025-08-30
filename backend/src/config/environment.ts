@@ -9,6 +9,7 @@ export const ENV_VARS = {
   NODE_ENV: 'NODE_ENV',
   PORT: 'PORT',
   LOG_LEVEL: 'LOG_LEVEL',
+  BASE_URL: 'BASE_URL',
   
   // Database and external services
   GOOGLE_CLIENT_ID: 'GOOGLE_CLIENT_ID',
@@ -55,6 +56,11 @@ export const ENVIRONMENT = {
    * Logging level for winston
    */
   logLevel: process.env[ENV_VARS.LOG_LEVEL] || 'info',
+  
+  /**
+   * Base URL for OAuth redirect URIs
+   */
+  baseUrl: process.env[ENV_VARS.BASE_URL] || 'http://localhost:3000',
   
   /**
    * Google OAuth configuration
