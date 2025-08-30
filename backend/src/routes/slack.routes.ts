@@ -251,16 +251,20 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
       logger.info('Slack interactive component received', { 
         type: parsedPayload.type,
         actionId: parsedPayload.actions?.[0]?.action_id,
-        userId: parsedPayload.user?.id
+        userId: parsedPayload.user?.id,
+        fullPayload: parsedPayload // Log full payload for debugging
       });
 
       // Process button clicks
       if (parsedPayload.type === 'block_actions' && parsedPayload.actions?.[0]) {
         const action = parsedPayload.actions[0];
         const actionId = action.action_id;
+        
+        logger.info('Processing button click', { actionId, actionType: typeof actionId });
 
         // Handle different button types
         if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
+          logger.info('Matched view results button pattern');
           // Extract tool name from action ID (e.g., "view_emailagent_results" -> "emailAgent")
           const toolName = actionId.replace('view_', '').replace('_results', '');
           
