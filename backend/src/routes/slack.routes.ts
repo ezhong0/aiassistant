@@ -238,22 +238,68 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
 
   /**
    * Slack interactive components endpoint - handles button clicks, modals, etc.
-   * This endpoint will be used by the Bolt framework
    */
   router.post('/interactive', async (req, res): Promise<void> => {
     try {
       const payload = req.body.payload;
-      if (payload) {
-        const parsedPayload = JSON.parse(payload);
-        logger.info('Slack interactive component received', { 
-          type: parsedPayload.type,
-          actionId: parsedPayload.actions?.[0]?.action_id,
-          userId: parsedPayload.user?.id
-        });
+      if (!payload) {
+        res.status(400).json({ error: 'No payload provided' });
+        return;
       }
 
-      // Acknowledge receipt - actual processing handled by Bolt
-      res.status(200).json({ ok: true });
+      const parsedPayload = JSON.parse(payload);
+      logger.info('Slack interactive component received', { 
+        type: parsedPayload.type,
+        actionId: parsedPayload.actions?.[0]?.action_id,
+        userId: parsedPayload.user?.id
+      });
+
+      // Process button clicks
+      if (parsedPayload.type === 'block_actions' && parsedPayload.actions?.[0]) {
+        const action = parsedPayload.actions[0];
+        const actionId = action.action_id;
+
+        // Handle different button types
+        if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
+          // Extract tool name from action ID (e.g., "view_emailagent_results" -> "emailAgent")
+          const toolName = actionId.replace('view_', '').replace('_results', '');
+          
+          // Send a response showing the results
+          const responseMessage = {
+            text: `📋 ${toolName} Results`,
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `*${toolName} Results*\n\nThis feature shows detailed results from the ${toolName} execution. The email was processed successfully.`
+                }
+              },
+              {
+                type: 'context',
+                elements: [
+                  {
+                    type: 'mrkdwn',
+                    text: `Action: ${actionId} | User: ${parsedPayload.user?.name || 'Unknown'}`
+                  }
+                ]
+              }
+            ]
+          };
+
+          res.status(200).json(responseMessage);
+          return;
+        }
+
+        // Handle other button types
+        res.status(200).json({
+          text: `Button clicked: ${actionId}`,
+          response_type: 'ephemeral'
+        });
+      } else {
+        // Acknowledge receipt for other interaction types
+        res.status(200).json({ ok: true });
+      }
       
     } catch (error) {
       logger.error('Error handling Slack interactive component', error);
