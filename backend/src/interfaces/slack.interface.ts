@@ -25,15 +25,10 @@ export class SlackInterface {
     this.config = config;
     this.serviceManager = serviceManager;
 
-    // Create Express receiver for Slack with unique endpoint paths
-    // These paths are different from the main app routes to avoid conflicts
+    // Create Express receiver for Slack with default endpoints
+    // The receiver will be mounted at /slack/bolt, so default endpoints will work
     this.receiver = new ExpressReceiver({
-      signingSecret: config.signingSecret,
-      endpoints: {
-        events: '/slack/bolt/events',
-        commands: '/slack/bolt/commands',
-        interactive: '/slack/bolt/interactive'
-      }
+      signingSecret: config.signingSecret
     });
 
     // Initialize Slack app
@@ -60,11 +55,12 @@ export class SlackInterface {
 
   /**
    * Start the Slack interface
+   * Note: We don't call app.start() because we're mounting the receiver manually
    */
   public async start(): Promise<void> {
     try {
-      await this.app.start();
-      logger.info('Slack interface started successfully');
+      // Don't call app.start() since we're using the receiver's router directly
+      logger.info('Slack interface started successfully (using manual router mounting)');
     } catch (error) {
       logger.error('Failed to start Slack interface:', error);
       throw error;
@@ -81,6 +77,61 @@ export class SlackInterface {
     } catch (error) {
       logger.error('Failed to stop Slack interface:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Handle Slack events directly
+   */
+  public async handleEvent(event: any, teamId: string): Promise<void> {
+    try {
+      logger.info('Handling Slack event directly', {
+        eventType: event.type,
+        userId: event.user,
+        channelId: event.channel
+      });
+
+      // Create Slack context from event
+      const slackContext: SlackContext = {
+        userId: event.user,
+        channelId: event.channel,
+        teamId: teamId,
+        threadTs: event.ts,
+        isDirectMessage: event.channel_type === 'im'
+      };
+
+      // Determine event type
+      let eventType: SlackEventType;
+      if (event.type === 'app_mention') {
+        eventType = 'app_mention';
+      } else if (event.type === 'message') {
+        eventType = 'message';
+      } else {
+        logger.warn('Unsupported event type', { eventType: event.type });
+        return;
+      }
+
+      // Process the event using existing logic
+      await this.handleSlackEvent(
+        event.text || '', 
+        slackContext, 
+        eventType,
+        {
+          say: async (message: any) => {
+            // Send response back to Slack via Web API
+            await this.client.chat.postMessage({
+              channel: slackContext.channelId,
+              text: typeof message === 'string' ? message : message.text,
+              blocks: message.blocks,
+              thread_ts: slackContext.threadTs
+            });
+          },
+          client: this.client
+        }
+      );
+
+    } catch (error) {
+      logger.error('Error handling Slack event directly', error);
     }
   }
 
