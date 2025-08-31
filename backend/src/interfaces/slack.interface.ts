@@ -207,6 +207,29 @@ export class SlackInterface {
             await this.sendWelcomeMessage(say, context);
           }
 
+          // Check if this is a first-time email-related request
+          const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
+          const isEmailRelated = emailKeywords.some(keyword => 
+            messageText.toLowerCase().includes(keyword.toLowerCase())
+          );
+
+          if (isEmailRelated && this.isFirstTimeUser(context)) {
+            await this.sendEmailWelcomeMessage(say, context);
+          } else if (isEmailRelated) {
+            // Check if user has OAuth tokens for email requests
+            const hasOAuth = await this.hasOAuthTokens(context);
+            if (!hasOAuth) {
+              await this.sendOAuthRequiredMessage(say, context);
+              return; // Don't process the request without OAuth
+            } else {
+              // User has OAuth tokens, check if they recently completed authentication
+              const isRecentlyConnected = await this.isRecentlyConnected(context);
+              if (isRecentlyConnected) {
+                await this.sendOAuthSuccessMessage(say, context);
+              }
+            }
+          }
+
           await this.handleSlackEvent(
             messageText,
             context,
@@ -252,45 +275,46 @@ export class SlackInterface {
    * Setup slash commands with enhanced parameter parsing
    */
   private setupSlashCommands(): void {
-    // Main assistant command with sophisticated parsing
-    this.app.command('/assistant', async ({ command, ack, respond, client }) => {
+    // Handle slash commands
+    this.app.command('/assistant', async ({ command, ack, respond }) => {
       await ack();
-      
       try {
         logger.info('Slash command received', { 
-          user: command.user_id, 
+          command: command.command,
+          user: command.user_id,
           channel: command.channel_id,
           text: command.text?.substring(0, 100) + '...'
         });
 
-        const context = this.createSlackContextFromCommand(command);
-        const parsedCommand = this.parseSlashCommandText(command.text || '');
+        const context = await this.createSlackContextFromEvent(command, { team: { id: command.team_id } });
+        const message = this.parseSlashCommandText(command.text || '');
         
-        // Handle empty commands with helpful guidance
-        if (!parsedCommand.message.trim()) {
-          const helpResponse = this.formatSlashCommandHelp();
-          await respond(helpResponse);
+        // Handle special commands
+        if (message.isHelpRequest) {
+          await this.sendHelpMessage(respond, context);
           return;
         }
 
-        // Handle help requests specifically
-        if (parsedCommand.isHelpRequest) {
-          const helpResponse = this.formatHelpResponse();
-          await respond(helpResponse);
+        if (message.message.toLowerCase().includes('auth') || message.message.toLowerCase().includes('connect')) {
+          await this.handleAuthCommand(respond, context);
+          return;
+        }
+
+        if (message.message.toLowerCase().includes('status') || message.message.toLowerCase().includes('check')) {
+          await this.handleStatusCommand(respond, context);
           return;
         }
 
         await this.handleSlackEvent(
-          parsedCommand.message,
+          message.message,
           context,
           'slash_command',
           { 
             say: respond, 
-            client, 
-            thread_ts: undefined,
+            client: this.client,
             commandInfo: {
               command: command.command,
-              channelName: command.channel_name,
+              channelName: command.channel_name || 'unknown',
               triggerId: command.trigger_id,
               responseUrl: command.response_url
             }
@@ -304,8 +328,8 @@ export class SlackInterface {
         });
         
         await respond({
-          response_type: 'ephemeral' as const,
-          text: 'I apologize, but I encountered an error processing your command. Please try again or contact support if the issue persists.'
+          text: 'I apologize, but I encountered an error processing your command. Please try again or contact support if the issue persists.',
+          response_type: 'ephemeral'
         });
       }
     });
@@ -375,19 +399,43 @@ export class SlackInterface {
       }
     });
 
-    // Handle generic button clicks
+    // Handle OAuth button clicks
+    this.app.action('gmail_oauth', async ({ ack, body, client }) => {
+      await ack();
+      try {
+        logger.info('OAuth button clicked', { 
+          user: body.user?.id,
+          channel: body.channel?.id,
+          teamId: body.team?.id
+        });
+
+        // Send a confirmation message
+        const channelId = body.channel?.id || (body as any).channel_id;
+        if (channelId) {
+          await client.chat.postEphemeral({
+            channel: channelId,
+            user: body.user?.id || 'unknown',
+            text: '🔗 *OAuth Redirect*\n\nYou\'re being redirected to Google to connect your Gmail account. Please complete the authorization process and then return to Slack to try your request again.'
+          });
+        }
+      } catch (error) {
+        logger.error('Error handling OAuth button click', { error, body });
+      }
+    });
+
+    // Handle other button clicks
     this.app.action(/.*/, async ({ ack, body, client }) => {
       await ack();
       try {
-        logger.info('Generic button/action clicked:', { 
+        logger.info('Generic button action received', { 
           actionId: (body as any).actions?.[0]?.action_id,
-          user: body.user?.id 
+          user: body.user?.id,
+          channel: body.channel?.id
         });
         
-        // Route to appropriate handler based on action_id
-        // This can be expanded based on specific button needs
+        // Handle other button actions as needed
       } catch (error) {
-        logger.error('Error handling generic action:', error);
+        logger.error('Error handling button action', { error, body });
       }
     });
 
@@ -587,6 +635,66 @@ export class SlackInterface {
   }
 
   /**
+   * Send a welcome message specifically for email-related requests for first-time users
+   */
+  private async sendEmailWelcomeMessage(say: any, context: SlackContext): Promise<void> {
+    try {
+      const oauthUrl = await this.generateOAuthUrl(context);
+      
+      const welcomeMessage = {
+        text: "👋 Welcome to your AI Assistant!",
+        blocks: [
+          {
+            type: "header",
+            text: {
+              type: "plain_text",
+              text: "👋 Welcome to your AI Assistant!"
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "I'm here to help you manage your email directly from Slack. To get started, you need to connect your Gmail account. Here's how:"
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "• *Click the 'Connect Gmail Account' button* below to securely connect your Gmail account.\n• *Authorize* the connection in Google.\n• *Return to Slack* and try your email request again."
+            }
+          },
+          {
+            type: "actions",
+            elements: [
+              {
+                type: "button",
+                text: {
+                  type: "plain_text",
+                  text: "🔗 Connect Gmail Account"
+                },
+                action_id: "gmail_oauth",
+                url: oauthUrl,
+                style: "primary"
+              }
+            ]
+          }
+        ]
+      };
+
+      await say(welcomeMessage);
+    } catch (error) {
+      logger.error('Error sending email welcome message', { error, userId: context.userId });
+      
+      // Fallback to simple text message
+      await say({
+        text: "👋 Welcome! I can help with email management. Please use `/assistant auth` to connect your Gmail account first."
+      });
+    }
+  }
+
+  /**
    * Format quick help response for empty commands
    */
   private formatQuickHelpResponse(): any {
@@ -760,6 +868,17 @@ export class SlackInterface {
       
       const sessionId = `slack_${slackContext.teamId}_${slackContext.userId}_${sessionSuffix}`;
       
+      logger.info('Creating/retrieving Slack session with detailed context', { 
+        sessionId, 
+        userId: slackContext.userId,
+        teamId: slackContext.teamId,
+        channelId: slackContext.channelId,
+        isDirectMessage: slackContext.isDirectMessage,
+        threadTs: slackContext.threadTs,
+        sessionSuffix,
+        fullSessionId: sessionId
+      });
+      
       // Get or create session using existing SessionService with enhanced context
       const session = (sessionService as any).getOrCreateSession(sessionId, slackContext.userId);
       
@@ -845,6 +964,43 @@ export class SlackInterface {
           thread_ts: slackHandlers.thread_ts
         });
         return;
+      }
+
+      // Early detection of email-related requests for better OAuth experience
+      const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
+      const isEmailRelated = emailKeywords.some(keyword => 
+        message.toLowerCase().includes(keyword.toLowerCase())
+      );
+
+      if (isEmailRelated) {
+        const hasOAuth = await this.hasOAuthTokens(context);
+        if (!hasOAuth) {
+          logger.info('Email-related request detected but no OAuth tokens found', { 
+            userId: context.userId,
+            message: message.substring(0, 100)
+          });
+          
+          await this.sendOAuthRequiredMessage(slackHandlers.say, context, slackHandlers.thread_ts);
+          return;
+        } else {
+          // User has OAuth tokens, send a helpful message
+          logger.info('Email-related request detected with OAuth tokens available', { 
+            userId: context.userId,
+            message: message.substring(0, 100)
+          });
+          
+          // Check if this is the first time using OAuth tokens (recently connected)
+          const isRecentlyConnected = await this.isRecentlyConnected(context);
+          if (isRecentlyConnected) {
+            await this.sendOAuthSuccessMessage(slackHandlers.say, context, slackHandlers.thread_ts);
+          } else {
+            // Send a brief confirmation that OAuth is available
+            await slackHandlers.say({
+              text: '✅ *Gmail Connected*\n\nI can see your Gmail account is connected. Processing your email request...',
+              thread_ts: slackHandlers.thread_ts
+            });
+          }
+        }
       }
 
       // Show typing indicator for longer operations
@@ -970,23 +1126,98 @@ export class SlackInterface {
       // 1. Create or get session for Slack user with enhanced context
       const sessionId = await this.createOrGetSession(request.context);
       
+      logger.info('Slack session created/retrieved for OAuth check', { 
+        sessionId, 
+        userId: request.context.userId,
+        teamId: request.context.teamId,
+        channelId: request.context.channelId
+      });
+      
       // 2. Get OAuth tokens for this session if available
       let accessToken: string | undefined;
       try {
         const sessionService = this.serviceManager.getService('sessionService');
         if (sessionService) {
+          logger.info('Attempting to retrieve OAuth tokens', { 
+            sessionId, 
+            userId: request.context.userId,
+            teamId: request.context.teamId
+          });
+          
+          // Check what tokens are available
+          const allTokens = (sessionService as any).getOAuthTokens(sessionId);
+          logger.info('Available OAuth tokens for session', { 
+            sessionId, 
+            hasTokens: !!allTokens,
+            googleToken: !!allTokens?.google?.access_token,
+            slackToken: !!allTokens?.slack,
+            tokenDetails: allTokens ? {
+              google: {
+                hasAccessToken: !!allTokens.google?.access_token,
+                hasRefreshToken: !!allTokens.google?.refresh_token,
+                expiresIn: allTokens.google?.expires_in,
+                expiryDate: allTokens.google?.expiry_date
+              },
+              slack: {
+                teamId: allTokens.slack?.team_id,
+                userId: allTokens.slack?.user_id
+              }
+            } : null
+          });
+          
           accessToken = (sessionService as any).getGoogleAccessToken(sessionId);
           if (accessToken) {
-            logger.debug('Retrieved Google OAuth access token for Slack user', { 
+            logger.info('✅ Retrieved Google OAuth access token for Slack user', { 
               sessionId, 
-              hasToken: !!accessToken 
+              hasToken: !!accessToken,
+              tokenLength: accessToken.length
             });
           } else {
-            logger.debug('No Google OAuth access token found for Slack user', { sessionId });
+            logger.warn('❌ No Google OAuth access token found for Slack user', { 
+              sessionId,
+              availableTokens: allTokens
+            });
+            
+            // Try to find tokens in other possible session locations
+            const possibleSessionIds = [
+              `slack_${request.context.teamId}_${request.context.userId}_main`,
+              `slack_${request.context.teamId}_${request.context.userId}_channel_${request.context.channelId}`,
+              `slack_${request.context.teamId}_${request.context.userId}_fallback_${Date.now()}`
+            ];
+            
+            for (const possibleSessionId of possibleSessionIds) {
+              if (possibleSessionId === sessionId) continue; // Skip the current session
+              
+              try {
+                const possibleTokens = (sessionService as any).getOAuthTokens(possibleSessionId);
+                if (possibleTokens?.google?.access_token) {
+                  accessToken = possibleTokens.google.access_token;
+                  logger.info('✅ Found OAuth tokens in alternative session', { 
+                    originalSessionId: sessionId,
+                    foundInSessionId: possibleSessionId,
+                    hasToken: !!accessToken
+                  });
+                  break;
+                }
+              } catch (alternativeError) {
+                logger.debug('Could not check alternative session for tokens', { 
+                  alternativeSessionId: possibleSessionId,
+                  error: alternativeError
+                });
+              }
+            }
+            
+            if (!accessToken) {
+              logger.warn('❌ No OAuth tokens found in any session location', { 
+                checkedSessions: [sessionId, ...possibleSessionIds],
+                userId: request.context.userId,
+                teamId: request.context.teamId
+              });
+            }
           }
         }
       } catch (error) {
-        logger.warn('Error retrieving OAuth tokens for Slack user', { error, sessionId });
+        logger.error('Error retrieving OAuth tokens for Slack user', { error, sessionId });
       }
       
       // 3. Initialize MasterAgent with OpenAI configuration
@@ -1264,14 +1495,15 @@ export class SlackInterface {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: '*🔐 Authentication Required*\n' +
-                      'To use email, calendar, or contact features, you need to connect your Gmail account first.'
+                text: '*🔐 Gmail Authentication Required*\n' +
+                      'To send emails, read your Gmail, or access contacts, you need to connect your Gmail account first.\n\n' +
+                      'This is a one-time setup that keeps your data secure.'
               },
               accessory: {
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: 'Connect Gmail Account'
+                  text: '🔗 Connect Gmail Account'
                 },
                 style: 'primary',
                 action_id: 'gmail_oauth',
@@ -1283,8 +1515,21 @@ export class SlackInterface {
               type: 'context',
               elements: [{
                 type: 'mrkdwn',
-                text: '_Click the button above to securely connect your Gmail account_'
+                text: '_Click the button above to securely connect your Gmail account. You\'ll be redirected to Google to authorize access._'
               }]
+            });
+            
+            // Add helpful information
+            blocks.push({
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '*What happens next?*\n' +
+                      '• Click "Connect Gmail Account"\n' +
+                      '• Authorize with Google\n' +
+                      '• Return to Slack\n' +
+                      '• Try your email request again'
+              }
             });
           }
         }
@@ -1346,6 +1591,315 @@ export class SlackInterface {
   }
 
   /**
+   * Send help message for slash commands
+   */
+  private async sendHelpMessage(respond: any, context: SlackContext): Promise<void> {
+    try {
+      const blocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*🤖 AI Assistant Help*\n' +
+                  'Here\'s what I can help you with:'
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*📧 Email Features*\n' +
+                  '• Send emails\n' +
+                  '• Read Gmail\n' +
+                  '• Manage contacts\n\n' +
+                  '*📅 Calendar Features*\n' +
+                  '• Schedule meetings\n' +
+                  '• Check availability\n\n' +
+                  '*🔍 Other Features*\n' +
+                  '• Web search\n' +
+                  '• Content creation\n' +
+                  '• Task assistance'
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*💡 Usage Examples*\n' +
+                  '• `/assistant send an email to john@example.com`\n' +
+                  '• `/assistant schedule a meeting tomorrow at 2pm`\n' +
+                  '• `/assistant search for latest AI news`\n' +
+                  '• `/assistant auth` - Check authentication status\n' +
+                  '• `/assistant status` - Check connection status'
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*🔐 Authentication*\n' +
+                  'Email and calendar features require Gmail authentication. Use `/assistant auth` to connect your account.'
+          }
+        }
+      ];
+
+      await respond({
+        blocks: blocks,
+        text: 'AI Assistant Help - I can help with email, calendar, search, and more!',
+        response_type: 'ephemeral'
+      });
+    } catch (error) {
+      logger.error('Error sending help message', { error, userId: context.userId });
+      
+      await respond({
+        text: '🤖 AI Assistant Help\n\nI can help with:\n• Email management\n• Calendar scheduling\n• Web search\n• Content creation\n\nTry: `/assistant send an email to...`',
+        response_type: 'ephemeral'
+      });
+    }
+  }
+
+  /**
+   * Handle authentication-related commands
+   */
+  private async handleAuthCommand(respond: any, context: SlackContext): Promise<void> {
+    try {
+      const hasOAuth = await this.hasOAuthTokens(context);
+      
+      if (hasOAuth) {
+        await respond({
+          text: '✅ *Authentication Status: Connected*\n\nYour Gmail account is connected and ready to use! You can now:\n• Send emails\n• Read Gmail\n• Access contacts\n• Use calendar features',
+          response_type: 'ephemeral'
+        });
+      } else {
+        await this.sendOAuthRequiredMessage(respond, context);
+      }
+    } catch (error) {
+      logger.error('Error handling auth command', { error, userId: context.userId });
+      
+      await respond({
+        text: '❌ Error checking authentication status. Please try again or contact support.',
+        response_type: 'ephemeral'
+      });
+    }
+  }
+
+  /**
+   * Handle status command to check authentication status
+   */
+  private async handleStatusCommand(respond: any, context: SlackContext): Promise<void> {
+    try {
+      const hasOAuth = await this.hasOAuthTokens(context);
+      const statusMessage = hasOAuth ? 
+        '✅ *Authentication Status: Connected*\n\nYour Gmail account is connected and ready to use! You can now:\n• Send emails\n• Read Gmail\n• Access contacts\n• Use calendar features' :
+        '❌ *Authentication Status: Disconnected*\n\nYour Gmail account is not connected. Please use `/assistant auth` to connect your account.';
+
+      await respond({
+        text: statusMessage,
+        response_type: 'ephemeral'
+      });
+    } catch (error) {
+      logger.error('Error handling status command', { error, userId: context.userId });
+      await respond({
+        text: '❌ Error checking authentication status. Please try again or contact support.',
+        response_type: 'ephemeral'
+      });
+    }
+  }
+
+  /**
+   * Send a success message when OAuth is completed
+   */
+  private async sendOAuthSuccessMessage(say: any, slackContext: SlackContext, threadTs?: string): Promise<void> {
+    try {
+      const successMessage = {
+        text: "🎉 Gmail Successfully Connected!",
+        blocks: [
+          {
+            type: "header",
+            text: {
+              type: "plain_text",
+              text: "🎉 Gmail Successfully Connected!"
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "Great! Your Gmail account is now connected and ready to use. You can now:"
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "• 📧 Send emails through the AI Assistant\n• 📋 Read and manage your Gmail\n• 👤 Access your contacts\n• 📅 Use calendar features"
+            }
+          },
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: "*Try your email request again!* The AI Assistant now has access to your Gmail account."
+            }
+          }
+        ]
+      };
+
+      await say({
+        ...successMessage,
+        thread_ts: threadTs
+      });
+    } catch (error) {
+      logger.error('Error sending OAuth success message', { error, userId: slackContext.userId });
+      
+      // Fallback to simple text message
+      await say({
+        text: "🎉 Gmail successfully connected! You can now try your email request again.",
+        thread_ts: threadTs
+      });
+    }
+  }
+
+  /**
+   * Check if a user has recently completed OAuth authentication
+   */
+  private async isRecentlyConnected(slackContext: SlackContext): Promise<boolean> {
+    try {
+      const sessionService = this.serviceManager.getService('sessionService');
+      if (!sessionService) {
+        return false;
+      }
+
+      // Check if tokens were stored recently (within the last 5 minutes)
+      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+      
+      // Check multiple possible session locations
+      const possibleSessionIds = [
+        `slack_${slackContext.teamId}_${slackContext.userId}_main`,
+        `slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`,
+        `slack_${slackContext.teamId}_${slackContext.userId}_fallback_${Date.now()}`
+      ];
+
+      for (const sessionId of possibleSessionIds) {
+        try {
+          const session = (sessionService as any).getSession(sessionId);
+          if (session?.oauthTokens?.google?.access_token && session.lastActivity) {
+            const lastActivity = new Date(session.lastActivity).getTime();
+            if (lastActivity > fiveMinutesAgo) {
+              return true;
+            }
+          }
+        } catch (error) {
+          logger.debug('Could not check session for recent connection', { sessionId, error });
+        }
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('Error checking if recently connected', { error, userId: slackContext.userId });
+      return false;
+    }
+  }
+
+  /**
+   * Check if a user has OAuth tokens for Gmail access
+   */
+  private async hasOAuthTokens(slackContext: SlackContext): Promise<boolean> {
+    try {
+      const sessionService = this.serviceManager.getService('sessionService');
+      if (!sessionService) {
+        return false;
+      }
+
+      // Check multiple possible session locations
+      const possibleSessionIds = [
+        `slack_${slackContext.teamId}_${slackContext.userId}_main`,
+        `slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`,
+        `slack_${slackContext.teamId}_${slackContext.userId}_fallback_${Date.now()}`
+      ];
+
+      for (const sessionId of possibleSessionIds) {
+        try {
+          const tokens = (sessionService as any).getOAuthTokens(sessionId);
+          if (tokens?.google?.access_token) {
+            return true;
+          }
+        } catch (error) {
+          logger.debug('Could not check session for OAuth tokens', { sessionId, error });
+        }
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('Error checking OAuth tokens', { error, userId: slackContext.userId });
+      return false;
+    }
+  }
+
+  /**
+   * Send a helpful message when user doesn't have OAuth tokens
+   */
+  private async sendOAuthRequiredMessage(say: any, slackContext: SlackContext, threadTs?: string): Promise<void> {
+    try {
+      const oauthUrl = await this.generateOAuthUrl(slackContext);
+      
+      const blocks = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*🔐 Gmail Authentication Required*\n' +
+                  'To use email, calendar, or contact features, you need to connect your Gmail account first.\n\n' +
+                  'This is a one-time setup that keeps your data secure.'
+          },
+          accessory: {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: '🔗 Connect Gmail Account'
+            },
+            style: 'primary',
+            action_id: 'gmail_oauth',
+            url: oauthUrl
+          }
+        },
+        {
+          type: 'context',
+          elements: [{
+            type: 'mrkdwn',
+            text: '_Click the button above to securely connect your Gmail account. You\'ll be redirected to Google to authorize access._'
+          }]
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*What happens next?*\n' +
+                  '• Click "Connect Gmail Account"\n' +
+                  '• Authorize with Google\n' +
+                  '• Return to Slack\n' +
+                  '• Try your email request again'
+          }
+        }
+      ];
+
+      await say({
+        blocks: blocks,
+        text: 'Gmail authentication required. Please connect your Gmail account to use email features.',
+        thread_ts: threadTs
+      });
+    } catch (error) {
+      logger.error('Error sending OAuth required message', { error, userId: slackContext.userId });
+      
+      // Fallback to simple text message
+      await say({
+        text: '🔐 Gmail authentication required. Please contact support to connect your Gmail account.',
+        thread_ts: threadTs
+      });
+    }
+  }
+
+  /**
    * Check if a tool requires OAuth authentication
    */
   private toolRequiresOAuth(toolName: string): boolean {
@@ -1362,40 +1916,93 @@ export class SlackInterface {
    * Generate OAuth URL for Slack user authentication
    */
   private async generateOAuthUrl(slackContext: SlackContext): Promise<string> {
-    const { ENVIRONMENT } = await import('../config/environment');
-    const baseUrl = ENVIRONMENT.baseUrl;
-    const clientId = ENVIRONMENT.google.clientId;
-    
-    if (!clientId) {
-      logger.error('Google OAuth client ID not configured');
-      return `${baseUrl}/auth/error?message=OAuth+not+configured`;
+    try {
+      const { ENVIRONMENT } = await import('../config/environment');
+      let baseUrl = ENVIRONMENT.baseUrl;
+      const clientId = ENVIRONMENT.google.clientId;
+      
+      if (!clientId) {
+        logger.error('Google OAuth client ID not configured');
+        return `${baseUrl}/auth/error?message=OAuth+not+configured`;
+      }
+
+      // Ensure baseUrl doesn't have trailing paths - it should just be the domain
+      // Fix for cases where BASE_URL might be set to include /auth/google or similar
+      if (baseUrl.includes('/auth/')) {
+        const originalBaseUrl = baseUrl;
+        const parts = baseUrl.split('/auth/');
+        baseUrl = parts[0] || baseUrl; // Fallback to original if split fails
+        logger.warn('Base URL contained /auth/ path, corrected', { 
+          original: originalBaseUrl, 
+          corrected: baseUrl 
+        });
+      }
+
+      // Use configured redirect URI or fall back to default
+      const redirectUri = ENVIRONMENT.google.redirectUri || `${baseUrl}/auth/callback`;
+      
+      // Validate redirect URI format
+      if (!redirectUri.startsWith('http')) {
+        logger.error('Invalid redirect URI format', { redirectUri, baseUrl });
+        return `${baseUrl}/auth/error?message=Invalid+redirect+URI+format`;
+      }
+
+      // Ensure redirect URI points to the correct callback endpoint
+      if (!redirectUri.endsWith('/auth/callback')) {
+        logger.warn('Redirect URI does not end with /auth/callback, this may cause OAuth issues', { 
+          redirectUri, 
+          expected: `${baseUrl}/auth/callback` 
+        });
+      }
+
+      // Create state parameter with Slack context
+      const state = JSON.stringify({
+        source: 'slack',
+        team_id: slackContext.teamId,
+        user_id: slackContext.userId,
+        channel_id: slackContext.channelId
+      });
+
+      const scopes = [
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/contacts.readonly'
+      ].join(' ');
+
+      // Use the proper Google OAuth endpoint instead of our custom /auth/init route
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: scopes,
+        state: state,
+        response_type: 'code',
+        access_type: 'offline',
+        prompt: 'consent'
+      });
+
+      logger.info('Generated Google OAuth URL for Slack user', {
+        userId: slackContext.userId,
+        teamId: slackContext.teamId,
+        channelId: slackContext.channelId,
+        redirectUri: redirectUri,
+        usingConfiguredRedirect: !!ENVIRONMENT.google.redirectUri,
+        baseUrl: baseUrl,
+        clientIdConfigured: !!clientId,
+        generatedUrl: authUrl.substring(0, 100) + '...', // Log first 100 chars for debugging
+        fullRedirectUri: redirectUri,
+        fullBaseUrl: baseUrl,
+        environmentRedirectUri: ENVIRONMENT.google.redirectUri
+      });
+
+      return authUrl;
+    } catch (error) {
+      logger.error('Error generating OAuth URL', { error, slackContext });
+      
+      // Return a fallback error URL
+      const { ENVIRONMENT } = await import('../config/environment');
+      return `${ENVIRONMENT.baseUrl}/auth/error?message=OAuth+URL+generation+failed`;
     }
-
-    // Create state parameter with Slack context
-    const state = JSON.stringify({
-      source: 'slack',
-      team_id: slackContext.teamId,
-      user_id: slackContext.userId,
-      channel_id: slackContext.channelId
-    });
-
-    const scopes = [
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/contacts.readonly'
-    ].join(' ');
-
-    const authUrl = `${baseUrl}/auth/init?` + new URLSearchParams({
-      client_id: clientId,
-      scope: scopes,
-      state: state,
-      response_type: 'code',
-      access_type: 'offline',
-      prompt: 'consent'
-    });
-
-    return authUrl;
   }
 
   /**
