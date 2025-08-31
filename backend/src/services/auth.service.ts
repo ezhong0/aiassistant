@@ -282,21 +282,48 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
-      this.logDebug('Fetching user info from Google');
+      this.logDebug('Fetching user info from Google', { tokenLength: accessToken.length });
       
-      const response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      });
+      // Try the OpenID Connect userinfo endpoint first (more reliable)
+      let response;
+      let userInfo: GoogleUserInfo;
+      
+      try {
+        this.logDebug('Trying OpenID Connect userinfo endpoint');
+        response = await axios.get('https://openidconnect.googleapis.com/v1/userinfo', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        });
+        
+        userInfo = {
+          sub: response.data.sub,
+          email: response.data.email,
+          name: response.data.name || '',
+          picture: response.data.picture || '',
+          email_verified: response.data.email_verified || false
+        };
+      } catch (oidcError) {
+        this.logWarn('OpenID Connect endpoint failed, trying OAuth2 v2 endpoint', { 
+          error: oidcError.response?.status,
+          message: oidcError.message 
+        });
+        
+        // Fallback to OAuth2 v2 userinfo endpoint
+        response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        });
 
-      const userInfo: GoogleUserInfo = {
-        sub: response.data.id,
-        email: response.data.email,
-        name: response.data.name || '',
-        picture: response.data.picture || '',
-        email_verified: response.data.verified_email || false
-      };
+        userInfo = {
+          sub: response.data.id,
+          email: response.data.email,
+          name: response.data.name || '',
+          picture: response.data.picture || '',
+          email_verified: response.data.verified_email || false
+        };
+      }
 
       // Validate user info
       const validationResult = validateGoogleUserInfo(userInfo);
@@ -308,6 +335,15 @@ export class AuthService extends BaseService {
       
       return userInfo;
     } catch (error) {
+      // Add more detailed error logging
+      if (error.response) {
+        this.logError('Google userinfo API error', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          tokenPrefix: accessToken.substring(0, 20) + '...'
+        });
+      }
       this.handleError(error, 'getGoogleUserInfo');
     }
   }

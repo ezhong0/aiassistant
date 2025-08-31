@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import axios from 'axios';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
@@ -314,6 +315,53 @@ router.get('/debug/test-token-exchange', async (req: Request, res: Response) => 
     }
   } catch (error) {
     logger.error('Debug token exchange endpoint error:', error);
+    return res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /auth/debug/token-info
+ * Test endpoint to check token validity with Google
+ */
+router.get('/debug/token-info', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.query;
+    
+    if (!token || typeof token !== 'string') {
+      return res.json({
+        success: false,
+        error: 'Missing token parameter',
+        message: 'Add ?token=YOUR_ACCESS_TOKEN to test token validity'
+      });
+    }
+
+    try {
+      // Test token with Google's tokeninfo endpoint
+      const response = await axios.get(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${token}`);
+      
+      return res.json({
+        success: true,
+        message: 'Token is valid',
+        tokenInfo: response.data
+      });
+    } catch (tokenError) {
+      logger.error('Token info check failed:', {
+        error: tokenError instanceof Error ? tokenError.message : tokenError,
+        status: tokenError.response?.status,
+        data: tokenError.response?.data
+      });
+      
+      return res.status(400).json({
+        success: false,
+        error: 'Token validation failed',
+        details: tokenError.response?.data || tokenError.message
+      });
+    }
+  } catch (error) {
+    logger.error('Debug token info endpoint error:', error);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
