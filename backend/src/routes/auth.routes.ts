@@ -907,6 +907,10 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
     const isSlackAuth = slackContext?.source === 'slack';
     
     if (isSlackAuth) {
+      // Add debug link for immediate token testing
+      const { code } = req.query;
+      const debugLink = code ? `/auth/debug/detailed-token-test?code=${encodeURIComponent(code as string)}` : '';
+      
       return res.status(500).send(`
         <html>
           <head><title>Authentication Error</title></head>
@@ -914,6 +918,14 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
             <h1>❌ Authentication Error</h1>
             <p>Sorry, there was an unexpected error during authentication.</p>
             <p>Please try again from Slack or contact support if the issue persists.</p>
+            ${debugLink ? `
+            <div style="background: #f0f0f0; border: 1px solid #ccc; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: left;">
+              <h3 style="margin-top: 0; color: #333;">🔧 Debug Information</h3>
+              <p><strong>For debugging:</strong></p>
+              <p><a href="${debugLink}" target="_blank" style="color: #0066cc;">Click here to test token exchange</a></p>
+              <p style="font-size: 12px; color: #666;">This link will show detailed error information.</p>
+            </div>
+            ` : ''}
             <p style="margin-top: 40px; color: #666;">You can close this tab and return to Slack.</p>
           </body>
         </html>
