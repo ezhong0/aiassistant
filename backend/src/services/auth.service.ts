@@ -303,7 +303,7 @@ export class AuthService extends BaseService {
           picture: response.data.picture || '',
           email_verified: response.data.email_verified || false
         };
-      } catch (oidcError) {
+      } catch (oidcError: any) {
         this.logWarn('OpenID Connect endpoint failed, trying OAuth2 v2 endpoint', { 
           error: oidcError.response?.status,
           message: oidcError.message 
@@ -334,7 +334,7 @@ export class AuthService extends BaseService {
       this.logDebug('Successfully fetched Google user info', { email: userInfo.email });
       
       return userInfo;
-    } catch (error) {
+    } catch (error: any) {
       // Add more detailed error logging
       if (error.response) {
         this.logError('Google userinfo API error', {

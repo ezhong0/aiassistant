@@ -300,11 +300,11 @@ router.get('/debug/test-token-exchange', async (req: Request, res: Response) => 
           verified: userInfo.email_verified
         }
       });
-    } catch (exchangeError) {
+    } catch (exchangeError: any) {
       logger.error('Token exchange test failed:', {
         error: exchangeError instanceof Error ? exchangeError.message : exchangeError,
         stack: exchangeError instanceof Error ? exchangeError.stack : undefined,
-        errorType: exchangeError?.constructor?.name
+        errorType: (exchangeError as any)?.constructor?.name
       });
       
       return res.status(500).json({
@@ -347,7 +347,7 @@ router.get('/debug/token-info', async (req: Request, res: Response) => {
         message: 'Token is valid',
         tokenInfo: response.data
       });
-    } catch (tokenError) {
+    } catch (tokenError: any) {
       logger.error('Token info check failed:', {
         error: tokenError instanceof Error ? tokenError.message : tokenError,
         status: tokenError.response?.status,
@@ -758,7 +758,7 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
     logger.error('OAuth callback processing error:', {
       error: error instanceof Error ? error.message : error,
       stack: error instanceof Error ? error.stack : undefined,
-      errorType: error?.constructor?.name,
+      errorType: (error as any)?.constructor?.name,
       query: req.query
     });
     
