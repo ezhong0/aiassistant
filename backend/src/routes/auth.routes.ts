@@ -62,10 +62,10 @@ router.get('/google/slack', authRateLimit, (req: Request, res: Response) => {
       team_id
     });
     
-    res.redirect(authUrl);
+    return res.redirect(authUrl);
   } catch (error) {
     logger.error('Error initiating Slack OAuth flow:', error);
-    res.status(500).send(`
+    return res.status(500).send(`
       <html>
         <head><title>Authentication Error</title></head>
         <body style="font-family: Arial; text-align: center; padding: 50px;">
@@ -100,13 +100,260 @@ router.get('/google', authRateLimit, (req: Request, res: Response) => {
     
     logger.info('Generated Google OAuth URL for user authentication');
     
-    res.redirect(authUrl);
+    return res.redirect(authUrl);
   } catch (error) {
     logger.error('Error generating Google auth URL:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Failed to initiate authentication',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+});
+
+/**
+ * GET /auth/debug/test-oauth-url
+ * Test endpoint to generate an OAuth URL for debugging
+ */
+router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
+  try {
+    const { ENVIRONMENT } = require('../config/environment');
+    const { getService } = require('../services/service-manager');
+    
+    const authService = getService('authService');
+    if (!authService) {
+      return res.status(500).json({ error: 'Auth service not available' });
+    }
+    
+    // Create a test state parameter
+    const testState = JSON.stringify({
+      source: 'slack',
+      team_id: 'test_team',
+      user_id: 'test_user',
+      channel_id: 'test_channel'
+    });
+    
+    // Generate test OAuth URL
+    const testScopes = [
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/contacts.readonly'
+    ];
+    
+    const authUrl = authService.generateAuthUrl(testScopes, testState);
+    
+    // Also test the Slack interface OAuth URL generation
+    let slackOAuthUrl = 'Not available';
+    try {
+      const { SlackInterface } = require('../interfaces/slack.interface');
+      const mockSlackContext = {
+        teamId: 'test_team',
+        userId: 'test_user',
+        channelId: 'test_channel'
+      };
+      
+      // Create a mock SlackInterface instance to test OAuth URL generation
+      const mockSlackInterface = new SlackInterface({} as any, {} as any);
+      slackOAuthUrl = await mockSlackInterface['generateOAuthUrl'](mockSlackContext);
+    } catch (slackError: any) {
+      slackOAuthUrl = `Error: ${slackError?.message || 'Unknown error'}`;
+    }
+    
+    return res.json({
+      success: true,
+      message: 'Test OAuth URL generated',
+      authUrl,
+      slackOAuthUrl,
+      config: {
+        baseUrl: ENVIRONMENT.baseUrl,
+        clientId: ENVIRONMENT.google.clientId ? '✅ Configured' : '❌ Not configured',
+        redirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`,
+        environmentRedirectUri: ENVIRONMENT.google.redirectUri,
+        computedRedirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`
+      },
+      testState,
+      scopes: testScopes,
+      debug: {
+        baseUrlContainsAuth: ENVIRONMENT.baseUrl.includes('/auth/'),
+        baseUrlParts: ENVIRONMENT.baseUrl.split('/auth/'),
+        correctedBaseUrl: ENVIRONMENT.baseUrl.includes('/auth/') ? ENVIRONMENT.baseUrl.split('/auth/')[0] : ENVIRONMENT.baseUrl
+      }
+    });
+  } catch (error) {
+    logger.error('Error in test OAuth URL endpoint:', error);
+    return res.status(500).json({ 
+      error: 'Test OAuth URL generation failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /auth/debug/current-config
+ * Simple endpoint to show current OAuth configuration
+ */
+router.get('/debug/current-config', (req: Request, res: Response) => {
+  try {
+    const { ENVIRONMENT } = require('../config/environment');
+    
+    return res.json({
+      success: true,
+      message: 'Current OAuth configuration',
+      config: {
+        baseUrl: ENVIRONMENT.baseUrl,
+        baseUrlContainsAuth: ENVIRONMENT.baseUrl.includes('/auth/'),
+        correctedBaseUrl: ENVIRONMENT.baseUrl.includes('/auth/') ? ENVIRONMENT.baseUrl.split('/auth/')[0] : ENVIRONMENT.baseUrl,
+        google: {
+          clientId: ENVIRONMENT.google.clientId ? '✅ Configured' : '❌ Not configured',
+          clientSecret: ENVIRONMENT.google.clientSecret ? '✅ Configured' : '❌ Not configured',
+          redirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`
+        },
+        environment: ENVIRONMENT.nodeEnv,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    logger.error('Error in current config debug endpoint:', error);
+    return res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /auth/debug/oauth-config
+ * Debug endpoint to check OAuth configuration
+ */
+router.get('/debug/oauth-config', (req: Request, res: Response) => {
+  try {
+    const { ENVIRONMENT } = require('../config/environment');
+    
+    const config = {
+      baseUrl: ENVIRONMENT.baseUrl,
+      google: {
+        clientId: ENVIRONMENT.google.clientId ? '✅ Configured' : '❌ Not configured',
+        clientSecret: ENVIRONMENT.google.clientSecret ? '✅ Configured' : '❌ Not configured',
+        redirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`
+      },
+      environment: ENVIRONMENT.nodeEnv,
+      timestamp: new Date().toISOString()
+    };
+    
+    return res.json({
+      success: true,
+      message: 'OAuth configuration debug info',
+      config
+    });
+  } catch (error) {
+    logger.error('Error in OAuth config debug endpoint:', error);
+    return res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /auth/debug/test-token-exchange
+ * Test endpoint to debug token exchange issues
+ */
+router.get('/debug/test-token-exchange', async (req: Request, res: Response) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code || typeof code !== 'string') {
+      return res.json({
+        success: false,
+        error: 'Missing code parameter',
+        message: 'Add ?code=YOUR_AUTH_CODE to test token exchange'
+      });
+    }
+
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      return res.status(500).json({ error: 'Auth service not available' });
+    }
+
+    try {
+      // Test token exchange
+      logger.info('Testing token exchange with provided code');
+      const tokens = await authService.exchangeCodeForTokens(code);
+      
+      // Test getting user info
+      logger.info('Testing user info retrieval');
+      const userInfo = await authService.getGoogleUserInfo(tokens.access_token);
+      
+      return res.json({
+        success: true,
+        message: 'Token exchange successful',
+        tokens: {
+          hasAccessToken: !!tokens.access_token,
+          hasRefreshToken: !!tokens.refresh_token,
+          expiresIn: tokens.expires_in,
+          scope: tokens.scope
+        },
+        userInfo: {
+          email: userInfo.email,
+          name: userInfo.name,
+          verified: userInfo.email_verified
+        }
+      });
+    } catch (exchangeError) {
+      logger.error('Token exchange test failed:', {
+        error: exchangeError instanceof Error ? exchangeError.message : exchangeError,
+        stack: exchangeError instanceof Error ? exchangeError.stack : undefined,
+        errorType: exchangeError?.constructor?.name
+      });
+      
+      return res.status(500).json({
+        success: false,
+        error: 'Token exchange failed',
+        details: exchangeError instanceof Error ? exchangeError.message : exchangeError
+      });
+    }
+  } catch (error) {
+    logger.error('Debug token exchange endpoint error:', error);
+    return res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * GET /auth/debug/sessions
+ * Debug endpoint to check session and OAuth token status
+ */
+router.get('/debug/sessions', (req: Request, res: Response) => {
+  try {
+    const sessionService = getService('sessionService');
+    if (!sessionService) {
+      return res.status(500).json({ error: 'SessionService not available' });
+    }
+
+    const stats = (sessionService as any).getSessionStats();
+    const sessionsMap = (sessionService as any).sessions;
+    const sessions = Array.from(sessionsMap.entries()).map((entry: any) => {
+      const [id, session] = entry;
+      return {
+        sessionId: id,
+        userId: session.userId,
+        hasOAuthTokens: !!session.oauthTokens,
+        googleToken: !!session.oauthTokens?.google?.access_token,
+        slackToken: !!session.oauthTokens?.slack,
+        createdAt: session.createdAt,
+        lastActivity: session.lastActivity
+      };
+    });
+
+    return res.json({
+      stats,
+      sessions: sessions.slice(0, 20) // Limit to first 20 sessions
+    });
+  } catch (error) {
+    logger.error('Error in debug endpoint:', error);
+    return res.status(500).json({ error: 'Debug endpoint failed' });
   }
 });
 
@@ -149,10 +396,10 @@ router.get('/init', authRateLimit, (req: Request, res: Response) => {
       slackTeamId: slackContext?.team_id
     });
     
-    res.redirect(authUrl);
+    return res.redirect(authUrl);
   } catch (error) {
     logger.error('Error in /auth/init:', error);
-    res.status(500).send(`
+    return res.status(500).send(`
       <html>
         <head><title>Authentication Error</title></head>
         <body style="font-family: Arial; text-align: center; padding: 50px;">
@@ -162,6 +409,34 @@ router.get('/init', authRateLimit, (req: Request, res: Response) => {
         </body>
       </html>
     `);
+  }
+});
+
+/**
+ * GET /auth/google/callback
+ * Temporary redirect route to handle incorrect OAuth callbacks
+ * This should be removed once the main OAuth URL generation fix is deployed
+ */
+router.get('/google/callback', (req: Request, res: Response) => {
+  try {
+    logger.warn('Incorrect OAuth callback route accessed, redirecting to correct endpoint', {
+      originalUrl: req.url,
+      query: req.query,
+      userAgent: req.get('User-Agent')
+    });
+    
+    // Redirect to the correct callback endpoint with all query parameters
+    const queryString = new URLSearchParams(req.query as any).toString();
+    const redirectUrl = `/auth/callback?${queryString}`;
+    
+    logger.info('Redirecting OAuth callback to correct endpoint', { redirectUrl });
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    logger.error('Error in temporary OAuth callback redirect', { error });
+    return res.status(500).json({ 
+      error: 'OAuth callback redirect failed',
+      message: 'Please contact support'
+    });
   }
 });
 
@@ -259,13 +534,32 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
     // Store tokens associated with Slack user context for future use
     if (isSlackAuth && slackContext?.user_id && slackContext?.team_id) {
       try {
+        logger.info('Processing OAuth callback for Slack user', {
+          teamId: slackContext.team_id,
+          userId: slackContext.user_id,
+          hasTokens: !!tokens.access_token
+        });
+        
         const sessionService = getService('sessionService');
         if (sessionService) {
-          // Create a session ID for the Slack user
-          const slackSessionId = `slack_${slackContext.team_id}_${slackContext.user_id}_oauth`;
+          // Create a session ID that matches the Slack interface format
+          // Use 'main' suffix to match the default Slack session creation
+          const slackSessionId = `slack_${slackContext.team_id}_${slackContext.user_id}_main`;
+          
+          logger.info('Creating/retrieving session for OAuth token storage', {
+            sessionId: slackSessionId,
+            teamId: slackContext.team_id,
+            userId: slackContext.user_id
+          });
           
           // Get or create session
           const session = (sessionService as any).getOrCreateSession(slackSessionId, slackContext.user_id);
+          
+          logger.info('Session retrieved for OAuth token storage', {
+            sessionId: slackSessionId,
+            sessionExists: !!session,
+            hasOAuthTokens: !!session?.oauthTokens
+          });
           
           // Store OAuth tokens in the session
           const tokensStored = (sessionService as any).storeOAuthTokens(slackSessionId, {
@@ -284,18 +578,70 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           });
 
           if (tokensStored) {
-            logger.info('Successfully stored OAuth tokens for Slack user', {
+            logger.info('✅ Successfully stored OAuth tokens for Slack user', {
               sessionId: slackSessionId,
               teamId: slackContext.team_id,
-              userId: slackContext.user_id
+              userId: slackContext.user_id,
+              tokenDetails: {
+                hasAccessToken: !!tokens.access_token,
+                hasRefreshToken: !!tokens.refresh_token,
+                expiresIn: tokens.expires_in,
+                scope: tokens.scope
+              }
             });
+            
+            // Also store tokens in additional session variations to ensure they can be found
+            // regardless of conversation context (channel, thread, etc.)
+            const additionalSessionIds = [
+              `slack_${slackContext.team_id}_${slackContext.user_id}_channel_${slackContext.channel_id}`,
+              `slack_${slackContext.team_id}_${slackContext.user_id}_thread_${Date.now()}`,
+              `slack_${slackContext.team_id}_${slackContext.user_id}_fallback_${Date.now()}`
+            ];
+            
+            for (const additionalSessionId of additionalSessionIds) {
+              try {
+                // Create the additional session
+                (sessionService as any).getOrCreateSession(additionalSessionId, slackContext.user_id);
+                
+                // Store the same OAuth tokens
+                const additionalTokensStored = (sessionService as any).storeOAuthTokens(additionalSessionId, {
+                  google: {
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
+                    expires_in: tokens.expires_in,
+                    token_type: tokens.token_type,
+                    scope: tokens.scope,
+                    expiry_date: tokens.expiry_date
+                  },
+                  slack: {
+                    team_id: slackContext.team_id,
+                    user_id: slackContext.user_id
+                  }
+                });
+                
+                if (additionalTokensStored) {
+                  logger.debug('✅ Stored OAuth tokens in additional session', { 
+                    additionalSessionId,
+                    teamId: slackContext.team_id,
+                    userId: slackContext.user_id
+                  });
+                }
+              } catch (additionalError) {
+                logger.debug('Could not store tokens in additional session (non-critical)', { 
+                  additionalSessionId,
+                  error: additionalError
+                });
+              }
+            }
           } else {
-            logger.warn('Failed to store OAuth tokens for Slack user', {
+            logger.warn('❌ Failed to store OAuth tokens for Slack user', {
               sessionId: slackSessionId,
               teamId: slackContext.team_id,
               userId: slackContext.user_id
             });
           }
+        } else {
+          logger.error('SessionService not available for OAuth token storage');
         }
       } catch (error) {
         logger.error('Error storing OAuth tokens for Slack user', {
@@ -304,6 +650,13 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           userId: slackContext.user_id
         });
       }
+    } else {
+      logger.info('OAuth callback not for Slack user or missing context', {
+        isSlackAuth,
+        hasUserId: !!slackContext?.user_id,
+        hasTeamId: !!slackContext?.team_id,
+        slackContext
+      });
     }
 
     if (isSlackAuth) {
@@ -321,6 +674,12 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
               <li>📋 Read and manage your Gmail</li>
               <li>👤 Access your contacts</li>
             </ul>
+            <div style="background: #f0f8ff; border: 1px solid #0066cc; border-radius: 8px; padding: 20px; margin: 30px 0;">
+              <h3 style="color: #0066cc; margin-top: 0;">🔄 Next Steps</h3>
+              <p style="margin: 10px 0;"><strong>1.</strong> Close this tab and return to Slack</p>
+              <p style="margin: 10px 0;"><strong>2.</strong> Try your email request again</p>
+              <p style="margin: 10px 0;"><strong>3.</strong> The AI Assistant will now have access to your Gmail</p>
+            </div>
             <p style="margin-top: 40px; color: #666; font-style: italic;">
               You can close this tab and return to Slack to start using email features!
             </p>
@@ -348,7 +707,12 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
     return res.json(successResponse);
 
   } catch (error) {
-    logger.error('OAuth callback processing error:', error);
+    logger.error('OAuth callback processing error:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      errorType: error?.constructor?.name,
+      query: req.query
+    });
     
     // Parse state for Slack context in error case too
     let slackContext = null;
