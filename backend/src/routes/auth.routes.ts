@@ -370,6 +370,138 @@ router.get('/debug/token-info', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /auth/debug/detailed-token-test
+ * Comprehensive token debugging endpoint
+ */
+router.get('/debug/detailed-token-test', async (req: Request, res: Response) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code || typeof code !== 'string') {
+      return res.json({
+        success: false,
+        error: 'Missing code parameter',
+        message: 'Add ?code=YOUR_AUTH_CODE to test detailed token analysis'
+      });
+    }
+
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      return res.status(500).json({ error: 'Auth service not available' });
+    }
+
+    const results: any = {
+      step1_tokenExchange: null,
+      step2_tokenValidation: null,
+      step3_userinfoTest: null,
+      step4_alternativeEndpoints: []
+    };
+
+    try {
+      // Step 1: Exchange code for tokens
+      logger.info('Step 1: Testing token exchange');
+      const tokens = await authService.exchangeCodeForTokens(code);
+      results.step1_tokenExchange = {
+        success: true,
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        tokenLength: tokens.access_token.length,
+        tokenPrefix: tokens.access_token.substring(0, 30) + '...',
+        expiresIn: tokens.expires_in,
+        scope: tokens.scope
+      };
+
+      // Step 2: Validate token with Google's tokeninfo
+      logger.info('Step 2: Testing token validation');
+      try {
+        const tokenInfoResponse = await axios.get(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${tokens.access_token}`);
+        results.step2_tokenValidation = {
+          success: true,
+          data: tokenInfoResponse.data
+        };
+      } catch (tokenError: any) {
+        results.step2_tokenValidation = {
+          success: false,
+          error: tokenError.response?.data || tokenError.message,
+          status: tokenError.response?.status
+        };
+      }
+
+      // Step 3: Test userinfo endpoints
+      logger.info('Step 3: Testing userinfo endpoints');
+      const endpoints = [
+        'https://openidconnect.googleapis.com/v1/userinfo',
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        'https://www.googleapis.com/oauth2/v1/userinfo',
+        'https://people.googleapis.com/v1/people/me?personFields=names,emailAddresses'
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          const response = await axios.get(endpoint, {
+            headers: {
+              Authorization: `Bearer ${tokens.access_token}`
+            }
+          });
+          results.step4_alternativeEndpoints.push({
+            endpoint,
+            success: true,
+            data: response.data
+          });
+        } catch (endpointError: any) {
+          results.step4_alternativeEndpoints.push({
+            endpoint,
+            success: false,
+            status: endpointError.response?.status,
+            error: endpointError.response?.data || endpointError.message
+          });
+        }
+      }
+
+      // Step 4: Try direct userinfo call
+      try {
+        const userInfo = await authService.getGoogleUserInfo(tokens.access_token);
+        results.step3_userinfoTest = {
+          success: true,
+          userInfo
+        };
+      } catch (userinfoError: any) {
+        results.step3_userinfoTest = {
+          success: false,
+          error: userinfoError.message,
+          details: userinfoError.response?.data
+        };
+      }
+
+      return res.json({
+        success: true,
+        message: 'Detailed token analysis complete',
+        results
+      });
+
+    } catch (exchangeError: any) {
+      results.step1_tokenExchange = {
+        success: false,
+        error: exchangeError.message,
+        details: exchangeError.response?.data
+      };
+
+      return res.json({
+        success: false,
+        error: 'Token exchange failed',
+        results
+      });
+    }
+  } catch (error: any) {
+    logger.error('Debug detailed token test endpoint error:', error);
+    return res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * GET /auth/debug/sessions
  * Debug endpoint to check session and OAuth token status
  */
