@@ -1773,12 +1773,21 @@ export class SlackInterface {
       // Check if tokens were stored recently (within the last 2 minutes)
       const twoMinutesAgo = Date.now() - (2 * 60 * 1000);
       
-      // Check multiple possible session locations
-      const possibleSessionIds = [
-        `slack_${slackContext.teamId}_${slackContext.userId}_main`,
-        `slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`,
-        `slack_${slackContext.teamId}_${slackContext.userId}_fallback_${Date.now()}`
-      ];
+      // Check multiple possible session locations (consistent with createOrGetSession logic)
+      const possibleSessionIds = [];
+      
+      // Add thread-specific session if in a thread
+      if (slackContext.threadTs) {
+        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_thread_${slackContext.threadTs.replace('.', '_')}`);
+      }
+      
+      // Add channel-specific session if not a DM
+      if (!slackContext.isDirectMessage) {
+        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`);
+      }
+      
+      // Add main session as fallback
+      possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_main`);
 
       for (const sessionId of possibleSessionIds) {
         try {
@@ -1811,12 +1820,21 @@ export class SlackInterface {
         return false;
       }
 
-      // Check multiple possible session locations
-      const possibleSessionIds = [
-        `slack_${slackContext.teamId}_${slackContext.userId}_main`,
-        `slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`,
-        `slack_${slackContext.teamId}_${slackContext.userId}_fallback_${Date.now()}`
-      ];
+      // Check multiple possible session locations (consistent with createOrGetSession logic)
+      const possibleSessionIds = [];
+      
+      // Add thread-specific session if in a thread
+      if (slackContext.threadTs) {
+        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_thread_${slackContext.threadTs.replace('.', '_')}`);
+      }
+      
+      // Add channel-specific session if not a DM
+      if (!slackContext.isDirectMessage) {
+        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`);
+      }
+      
+      // Add main session as fallback
+      possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_main`);
 
       for (const sessionId of possibleSessionIds) {
         try {
