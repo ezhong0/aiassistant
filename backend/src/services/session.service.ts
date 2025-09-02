@@ -8,9 +8,11 @@ import {
 import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
+import { DatabaseService, SessionData, OAuthTokenData } from './database.service';
 
 export class SessionService extends BaseService {
-  private sessions: Map<string, SessionContext> = new Map();
+  private databaseService: DatabaseService | null = null;
+  private sessions: Map<string, SessionContext> | null = null;
   private readonly defaultTimeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes;
   private cleanupInterval: NodeJS.Timeout | null = null;
 
@@ -24,6 +26,18 @@ export class SessionService extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     this.logInfo('Starting SessionService initialization...');
+    
+    // Get database service from service manager
+    const serviceManager = (this as any).serviceManager;
+    if (serviceManager) {
+      this.databaseService = serviceManager.getService('databaseService') as DatabaseService;
+    }
+    
+    if (!this.databaseService) {
+      this.logWarn('Database service not available, falling back to in-memory storage');
+      // Fallback to in-memory storage if database is not available
+      this.sessions = new Map<string, SessionContext>();
+    }
     
     // Clean up expired sessions using configured interval
     this.cleanupInterval = setInterval(() => {
@@ -43,9 +57,11 @@ export class SessionService extends BaseService {
       this.cleanupInterval = null;
     }
 
-    // Clear all sessions
-    this.sessions.clear();
-    this.logInfo('SessionService destroyed, all sessions cleared');
+    // Clear all sessions (only for in-memory fallback)
+    if (this.sessions) {
+      this.sessions.clear();
+    }
+    this.logInfo('SessionService destroyed');
   }
 
   /**
@@ -68,7 +84,27 @@ export class SessionService extends BaseService {
       toolResults: []
     };
 
-    this.sessions.set(sessionId, session);
+    if (this.databaseService) {
+      // Store in database
+      const sessionData: SessionData = {
+        sessionId,
+        userId,
+        createdAt: now,
+        expiresAt,
+        lastActivity: now,
+        conversationHistory: [],
+        toolCalls: [],
+        toolResults: []
+      };
+      
+      this.databaseService.createSession(sessionData).catch(error => {
+        this.logError('Failed to store session in database:', error);
+      });
+    } else {
+      // Fallback to in-memory storage
+      this.sessions!.set(sessionId, session);
+    }
+
     this.logDebug('Created new session', { sessionId, userId, expiresAt });
     
     return session;
@@ -77,17 +113,45 @@ export class SessionService extends BaseService {
   /**
    * Get or create a session
    */
-  getOrCreateSession(sessionId: string, userId?: string): SessionContext {
+  async getOrCreateSession(sessionId: string, userId?: string): Promise<SessionContext> {
     this.assertReady();
     
-    let session = this.sessions.get(sessionId);
+    let session: SessionContext | undefined;
+    
+    if (this.databaseService) {
+      // Try to get from database
+      const sessionData = await this.databaseService.getSession(sessionId);
+      if (sessionData) {
+        session = {
+          sessionId: sessionData.sessionId,
+          userId: sessionData.userId,
+          createdAt: sessionData.createdAt,
+          expiresAt: sessionData.expiresAt,
+          lastActivity: sessionData.lastActivity,
+          conversationHistory: sessionData.conversationHistory,
+          toolCalls: sessionData.toolCalls,
+          toolResults: sessionData.toolResults
+        };
+        
+        // Update last activity
+        session.lastActivity = new Date();
+        session.userId = userId || session.userId;
+        
+        // Update in database
+        await this.databaseService.updateSessionActivity(sessionId);
+      }
+    } else {
+      // Fallback to in-memory storage
+      session = this.sessions!.get(sessionId);
+      if (session) {
+        // Update last activity
+        session.lastActivity = new Date();
+        session.userId = userId || session.userId;
+      }
+    }
     
     if (!session) {
       session = this.createSession(sessionId, userId);
-    } else {
-      // Update last activity
-      session.lastActivity = new Date();
-      session.userId = userId || session.userId;
     }
     
     return session;
@@ -96,17 +160,43 @@ export class SessionService extends BaseService {
   /**
    * Get an existing session
    */
-  getSession(sessionId: string): SessionContext | undefined {
+  async getSession(sessionId: string): Promise<SessionContext | undefined> {
     this.assertReady();
     
-    const session = this.sessions.get(sessionId);
-    if (session && this.isSessionExpired(session)) {
-      this.logWarn('Session expired', { sessionId, expiresAt: session.expiresAt });
-      this.sessions.delete(sessionId);
+    if (this.databaseService) {
+      const sessionData = await this.databaseService.getSession(sessionId);
+      if (sessionData) {
+        const session = {
+          sessionId: sessionData.sessionId,
+          userId: sessionData.userId,
+          createdAt: sessionData.createdAt,
+          expiresAt: sessionData.expiresAt,
+          lastActivity: sessionData.lastActivity,
+          conversationHistory: sessionData.conversationHistory,
+          toolCalls: sessionData.toolCalls,
+          toolResults: sessionData.toolResults
+        };
+        
+        if (this.isSessionExpired(session)) {
+          this.logWarn('Session expired', { sessionId, expiresAt: session.expiresAt });
+          await this.databaseService.deleteSession(sessionId);
+          return undefined;
+        }
+        
+        return session;
+      }
       return undefined;
+    } else {
+      // Fallback to in-memory storage
+      const session = this.sessions!.get(sessionId);
+      if (session && this.isSessionExpired(session)) {
+        this.logWarn('Session expired', { sessionId, expiresAt: session.expiresAt });
+        this.sessions!.delete(sessionId);
+        return undefined;
+      }
+      
+      return session;
     }
-    
-    return session;
   }
 
   /**
@@ -115,17 +205,17 @@ export class SessionService extends BaseService {
   hasValidSession(sessionId: string): boolean {
     this.assertReady();
     
-    const session = this.sessions.get(sessionId);
+    const session = this.sessions?.get(sessionId);
     return session !== undefined && !this.isSessionExpired(session);
   }
 
   /**
    * Add a conversation entry to a session
    */
-  addConversationEntry(sessionId: string, entry: ConversationEntry): void {
+  async addConversationEntry(sessionId: string, entry: ConversationEntry): Promise<void> {
     this.assertReady();
     
-    const session = this.getSession(sessionId);
+    const session = await this.getSession(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
@@ -154,10 +244,10 @@ export class SessionService extends BaseService {
   /**
    * Add tool calls to a session
    */
-  addToolCalls(sessionId: string, toolCalls: ToolCall[]): void {
+  async addToolCalls(sessionId: string, toolCalls: ToolCall[]): Promise<void> {
     this.assertReady();
     
-    const session = this.getSession(sessionId);
+    const session = await this.getSession(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
@@ -175,10 +265,10 @@ export class SessionService extends BaseService {
   /**
    * Add tool results to a session
    */
-  addToolResults(sessionId: string, toolResults: ToolResult[]): void {
+  async addToolResults(sessionId: string, toolResults: ToolResult[]): Promise<void> {
     this.assertReady();
     
-    const session = this.getSession(sessionId);
+    const session = await this.getSession(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
@@ -196,10 +286,10 @@ export class SessionService extends BaseService {
   /**
    * Get conversation context for a session
    */
-  getConversationContext(sessionId: string): string | null {
+  async getConversationContext(sessionId: string): Promise<string | null> {
     this.assertReady();
     
-    const session = this.getSession(sessionId);
+    const session = await this.getSession(sessionId);
     if (!session || session.conversationHistory.length === 0) {
       return null;
     }
@@ -219,7 +309,7 @@ export class SessionService extends BaseService {
   deleteSession(sessionId: string): boolean {
     this.assertReady();
     
-    const deleted = this.sessions.delete(sessionId);
+    const deleted = this.sessions?.delete(sessionId) || false;
     if (deleted) {
       this.logInfo('Session deleted', { sessionId });
     }
@@ -232,7 +322,7 @@ export class SessionService extends BaseService {
   getSessionCount(): number {
     this.assertReady();
     
-    return this.sessions.size;
+    return this.sessions?.size || 0;
   }
 
   /**
@@ -248,17 +338,17 @@ export class SessionService extends BaseService {
   private cleanupExpiredSessions(): void {
     this.assertNotDestroyed();
     
-    const beforeCount = this.sessions.size;
+    const beforeCount = this.sessions?.size || 0;
     const now = new Date();
     
-    for (const [sessionId, session] of this.sessions.entries()) {
+    for (const [sessionId, session] of (this.sessions?.entries() || [])) {
       if (this.isSessionExpired(session)) {
-        this.sessions.delete(sessionId);
+        this.sessions?.delete(sessionId);
         this.logDebug('Cleaned up expired session', { sessionId, expiresAt: session.expiresAt });
       }
     }
     
-    const afterCount = this.sessions.size;
+    const afterCount = this.sessions?.size || 0;
     const cleanedCount = beforeCount - afterCount;
     
     if (cleanedCount > 0) {
@@ -279,7 +369,7 @@ export class SessionService extends BaseService {
   } {
     this.assertReady();
     
-    const sessions = Array.from(this.sessions.values());
+    const sessions = Array.from(this.sessions?.values() || []);
     const activeSessions = sessions.filter(s => !this.isSessionExpired(s));
     const expiredSessions = sessions.filter(s => this.isSessionExpired(s));
     
@@ -293,7 +383,7 @@ export class SessionService extends BaseService {
   /**
    * Store OAuth tokens for a Slack user
    */
-  storeOAuthTokens(
+  async storeOAuthTokens(
     sessionId: string, 
     tokens: {
       google?: {
@@ -310,44 +400,71 @@ export class SessionService extends BaseService {
         user_id?: string;
       };
     }
-  ): boolean {
+  ): Promise<boolean> {
     this.assertReady();
     
-    const session = this.getSession(sessionId);
+    const session = await this.getSession(sessionId);
     if (!session) {
       this.logWarn('Cannot store OAuth tokens - session not found', { sessionId });
       return false;
     }
 
-    // Initialize oauthTokens if it doesn't exist
-    if (!session.oauthTokens) {
-      session.oauthTokens = {};
-    }
-
-    // Store Google tokens
-    if (tokens.google) {
-      session.oauthTokens.google = {
-        ...session.oauthTokens.google,
-        ...tokens.google
+    if (this.databaseService && tokens.google) {
+      // Store Google tokens in database
+      const expiresAt = tokens.google.expiry_date 
+        ? new Date(tokens.google.expiry_date)
+        : new Date(Date.now() + (tokens.google.expires_in || 3600) * 1000);
+      
+      const tokenData: OAuthTokenData = {
+        sessionId,
+        accessToken: tokens.google.access_token,
+        refreshToken: tokens.google.refresh_token,
+        expiresAt,
+        tokenType: tokens.google.token_type || 'Bearer',
+        scope: tokens.google.scope || '',
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
-      this.logInfo('Stored Google OAuth tokens', { 
+      
+      await this.databaseService.storeOAuthTokens(tokenData);
+      
+      this.logInfo('Stored Google OAuth tokens in database', { 
         sessionId, 
         hasRefreshToken: !!tokens.google.refresh_token,
-        expiresIn: tokens.google.expires_in 
+        expiresAt: expiresAt.toISOString()
       });
-    }
+    } else if (this.sessions) {
+      // Fallback to in-memory storage
+      // Initialize oauthTokens if it doesn't exist
+      if (!session.oauthTokens) {
+        session.oauthTokens = {};
+      }
 
-    // Store Slack tokens
-    if (tokens.slack) {
-      session.oauthTokens.slack = {
-        ...session.oauthTokens.slack,
-        ...tokens.slack
-      };
-      this.logInfo('Stored Slack OAuth tokens', { 
-        sessionId, 
-        teamId: tokens.slack.team_id,
-        userId: tokens.slack.user_id 
-      });
+      // Store Google tokens
+      if (tokens.google) {
+        session.oauthTokens.google = {
+          ...session.oauthTokens.google,
+          ...tokens.google
+        };
+        this.logInfo('Stored Google OAuth tokens in memory', { 
+          sessionId, 
+          hasRefreshToken: !!tokens.google.refresh_token,
+          expiresIn: tokens.google.expires_in 
+        });
+      }
+
+      // Store Slack tokens
+      if (tokens.slack) {
+        session.oauthTokens.slack = {
+          ...session.oauthTokens.slack,
+          ...tokens.slack
+        };
+        this.logInfo('Stored Slack OAuth tokens in memory', { 
+          sessionId, 
+          teamId: tokens.slack.team_id,
+          userId: tokens.slack.user_id 
+        });
+      }
     }
 
     // Update last activity
@@ -359,7 +476,7 @@ export class SessionService extends BaseService {
   /**
    * Get OAuth tokens for a session
    */
-  getOAuthTokens(sessionId: string): {
+  async getOAuthTokens(sessionId: string): Promise<{
     google?: {
       access_token: string;
       refresh_token?: string;
@@ -373,24 +490,42 @@ export class SessionService extends BaseService {
       team_id?: string;
       user_id?: string;
     };
-  } | null {
+  } | null> {
     this.assertReady();
     
-    const session = this.getSession(sessionId);
-    if (!session || !session.oauthTokens) {
+    if (this.databaseService) {
+      // Try to get from database first
+      const tokenData = await this.databaseService.getOAuthTokens(sessionId);
+      if (tokenData) {
+        return {
+          google: {
+            access_token: tokenData.accessToken,
+            refresh_token: tokenData.refreshToken,
+            expires_in: Math.floor((tokenData.expiresAt.getTime() - Date.now()) / 1000),
+            token_type: tokenData.tokenType,
+            scope: tokenData.scope,
+            expiry_date: tokenData.expiresAt.getTime()
+          }
+        };
+      }
       return null;
+    } else {
+      // Fallback to in-memory storage
+      const session = await this.getSession(sessionId);
+      if (!session || !session.oauthTokens) {
+        return null;
+      }
+      return session.oauthTokens;
     }
-
-    return session.oauthTokens;
   }
 
-  /**
+    /**
    * Get Google access token for a session
    */
-  getGoogleAccessToken(sessionId: string): string | null {
+  async getGoogleAccessToken(sessionId: string): Promise<string | null> {
     this.assertReady();
     
-    const tokens = this.getOAuthTokens(sessionId);
+    const tokens = await this.getOAuthTokens(sessionId);
     if (!tokens?.google?.access_token) {
       return null;
     }
@@ -410,7 +545,7 @@ export class SessionService extends BaseService {
   findSessionBySlackUser(teamId: string, userId: string): string | null {
     this.assertReady();
     
-    for (const [sessionId, session] of this.sessions.entries()) {
+    for (const [sessionId, session] of (this.sessions?.entries() || [])) {
       if (session.oauthTokens?.slack?.team_id === teamId && 
           session.oauthTokens?.slack?.user_id === userId) {
         return sessionId;

@@ -82,7 +82,7 @@ export class MasterAgent {
       
       // Get or create session
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _session = sessionService.getOrCreateSession(sessionId, userId);
+      const _session = await sessionService.getOrCreateSession(sessionId, userId);
       
       let toolCalls: ToolCall[];
       let message: string;
@@ -93,7 +93,7 @@ export class MasterAgent {
         throw new Error('OpenAI service is required but not available. Please check OpenAI configuration.');
       }
 
-      const context = sessionService.getConversationContext(sessionId);
+      const context = await sessionService.getConversationContext(sessionId);
       const systemPromptWithContext = context ? 
         `${this.systemPrompt}\n\n${context}` : 
         this.systemPrompt;

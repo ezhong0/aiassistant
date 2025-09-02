@@ -34,7 +34,10 @@
     "railway:deploy": "railway up",
     "prepare": "node -e \"if (!process.env.RAILWAY_ENVIRONMENT) require('husky')\"",
     "railway:build": "npm run prebuild && tsc --project tsconfig.prod.json",
-    "railway:start": "npm start"
+    "railway:start": "npm start",
+    "db:setup": "npx ts-node scripts/setup-database.ts",
+    "db:test": "npx ts-node scripts/setup-database.ts",
+    "db:integration": "npx ts-node scripts/test-database-integration.ts"
   },
   "keywords": [],
   "author": "",
@@ -45,6 +48,7 @@
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.15.5",
     "@types/uuid": "^10.0.0",
     "axios": "^1.11.0",
     "compression": "^1.8.1",
@@ -56,6 +60,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "openai": "^5.13.1",
+    "pg": "^8.16.3",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",

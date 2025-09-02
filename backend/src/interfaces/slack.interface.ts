@@ -880,7 +880,7 @@ export class SlackInterface {
       });
       
       // Get or create session using existing SessionService with enhanced context
-      const session = (sessionService as any).getOrCreateSession(sessionId, slackContext.userId);
+      const session = await (sessionService as any).getOrCreateSession(sessionId, slackContext.userId);
       
       // Store Slack-specific context in the session for agents to use
       if (session && typeof (sessionService as any).updateSessionContext === 'function') {
@@ -1145,7 +1145,7 @@ export class SlackInterface {
           });
           
           // Check what tokens are available
-          const allTokens = (sessionService as any).getOAuthTokens(sessionId);
+          const allTokens = await (sessionService as any).getOAuthTokens(sessionId);
           logger.info('Available OAuth tokens for session', { 
             sessionId, 
             hasTokens: !!allTokens,
@@ -1165,7 +1165,7 @@ export class SlackInterface {
             } : null
           });
           
-          accessToken = (sessionService as any).getGoogleAccessToken(sessionId);
+          accessToken = await (sessionService as any).getGoogleAccessToken(sessionId);
           if (accessToken) {
             logger.info('✅ Retrieved Google OAuth access token for Slack user', { 
               sessionId, 
@@ -1189,7 +1189,7 @@ export class SlackInterface {
               if (possibleSessionId === sessionId) continue; // Skip the current session
               
               try {
-                const possibleTokens = (sessionService as any).getOAuthTokens(possibleSessionId);
+                const possibleTokens = await (sessionService as any).getOAuthTokens(possibleSessionId);
                 if (possibleTokens?.google?.access_token) {
                   accessToken = possibleTokens.google.access_token;
                   logger.info('✅ Found OAuth tokens in alternative session', { 
@@ -1791,7 +1791,7 @@ export class SlackInterface {
 
       for (const sessionId of possibleSessionIds) {
         try {
-          const session = (sessionService as any).getSession(sessionId);
+          const session = await (sessionService as any).getSession(sessionId);
           if (session?.oauthTokens?.google?.access_token && session.lastActivity) {
             const lastActivity = new Date(session.lastActivity).getTime();
             if (lastActivity > twoMinutesAgo) {
@@ -1838,7 +1838,7 @@ export class SlackInterface {
 
       for (const sessionId of possibleSessionIds) {
         try {
-          const tokens = (sessionService as any).getOAuthTokens(sessionId);
+          const tokens = await (sessionService as any).getOAuthTokens(sessionId);
           if (tokens?.google?.access_token) {
             return true;
           }

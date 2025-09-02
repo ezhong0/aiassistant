@@ -796,7 +796,7 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           });
           
           // Get or create session
-          const session = (sessionService as any).getOrCreateSession(slackSessionId, slackContext.user_id);
+          const session = await (sessionService as any).getOrCreateSession(slackSessionId, slackContext.user_id);
           
           logger.info('Session retrieved for OAuth token storage', {
             sessionId: slackSessionId,
@@ -805,7 +805,7 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           });
           
           // Store OAuth tokens in the session
-          const tokensStored = (sessionService as any).storeOAuthTokens(slackSessionId, {
+          const tokensStored = await (sessionService as any).storeOAuthTokens(slackSessionId, {
             google: {
               access_token: tokens.access_token,
               refresh_token: tokens.refresh_token,
@@ -847,7 +847,7 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
                 (sessionService as any).getOrCreateSession(additionalSessionId, slackContext.user_id);
                 
                 // Store the same OAuth tokens
-                const additionalTokensStored = (sessionService as any).storeOAuthTokens(additionalSessionId, {
+                const additionalTokensStored = await (sessionService as any).storeOAuthTokens(additionalSessionId, {
                   google: {
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token,
