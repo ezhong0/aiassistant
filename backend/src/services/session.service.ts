@@ -35,8 +35,13 @@ export class SessionService extends BaseService {
     
     if (!this.databaseService) {
       this.logWarn('Database service not available, falling back to in-memory storage');
+      this.logWarn('⚠️  OAuth tokens will NOT persist across server restarts!');
       // Fallback to in-memory storage if database is not available
       this.sessions = new Map<string, SessionContext>();
+    } else {
+      this.logInfo('✅ Database service available for persistent OAuth token storage');
+      this.logInfo(`Database service state: ${this.databaseService.state}`);
+      this.logInfo(`Database service ready: ${this.databaseService.isReady()}`);
     }
     
     // Clean up expired sessions using configured interval
@@ -426,13 +431,33 @@ export class SessionService extends BaseService {
         updatedAt: new Date()
       };
       
-      await this.databaseService.storeOAuthTokens(tokenData);
-      
-      this.logInfo('Stored Google OAuth tokens in database', { 
-        sessionId, 
-        hasRefreshToken: !!tokens.google.refresh_token,
-        expiresAt: expiresAt.toISOString()
-      });
+      try {
+        await this.databaseService.storeOAuthTokens(tokenData);
+        
+        this.logInfo('✅ Stored Google OAuth tokens in database', { 
+          sessionId, 
+          hasRefreshToken: !!tokens.google.refresh_token,
+          expiresAt: expiresAt.toISOString(),
+          databaseService: this.databaseService.constructor.name,
+          databaseState: this.databaseService.state
+        });
+      } catch (error) {
+        this.logError('❌ Failed to store OAuth tokens in database, falling back to memory', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId,
+          databaseService: this.databaseService.constructor.name,
+          databaseState: this.databaseService.state
+        });
+        
+        // Fallback to in-memory storage
+        if (!session.oauthTokens) {
+          session.oauthTokens = {};
+        }
+        session.oauthTokens.google = {
+          ...session.oauthTokens.google,
+          ...tokens.google
+        };
+      }
     } else if (this.sessions) {
       // Fallback to in-memory storage
       // Initialize oauthTokens if it doesn't exist
@@ -495,22 +520,41 @@ export class SessionService extends BaseService {
     
     if (this.databaseService) {
       // Try to get from database first
-      const tokenData = await this.databaseService.getOAuthTokens(sessionId);
-      if (tokenData) {
-        return {
-          google: {
-            access_token: tokenData.accessToken,
-            refresh_token: tokenData.refreshToken,
-            expires_in: Math.floor((tokenData.expiresAt.getTime() - Date.now()) / 1000),
-            token_type: tokenData.tokenType,
-            scope: tokenData.scope,
-            expiry_date: tokenData.expiresAt.getTime()
-          }
-        };
+      try {
+        const tokenData = await this.databaseService.getOAuthTokens(sessionId);
+        if (tokenData) {
+          this.logDebug('✅ Retrieved OAuth tokens from database', {
+            sessionId,
+            hasAccessToken: !!tokenData.accessToken,
+            hasRefreshToken: !!tokenData.refreshToken,
+            expiresAt: tokenData.expiresAt.toISOString()
+          });
+          
+          return {
+            google: {
+              access_token: tokenData.accessToken,
+              refresh_token: tokenData.refreshToken,
+              expires_in: Math.floor((tokenData.expiresAt.getTime() - Date.now()) / 1000),
+              token_type: tokenData.tokenType,
+              scope: tokenData.scope,
+              expiry_date: tokenData.expiresAt.getTime()
+            }
+          };
+        } else {
+          this.logDebug('No OAuth tokens found in database', { sessionId });
+        }
+      } catch (error) {
+        this.logError('❌ Failed to retrieve OAuth tokens from database', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          sessionId,
+          databaseService: this.databaseService.constructor.name,
+          databaseState: this.databaseService.state
+        });
       }
       return null;
     } else {
       // Fallback to in-memory storage
+      this.logDebug('Using in-memory storage for OAuth tokens', { sessionId });
       const session = await this.getSession(sessionId);
       if (!session || !session.oauthTokens) {
         return null;
