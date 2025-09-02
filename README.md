@@ -2,7 +2,7 @@
 
 ## 🎯 **Vision Statement**
 
-A sophisticated, voice-controlled AI assistant platform that demonstrates **architecture-first development** with clear boundaries, continuous validation, and AI-assisted implementation. This platform serves as a reference implementation for building complex, maintainable applications with AI collaboration.
+A sophisticated, AI-powered Slack assistant platform that demonstrates **architecture-first development** with clear boundaries, continuous validation, and AI-assisted implementation. This platform serves as a reference implementation for building complex, maintainable applications with AI collaboration.
 
 ## 🏗️ **Architecture Overview**
 
@@ -10,8 +10,8 @@ A sophisticated, voice-controlled AI assistant platform that demonstrates **arch
 ```
 Slack Interface → Backend API → Multi-Agent Orchestration → External Services
      ↓                    ↓              ↓                    ↓
-SwiftUI + Speech    Express + TS    Master Agent +     Google APIs + OpenAI
-   Framework         + Middleware    Specialized Agents
+Slack Bolt SDK      Express + TS    Master Agent +     Google APIs + OpenAI
+   + OAuth         + Middleware    Specialized Agents
 ```
 
 ### **Core Architectural Principles**
@@ -20,14 +20,15 @@ SwiftUI + Speech    Express + TS    Master Agent +     Google APIs + OpenAI
 3. **Plugin Architecture**: Extensible agent system
 4. **Fail-Safe Design**: Graceful degradation and error recovery
 5. **AI-First Development**: Structured for effective AI collaboration
+6. **Interface vs Service**: Input handling separated from business logic
 
 ## 🚀 **Quick Start**
 
 ### **Prerequisites**
 - Node.js 18+ and npm
-- Node.js 18+ (for backend development)
 - Google Cloud Platform account
 - OpenAI API key
+- Slack Developer account
 
 ### **1. Backend Setup**
 ```bash
@@ -37,19 +38,28 @@ cp ../.env.example .env  # Configure your environment
 npm run dev              # Starts on http://localhost:3000
 ```
 
-### **2. Backend Setup**
+### **2. Environment Configuration**
 ```bash
-cd backend && npm install
-# Configure GoogleService-Info.plist with your credentials
-# Build and run (⌘+R)
-```
-
-### **3. Environment Configuration**
-```bash
-# Root .env file required
+# Required environment variables
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 OPENAI_API_KEY=your_openai_api_key
+JWT_SECRET=your_jwt_secret_key
+
+# PostgreSQL (for persistent storage)
+DATABASE_URL=postgresql://username:password@host:5432/database
+
+# Slack (for bot integration)
+SLACK_SIGNING_SECRET=your_slack_signing_secret
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_CLIENT_ID=your_slack_client_id
+SLACK_CLIENT_SECRET=your_slack_client_secret
+```
+
+### **3. Database Setup**
+```bash
+npm run db:setup        # Create database schema
+npm run db:integration  # Test database integration
 ```
 
 ## 📁 **Project Structure**
@@ -59,7 +69,25 @@ assistantapp/
 ├── 📁 backend/                    # Node.js/TypeScript backend
 │   ├── 📁 src/
 │   │   ├── 📁 agents/            # AI agent implementations
+│   │   │   ├── master.agent.ts   # Intelligent routing
+│   │   │   ├── email.agent.ts    # Gmail integration
+│   │   │   ├── contact.agent.ts  # Google Contacts
+│   │   │   ├── calendar.agent.ts # Google Calendar
+│   │   │   ├── think.agent.ts    # Reasoning & verification
+│   │   │   ├── content-creator.agent.ts # Content generation
+│   │   │   └── tavily.agent.ts   # Web search
 │   │   ├── 📁 services/          # Business logic services
+│   │   │   ├── database.service.ts    # PostgreSQL integration
+│   │   │   ├── session.service.ts     # Session management
+│   │   │   ├── auth.service.ts        # OAuth authentication
+│   │   │   ├── gmail.service.ts       # Gmail API
+│   │   │   ├── calendar.service.ts    # Calendar API
+│   │   │   ├── contact.service.ts     # Contacts API
+│   │   │   ├── openai.service.ts      # OpenAI integration
+│   │   │   ├── slack-formatter.service.ts # Slack formatting
+│   │   │   └── tool-executor.service.ts   # Tool execution
+│   │   ├── 📁 interfaces/        # Input/output interfaces
+│   │   │   └── slack.interface.ts     # Slack event handling
 │   │   ├── 📁 middleware/        # Express middleware
 │   │   ├── 📁 routes/            # API route handlers
 │   │   ├── 📁 framework/         # Core framework classes
@@ -68,15 +96,15 @@ assistantapp/
 │   │   └── 📁 utils/             # Utility functions
 │   ├── 📁 tests/                 # Comprehensive test suite
 │   └── package.json
-├── 📁 backend/                   # Node.js/TypeScript backend
-│   └── 📁 AssistantApp/
-│       ├── 📁 Views/             # SwiftUI view components
-│       ├── 📁 ViewModels/        # MVVM view models
-│       ├── 📁 Services/          # Backend service layer
-│       ├── 📁 Models/            # Data models
-│       └── 📁 Configuration/     # Environment configs
+├── 📁 docs/                      # Strategic documentation
+│   ├── ARCHITECTURE.md           # System architecture
+│   ├── DEVELOPMENT.md            # Development workflow
+│   ├── AGENTS.md                 # Multi-agent system
+│   ├── SERVICES.md               # Service layer architecture
+│   ├── TESTING.md                # Testing strategy
+│   └── DEPLOYMENT.md             # Deployment guide
 ├── 📁 credentials/               # Google Cloud credentials
-└── 📁 docs/                      # AI development documentation
+└── strategic_framework.md        # AI development framework
 ```
 
 ## 🔧 **Development Commands**
@@ -89,13 +117,15 @@ npm run lint         # ESLint code quality check
 npm run format       # Prettier code formatting
 npm run test         # Run all tests
 npm run test:watch   # Watch mode for tests
+npm run typecheck    # TypeScript type checking
 ```
 
-### **Backend Development**
-- **Build**: ⌘+B
-- **Run**: ⌘+R
-- **Clean**: ⌘+Shift+K
-- **Product → Clean Build Folder**: ⌘+Shift+K
+### **Database Management**
+```bash
+npm run db:setup        # Set up database schema
+npm run db:integration  # Test database integration
+npm run db:test         # Test database connection
+```
 
 ## 🧠 **AI Development Guidelines**
 
@@ -134,21 +164,22 @@ This project follows the **Strategic Framework for AI-Assisted Development**:
 
 ### **✅ Completed**
 - **Backend Foundation**: Express server with TypeScript and middleware
-- **Multi-Agent System**: Master agent with specialized sub-agents
+- **Multi-Agent System**: Master agent with 6 specialized sub-agents
 - **Service Architecture**: Dependency injection and lifecycle management
-- **Backend Foundation**: Node.js/TypeScript with Google OAuth integration
 - **Authentication**: OAuth 2.0 flow with Google services
+- **Slack Integration**: Complete Slack bot with event handling
+- **Database Integration**: PostgreSQL for persistent storage
 - **Testing Framework**: Comprehensive test suite with AI behavior validation
 
 ### **🔄 In Progress**
-- **Slack Integration**: Slack bot with natural language processing
-- **Agent Workflows**: Multi-step intelligent workflows
-- **Performance Optimization**: Response time and resource optimization
+- **Interactive Components**: Enhanced Slack UI components
+- **Performance Optimization**: Response time optimization
+- **Production Deployment**: Environment configuration and monitoring
 
 ### **📋 Next Steps**
-- **Production Deployment**: Environment configuration and monitoring
+- **Slack App Directory**: Prepare for official distribution
+- **Beta Testing**: Launch with test workspaces
 - **Advanced Workflows**: Cross-agent communication protocols
-- **Analytics**: User interaction and agent effectiveness tracking
 
 ## 🔍 **Key Features**
 
@@ -156,15 +187,23 @@ This project follows the **Strategic Framework for AI-Assisted Development**:
 - **Master Agent**: Intelligent routing with OpenAI + rule-based fallback
 - **Email Agent**: Gmail API integration with natural language processing
 - **Contact Agent**: Google Contacts with fuzzy matching and history analysis
-- **Think Agent**: Verification and reasoning for quality assurance
 - **Calendar Agent**: Google Calendar integration with event management
-- **Content Creator**: OpenAI-powered content generation (ready for implementation)
+- **Think Agent**: Verification and reasoning for quality assurance
+- **Content Creator**: OpenAI-powered content generation
+- **Tavily Agent**: Web search and information retrieval
 
 ### **Enterprise Features**
 - **Security**: OAuth 2.0, rate limiting, security headers
 - **Monitoring**: Structured logging, performance tracking, health checks
 - **Scalability**: Service registry, dependency injection, plugin architecture
 - **Reliability**: Error handling, graceful degradation, fallback mechanisms
+- **Persistence**: PostgreSQL database for session and token storage
+
+### **Slack Integration**
+- **Event Handling**: Mentions, direct messages, slash commands
+- **Rich Formatting**: Block Kit messages with interactive components
+- **OAuth Flow**: Secure workspace installation and token management
+- **Context Management**: Thread-aware conversation context
 
 ## 🤝 **Contributing**
 
@@ -186,13 +225,14 @@ This project follows the **Strategic Framework for AI-Assisted Development**:
 ### **Development Resources**
 - **Backend API**: `http://localhost:3000/health` for health check
 - **Slack Testing**: Test bot functionality and agent responses
-- **Backend Logs**: Comprehensive logging for debugging
+- **Database**: PostgreSQL with persistent session storage
 - **Test Suite**: Run `npm run test` for system validation
 
 ### **Architecture Decisions**
 - **Service Registry**: Centralized dependency management
 - **Agent Factory**: Plugin-based agent system
-- **Middleware Stack**: Security, logging, and error handling
+- **Interface Layer**: Input handling separated from business logic
+- **Database Service**: PostgreSQL for persistent storage
 - **Type Safety**: Comprehensive TypeScript interfaces
 
 ## 🚀 **Getting Started with AI Development**

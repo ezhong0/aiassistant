@@ -1,1224 +1,549 @@
-# 🚀 Deployment & Configuration - AI Development Guide
+# 🚀 Deployment Guide - AI Development Guide
 
-## 🎯 **Deployment Vision**
+## 🎯 **Deployment Overview**
 
-This document establishes the **deployment and configuration strategy** for the AI assistant platform. The deployment approach ensures consistent, secure, and scalable deployments across environments while maintaining the architectural integrity established in development.
+This document provides comprehensive deployment instructions for the AI Assistant Platform, covering development, staging, and production environments with PostgreSQL integration and Slack bot deployment.
 
-## 🏗️ **Deployment Architecture Overview**
+## 🏗️ **Architecture Overview**
 
-### **Deployment Environment Structure**
+### **Deployment Architecture**
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Production Environment                   │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐         │
-│  │   Load      │ │   App       │ │   Database  │         │
-│  │  Balancer   │ │  Servers    │ │   Cluster   │         │
-│  └─────────────┘ └─────────────┘ └─────────────┘         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │   Staging       │
-                    │  Environment    │
-                    └─────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │  Development    │
-                    │  Environment    │
-                    └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Slack App     │    │  Backend API    │    │ PostgreSQL      │
+│   Directory     │◄──►│   (Railway)     │◄──►│   Database      │
+│                 │    │                 │    │   (Railway)     │
+│ • Distribution  │    │ • Express       │    │ • Sessions      │
+│ • OAuth Flow    │    │ • TypeScript    │    │ • OAuth Tokens  │
+│ • Event Sub     │    │ • Multi-Agent   │    │ • Slack Data    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-### **Core Deployment Principles**
-1. **Environment Parity**: Staging mirrors production configuration
-2. **Infrastructure as Code**: Reproducible deployments
-3. **Security First**: Secure by default configuration
-4. **Monitoring Integration**: Comprehensive health monitoring
-5. **Rollback Capability**: Quick recovery from deployment issues
+### **Environment Types**
+- **Development**: Local development with local PostgreSQL
+- **Staging**: Railway deployment with staging database
+- **Production**: Railway deployment with production database
 
 ## 🔧 **Environment Configuration**
 
-### **1. Environment Variables**
+### **Required Environment Variables**
 
-#### **Root Environment Configuration**
+#### **Core Configuration**
 ```bash
-# .env.example - Root configuration file
-# Application Configuration
-NODE_ENV=development
+# Application
+NODE_ENV=production
 PORT=3000
-HOST=0.0.0.0
+JWT_SECRET=your-super-secret-jwt-key-here
 
-# Google OAuth Configuration
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+# Database
+DATABASE_URL=postgresql://username:password@host:5432/database
 
-# OpenAI Configuration
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4o-mini
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 
-# JWT Configuration
-JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRES_IN=24h
+# OpenAI
+OPENAI_API_KEY=your-openai-api-key
 
-# Database Configuration (if applicable)
-DATABASE_URL=postgresql://username:password@localhost:5432/assistantapp
+# Slack Configuration
+SLACK_SIGNING_SECRET=your-slack-signing-secret
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_CLIENT_ID=your-slack-client-id
+SLACK_CLIENT_SECRET=your-slack-client-secret
+SLACK_OAUTH_REDIRECT_URI=https://your-domain.railway.app/slack/oauth/callback
+```
 
-# Redis Configuration (if applicable)
-REDIS_URL=redis://localhost:6379
-
-# Logging Configuration
+#### **Optional Configuration**
+```bash
+# Logging
 LOG_LEVEL=info
-LOG_FILE_PATH=./logs/app.log
+LOG_FORMAT=json
 
-# Security Configuration
-CORS_ORIGIN=http://localhost:3000
+# Rate Limiting
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 
-# Monitoring Configuration
-HEALTH_CHECK_INTERVAL=30000
-METRICS_ENABLED=true
+# Timeouts
+REQUEST_TIMEOUT_MS=30000
+TOOL_EXECUTION_TIMEOUT_MS=60000
+
+# Session Management
+SESSION_TIMEOUT_MINUTES=30
+MAX_CONVERSATION_HISTORY=50
 ```
 
-#### **Environment-Specific Configuration**
-```typescript
-// backend/src/config/environment.ts
-export class EnvironmentConfig {
-  // Environment
-  get nodeEnv(): string {
-    return process.env.NODE_ENV || 'development';
-  }
-  
-  get isProduction(): boolean {
-    return this.nodeEnv === 'production';
-  }
-  
-  get isStaging(): boolean {
-    return this.nodeEnv === 'staging';
-  }
-  
-  get isDevelopment(): boolean {
-    return this.nodeEnv === 'development';
-  }
-  
-  // Server Configuration
-  get port(): number {
-    return parseInt(process.env.PORT || '3000', 10);
-  }
-  
-  get host(): string {
-    return process.env.HOST || '0.0.0.0';
-  }
-  
-  // Google OAuth
-  get googleClientId(): string {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      throw new Error('GOOGLE_CLIENT_ID is required');
-    }
-    return clientId;
-  }
-  
-  get googleClientSecret(): string {
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    if (!clientSecret) {
-      throw new Error('GOOGLE_CLIENT_SECRET is required');
-    }
-    return clientSecret;
-  }
-  
-  // OpenAI
-  get openaiApiKey(): string {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is required');
-    }
-    return apiKey;
-  }
-  
-  get openaiModel(): string {
-    return process.env.OPENAI_MODEL || 'gpt-4o-mini';
-  }
-  
-  // JWT
-  get jwtSecret(): string {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error('JWT_SECRET is required');
-    }
-    return secret;
-  }
-  
-  get jwtExpiresIn(): string {
-    return process.env.JWT_EXPIRES_IN || '24h';
-  }
-  
-  // Security
-  get corsOrigin(): string {
-    return process.env.CORS_ORIGIN || 'http://localhost:3000';
-  }
-  
-  get rateLimitWindowMs(): number {
-    return parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10);
-  }
-  
-  get rateLimitMaxRequests(): number {
-    return parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10);
-  }
-  
-  // Monitoring
-  get healthCheckInterval(): number {
-    return parseInt(process.env.HEALTH_CHECK_INTERVAL || '30000', 10);
-  }
-  
-  get metricsEnabled(): boolean {
-    return process.env.METRICS_ENABLED === 'true';
-  }
-}
+### **Environment-Specific Configuration**
 
-// Singleton instance
-export const environmentConfig = new EnvironmentConfig();
-```
-
-### **2. Configuration Validation**
-
-#### **Configuration Validation Service**
-```typescript
-// backend/src/config/config-validator.ts
-export class ConfigValidator {
-  private static instance: ConfigValidator;
-  private validationErrors: string[] = [];
-  
-  static getInstance(): ConfigValidator {
-    if (!ConfigValidator.instance) {
-      ConfigValidator.instance = new ConfigValidator();
-    }
-    return ConfigValidator.instance;
-  }
-  
-  validateConfiguration(): { valid: boolean; errors: string[] } {
-    this.validationErrors = [];
-    
-    try {
-      // Validate required environment variables
-      this.validateRequiredEnvVars();
-      
-      // Validate Google OAuth configuration
-      this.validateGoogleOAuth();
-      
-      // Validate OpenAI configuration
-      this.validateOpenAI();
-      
-      // Validate JWT configuration
-      this.validateJWT();
-      
-      // Validate security configuration
-      this.validateSecurityConfig();
-      
-      // Validate environment-specific requirements
-      this.validateEnvironmentSpecific();
-      
-    } catch (error) {
-      this.validationErrors.push(`Configuration validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-    
-    return {
-      valid: this.validationErrors.length === 0,
-      errors: this.validationErrors
-    };
-  }
-  
-  private validateRequiredEnvVars(): void {
-    const requiredVars = [
-      'GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
-      'OPENAI_API_KEY',
-      'JWT_SECRET'
-    ];
-    
-    for (const envVar of requiredVars) {
-      if (!process.env[envVar]) {
-        this.validationErrors.push(`Required environment variable ${envVar} is not set`);
-      }
-    }
-  }
-  
-  private validateGoogleOAuth(): void {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    
-    if (clientId && clientId.length < 20) {
-      this.validationErrors.push('GOOGLE_CLIENT_ID appears to be invalid (too short)');
-    }
-    
-    if (clientSecret && clientSecret.length < 20) {
-      this.validationErrors.push('GOOGLE_CLIENT_SECRET appears to be invalid (too short)');
-    }
-  }
-  
-  private validateOpenAI(): void {
-    const apiKey = process.env.OPENAI_API_KEY;
-    
-    if (apiKey && !apiKey.startsWith('sk-')) {
-      this.validationErrors.push('OPENAI_API_KEY should start with "sk-"');
-    }
-  }
-  
-  private validateJWT(): void {
-    const jwtSecret = process.env.JWT_SECRET;
-    
-    if (jwtSecret && jwtSecret.length < 32) {
-      this.validationErrors.push('JWT_SECRET should be at least 32 characters long');
-    }
-    
-    if (jwtSecret === 'your_jwt_secret_key_here') {
-      this.validationErrors.push('JWT_SECRET should not use the default placeholder value');
-    }
-  }
-  
-  private validateSecurityConfig(): void {
-    const nodeEnv = process.env.NODE_ENV;
-    
-    if (nodeEnv === 'production') {
-      if (process.env.JWT_SECRET === 'your_jwt_secret_key_here') {
-        this.validationErrors.push('JWT_SECRET must be changed in production');
-      }
-      
-      if (process.env.CORS_ORIGIN === 'http://localhost:3000') {
-        this.validationErrors.push('CORS_ORIGIN must be configured for production');
-      }
-    }
-  }
-  
-  private validateEnvironmentSpecific(): void {
-    const nodeEnv = process.env.NODE_ENV;
-    
-    if (nodeEnv === 'production') {
-      // Production-specific validations
-      if (!process.env.DATABASE_URL) {
-        this.validationErrors.push('DATABASE_URL is required in production');
-      }
-      
-      if (process.env.LOG_LEVEL === 'debug') {
-        this.validationErrors.push('LOG_LEVEL should not be debug in production');
-      }
-    }
-  }
-}
-
-// Usage in application startup
-export const validateConfiguration = (): void => {
-  const validator = ConfigValidator.getInstance();
-  const result = validator.validateConfiguration();
-  
-  if (!result.valid) {
-    console.error('Configuration validation failed:');
-    result.errors.forEach(error => console.error(`  - ${error}`));
-    process.exit(1);
-  }
-  
-  console.log('Configuration validation passed');
-};
-```
-
-## 🚀 **Deployment Process**
-
-### **1. Pre-Deployment Checklist**
-
-#### **Production Deployment Checklist**
-```markdown
-## Pre-Deployment Checklist
-
-### Code Quality
-- [ ] All tests passing (unit, integration, AI behavior)
-- [ ] Code coverage above 80%
-- [ ] Linting and formatting checks passed
-- [ ] Type checking completed successfully
-- [ ] Security review completed
-- [ ] Performance benchmarks met
-
-### Configuration
-- [ ] Environment variables configured for production
-- [ ] Google OAuth credentials updated for production domain
-- [ ] JWT secret changed from default
-- [ ] CORS origin configured for production domain
-- [ ] Database connection strings updated
-- [ ] Redis connection strings updated (if applicable)
-
-### Infrastructure
-- [ ] Production servers provisioned
-- [ ] Load balancer configured
-- [ ] SSL certificates installed
-- [ ] Domain names configured
-- [ ] Monitoring and logging configured
-- [ ] Backup strategy implemented
-
-### Security
-- [ ] Security headers configured
-- [ ] Rate limiting enabled
-- [ ] CORS properly configured
-- [ ] Authentication middleware active
-- [ ] Input validation enabled
-- [ ] SQL injection protection (if applicable)
-
-### Testing
-- [ ] Staging environment deployment successful
-- [ ] Integration tests passed in staging
-- [ ] Load testing completed
-- [ ] Security testing completed
-- [ ] User acceptance testing completed
-```
-
-### **2. Deployment Scripts**
-
-#### **Deployment Automation**
+#### **Development Environment**
 ```bash
-#!/bin/bash
-# scripts/deploy.sh
-
-set -e  # Exit on any error
-
-# Configuration
-ENVIRONMENT=${1:-staging}
-APP_NAME="assistantapp"
-DEPLOY_PATH="/opt/$APP_NAME"
-BACKUP_PATH="/opt/backups/$APP_NAME"
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-echo -e "${YELLOW}Starting deployment to $ENVIRONMENT...${NC}"
-
-# 1. Pre-deployment checks
-echo "Performing pre-deployment checks..."
-if ! npm run test:coverage; then
-    echo -e "${RED}Tests failed. Aborting deployment.${NC}"
-    exit 1
-fi
-
-if ! npm run build; then
-    echo -e "${RED}Build failed. Aborting deployment.${NC}"
-    exit 1
-fi
-
-# 2. Create backup
-echo "Creating backup of current deployment..."
-if [ -d "$DEPLOY_PATH" ]; then
-    mkdir -p "$BACKUP_PATH"
-    cp -r "$DEPLOY_PATH" "$BACKUP_PATH/$(date +%Y%m%d_%H%M%S)"
-fi
-
-# 3. Deploy new version
-echo "Deploying new version..."
-rsync -av --delete dist/ "$DEPLOY_PATH/"
-
-# 4. Copy configuration files
-echo "Copying configuration files..."
-cp .env.$ENVIRONMENT "$DEPLOY_PATH/.env"
-cp ecosystem.config.js "$DEPLOY_PATH/"
-
-# 5. Install production dependencies
-echo "Installing production dependencies..."
-cd "$DEPLOY_PATH"
-npm ci --only=production
-
-# 6. Restart application
-echo "Restarting application..."
-pm2 restart ecosystem.config.js --env $ENVIRONMENT
-
-# 7. Health check
-echo "Performing health check..."
-sleep 10
-if curl -f http://localhost:3000/health > /dev/null 2>&1; then
-    echo -e "${GREEN}Deployment successful!${NC}"
-else
-    echo -e "${RED}Health check failed. Rolling back...${NC}"
-    # Rollback logic here
-    exit 1
-fi
-
-echo -e "${GREEN}Deployment to $ENVIRONMENT completed successfully!${NC}"
+# .env.local
+NODE_ENV=development
+DATABASE_URL=postgresql://localhost:5432/assistantapp_dev
+SLACK_OAUTH_REDIRECT_URI=http://localhost:3000/slack/oauth/callback
+LOG_LEVEL=debug
 ```
 
-#### **PM2 Ecosystem Configuration**
-```javascript
-// ecosystem.config.js
-module.exports = {
-  apps: [{
-    name: 'assistantapp',
-    script: 'dist/index.js',
-    instances: 'max',
-    exec_mode: 'cluster',
-    env: {
-      NODE_ENV: 'development',
-      PORT: 3000
-    },
-    env_staging: {
-      NODE_ENV: 'staging',
-      PORT: 3000,
-      LOG_LEVEL: 'info'
-    },
-    env_production: {
-      NODE_ENV: 'production',
-      PORT: 3000,
-      LOG_LEVEL: 'warn',
-      METRICS_ENABLED: 'true'
-    },
-    // Process management
-    max_memory_restart: '1G',
-    min_uptime: '10s',
-    max_restarts: 10,
-    
-    // Logging
-    log_file: './logs/combined.log',
-    out_file: './logs/out.log',
-    error_file: './logs/error.log',
-    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-    
-    // Monitoring
-    pmx: true,
-    monitor: true,
-    
-    // Graceful shutdown
-    kill_timeout: 5000,
-    listen_timeout: 3000,
-    
-    // Health checks
-    health_check_grace_period: 3000,
-    health_check_fatal_exceptions: true
-  }]
-};
+#### **Staging Environment**
+```bash
+# Railway environment variables
+NODE_ENV=staging
+DATABASE_URL=postgresql://staging-db-url
+SLACK_OAUTH_REDIRECT_URI=https://staging-app.railway.app/slack/oauth/callback
+LOG_LEVEL=info
 ```
 
-### **3. Docker Deployment**
-
-#### **Dockerfile**
-```dockerfile
-# Dockerfile
-FROM node:18-alpine AS builder
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-COPY tsconfig.json ./
-
-# Install dependencies
-RUN npm ci
-
-# Copy source code
-COPY src/ ./src/
-
-# Build application
-RUN npm run build
-
-# Production stage
-FROM node:18-alpine AS production
-
-# Create app user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Copy built application
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-
-# Copy configuration
-COPY .env.production ./.env
-
-# Create logs directory
-RUN mkdir -p logs && chown nodejs:nodejs logs
-
-# Switch to non-root user
-USER nodejs
-
-# Expose port
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node healthcheck.js
-
-# Start application
-CMD ["node", "dist/index.js"]
+#### **Production Environment**
+```bash
+# Railway environment variables
+NODE_ENV=production
+DATABASE_URL=postgresql://production-db-url
+SLACK_OAUTH_REDIRECT_URI=https://production-app.railway.app/slack/oauth/callback
+LOG_LEVEL=warn
 ```
 
-#### **Docker Compose**
-```yaml
-# docker-compose.yml
-version: '3.8'
+## 🚀 **Railway Deployment**
 
-services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - .env.production
-    depends_on:
-      - redis
-      - postgres
-    volumes:
-      - ./logs:/app/logs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+### **1. Railway Setup**
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
+#### **Create Railway Account**
+1. Go to [Railway](https://railway.app)
+2. Sign up with GitHub account
+3. Create new project
 
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: assistantapp
-      POSTGRES_USER: assistantapp
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+#### **Connect Repository**
+```bash
+# Connect your GitHub repository
+# Railway will automatically detect the Node.js project
+```
 
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - app
-    restart: unless-stopped
+### **2. Database Setup**
 
-volumes:
-  redis_data:
-  postgres_data:
+#### **Create PostgreSQL Database**
+1. In Railway dashboard, click "New"
+2. Select "Database" → "PostgreSQL"
+3. Note the connection string
+
+#### **Configure Database Environment**
+```bash
+# Add to Railway environment variables
+DATABASE_URL=postgresql://username:password@host:5432/database
+```
+
+#### **Run Database Setup**
+```bash
+# Deploy first, then run database setup
+npm run db:setup
+```
+
+### **3. Backend Deployment**
+
+#### **Deploy Backend**
+1. Railway automatically detects `package.json`
+2. Builds and deploys on push to main branch
+3. Uses `npm start` as the start command
+
+#### **Health Check Configuration**
+```json
+{
+  "healthcheck": {
+    "path": "/health",
+    "interval": "30s",
+    "timeout": "10s",
+    "retries": 3
+  }
+}
+```
+
+### **4. Custom Domain (Optional)**
+1. In Railway dashboard, go to "Settings"
+2. Add custom domain
+3. Configure DNS records
+4. Update Slack OAuth redirect URI
+
+## 🤖 **Slack App Deployment**
+
+### **1. Slack App Configuration**
+
+#### **Create Slack App**
+1. Go to [Slack API Console](https://api.slack.com/apps)
+2. Click "Create New App"
+3. Choose "From scratch"
+4. Name: "AI Assistant"
+5. Select workspace
+
+#### **Configure OAuth & Permissions**
+1. Go to "OAuth & Permissions"
+2. Add redirect URLs:
+   ```
+   https://your-domain.railway.app/slack/oauth/callback
+   ```
+3. Add bot token scopes:
+   ```
+   chat:write
+   commands
+   im:read
+   mpim:read
+   users:read
+   users:read.email
+   ```
+
+#### **Configure Event Subscriptions**
+1. Go to "Event Subscriptions"
+2. Enable events
+3. Request URL: `https://your-domain.railway.app/slack/events`
+4. Subscribe to events:
+   ```
+   app_mention
+   message.im
+   ```
+
+#### **Add Slash Commands**
+1. Go to "Slash Commands"
+2. Create command:
+   - Command: `/assistant`
+   - Request URL: `https://your-domain.railway.app/slack/commands`
+   - Description: "AI Assistant for email and calendar management"
+
+### **2. Environment Variables for Slack**
+```bash
+# Add to Railway environment variables
+SLACK_SIGNING_SECRET=your-signing-secret
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_CLIENT_ID=your-client-id
+SLACK_CLIENT_SECRET=your-client-secret
+SLACK_OAUTH_REDIRECT_URI=https://your-domain.railway.app/slack/oauth/callback
+```
+
+### **3. Slack App Directory Submission**
+
+#### **Prepare App Directory Listing**
+1. Go to "App Home" in Slack API Console
+2. Fill out required information:
+   - App name and description
+   - Icon and screenshots
+   - Privacy policy URL
+   - Support URL
+
+#### **Submit for Review**
+1. Go to "Distribution" → "App Directory"
+2. Click "Submit for Review"
+3. Provide detailed description of functionality
+4. Include testing instructions
+
+## 🗄️ **Database Management**
+
+### **1. Database Schema Setup**
+
+#### **Automatic Setup**
+```bash
+# Run database setup script
+npm run db:setup
+```
+
+#### **Manual Setup (if needed)**
+```sql
+-- Connect to PostgreSQL and run:
+
+-- Sessions table
+CREATE TABLE sessions (
+  session_id VARCHAR(255) PRIMARY KEY,
+  user_id VARCHAR(255),
+  conversation_history JSONB,
+  tool_calls JSONB,
+  tool_results JSONB,
+  pending_actions JSONB,
+  oauth_tokens JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP
+);
+
+-- OAuth tokens table
+CREATE TABLE oauth_tokens (
+  session_id VARCHAR(255) PRIMARY KEY,
+  access_token TEXT,
+  refresh_token TEXT,
+  expires_at TIMESTAMP,
+  token_type VARCHAR(50),
+  scope TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Slack workspaces table
+CREATE TABLE slack_workspaces (
+  team_id VARCHAR(255) PRIMARY KEY,
+  team_name VARCHAR(255),
+  access_token TEXT,
+  bot_user_id VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Slack users table
+CREATE TABLE slack_users (
+  slack_user_id VARCHAR(255),
+  team_id VARCHAR(255),
+  google_user_id VARCHAR(255),
+  access_token TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (slack_user_id, team_id)
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON oauth_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_slack_users_google_id ON slack_users(google_user_id);
+```
+
+### **2. Database Maintenance**
+
+#### **Automatic Cleanup**
+```bash
+# The application automatically cleans up expired sessions and tokens
+# This runs every 30 minutes by default
+```
+
+#### **Manual Cleanup (if needed)**
+```sql
+-- Clean up expired sessions
+DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP;
+
+-- Clean up expired OAuth tokens
+DELETE FROM oauth_tokens WHERE expires_at < CURRENT_TIMESTAMP;
+
+-- Check database health
+SELECT 
+  COUNT(*) as total_sessions,
+  COUNT(CASE WHEN expires_at < CURRENT_TIMESTAMP THEN 1 END) as expired_sessions
+FROM sessions;
+```
+
+### **3. Database Backup**
+
+#### **Railway Automatic Backups**
+- Railway provides automatic daily backups
+- Backups are retained for 7 days
+- Can be restored from Railway dashboard
+
+#### **Manual Backup (if needed)**
+```bash
+# Using Railway CLI
+railway connect
+pg_dump $DATABASE_URL > backup.sql
+
+# Restore
+psql $DATABASE_URL < backup.sql
+```
+
+## 🔍 **Monitoring and Health Checks**
+
+### **1. Health Check Endpoint**
+```bash
+# Check application health
+curl https://your-domain.railway.app/health
+
+# Expected response:
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "uptime": 3600,
+  "environment": "production",
+  "services": [
+    {
+      "name": "databaseService",
+      "healthy": true,
+      "state": "ready"
+    },
+    {
+      "name": "sessionService", 
+      "healthy": true,
+      "state": "ready"
+    }
+  ]
+}
+```
+
+### **2. Railway Monitoring**
+- **Logs**: View real-time logs in Railway dashboard
+- **Metrics**: CPU, memory, and network usage
+- **Deployments**: Track deployment history and status
+
+### **3. Custom Monitoring**
+
+#### **Database Health**
+```bash
+# Check database connection
+npm run db:test
+```
+
+#### **Service Health**
+```bash
+# Check all services
+curl https://your-domain.railway.app/health/services
 ```
 
 ## 🔒 **Security Configuration**
 
-### **1. Security Headers**
+### **1. Environment Security**
+- **Never commit secrets**: Use Railway environment variables
+- **Rotate secrets regularly**: Update JWT_SECRET and API keys
+- **Use strong passwords**: For database and admin accounts
 
-#### **Security Middleware Configuration**
-```typescript
-// backend/src/middleware/security.middleware.ts
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+### **2. Network Security**
+- **HTTPS only**: Railway provides automatic SSL certificates
+- **CORS configuration**: Restrict to trusted domains
+- **Rate limiting**: Prevent abuse and DDoS attacks
 
-export const securityHeaders = helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://www.googleapis.com", "https://api.openai.com"],
-      frameSrc: ["'none'"],
-      objectSrc: ["'none'"],
-      upgradeInsecureRequests: []
-    }
-  },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  },
-  noSniff: true,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  frameguard: { action: 'deny' },
-  xssFilter: true
-});
+### **3. Data Security**
+- **Encrypted storage**: OAuth tokens stored securely
+- **Session management**: Secure session handling
+- **Input validation**: Sanitize all user inputs
 
-export const apiSecurityHeaders = helmet({
-  contentSecurityPolicy: false, // Disable CSP for API endpoints
-  hsts: false, // Disable HSTS for API endpoints
-  noSniff: true,
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  frameguard: { action: 'deny' },
-  xssFilter: true
-});
+## 🧪 **Testing Deployment**
 
-export const corsMiddleware = cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://yourdomain.com',
-      'https://www.yourdomain.com'
-    ];
-    
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-});
-
-export const apiRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: '15 minutes'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-  skipFailedRequests: false
-});
-```
-
-### **2. Authentication Security**
-
-#### **JWT Security Configuration**
-```typescript
-// backend/src/services/auth.service.ts
-export class AuthService implements IService {
-  private readonly jwtSecret: string;
-  private readonly jwtExpiresIn: string;
-  private readonly refreshTokenExpiresIn: string;
-  
-  constructor() {
-    this.jwtSecret = environmentConfig.jwtSecret;
-    this.jwtExpiresIn = environmentConfig.jwtExpiresIn;
-    this.refreshTokenExpiresIn = '7d';
-  }
-  
-  private createAccessToken(userId: string, scopes: string[]): string {
-    return jwt.sign(
-      {
-        userId,
-        scopes,
-        type: 'access'
-      },
-      this.jwtSecret,
-      {
-        expiresIn: this.jwtExpiresIn,
-        issuer: 'assistantapp',
-        audience: 'assistantapp-users'
-      }
-    );
-  }
-  
-  private createRefreshToken(userId: string): string {
-    return jwt.sign(
-      {
-        userId,
-        type: 'refresh'
-      },
-      this.jwtSecret,
-      {
-        expiresIn: this.refreshTokenExpiresIn,
-        issuer: 'assistantapp',
-        audience: 'assistantapp-users'
-      }
-    );
-  }
-  
-  async validateToken(token: string): Promise<JwtPayload | null> {
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret, {
-        issuer: 'assistantapp',
-        audience: 'assistantapp-users'
-      }) as JwtPayload;
-      
-      return decoded;
-    } catch (error) {
-      if (error instanceof jwt.TokenExpiredError) {
-        throw new AuthenticationError('Token expired');
-      } else if (error instanceof jwt.JsonWebTokenError) {
-        throw new AuthenticationError('Invalid token');
-      }
-      
-      throw new AuthenticationError('Token validation failed');
-    }
-  }
-}
-```
-
-## 📊 **Monitoring and Health Checks**
-
-### **1. Health Check Endpoints**
-
-#### **Comprehensive Health Monitoring**
-```typescript
-// backend/src/routes/health.ts
-import { Router, Request, Response } from 'express';
-import { getService } from '../services/service-manager';
-import { AgentFactory } from '../framework/agent-factory';
-import { environmentConfig } from '../config/environment';
-
-const router = Router();
-
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const startTime = Date.now();
-    
-    // Basic application health
-    const basicHealth = {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: environmentConfig.nodeEnv,
-      version: process.env.npm_package_version || 'unknown',
-      nodeVersion: process.version,
-      memory: process.memoryUsage(),
-      pid: process.pid
-    };
-    
-    // Service health status
-    const serviceManager = getService('serviceManager');
-    let servicesHealth: any[] = [];
-    
-    if (serviceManager) {
-      servicesHealth = await serviceManager.getHealthStatus();
-    }
-    
-    // Agent health status
-    const agentsHealth = AgentFactory.getStats();
-    
-    // Database health (if applicable)
-    let databaseHealth = { status: 'unknown' };
-    try {
-      // Add database health check here
-      databaseHealth = { status: 'healthy' };
-    } catch (error) {
-      databaseHealth = { status: 'unhealthy', error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-    
-    // External service health
-    const externalServicesHealth = {
-      google: await checkGoogleAPIAccess(),
-      openai: await checkOpenAIAccess()
-    };
-    
-    // Overall health assessment
-    const allServicesHealthy = servicesHealth.every(service => service.healthy);
-    const allExternalHealthy = Object.values(externalServicesHealth).every(status => status === 'healthy');
-    
-    const overallHealth = allServicesHealthy && allExternalHealthy ? 'healthy' : 'degraded';
-    
-    const health = {
-      ...basicHealth,
-      status: overallHealth,
-      services: servicesHealth,
-      agents: agentsHealth,
-      database: databaseHealth,
-      externalServices: externalServicesHealth,
-      responseTime: Date.now() - startTime
-    };
-    
-    const statusCode = overallHealth === 'healthy' ? 200 : 503;
-    res.status(statusCode).json(health);
-    
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-router.get('/ready', async (req: Request, res: Response) => {
-  try {
-    // Check if all critical services are ready
-    const serviceManager = getService('serviceManager');
-    if (!serviceManager) {
-      return res.status(503).json({ status: 'not ready', reason: 'Service manager not available' });
-    }
-    
-    const servicesHealth = await serviceManager.getHealthStatus();
-    const criticalServices = servicesHealth.filter(service => 
-      ['sessionService', 'authService', 'gmailService'].includes(service.name)
-    );
-    
-    const allCriticalReady = criticalServices.every(service => service.healthy);
-    
-    if (allCriticalReady) {
-      res.status(200).json({ status: 'ready' });
-    } else {
-      res.status(503).json({ 
-        status: 'not ready', 
-        reason: 'Critical services not healthy',
-        services: criticalServices
-      });
-    }
-    
-  } catch (error) {
-    res.status(503).json({ 
-      status: 'not ready', 
-      reason: 'Health check failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-router.get('/live', (req: Request, res: Response) => {
-  // Simple liveness check
-  res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
-});
-
-async function checkGoogleAPIAccess(): Promise<string> {
-  try {
-    // Simple Google API check
-    const response = await fetch('https://www.googleapis.com/discovery/v1/apis');
-    return response.ok ? 'healthy' : 'unhealthy';
-  } catch (error) {
-    return 'unhealthy';
-  }
-}
-
-async function checkOpenAIAccess(): Promise<string> {
-  try {
-    // Simple OpenAI API check (without using API key)
-    const response = await fetch('https://api.openai.com/v1/models');
-    return response.status === 401 ? 'healthy' : 'unhealthy'; // 401 means API is reachable
-  } catch (error) {
-    return 'unhealthy';
-  }
-}
-
-export default router;
-```
-
-### **2. Metrics Collection**
-
-#### **Performance Metrics**
-```typescript
-// backend/src/utils/metrics.ts
-export class MetricsCollector {
-  private static instance: MetricsCollector;
-  private metrics: Map<string, any> = new Map();
-  
-  static getInstance(): MetricsCollector {
-    if (!MetricsCollector.instance) {
-      MetricsCollector.instance = new MetricsCollector();
-    }
-    return MetricsCollector.instance;
-  }
-  
-  recordRequest(method: string, path: string, statusCode: number, duration: number): void {
-    const key = `${method}_${path}`;
-    
-    if (!this.metrics.has(key)) {
-      this.metrics.set(key, {
-        count: 0,
-        totalDuration: 0,
-        minDuration: Infinity,
-        maxDuration: 0,
-        statusCodes: {}
-      });
-    }
-    
-    const metric = this.metrics.get(key);
-    metric.count++;
-    metric.totalDuration += duration;
-    metric.minDuration = Math.min(metric.minDuration, duration);
-    metric.maxDuration = Math.max(metric.maxDuration, duration);
-    
-    const statusKey = statusCode.toString();
-    metric.statusCodes[statusKey] = (metric.statusCodes[statusKey] || 0) + 1;
-  }
-  
-  recordAgentExecution(agentName: string, success: boolean, duration: number): void {
-    const key = `agent_${agentName}`;
-    
-    if (!this.metrics.has(key)) {
-      this.metrics.set(key, {
-        totalExecutions: 0,
-        successfulExecutions: 0,
-        failedExecutions: 0,
-        totalDuration: 0,
-        averageDuration: 0
-      });
-    }
-    
-    const metric = this.metrics.get(key);
-    metric.totalExecutions++;
-    metric.totalDuration += duration;
-    metric.averageDuration = metric.totalDuration / metric.totalExecutions;
-    
-    if (success) {
-      metric.successfulExecutions++;
-    } else {
-      metric.failedExecutions++;
-    }
-  }
-  
-  getMetrics(): any {
-    const metrics = {};
-    for (const [key, value] of this.metrics) {
-      metrics[key] = { ...value };
-    }
-    return metrics;
-  }
-  
-  resetMetrics(): void {
-    this.metrics.clear();
-  }
-}
-
-export const metricsCollector = MetricsCollector.getInstance();
-```
-
-## 🔄 **Rollback Strategy**
-
-### **1. Automated Rollback**
-
-#### **Rollback Script**
+### **1. Pre-Deployment Testing**
 ```bash
-#!/bin/bash
-# scripts/rollback.sh
+# Local testing
+npm run test
+npm run typecheck
+npm run build
 
-set -e
+# Database testing
+npm run db:integration
+```
 
-ENVIRONMENT=${1:-staging}
-APP_NAME="assistantapp"
-DEPLOY_PATH="/opt/$APP_NAME"
-BACKUP_PATH="/opt/backups/$APP_NAME"
-
-echo "Starting rollback for $ENVIRONMENT..."
-
-# Find latest backup
-LATEST_BACKUP=$(ls -t "$BACKUP_PATH" | head -n1)
-
-if [ -z "$LATEST_BACKUP" ]; then
-    echo "No backup found. Cannot rollback."
-    exit 1
-fi
-
-echo "Rolling back to backup: $LATEST_BACKUP"
-
-# Stop application
-pm2 stop ecosystem.config.js --env $ENVIRONMENT
-
-# Restore from backup
-rm -rf "$DEPLOY_PATH"
-cp -r "$BACKUP_PATH/$LATEST_BACKUP" "$DEPLOY_PATH"
-
-# Restart application
-cd "$DEPLOY_PATH"
-pm2 start ecosystem.config.js --env $ENVIRONMENT
-
+### **2. Post-Deployment Testing**
+```bash
 # Health check
-sleep 10
-if curl -f http://localhost:3000/health > /dev/null 2>&1; then
-    echo "Rollback successful!"
-else
-    echo "Rollback failed health check!"
-    exit 1
-fi
+curl https://your-domain.railway.app/health
 
-echo "Rollback completed successfully!"
+# Database connection
+curl https://your-domain.railway.app/health/database
+
+# Slack integration test
+# Send a message to your Slack bot
 ```
 
-### **2. Database Rollback**
-
-#### **Migration Rollback**
-```typescript
-// backend/src/utils/migration-manager.ts
-export class MigrationManager {
-  private static instance: MigrationManager;
-  private migrations: Migration[] = [];
-  
-  static getInstance(): MigrationManager {
-    if (!MigrationManager.instance) {
-      MigrationManager.instance = new MigrationManager();
-    }
-    return MigrationManager.instance;
-  }
-  
-  async rollback(steps: number = 1): Promise<void> {
-    try {
-      const currentVersion = await this.getCurrentVersion();
-      const targetVersion = currentVersion - steps;
-      
-      if (targetVersion < 0) {
-        throw new Error('Cannot rollback beyond version 0');
-      }
-      
-      logger.info(`Rolling back from version ${currentVersion} to ${targetVersion}`);
-      
-      // Execute rollback migrations
-      for (let i = currentVersion; i > targetVersion; i--) {
-        const migration = this.migrations.find(m => m.version === i);
-        if (migration && migration.down) {
-          await migration.down();
-          logger.info(`Rolled back migration: ${migration.name}`);
-        }
-      }
-      
-      // Update version
-      await this.updateVersion(targetVersion);
-      
-      logger.info(`Rollback completed successfully to version ${targetVersion}`);
-      
-    } catch (error) {
-      logger.error('Rollback failed:', error);
-      throw new Error(`Rollback failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-  
-  private async getCurrentVersion(): Promise<number> {
-    // Implementation to get current migration version
-    return 0;
-  }
-  
-  private async updateVersion(version: number): Promise<void> {
-    // Implementation to update migration version
-  }
-}
-
-export interface Migration {
-  version: number;
-  name: string;
-  up: () => Promise<void>;
-  down: () => Promise<void>;
-}
+### **3. Integration Testing**
+```bash
+# Test complete workflow
+1. Install Slack app to workspace
+2. Send message to bot
+3. Verify OAuth flow works
+4. Test email sending
+5. Test calendar operations
 ```
 
-## 📋 **Deployment Checklist**
+## 🚨 **Troubleshooting**
 
-### **1. Pre-Deployment Validation**
+### **1. Common Issues**
 
-#### **Automated Pre-Deployment Checks**
-```typescript
-// backend/src/utils/deployment-validator.ts
-export class DeploymentValidator {
-  static async validatePreDeployment(): Promise<{ valid: boolean; errors: string[] }> {
-    const errors: string[] = [];
-    
-    try {
-      // 1. Configuration validation
-      const configValidator = ConfigValidator.getInstance();
-      const configResult = configValidator.validateConfiguration();
-      if (!configResult.valid) {
-        errors.push(...configResult.errors);
-      }
-      
-      // 2. Test validation
-      if (!await this.runTests()) {
-        errors.push('Tests failed');
-      }
-      
-      // 3. Build validation
-      if (!await this.validateBuild()) {
-        errors.push('Build validation failed');
-      }
-      
-      // 4. Security validation
-      if (!await this.validateSecurity()) {
-        errors.push('Security validation failed');
-      }
-      
-      // 5. Performance validation
-      if (!await this.validatePerformance()) {
-        errors.push('Performance validation failed');
-      }
-      
-    } catch (error) {
-      errors.push(`Deployment validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-    
-    return {
-      valid: errors.length === 0,
-      errors
-    };
-  }
-  
-  private static async runTests(): Promise<boolean> {
-    try {
-      // Run test suite
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      await execAsync('npm run test:coverage');
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-  
-  private static async validateBuild(): Promise<boolean> {
-    try {
-      // Validate build output
-      const fs = require('fs');
-      const path = require('path');
-      
-      const distPath = path.join(__dirname, '../../dist');
-      if (!fs.existsSync(distPath)) {
-        return false;
-      }
-      
-      const indexFile = path.join(distPath, 'index.js');
-      if (!fs.existsSync(indexFile)) {
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-  
-  private static async validateSecurity(): Promise<boolean> {
-    try {
-      // Security checks
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      // Run security audit
-      await execAsync('npm audit --audit-level=high');
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-  
-  private static async validatePerformance(): Promise<boolean> {
-    try {
-      // Performance benchmarks
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
-      const execAsync = promisify(exec);
-      
-      await execAsync('npm run test:performance');
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
-}
+#### **Database Connection Failed**
+```bash
+# Check DATABASE_URL format
+echo $DATABASE_URL
+
+# Test connection
+npm run db:test
+
+# Check Railway database status
+# Go to Railway dashboard → Database → Status
 ```
 
-This comprehensive deployment and configuration strategy ensures secure, reliable, and scalable deployments while maintaining the architectural integrity established in development.
+#### **Slack Events Not Working**
+```bash
+# Check Slack app configuration
+# Verify request URL is correct
+# Check bot token permissions
+
+# Test endpoint
+curl -X POST https://your-domain.railway.app/slack/events \
+  -H "Content-Type: application/json" \
+  -d '{"type":"url_verification","challenge":"test"}'
+```
+
+#### **OAuth Flow Issues**
+```bash
+# Check redirect URI configuration
+# Verify Google OAuth settings
+# Check Slack OAuth settings
+
+# Test OAuth endpoint
+curl https://your-domain.railway.app/slack/oauth/authorize
+```
+
+### **2. Log Analysis**
+```bash
+# View Railway logs
+# Go to Railway dashboard → Deployments → Logs
+
+# Common log patterns:
+# - Database connection errors
+# - Slack event processing errors
+# - OAuth token validation failures
+# - Rate limiting warnings
+```
+
+### **3. Performance Issues**
+```bash
+# Check Railway metrics
+# Go to Railway dashboard → Metrics
+
+# Common performance issues:
+# - Database connection pool exhaustion
+# - Memory leaks in session management
+# - Slow external API calls
+# - Rate limiting from Google/Slack APIs
+```
+
+## 📈 **Scaling Considerations**
+
+### **1. Horizontal Scaling**
+- **Railway auto-scaling**: Automatically scales based on load
+- **Database scaling**: Upgrade PostgreSQL plan as needed
+- **CDN**: Consider Cloudflare for static assets
+
+### **2. Performance Optimization**
+- **Database indexing**: Monitor query performance
+- **Caching**: Implement Redis for session caching
+- **Connection pooling**: Optimize database connections
+- **Rate limiting**: Prevent API abuse
+
+### **3. Cost Optimization**
+- **Railway pricing**: Monitor usage and costs
+- **Database optimization**: Clean up unused data
+- **API usage**: Monitor Google and OpenAI API costs
+
+## 📚 **Deployment Checklist**
+
+### **Pre-Deployment**
+- [ ] All tests passing
+- [ ] TypeScript compilation successful
+- [ ] Environment variables configured
+- [ ] Database schema ready
+- [ ] Slack app configured
+
+### **Deployment**
+- [ ] Railway project created
+- [ ] Database provisioned
+- [ ] Backend deployed
+- [ ] Health checks passing
+- [ ] Slack app installed
+
+### **Post-Deployment**
+- [ ] OAuth flow tested
+- [ ] Email functionality verified
+- [ ] Calendar operations tested
+- [ ] Error handling validated
+- [ ] Monitoring configured
+
+### **Production Readiness**
+- [ ] SSL certificates active
+- [ ] Rate limiting configured
+- [ ] Logging and monitoring active
+- [ ] Backup strategy implemented
+- [ ] Security review completed
+
+This deployment guide provides comprehensive instructions for deploying the AI Assistant Platform to production with proper security, monitoring, and scaling considerations.

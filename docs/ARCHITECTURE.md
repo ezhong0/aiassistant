@@ -13,7 +13,7 @@ This document establishes the **architectural boundaries** that AI development m
 │                 │    │                 │    │                 │
 │ • Slack Bot     │◄──►│ • Express       │◄──►│ • Google APIs   │
 │ • Events        │    │ • TypeScript    │    │ • OpenAI API    │
-│ • Commands      │    │ • Middleware    │    │ • Tavily API    │
+│ • Commands      │    │ • Middleware   │    │ • Tavily API    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                               │
                               ▼
@@ -26,6 +26,16 @@ This document establishes the **architectural boundaries** that AI development m
                        │   Agents        │
                        │ • Tool Executor │
                        └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │ PostgreSQL      │
+                       │ Database        │
+                       │                 │
+                       │ • Sessions      │
+                       │ • OAuth Tokens  │
+                       │ • Slack Data   │
+                       └─────────────────┘
 ```
 
 ### **Core Architectural Layers**
@@ -35,6 +45,7 @@ This document establishes the **architectural boundaries** that AI development m
 - **Technology**: Slack Bolt SDK with Express integration
 - **Boundaries**: Event handling, message routing, response formatting
 - **Key Difference**: Stateless interface layer, not a service
+- **Location**: `src/interfaces/slack.interface.ts`
 
 #### **2. API Layer (Backend)**
 - **Responsibility**: HTTP interface and request handling
@@ -50,6 +61,11 @@ This document establishes the **architectural boundaries** that AI development m
 - **Responsibility**: AI-powered task execution and routing
 - **Technology**: Plugin-based agent system
 - **Boundaries**: Tool execution, context management, workflow orchestration
+
+#### **5. Data Layer**
+- **Responsibility**: Persistent data storage and retrieval
+- **Technology**: PostgreSQL with connection pooling
+- **Boundaries**: Session management, OAuth token storage, Slack workspace data
 
 ## 🔧 **Core Components**
 
@@ -81,7 +97,7 @@ export enum ServiceState {
 }
 ```
 
-#### **Interface Layer Initialization**
+#### **Interface Layer Pattern**
 ```typescript
 // Interface layers are initialized differently - they don't go through service manager
 const slackInterface = new SlackInterface(serviceManager, slackConfig);
@@ -94,446 +110,290 @@ app.use('/slack', slackInterface.router);
 #### **Dependency Injection Pattern**
 ```typescript
 // Services declare their dependencies
-serviceManager.registerService('gmailService', gmailService, {
-  dependencies: ['authService'],  // Must initialize after authService
-  priority: 50,                  // Lower number = higher priority
-  autoStart: true                // Start automatically
+serviceManager.registerService('databaseService', databaseService, {
+  dependencies: [],           // No dependencies
+  priority: 5,               // Highest priority (initialize first)
+  autoStart: true            // Start automatically
+});
+
+serviceManager.registerService('sessionService', sessionService, {
+  dependencies: ['databaseService'],  // Must initialize after databaseService
+  priority: 10,                       // Lower number = higher priority
+  autoStart: true                     // Start automatically
 });
 ```
 
-### **2. Service vs. Interface Layer Architecture**
+### **2. Multi-Agent System**
 
-#### **Core Services (Stateful, Long-Running)**
+#### **Agent Architecture**
 ```typescript
-// These are true services that maintain state and provide functionality
-- SessionService: Manages user sessions and conversation context
-- AuthService: Handles authentication and authorization
-- GmailService: Manages Gmail API connections and operations
-- CalendarService: Manages Google Calendar API connections
-- ContactService: Manages Google Contacts API operations
-- OpenAIService: Manages OpenAI API connections and rate limiting
-- ToolExecutorService: Executes agent tool calls with context
-```
+// Base agent interface
+export abstract class BaseAgent {
+  abstract processUserInput(input: string, sessionId: string, userId: string): Promise<AgentResponse>;
+  abstract getCapabilities(): string[];
+  abstract getTools(): Tool[];
+}
 
-#### **Interface Layers (Stateless, Event-Driven)**
-```typescript
-// These are interface handlers that route requests to services
-- SlackInterface: Handles Slack events, routes to MasterAgent
-- WebInterface: Future web dashboard interface (planned)
-- APIRouter: REST API endpoint routing
-```
-
-#### **Key Architectural Distinction**
-- **Services**: Maintain state, provide business logic, are initialized and managed
-- **Interfaces**: Handle input/output, route requests, are stateless and event-driven
-
-### **3. Multi-Agent System**
-
-#### **Agent Factory Architecture**
-```typescript
-export class AgentFactory {
-  private static agents = new Map<string, BaseAgent>();
-  private static toolMetadata = new Map<string, ToolMetadata>();
-  
-  // Plugin-based agent registration
-  static registerAgentClass<TParams, TResult>(
-    name: string, 
-    AgentClass: new () => BaseAgent<TParams, TResult>
-  ): void
-  
-  // Tool discovery and routing
-  static findMatchingTools(userInput: string): ToolMetadata[]
+// Master agent for intelligent routing
+export class MasterAgent extends BaseAgent {
+  // Routes requests to appropriate specialized agents
+  // Uses OpenAI for intent recognition
+  // Falls back to rule-based routing
 }
 ```
 
-#### **Base Agent Framework**
+#### **Specialized Agents**
+- **Email Agent**: Gmail API integration with natural language processing
+- **Contact Agent**: Google Contacts with fuzzy matching and history analysis
+- **Calendar Agent**: Google Calendar integration with event management
+- **Think Agent**: Verification and reasoning for quality assurance
+- **Content Creator**: OpenAI-powered content generation
+- **Tavily Agent**: Web search and information retrieval
+
+### **3. Database Layer**
+
+#### **PostgreSQL Integration**
 ```typescript
-export abstract class BaseAgent<TParams = any, TResult = any> {
-  // Template method pattern for consistent execution
-  async execute(params: TParams, context: ToolExecutionContext): Promise<ToolResult> {
-    await this.beforeExecution(params, context);
-    this.validateParams(params);
-    const result = await this.processQuery(params, context);
-    await this.afterExecution(result, context);
-    return this.createSuccessResult(result, executionTime);
-  }
+// Database service for persistent storage
+export class DatabaseService extends BaseService {
+  private pool: Pool;
   
-  // Abstract methods for subclasses
-  protected abstract processQuery(params: TParams, context: ToolExecutionContext): Promise<TResult>;
+  // Session management
+  async createSession(sessionData: SessionData): Promise<void>
+  async getSession(sessionId: string): Promise<SessionData | null>
+  async updateSessionActivity(sessionId: string): Promise<void>
   
-  // Optional hooks for customization
-  protected async beforeExecution(params: TParams, context: ToolExecutionContext): Promise<void>
-  protected async afterExecution(result: TResult, context: ToolExecutionContext): Promise<void>
+  // OAuth token storage
+  async storeOAuthTokens(tokenData: OAuthTokenData): Promise<void>
+  async getOAuthTokens(sessionId: string): Promise<OAuthTokenData | null>
+  
+  // Slack data storage
+  async storeSlackWorkspace(workspaceData: SlackWorkspaceData): Promise<void>
+  async storeSlackUser(userData: SlackUserData): Promise<void>
 }
 ```
 
-#### **Agent Orchestration Flow**
+#### **Database Schema**
+```sql
+-- Sessions table
+CREATE TABLE sessions (
+  session_id VARCHAR(255) PRIMARY KEY,
+  user_id VARCHAR(255),
+  conversation_history JSONB,
+  tool_calls JSONB,
+  tool_results JSONB,
+  pending_actions JSONB,
+  oauth_tokens JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP
+);
+
+-- OAuth tokens table
+CREATE TABLE oauth_tokens (
+  session_id VARCHAR(255) PRIMARY KEY,
+  access_token TEXT,
+  refresh_token TEXT,
+  expires_at TIMESTAMP,
+  token_type VARCHAR(50),
+  scope TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Slack workspaces table
+CREATE TABLE slack_workspaces (
+  team_id VARCHAR(255) PRIMARY KEY,
+  team_name VARCHAR(255),
+  access_token TEXT,
+  bot_user_id VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Slack users table
+CREATE TABLE slack_users (
+  slack_user_id VARCHAR(255),
+  team_id VARCHAR(255),
+  google_user_id VARCHAR(255),
+  access_token TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (slack_user_id, team_id)
+);
+```
+
+## 🏗️ **Architectural Patterns**
+
+### **1. Interface vs Service Pattern**
+
+#### **Key Distinction**
+- **Services**: Maintain state, provide business logic, go through service manager
+- **Interfaces**: Handle input/output, route to services, don't maintain state
+
+#### **Slack Interface Implementation**
 ```typescript
-// Master Agent determines workflow
-const toolCalls = [
-  {
-    name: 'contactAgent',
-    parameters: { query: 'get contact information for John' }
-  },
-  {
-    name: 'emailAgent', 
-    parameters: { query: 'send email to John about quarterly review meeting' }
-  },
-  {
-    name: 'Think',
-    parameters: { query: 'Verify correct steps were taken' }
+export class SlackInterface {
+  private serviceManager: ServiceManager;
+  private router: Router;
+  
+  constructor(serviceManager: ServiceManager, config: SlackConfig) {
+    this.serviceManager = serviceManager;
+    this.router = Router();
+    this.setupRoutes();
   }
-];
-
-// Tool Executor runs agents sequentially
-const results = await toolExecutor.executeToolCalls(toolCalls, context);
+  
+  // Routes Slack events to appropriate services
+  // Doesn't maintain its own state
+  // Delegates business logic to services
+}
 ```
 
-### **3. Middleware Architecture**
+### **2. Dependency Injection Pattern**
 
-#### **Middleware Stack Order**
+#### **Service Registration Order**
+1. **Database Service** (priority: 5) - Foundation for all data operations
+2. **Session Service** (priority: 10) - Depends on database service
+3. **Auth Service** (priority: 15) - Authentication and OAuth
+4. **Google Services** (priority: 20) - Gmail, Calendar, Contacts
+5. **OpenAI Service** (priority: 25) - AI capabilities
+6. **Agent Services** (priority: 30) - Multi-agent system
+7. **Tool Executor** (priority: 35) - Tool execution framework
+
+### **3. Error Handling Pattern**
+
+#### **Layered Error Handling**
 ```typescript
-// Security first, then business logic
-app.use(requestTimeout(30000));           // Request timeout
-app.use(corsMiddleware);                  // CORS handling
-app.use(securityHeaders);                 // Security headers
-app.use(compressionMiddleware);           // Response compression
-app.use(requestSizeLimiter);              // Request size limits
-app.use(apiRateLimit);                    // Rate limiting
-app.use(requestLogger);                   // Request logging
-app.use(sanitizeRequest);                 // Input sanitization
+// Service layer errors
+try {
+  const result = await service.performOperation();
+  return result;
+} catch (error) {
+  this.logError('Service operation failed', error);
+  throw new ServiceError('Operation failed', error);
+}
 
-// Business routes
-app.use('/auth', authRoutes);
-app.use('/api/assistant', assistantRoutes);
-
-// Error handling (must be last)
-app.use(errorHandler);
+// Interface layer error handling
+try {
+  const response = await service.performOperation();
+  return formatResponse(response);
+} catch (error) {
+  return formatErrorResponse(error);
+}
 ```
 
-#### **Custom Middleware Pattern**
+### **4. Logging and Monitoring Pattern**
+
+#### **Structured Logging**
 ```typescript
-export const apiRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP',
-  standardHeaders: true,
-  legacyHeaders: false,
+// Consistent logging across all layers
+logger.info('Operation started', {
+  operation: 'sendEmail',
+  sessionId: sessionId,
+  userId: userId,
+  metadata: { recipient: recipient }
 });
-```
 
-## 📊 **Data Flow Patterns**
-
-### **1. Request Flow**
-```
-User Input → Slack Bot → Backend API → Middleware Stack → Route Handler → Service → Agent → External API
-```
-
-### **2. Response Flow**
-```
-External API → Agent → Service → Route Handler → Middleware Stack → Backend API → Slack Bot → User
-```
-
-### **3. Error Flow**
-```
-Error → Agent/Service → Route Handler → Error Middleware → Structured Response → Slack Bot → User
+logger.error('Operation failed', error, {
+  operation: 'sendEmail',
+  sessionId: sessionId,
+  errorCode: error.code
+});
 ```
 
 ## 🔒 **Security Architecture**
 
 ### **1. Authentication Flow**
-```typescript
-// OAuth 2.0 with Google
-1. Slack: Google OAuth → Access Token
-2. Slack → Backend: Token exchange
-3. Backend: Validate token with Google
-4. Backend: Issue session token
-5. Slack: Store session token securely
+```
+Slack OAuth → Google OAuth → JWT Token → Session Management
+     ↓              ↓              ↓              ↓
+  Workspace    User Account    API Access    Persistent
+  Installation   Access        Token        Storage
 ```
 
-### **2. Authorization Patterns**
-```typescript
-// Route protection with middleware
-app.use('/api/assistant', authMiddleware, assistantRoutes);
+### **2. Data Protection**
+- **OAuth Tokens**: Encrypted storage in PostgreSQL
+- **Session Data**: Secure session management with expiration
+- **API Keys**: Environment variable protection
+- **Rate Limiting**: Request throttling and abuse prevention
 
-// Service-level authorization
-class GmailService {
-  async sendEmail(params: SendEmailParams, accessToken: string): Promise<EmailResult> {
-    // Validate token and permissions
-    const user = await this.authService.validateToken(accessToken);
-    if (!user.hasGmailScope) {
-      throw new Error('Insufficient permissions');
-    }
-    // Proceed with email operation
-  }
-}
-```
+### **3. Security Middleware**
+- **Helmet**: Security headers
+- **CORS**: Cross-origin request protection
+- **Rate Limiting**: Request throttling
+- **Input Validation**: Request sanitization
 
-### **3. Security Headers**
-```typescript
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-    },
-  },
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  }
-}));
-```
+## 📊 **Performance Architecture**
+
+### **1. Database Optimization**
+- **Connection Pooling**: Efficient database connections
+- **Indexing**: Optimized query performance
+- **Caching**: Session and token caching
+- **Cleanup**: Automatic cleanup of expired data
+
+### **2. Service Performance**
+- **Async Operations**: Non-blocking service operations
+- **Timeout Management**: Request timeout handling
+- **Error Recovery**: Graceful degradation
+- **Resource Management**: Efficient resource utilization
 
 ## 🧪 **Testing Architecture**
 
-### **1. Test Structure**
-```
-tests/
-├── unit/                    # Unit tests for individual components
-├── integration/            # Integration tests for service interactions
-├── ai-behavior/           # AI behavior validation tests
-│   ├── context-continuity/    # Conversation context tests
-│   ├── decision-quality/      # Agent decision validation
-│   ├── error-recovery/        # Error handling tests
-│   ├── intent-recognition/    # Intent understanding tests
-│   └── workflow-validation/   # Multi-agent workflow tests
-└── fixtures/               # Test data and mocks
-```
+### **1. Testing Layers**
+- **Unit Tests**: Individual service and agent testing
+- **Integration Tests**: Service interaction testing
+- **End-to-End Tests**: Full workflow testing
+- **AI Behavior Tests**: Agent behavior validation
 
-### **2. Testing Patterns**
+### **2. Test Patterns**
 ```typescript
-// Service testing with dependency injection
-describe('GmailService', () => {
-  let gmailService: GmailService;
-  let mockAuthService: jest.Mocked<AuthService>;
+// Service testing pattern
+describe('EmailService', () => {
+  let service: EmailService;
+  let mockGmailService: jest.Mocked<GmailService>;
   
   beforeEach(() => {
-    mockAuthService = createMockAuthService();
-    gmailService = new GmailService(mockAuthService);
+    mockGmailService = createMockGmailService();
+    service = new EmailService(mockGmailService);
   });
   
-  it('should send email with valid token', async () => {
+  it('should send email successfully', async () => {
     // Test implementation
   });
 });
-
-// AI behavior testing
-describe('Master Agent Routing', () => {
-  it('should route email requests to emailAgent', async () => {
-    const response = await masterAgent.processUserInput(
-      'Send an email to john about the meeting',
-      'test-session-id'
-    );
-    
-    expect(response.toolCalls).toContainEqual(
-      expect.objectContaining({ name: 'emailAgent' })
-    );
-  });
-});
-```
-
-## 📈 **Performance Architecture**
-
-### **1. Caching Strategy**
-```typescript
-// Session-based caching
-class SessionService {
-  private sessions = new Map<string, SessionData>();
-  
-  getOrCreateSession(sessionId: string, userId?: string): SessionData {
-    if (this.sessions.has(sessionId)) {
-      return this.sessions.get(sessionId)!;
-    }
-    
-    const session = this.createNewSession(sessionId, userId);
-    this.sessions.set(sessionId, session);
-    return session;
-  }
-}
-```
-
-### **2. Async Processing**
-```typescript
-// Non-blocking agent execution
-class ToolExecutorService {
-  async executeToolCalls(toolCalls: ToolCall[], context: ToolExecutionContext): Promise<ToolResult[]> {
-    const results: ToolResult[] = [];
-    
-    for (const toolCall of toolCalls) {
-      try {
-        const result = await this.executeSingleTool(toolCall, context);
-        results.push(result);
-        
-        // Stop on critical failures
-        if (result.error && this.isCriticalTool(toolCall.name)) {
-          break;
-        }
-      } catch (error) {
-        results.push(this.createErrorResult(error, context));
-      }
-    }
-    
-    return results;
-  }
-}
-```
-
-## 🔄 **Error Handling Architecture**
-
-### **1. Error Hierarchy**
-```typescript
-// Structured error types
-export class BaseError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public statusCode: number = 500,
-    public details?: any
-  ) {
-    super(message);
-    this.name = this.constructor.name;
-  }
-}
-
-export class ValidationError extends BaseError {
-  constructor(message: string, details?: any) {
-    super(message, 'VALIDATION_ERROR', 400, details);
-  }
-}
-
-export class AuthenticationError extends BaseError {
-  constructor(message: string) {
-    super(message, 'AUTHENTICATION_ERROR', 401);
-  }
-}
-```
-
-### **2. Error Recovery Patterns**
-```typescript
-// Graceful degradation in Master Agent
-if (this.useOpenAI && this.openaiService) {
-  try {
-    const response = await this.openaiService.generateToolCalls(userInput, systemPrompt, sessionId);
-    toolCalls = response.toolCalls;
-    message = response.message;
-  } catch (openaiError) {
-    logger.warn('OpenAI failed, falling back to rule-based routing:', openaiError);
-    toolCalls = this.determineToolCalls(userInput);
-    message = this.generateResponse(userInput, toolCalls);
-  }
-}
 ```
 
 ## 🚀 **Deployment Architecture**
 
 ### **1. Environment Configuration**
-```typescript
-// Environment-based configuration
-class ConfigService {
-  get nodeEnv(): string {
-    return process.env.NODE_ENV || 'development';
-  }
-  
-  get port(): number {
-    return parseInt(process.env.PORT || '3000', 10);
-  }
-  
-  get isProduction(): boolean {
-    return this.nodeEnv === 'production';
-  }
-}
-```
+- **Development**: Local PostgreSQL, development OAuth apps
+- **Staging**: Staging database, staging OAuth apps
+- **Production**: Production PostgreSQL, production OAuth apps
 
-### **2. Health Monitoring**
-```typescript
-// Comprehensive health checks
-app.get('/health', async (req: Request, res: Response) => {
-  const health = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: configService.nodeEnv,
-    services: await serviceManager.getHealthStatus(),
-    agents: AgentFactory.getStats()
-  };
-  
-  const isHealthy = health.services.every(service => service.healthy);
-  res.status(isHealthy ? 200 : 503).json(health);
-});
-```
+### **2. Deployment Strategy**
+- **Railway**: Backend deployment with PostgreSQL
+- **Slack App Directory**: Official distribution
+- **Environment Variables**: Secure configuration management
+- **Health Checks**: Automated health monitoring
 
-## 📋 **Architecture Decision Records (ADRs)**
+## 📚 **Architecture Guidelines**
 
-### **ADR-001: Service Registry Pattern**
-- **Decision**: Use centralized service registry with dependency injection
-- **Rationale**: Enables proper lifecycle management and testing
-- **Consequences**: Services must implement IService interface
+### **1. AI Development Boundaries**
+- **Respect Service Boundaries**: Don't cross service boundaries
+- **Follow Interface Pattern**: Use interfaces for input/output
+- **Maintain Type Safety**: Use TypeScript interfaces
+- **Error Handling**: Implement proper error handling at each layer
 
-### **ADR-002: Plugin-Based Agent System**
-- **Decision**: Use factory pattern for agent registration and discovery
-- **Rationale**: Enables easy extension and testing of agent capabilities
-- **Consequences**: All agents must extend BaseAgent
+### **2. Code Quality Standards**
+- **TypeScript Strict Mode**: Enable strict type checking
+- **ESLint Rules**: Enforce architectural boundaries
+- **Test Coverage**: Maintain high test coverage
+- **Documentation**: Keep documentation updated
 
-### **ADR-003: Middleware-First Security**
-- **Decision**: Implement security at middleware level
-- **Rationale**: Centralized security enforcement and easier testing
-- **Consequences**: All routes automatically protected
+### **3. Performance Standards**
+- **Response Time**: < 2 seconds for most operations
+- **Database Queries**: Optimized and indexed
+- **Memory Usage**: Efficient resource utilization
+- **Error Rate**: < 1% error rate in production
 
-## 🔍 **Architecture Validation**
-
-### **1. Dependency Analysis**
-```bash
-# Check for circular dependencies
-npm run lint:circular
-
-# Validate architectural boundaries
-npm run test:architecture
-```
-
-### **2. Code Quality Gates**
-```bash
-# Type checking
-npm run typecheck
-
-# Linting
-npm run lint
-
-# Testing
-npm run test:coverage
-```
-
-### **3. Performance Monitoring**
-```bash
-# Load testing
-npm run test:load
-
-# Memory profiling
-npm run test:memory
-```
-
-## 📚 **AI Development Guidelines**
-
-### **1. Architecture Compliance**
-When implementing new features:
-1. **Review this architecture document** for relevant patterns
-2. **Follow established interfaces** and contracts
-3. **Maintain separation of concerns** between layers
-4. **Use dependency injection** for external dependencies
-5. **Implement comprehensive error handling**
-
-### **2. Extension Points**
-- **New Agents**: Extend BaseAgent and register with AgentFactory
-- **New Services**: Implement IService and register with ServiceManager
-- **New Middleware**: Add to middleware stack in correct order
-- **New Routes**: Follow established routing patterns
-
-### **3. Testing Requirements**
-- **Unit Tests**: Test individual components in isolation
-- **Integration Tests**: Test service interactions
-- **AI Behavior Tests**: Validate agent decision-making
-- **Performance Tests**: Ensure scalability requirements
-
-This architecture provides a solid foundation for AI-assisted development while maintaining code quality and system reliability.
+This architecture provides a solid foundation for AI-assisted development while maintaining code quality, performance, and maintainability.
