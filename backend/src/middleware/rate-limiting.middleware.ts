@@ -154,6 +154,12 @@ export const rateLimit = (options: RateLimitOptions) => {
         return;
       }
       
+      // TEMPORARY: Skip rate limiting for OAuth debugging
+      if (req.path.includes('/auth/')) {
+        next();
+        return;
+      }
+      
       const key = keyGenerator(req);
       const data = rateLimitStore.increment(key, windowMs);
       
