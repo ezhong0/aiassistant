@@ -1770,8 +1770,8 @@ export class SlackInterface {
         return false;
       }
 
-      // Check if tokens were stored recently (within the last 5 minutes)
-      const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+      // Check if tokens were stored recently (within the last 2 minutes)
+      const twoMinutesAgo = Date.now() - (2 * 60 * 1000);
       
       // Check multiple possible session locations
       const possibleSessionIds = [
@@ -1785,7 +1785,7 @@ export class SlackInterface {
           const session = (sessionService as any).getSession(sessionId);
           if (session?.oauthTokens?.google?.access_token && session.lastActivity) {
             const lastActivity = new Date(session.lastActivity).getTime();
-            if (lastActivity > fiveMinutesAgo) {
+            if (lastActivity > twoMinutesAgo) {
               return true;
             }
           }
