@@ -133,8 +133,8 @@ router.post('/text-command',
 
     const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
     
-          // Get session context from backend session service (includes pending actions)
-      const sessionContext = getSessionService().getSession(finalSessionId);
+              // Get session context from backend session service (includes pending actions)
+    const sessionContext = await getSessionService().getSession(finalSessionId);
     
     logger.info('Session context retrieved', {
       sessionId: finalSessionId,
@@ -409,7 +409,7 @@ router.get('/session/:id',
       });
 
               try {
-          const session = getSessionService().getSession(sessionId);
+          const session = await getSessionService().getSession(sessionId);
         
         if (!session) {
           return res.status(404).json({
@@ -530,7 +530,7 @@ router.delete('/session/:id',
               // First check if session exists and get it for authorization
         let session;
         try {
-          session = getSessionService().getSession(sessionId);
+          session = await getSessionService().getSession(sessionId);
       } catch (error) {
         if (error instanceof SessionExpiredError) {
           // Session already expired and cleaned up

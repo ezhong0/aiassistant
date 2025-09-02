@@ -7,6 +7,7 @@ import { GmailService } from './gmail.service';
 import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
 import { SlackFormatterService } from './slack-formatter.service';
+import { DatabaseService } from './database.service';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import logger from '../utils/logger';
 
@@ -41,9 +42,17 @@ export const initializeAllCoreServices = async (): Promise<void> => {
  */
 const registerCoreServices = async (): Promise<void> => {
   try {
-    // 1. SessionService - No dependencies, highest priority
+    // 0. DatabaseService - No dependencies, highest priority
+    const databaseService = new DatabaseService();
+    serviceManager.registerService('databaseService', databaseService, {
+      priority: 5,
+      autoStart: true
+    });
+
+    // 1. SessionService - Depends on databaseService
     const sessionService = new SessionService();
     serviceManager.registerService('sessionService', sessionService, {
+      dependencies: ['databaseService'],
       priority: 10,
       autoStart: true
     });
