@@ -55,18 +55,46 @@ open AssistantApp.xcodeproj
 
 ### **Development Scripts**
 ```bash
-# Backend development
-npm run dev          # Development server with hot reload
-npm run build        # TypeScript compilation
-npm run lint         # ESLint code quality check
-npm run format       # Prettier code formatting
-npm run test         # Run all tests
-npm run test:watch   # Watch mode for tests
+# Backend Development
+npm run dev            # Development server with nodemon and ts-node
+npm run build          # Production TypeScript compilation
+npm run build:dev      # Development TypeScript compilation
+npm run start          # Start production server from dist/
 
-# Backend development
-# Build: ⌘+B
-# Run: ⌘+R
-# Clean: ⌘+Shift+K
+# Code Quality
+npm run lint           # ESLint code quality check
+npm run lint:fix       # ESLint with automatic fixes
+npm run format         # Prettier code formatting
+npm run format:check   # Prettier format validation
+npm run typecheck      # TypeScript type checking
+
+# Testing Commands
+npm run test                    # Run all tests with Jest
+npm run test:watch             # Watch mode for all tests
+npm run test:coverage          # Generate test coverage report
+npm run test:unit              # Run unit tests only
+npm run test:integration       # Run integration tests
+npm run test:ai-behavior       # Run AI behavior tests
+npm run test:intent            # Run intent recognition tests
+npm run test:workflow          # Run workflow validation tests
+npm run test:context           # Run context continuity tests
+npm run test:errors            # Run error recovery tests
+npm run test:decisions         # Run decision quality tests
+npm run test:simple            # Run simple test suite
+npm run test:ai-fast           # Fast AI behavior tests
+npm run test:master            # Run master agent tests
+npm run test:comprehensive     # Run comprehensive test suite
+
+# Database Operations
+npm run migrate:tokens         # Migrate file tokens to database
+
+# Deployment
+npm run railway:build          # Railway production build
+npm run railway:start          # Railway production start
+npm run railway:deploy         # Deploy to Railway
+
+# Utilities
+npm run cli                    # Run CLI test script
 ```
 
 ## 📋 **Feature Development Workflow**
