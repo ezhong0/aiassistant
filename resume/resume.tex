@@ -5,7 +5,7 @@
 \documentclass[12pt, letterpaper]{russell}
 
 % Configure page margins with geometry
-\geometry{left=1.3cm, top=.6cm, right=1.3cm, bottom=0.5cm, footskip=.4cm}
+\geometry{left=1.1cm, top=.6cm, right=1.1cm, bottom=0.0cm, footskip=.4cm}
 
 % Specify the location of the included fonts
 \fontdir[fonts/]
@@ -37,34 +37,132 @@
 % Reduce space after the header before the content
 \vspace{-.6cm}
 
+\cvsection{Summary}
+\vspace{-0.05cm}
+\begin{cvsummary}
+Full-stack Software Engineer with 2+ years experience building AI-powered applications and scalable microservices. Expertise in React, Node.js, and Python with focus on secure REST APIs and production systems. Proven ability to architect and deliver enterprise-grade solutions from concept to deployment.
+\end{cvsummary}
+
 %-------------------------------------------------------------------------------
 %	SECTION TITLE
 %-------------------------------------------------------------------------------
-\cvsection{Education}
+\vspace{-0.05cm}
 
+\cvsection{Work Experience}
+\vspace{-0.2cm}
 %-------------------------------------------------------------------------------
 %	CONTENT
 %-------------------------------------------------------------------------------
 \begin{cventries}
 
 %---------------------------------------------------------
+\cventry
+  {Software Engineer} % Job title
+  {Integuru} % Organisation
+  {San Francisco, CA} % Location
+  {2024 -- Present} % Date(s)
+  {
+\begin{cvitems}
+  \item {Developed secure Python REST APIs at this early-stage startup, connecting distributed microservices to deliver key customer features quickly.}
+  \item {Designed and built automated billing system using OpenMeter and Stripe APIs, streamlining payment processing workflows.}
+  \item {Created responsive React dashboard displaying real-time OpenMeter analytics and usage data, reducing support inquiries.}
+  \item {Maintained Dockerized microservices and established CI/CD pipelines with GitHub Actions for fast and reliable deployments.}
+  \item {Worked closely with product and design teams to improve UI responsiveness and streamline workflows in this fast-paced environment.}
+\end{cvitems}
+}
+
+\vspace{0.1cm}
+
+%---------------------------------------------------------
   \cventry
-    {B.S. in Computer Science} % Degree
-    {University of California, Santa Barbara} % Institution
-    {Santa Barbara, CA} % Location
-    {Graduated 2023} % Date(s)
+    {Engineering Intern} % Job title
+    {Bill.com} % Organisation
+    {Palo Alto, CA} % Location
+    {Summer 2019} % Date(s)
     {
-      \begin{cvitems} % Description(s) bullet points
-        \item {\textbf{Relevant Coursework:} Machine Learning, Artificial Intelligence, Cryptography, Computer Architecture, Computer Communication Networks, Data Science, Database Design, Programming Languages, Object-Oriented Programming, Data Structures and Algorithms}
-        % \item {\textbf{GRE:} 333 (Verbal: 165, Quantitative: 168, Analytical Writing: 4.5)}
+\begin{cvitems}
+  \item {Led the adoption of Google Authenticator for multi-factor authentication on the Risk and Compliance team, designing better security architecture.}
+  \item {Built full-stack MFA integration including backend, frontend, and third-party systems, improving account security for over 100,000 users.}
+  \item {Connected Whitepages API to internal fraud detection systems, improving real-time analysis of thousands of high-risk transactions daily.}
+  \item {Built Java + MySQL backend and Angular/Node.js frontend with automated Jenkins CI/CD pipeline and Perforce version control.}
+\end{cvitems}
+    }
+
+\vspace{0.1cm}
+
+%---------------------------------------------------------
+  \cventry
+    {Engineering Intern} % Job title
+    {Stanford University} % Organisation
+    {Stanford, CA} % Location
+    {Summer 2018} % Date(s)
+    {
+      \begin{cvitems}
+        \item {Supported research efforts at the Stanford Functional Genomics Facility by improving software workflows for gene sequencing and analysis.}
+        \item {Designed and built custom humidifier hardware for laboratory environmental control systems, maintaining optimal conditions for genomic research.}
+      \end{cvitems}
+    }
+
+%---------------------------------------------------------
+\end{cventries}
+\vspace{-0.25cm}
+
+%-------------------------------------------------------------------------------
+%	SECTION TITLE
+%-------------------------------------------------------------------------------
+\cvsection{Projects}
+\vspace{-0.2cm}
+%-------------------------------------------------------------------------------
+%	CONTENT
+%-------------------------------------------------------------------------------
+\begin{cventries}
+%---------------------------------------------------------
+\cvprojectinline
+    {\href{https://github.com/ezhong0/assistantapp}{github.com/ezhong0/assistantapp} (Private)} % Link
+    {Enterprise AI Assistant Platform} % Project
+    {Node.js, TypeScript, Slack API, PostgreSQL, OpenAI} % Technology
+    {2025 - Present} % Date(s)
+    {
+      \begin{cvitems}
+        \item {Developed sophisticated Slack AI assistant with multi-agent orchestration and persistent PostgreSQL token storage for enterprise environments}
+        \item {Architected Express.js backend with TypeScript, implementing master agent with specialized sub-agents for Google Workspace integration}
+        \item {Integrated @slack/bolt framework with natural language processing for intelligent request routing and automated workflow management}
+        \item {Engineered comprehensive service architecture with dependency injection, OAuth 2.0 authentication, and Railway cloud deployment}
+        \item {Implemented enterprise-grade security features including JWT tokens, rate limiting, Helmet protection, and graceful error recovery systems}
+        \item {Built comprehensive test suite with AI behavior validation, achieving 80\%+ code coverage with Jest and extensive integration testing}
       \end{cvitems}
     }
 %---------------------------------------------------------
-
+\cvprojectinline
+    {\href{exceltoinvoice.com}{exceltoinvoice.com} \textbar{} \href{https://github.com/ezhong0/csvtoinvoice}{github.com/ezhong0/csvtoinvoice}} % Link
+    {Invoice Automation SaaS Platform} % Project
+    {Next.js, TypeScript, PostgreSQL} % Technology
+    {2025 - Present} % Date(s)
+    {
+      \begin{cvitems}
+        \item {Developed full-stack SaaS application for automated PDF invoice generation from CSV data with intelligent column mapping and validation}
+        \item {Architected secure Supabase backend with PostgreSQL database, implementing RLS policies, JWT authentication, and multi-tenant data isolation}
+        \item {Created dynamic React/TypeScript components with drag-and-drop CSV upload, real-time data preview, and bulk invoice processing capabilities}
+        \item {Integrated Stripe API for secure payment processing, subscription management, webhook handling, and automated billing workflows}
+        \item {Implemented comprehensive user authentication, subscription tiers, and automated invoice generation with professional PDF formatting}
+      \end{cvitems}
+    }
+%---------------------------------------------------------
+    \cvprojectinline
+    {\href{https://ezhong0.github.io/pomodoro/}{ezhong0.github.io/pomodoro} \textbar{} \href{https://github.com/ezhong0/pomodoro}{github.com/ezhong0/pomodoro}} % Link
+    {Productivity Timer Progressive Web App} % Project
+    {React, PWA, Service Workers} % Technology
+    {2025} % Date(s)
+    {
+      \begin{cvitems}
+        \item {Built responsive Pomodoro timer with React hooks, progressive web app capabilities, and cross-platform installation support}
+        \item {Created mobile-first design with theme system, customizable durations, and offline functionality using service workers}
+      \end{cvitems}
+    }
 \end{cventries}
+\vspace{-0.15cm}
 
-\vspace{-0.3cm}
-
+%-------------------------------------------------------------------------------
 %-------------------------------------------------------------------------------
 %	SECTION TITLE
 %-------------------------------------------------------------------------------
@@ -73,7 +171,7 @@
 %-------------------------------------------------------------------------------
 %	CONTENT
 %-------------------------------------------------------------------------------
-\vspace{-0.3cm}
+\vspace{-0.45cm}
 
 %-------------------------------------------------------------------------------
 %	CONTENT
@@ -115,122 +213,29 @@
     {Jest, OAuth 2.0, Helmet, Rate Limiting, Zod} % Skills
 \end{cvskills}
 \end{minipage}
+\vspace{-0.3cm}
 
 %-------------------------------------------------------------------------------
 %	SECTION TITLE
 %-------------------------------------------------------------------------------
-\cvsection{Work Experience}
-
-%-------------------------------------------------------------------------------
-%	CONTENT
-%-------------------------------------------------------------------------------
-\begin{cventries}
-
-%---------------------------------------------------------
-\cventry
-  {Software Engineer} % Job title
-  {Integuru} % Organisation
-  {San Francisco, CA} % Location
-  {2024 -- Present} % Date(s)
-  {
-\begin{cvitems}
-  \item {Developed secure Python REST APIs at this early-stage startup, connecting distributed microservices to deliver key customer features quickly.}
-  \item {Designed and built automated billing system using OpenMeter and Stripe APIs, directly increasing company revenue.}
-  \item {Created responsive React dashboard displaying real-time OpenMeter analytics and usage data, reducing support inquiries.}
-  \item {Maintained Dockerized microservices and established CI/CD pipelines with GitHub Actions for fast and reliable deployments.}
-  \item {Worked closely with product and design teams to improve UI responsiveness and streamline workflows in this fast-paced environment.}
-\end{cvitems}
-}
-
-\vspace{0.1cm}
-
-%---------------------------------------------------------
-  \cventry
-    {Engineering Intern} % Job title
-    {Bill.com} % Organisation
-    {Palo Alto, CA} % Location
-    {Summer 2019} % Date(s)
-    {
-\begin{cvitems}
-  \item {Led the adoption of Google Authenticator for multi-factor authentication on the Risk and Compliance team, designing better security architecture.}
-  \item {Built full-stack MFA integration including backend, frontend, and third-party systems, improving account security for over 100,000 users.}
-  \item {Connected Whitepages API to internal fraud detection systems, improving real-time analysis of thousands of high-risk transactions daily.}
-  \item {Built Java + MySQL backend and Angular/Node.js frontend with automated Jenkins CI/CD pipeline and Perforce version control.}
-\end{cvitems}
-    }
-
-\vspace{0.1cm}
-
-%---------------------------------------------------------
-  \cventry
-    {Engineering Intern} % Job title
-    {Stanford University} % Organisation
-    {Stanford, CA} % Location
-    {Summer 2018} % Date(s)
-    {
-      \begin{cvitems}
-        \item {Supported research efforts at the Stanford Functional Genomics Facility by improving software workflows for gene sequencing and analysis.}
-        \item {Designed and built custom humidifier hardware for laboratory environmental control systems, maintaining optimal conditions for genomic research.}
-      \end{cvitems}
-    }
-
-%---------------------------------------------------------
-\end{cventries}
-
-%-------------------------------------------------------------------------------
-%	SECTION TITLE
-%-------------------------------------------------------------------------------
-\cvsection{Projects}
+\cvsection{Education}
 \vspace{-0.2cm}
+
 %-------------------------------------------------------------------------------
 %	CONTENT
 %-------------------------------------------------------------------------------
 \begin{cventries}
+
 %---------------------------------------------------------
-    \cvprojectinline
-    {\href{https://github.com/ezhong0/assistantapp}{github.com/ezhong0/assistantapp} (Private)} % Link
-    {Enterprise AI Assistant Platform} % Project
-    {Node.js, TypeScript, Slack API, PostgreSQL, OpenAI} % Technology
-    {2025} % Date(s)
-    {
-      \begin{cvitems}
-        \item {Built sophisticated Slack AI assistant with multi-agent orchestration and persistent PostgreSQL token storage for enterprise use}
-        \item {Designed Express.js backend with TypeScript, implementing master agent with specialized sub-agents for Gmail, Calendar, and Google Contacts}
-        \item {Integrated @slack/bolt framework with natural language processing for intelligent request routing and workflow automation}
-        \item {Created comprehensive service architecture with dependency injection, OAuth 2.0 authentication, and Railway deployment}
-        \item {Implemented enterprise security features including JWT tokens, rate limiting, Helmet protection, and graceful error recovery}
-        \item {Built extensive test suite with AI behavior validation, achieving 80\%+ code coverage with Jest and comprehensive integration testing}
-      \end{cvitems}
-    }
+  \cventry
+    {B.S. in Computer Science} % Degree
+    {University of California, Santa Barbara} % Institution
+    {Santa Barbara, CA} % Location
+    {Graduated 2023} % Date(s)
+    { }
+
 %---------------------------------------------------------
-    \cvprojectinline
-    {\href{exceltoinvoice.com}{exceltoinvoice.com} \textbar{} \href{https://github.com/ezhong0/csvtoinvoice}{github.com/ezhong0/csvtoinvoice}} % Link
-    {Invoice Automation SaaS Platform} % Project
-    {Next.js, TypeScript, PostgreSQL} % Technology
-    {2025 - Present} % Date(s)
-    {
-      \begin{cvitems}
-        \item {Built full-stack SaaS application for automated PDF invoice generation from CSV data with smart column mapping}
-        \item {Designed secure Supabase backend with PostgreSQL database, using RLS policies, JWT authentication, and multi-tenant isolation}
-        \item {Created dynamic React/TypeScript components with drag-and-drop CSV upload, real-time data preview, and bulk invoice processing}
-        \item {Connected Stripe API for secure payment processing, subscription management, webhook handling, and automated billing}
-        \item {Reached 95\% user retention rate with 200+ active users generating thousands of professional invoices monthly across multiple industries}
-      \end{cvitems}
-    }
-%---------------------------------------------------------
-\vspace{0.2cm}
-    \cvprojectinline
-    {\href{https://ezhong0.github.io/pomodoro/}{ezhong0.github.io/pomodoro} \textbar{} \href{https://github.com/ezhong0/pomodoro}{github.com/ezhong0/pomodoro}} % Link
-    {Productivity Timer Progressive Web App} % Project
-    {React, PWA, Service Workers} % Technology
-    {2025} % Date(s)
-    {
-      \begin{cvitems}
-        \item {Built responsive Pomodoro timer with React hooks, progressive web app capabilities, and cross-platform installation support}
-        \item {Created mobile-first design with theme system, customizable durations, and offline functionality using service workers}
-      \end{cvitems}
-    }
+
 \end{cventries}
 
-%-------------------------------------------------------------------------------
 \end{document}

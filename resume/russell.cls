@@ -745,6 +745,17 @@
   \vspace{-4.0mm}
 }
 
+% Define an environment for summary text
+\newenvironment{cvsummary}{%
+  \vspace{\acvSectionContentTopSkip}
+  \vspace{-2.0mm}
+  \begin{justify}
+  \paragraphstyle
+}{%
+  \end{justify}
+  \vspace{-2.0mm}
+}
+
 
 %-------------------------------------------------------------------------------
 %                Commands for elements of Cover Letter
