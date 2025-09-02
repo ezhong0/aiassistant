@@ -9,7 +9,7 @@ export interface DatabaseConfig {
   database: string;
   user: string;
   password: string;
-  ssl?: boolean;
+  ssl?: boolean | { rejectUnauthorized: boolean };
   max?: number;
   idleTimeoutMillis?: number;
   connectionTimeoutMillis?: number;
@@ -73,7 +73,9 @@ export class DatabaseService extends BaseService {
         database: url.pathname.slice(1), // Remove leading slash
         user: url.username,
         password: url.password,
-        ssl: url.protocol === 'postgresql:',
+        ssl: {
+          rejectUnauthorized: false // Allow self-signed certificates for Railway
+        },
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000
@@ -86,7 +88,7 @@ export class DatabaseService extends BaseService {
         database: process.env.DB_NAME || 'assistantapp',
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || '',
-        ssl: process.env.DB_SSL === 'true',
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
         max: parseInt(process.env.DB_MAX_CONNECTIONS || '20'),
         idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
         connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000')
@@ -104,7 +106,7 @@ export class DatabaseService extends BaseService {
         port: this.config.port,
         database: this.config.database,
         user: this.config.user,
-        ssl: this.config.ssl
+        ssl: typeof this.config.ssl === 'object' ? 'rejectUnauthorized: false' : this.config.ssl
       });
 
       this.pool = new Pool(this.config);
