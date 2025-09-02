@@ -160,6 +160,16 @@ export class SlackInterface {
           return;
         }
 
+        // Check for duplicate messages to prevent multiple executions
+        const isDuplicate = await this.isDuplicateMessage(message, context);
+        if (isDuplicate) {
+          logger.info('Skipping duplicate app mention processing', {
+            userId: context.userId,
+            message: message.substring(0, 100)
+          });
+          return;
+        }
+
         await this.handleSlackEvent(
           message,
           context,
@@ -202,6 +212,16 @@ export class SlackInterface {
             return;
           }
 
+          // Check for duplicate messages to prevent multiple executions
+          const isDuplicate = await this.isDuplicateMessage(messageText, context);
+          if (isDuplicate) {
+            logger.info('Skipping duplicate direct message processing', {
+              userId: context.userId,
+              message: messageText.substring(0, 100)
+            });
+            return;
+          }
+
           // Welcome first-time users
           if (this.isFirstTimeUser(context)) {
             await this.sendWelcomeMessage(say, context);
@@ -221,13 +241,9 @@ export class SlackInterface {
             if (!hasOAuth) {
               await this.sendOAuthRequiredMessage(say, context);
               return; // Don't process the request without OAuth
-            } else {
-              // User has OAuth tokens, check if they recently completed authentication
-              const isRecentlyConnected = await this.isRecentlyConnected(context);
-              if (isRecentlyConnected) {
-                await this.sendOAuthSuccessMessage(say, context);
-              }
             }
+            // Note: Removed the duplicate OAuth success message check here
+            // It will be handled in handleSlackEvent to ensure proper thread context
           }
 
           await this.handleSlackEvent(
@@ -966,6 +982,16 @@ export class SlackInterface {
         return;
       }
 
+      // Check for duplicate messages to prevent multiple executions
+      const isDuplicate = await this.isDuplicateMessage(message, context);
+      if (isDuplicate) {
+        logger.info('Skipping duplicate message processing', {
+          userId: context.userId,
+          message: message.substring(0, 100)
+        });
+        return;
+      }
+
       // Early detection of email-related requests for better OAuth experience
       const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
       const isEmailRelated = emailKeywords.some(keyword => 
@@ -983,22 +1009,13 @@ export class SlackInterface {
           await this.sendOAuthRequiredMessage(slackHandlers.say, context, slackHandlers.thread_ts);
           return;
         } else {
-          // User has OAuth tokens, send a helpful message
-          logger.info('Email-related request detected with OAuth tokens available', { 
-            userId: context.userId,
-            message: message.substring(0, 100)
-          });
-          
-          // Check if this is the first time using OAuth tokens (recently connected)
+          // User has OAuth tokens, check if they recently completed authentication
           const isRecentlyConnected = await this.isRecentlyConnected(context);
           if (isRecentlyConnected) {
+            // Send OAuth success message in the current thread context
             await this.sendOAuthSuccessMessage(slackHandlers.say, context, slackHandlers.thread_ts);
-          } else {
-            // Send a brief confirmation that OAuth is available
-            await slackHandlers.say({
-              text: '✅ *Gmail Connected*\n\nI can see your Gmail account is connected. Processing your email request...',
-              thread_ts: slackHandlers.thread_ts
-            });
+            // Don't continue processing - let user send their request again
+            return;
           }
         }
       }
@@ -1711,6 +1728,21 @@ export class SlackInterface {
    */
   private async sendOAuthSuccessMessage(say: any, slackContext: SlackContext, threadTs?: string): Promise<void> {
     try {
+      // Only show this message if we haven't shown it recently for this user
+      const successMessageKey = `oauth_success_${slackContext.userId}_${slackContext.teamId}`;
+      const hasShownSuccess = await this.checkIfSuccessMessageShown(successMessageKey);
+      
+      if (hasShownSuccess) {
+        logger.debug('OAuth success message already shown recently, skipping', {
+          userId: slackContext.userId,
+          teamId: slackContext.teamId
+        });
+        return;
+      }
+
+      // Mark that we've shown the success message
+      await this.markSuccessMessageShown(successMessageKey);
+
       const successMessage = {
         text: "🎉 Gmail Successfully Connected!",
         blocks: [
@@ -1770,8 +1802,9 @@ export class SlackInterface {
         return false;
       }
 
-      // Check if tokens were stored recently (within the last 2 minutes)
-      const twoMinutesAgo = Date.now() - (2 * 60 * 1000);
+      // Check if tokens were stored recently (within the last 30 seconds)
+      // This prevents showing the success message multiple times
+      const thirtySecondsAgo = Date.now() - (30 * 1000);
       
       // Check multiple possible session locations (consistent with createOrGetSession logic)
       const possibleSessionIds = [];
@@ -1794,8 +1827,15 @@ export class SlackInterface {
           const session = await (sessionService as any).getSession(sessionId);
           if (session?.oauthTokens?.google?.access_token && session.lastActivity) {
             const lastActivity = new Date(session.lastActivity).getTime();
-            if (lastActivity > twoMinutesAgo) {
-              return true;
+            if (lastActivity > thirtySecondsAgo) {
+              // Check if we've already shown the success message for this session
+              const successMessageKey = `oauth_success_shown_${sessionId}`;
+              const hasShownSuccess = await this.checkIfSuccessMessageShown(successMessageKey);
+              if (!hasShownSuccess) {
+                // Mark that we've shown the success message
+                await this.markSuccessMessageShown(successMessageKey);
+                return true;
+              }
             }
           }
         } catch (error) {
@@ -1808,6 +1848,111 @@ export class SlackInterface {
       logger.error('Error checking if recently connected', { error, userId: slackContext.userId });
       return false;
     }
+  }
+
+  /**
+   * Check if we've already shown the OAuth success message for a session
+   */
+  private async checkIfSuccessMessageShown(successMessageKey: string): Promise<boolean> {
+    try {
+      const sessionService = this.serviceManager.getService('sessionService');
+      if (!sessionService) {
+        return false;
+      }
+
+      // Use a simple in-memory cache for this check
+      // In a production environment, you might want to use Redis or database
+      const cacheKey = `oauth_success_${successMessageKey}`;
+      const cached = (sessionService as any).getSession(cacheKey);
+      return !!cached;
+    } catch (error) {
+      logger.debug('Error checking if success message was shown', { error, successMessageKey });
+      return false;
+    }
+  }
+
+  /**
+   * Mark that we've shown the OAuth success message for a session
+   */
+  private async markSuccessMessageShown(successMessageKey: string): Promise<void> {
+    try {
+      const sessionService = this.serviceManager.getService('sessionService');
+      if (!sessionService) {
+        return;
+      }
+
+      // Store a simple flag to prevent duplicate messages
+      const cacheKey = `oauth_success_${successMessageKey}`;
+      await (sessionService as any).createOrUpdateSession(cacheKey, {
+        shown: true,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.debug('Error marking success message as shown', { error, successMessageKey });
+    }
+  }
+
+  /**
+   * Check if this is a duplicate message that was recently processed
+   */
+  private async isDuplicateMessage(message: string, context: SlackContext): Promise<boolean> {
+    try {
+      const sessionService = this.serviceManager.getService('sessionService');
+      if (!sessionService) {
+        return false;
+      }
+
+      // Create a hash of the message and context to identify duplicates
+      const messageHash = this.createMessageHash(message, context);
+      const cacheKey = `duplicate_check_${messageHash}`;
+      
+      // Check if we've processed this exact message recently (within last 10 seconds)
+      const tenSecondsAgo = Date.now() - (10 * 1000);
+      
+      try {
+        const cached = await (sessionService as any).getSession(cacheKey);
+        if (cached && cached.timestamp) {
+          const cachedTime = new Date(cached.timestamp).getTime();
+          if (cachedTime > tenSecondsAgo) {
+            logger.info('Duplicate message detected, skipping processing', {
+              messageHash,
+              userId: context.userId,
+              message: message.substring(0, 100)
+            });
+            return true;
+          }
+        }
+      } catch (error) {
+        // Cache miss, not a duplicate
+      }
+
+      // Mark this message as processed
+      await (sessionService as any).createOrUpdateSession(cacheKey, {
+        processed: true,
+        timestamp: new Date().toISOString(),
+        message: message.substring(0, 100) // Store first 100 chars for debugging
+      });
+
+      return false;
+    } catch (error) {
+      logger.debug('Error checking for duplicate message', { error, userId: context.userId });
+      return false;
+    }
+  }
+
+  /**
+   * Create a hash for message deduplication
+   */
+  private createMessageHash(message: string, context: SlackContext): string {
+    const content = `${message.trim().toLowerCase()}_${context.userId}_${context.channelId}`;
+    // Simple hash function - in production, use a proper hash library
+    let hash = 0;
+    for (let i = 0; i < content.length; i++) {
+      const char = content.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
   }
 
   /**
