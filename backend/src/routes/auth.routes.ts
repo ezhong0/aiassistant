@@ -502,6 +502,69 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
 });
 
 /**
+ * GET /auth/debug/oauth-validation
+ * Debug OAuth configuration vs. actual usage
+ */
+router.get('/debug/oauth-validation', async (req: Request, res: Response) => {
+  try {
+    const authService = getService<AuthService>('authService');
+    if (!authService) {
+      return res.status(500).json({ error: 'Auth service not available' });
+    }
+
+    // Generate a test OAuth URL to see what parameters we're using
+    const testScopes = ['openid', 'email', 'profile'];
+    const testState = JSON.stringify({ source: 'debug', timestamp: Date.now() });
+    const authUrl = authService.generateAuthUrl(testScopes, testState);
+
+    // Parse the URL to show the exact parameters
+    const url = new URL(authUrl);
+    const params = Object.fromEntries(url.searchParams.entries());
+
+    // Get config details
+    const { ENVIRONMENT } = require('../config/environment');
+
+    return res.json({
+      success: true,
+      message: 'OAuth configuration validation',
+      currentConfig: {
+        clientId: ENVIRONMENT.google.clientId ? ENVIRONMENT.google.clientId.substring(0, 20) + '...' : 'NOT SET',
+        redirectUri: ENVIRONMENT.google.redirectUri,
+        baseUrl: ENVIRONMENT.baseUrl,
+        environment: ENVIRONMENT.nodeEnv
+      },
+      generatedAuthUrl: {
+        fullUrl: authUrl,
+        host: url.host,
+        pathname: url.pathname,
+        parameters: params
+      },
+      expectedByGoogle: {
+        client_id: params.client_id || 'MISSING',
+        redirect_uri: params.redirect_uri || 'MISSING',
+        response_type: params.response_type || 'MISSING',
+        scope: params.scope || 'MISSING',
+        state: params.state ? 'Present' : 'Missing'
+      },
+      validation: {
+        clientIdMatch: ENVIRONMENT.google.clientId === params.client_id,
+        redirectUriMatch: ENVIRONMENT.google.redirectUri === params.redirect_uri,
+        responseTypeCorrect: params.response_type === 'code',
+        scopesIncludeOpenId: (params.scope || '').includes('openid'),
+        scopesIncludeEmail: (params.scope || '').includes('email'),
+        scopesIncludeProfile: (params.scope || '').includes('profile')
+      }
+    });
+  } catch (error: any) {
+    logger.error('Debug OAuth validation endpoint error:', error);
+    return res.status(500).json({ 
+      error: 'Debug endpoint failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * GET /auth/debug/sessions
  * Debug endpoint to check session and OAuth token status
  */

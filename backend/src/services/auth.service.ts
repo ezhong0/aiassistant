@@ -94,7 +94,15 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
-      this.logDebug('Exchanging authorization code for tokens');
+      this.logDebug('Exchanging authorization code for tokens', {
+        codeLength: code.length,
+        codePrefix: code.substring(0, 20) + '...',
+        clientConfig: {
+          clientId: this.config.googleClientId.substring(0, 20) + '...',
+          redirectUri: this.config.googleRedirectUri,
+          hasClientSecret: !!this.config.googleClientSecret
+        }
+      });
       
       const { tokens } = await this.oauth2Client.getToken(code);
       
@@ -112,11 +120,23 @@ export class AuthService extends BaseService {
 
       this.logInfo('Successfully exchanged code for tokens', {
         hasRefreshToken: !!googleTokens.refresh_token,
-        expiresIn: googleTokens.expires_in
+        expiresIn: googleTokens.expires_in,
+        tokenLength: googleTokens.access_token.length,
+        scope: googleTokens.scope
       });
 
       return googleTokens;
-    } catch (error) {
+    } catch (error: any) {
+      this.logError('Token exchange failed with detailed error', {
+        error: error.message,
+        errorCode: error.code,
+        errorDetails: error.response?.data,
+        status: error.response?.status,
+        clientConfig: {
+          clientId: this.config.googleClientId.substring(0, 20) + '...',
+          redirectUri: this.config.googleRedirectUri
+        }
+      });
       this.handleError(error, 'exchangeCodeForTokens');
     }
   }
