@@ -136,30 +136,12 @@ CREATE TABLE slack_users (
 - **Responsibility**: User session lifecycle, conversation history, OAuth token management
 - **Priority**: 10 (depends on DatabaseService)
 
-### **3. SessionMigrationService**
+### **3. SessionService**
 
 #### **Purpose**
-- **Primary**: Migration of session data to simplified format
-- **Responsibility**: Convert existing session data structures, handle legacy data
-- **Priority**: 12 (depends on DatabaseService)
-- **Documentation**: See `docs/SESSION_SIMPLIFICATION.md` for complete implementation details
-
-#### **Key Features**
-```typescript
-export class SessionMigrationService extends BaseService {
-  // Session migration operations
-  async migrateSession(sessionId: string): Promise<boolean>
-  async migrateAllSessions(): Promise<number>
-  async checkMigrationStatus(): Promise<MigrationStatus>
-  
-  // Data validation
-  async validateSessionData(sessionId: string): Promise<ValidationResult>
-  private isLegacySession(session: any): boolean
-  private convertToSimplifiedFormat(session: any): SimplifiedSession
-}
-```
-
-### **2. SessionService (Unified Session Management)**
+- **Primary**: Session management and conversation context
+- **Responsibility**: User session lifecycle, conversation history, OAuth token management
+- **Priority**: 10 (depends on DatabaseService)
 
 #### **Purpose**
 - **Primary**: Unified session management for all platforms (web, Slack, etc.)
@@ -403,7 +385,7 @@ DatabaseService (5)
     ↓
 SessionService (10)
     ↓
-SessionMigrationService (12) ← DatabaseService
+SessionService (10) ← DatabaseService
     ↓
 TokenManager (13) ← SessionService
     ↓

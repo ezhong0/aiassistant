@@ -4,6 +4,7 @@ import { CacheService } from './cache.service';
 import { CryptoUtil } from '../utils/crypto.util';
 import { AuditLogger } from '../utils/audit-logger';
 import logger from '../utils/logger';
+import { serviceManager } from './service-manager';
 
 export interface GoogleTokens {
   access_token: string;
@@ -49,11 +50,8 @@ export class TokenStorageService extends BaseService {
     this.logInfo('Starting TokenStorageService initialization...');
     
     // Get services from service manager
-    const serviceManager = (this as any).serviceManager;
-    if (serviceManager) {
-      this.databaseService = serviceManager.getService('databaseService') as DatabaseService;
-      this.cacheService = serviceManager.getService('cacheService') as CacheService;
-    }
+    this.databaseService = serviceManager.getService('databaseService') as DatabaseService;
+    this.cacheService = serviceManager.getService('cacheService') as CacheService;
     
     if (!this.databaseService) {
       throw new Error('TokenStorageService requires DatabaseService');
