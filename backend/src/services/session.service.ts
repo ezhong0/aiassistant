@@ -12,10 +12,12 @@ import logger from '../utils/logger';
 import { CryptoUtil } from '../utils/crypto.util';
 import { AuditLogger } from '../utils/audit-logger';
 import { DatabaseService, SessionData, OAuthTokenData } from './database.service';
+import { FileTokenStorage, FileTokenData } from '../utils/file-token-storage';
 
 export class SessionService extends BaseService {
   private databaseService: DatabaseService | null = null;
   private cacheService: CacheService | null = null;
+  private fileTokenStorage: FileTokenStorage;
   private sessions: Map<string, SessionContext> | null = null;
   private readonly defaultTimeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes;
   private cleanupInterval: NodeJS.Timeout | null = null;
@@ -26,6 +28,7 @@ export class SessionService extends BaseService {
   constructor(timeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes) {
     super('SessionService');
     this.defaultTimeoutMinutes = timeoutMinutes;
+    this.fileTokenStorage = new FileTokenStorage();
   }
 
   /**
@@ -463,7 +466,7 @@ export class SessionService extends BaseService {
       return false;
     }
 
-    if (this.databaseService && tokens.google) {
+    if (this.databaseService && this.databaseService.isReady() && tokens.google) {
       // Store Google tokens in database with encryption for sensitive data
       const expiresAt = tokens.google.expiry_date 
         ? new Date(tokens.google.expiry_date)
@@ -513,24 +516,58 @@ export class SessionService extends BaseService {
           tokenEncrypted: !!encryptedRefreshToken && encryptedRefreshToken !== tokens.google.refresh_token,
           storageType: 'database'
         });
+        return true;
       } catch (error) {
-        this.logError('❌ Failed to store OAuth tokens in database, falling back to memory', {
+        this.logError('❌ Failed to store OAuth tokens in database, falling back to file storage', {
           error: error instanceof Error ? error.message : 'Unknown error',
           sessionId,
           databaseService: this.databaseService.constructor.name,
           databaseState: this.databaseService.state
         });
-        
-        // Fallback to in-memory storage
-        if (!session.oauthTokens) {
-          session.oauthTokens = {};
-        }
-        session.oauthTokens.google = {
-          ...session.oauthTokens.google,
-          ...tokens.google
-        };
+        // Continue to file storage fallback below
       }
-    } else if (this.sessions) {
+    }
+    
+    // Database not available or failed - try file storage as fallback
+    if (tokens.google) {
+      const expiresAt = tokens.google.expiry_date 
+        ? new Date(tokens.google.expiry_date)
+        : new Date(Date.now() + (tokens.google.expires_in || 3600) * 1000);
+      
+      const fileTokenData: FileTokenData = {
+        sessionId,
+        accessToken: tokens.google.access_token,
+        refreshToken: tokens.google.refresh_token,
+        expiresAt: expiresAt.getTime(),
+        tokenType: tokens.google.token_type || 'Bearer',
+        scope: tokens.google.scope || '',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      
+      const fileStored = await this.fileTokenStorage.storeTokens(fileTokenData);
+      if (fileStored) {
+        this.logInfo('✅ Stored Google OAuth tokens in file system', { 
+          sessionId, 
+          hasRefreshToken: !!tokens.google.refresh_token,
+          expiresAt: expiresAt.toISOString(),
+          storageType: 'file'
+        });
+        
+        // Audit log file storage
+        AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', sessionId, session.userId, undefined, {
+          hasRefreshToken: !!tokens.google.refresh_token,
+          expiresAt: expiresAt.toISOString(),
+          storageType: 'file'
+        });
+        return true;
+      } else {
+        this.logError('❌ Failed to store OAuth tokens in file system, falling back to memory', { sessionId });
+      }
+    }
+    
+    // Final fallback to in-memory storage
+    if (this.sessions) {
       // Fallback to in-memory storage
       // Initialize oauthTokens if it doesn't exist
       if (!session.oauthTokens) {
@@ -590,8 +627,8 @@ export class SessionService extends BaseService {
   } | null> {
     this.assertReady();
     
-    if (this.databaseService) {
-      // Try to get from database first
+    // Try database first if available
+    if (this.databaseService && this.databaseService.isReady()) {
       try {
         const tokenData = await this.databaseService.getOAuthTokens(sessionId);
         if (tokenData) {
@@ -623,7 +660,8 @@ export class SessionService extends BaseService {
             hasAccessToken: !!tokenData.accessToken,
             hasRefreshToken: !!decryptedRefreshToken,
             expiresAt: tokenData.expiresAt.toISOString(),
-            decryptionRequired: tokenData.refreshToken !== decryptedRefreshToken
+            decryptionRequired: tokenData.refreshToken !== decryptedRefreshToken,
+            storageType: 'database'
           });
           
           return {
@@ -640,15 +678,56 @@ export class SessionService extends BaseService {
           this.logDebug('No OAuth tokens found in database', { sessionId });
         }
       } catch (error) {
-        this.logError('❌ Failed to retrieve OAuth tokens from database', {
+        this.logError('❌ Failed to retrieve OAuth tokens from database, trying file storage', {
           error: error instanceof Error ? error.message : 'Unknown error',
           sessionId,
           databaseService: this.databaseService.constructor.name,
           databaseState: this.databaseService.state
         });
       }
-      return null;
-    } else {
+    }
+    
+    // Try file storage as fallback
+    try {
+      const fileTokenData = await this.fileTokenStorage.getTokens(sessionId);
+      if (fileTokenData) {
+        this.logDebug('✅ Retrieved OAuth tokens from file storage', {
+          sessionId,
+          hasAccessToken: !!fileTokenData.accessToken,
+          hasRefreshToken: !!fileTokenData.refreshToken,
+          expiresAt: new Date(fileTokenData.expiresAt).toISOString()
+        });
+        
+        // Audit log file storage retrieval
+        AuditLogger.logOAuthEvent('OAUTH_TOKENS_RETRIEVED', sessionId, undefined, undefined, {
+          hasAccessToken: !!fileTokenData.accessToken,
+          hasRefreshToken: !!fileTokenData.refreshToken,
+          expiresAt: new Date(fileTokenData.expiresAt).toISOString(),
+          storageType: 'file'
+        });
+        
+        return {
+          google: {
+            access_token: fileTokenData.accessToken,
+            refresh_token: fileTokenData.refreshToken,
+            expires_in: Math.floor((fileTokenData.expiresAt - Date.now()) / 1000),
+            token_type: fileTokenData.tokenType,
+            scope: fileTokenData.scope,
+            expiry_date: fileTokenData.expiresAt
+          }
+        };
+      } else {
+        this.logDebug('No OAuth tokens found in file storage', { sessionId });
+      }
+    } catch (error) {
+      this.logError('❌ Failed to retrieve OAuth tokens from file storage', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        sessionId
+      });
+    }
+    
+    // Final fallback to in-memory storage
+    if (this.sessions) {
       // Fallback to in-memory storage
       this.logDebug('Using in-memory storage for OAuth tokens', { sessionId });
       const session = await this.getSession(sessionId);
@@ -657,6 +736,9 @@ export class SessionService extends BaseService {
       }
       return session.oauthTokens;
     }
+    
+    // No storage available
+    return null;
   }
 
     /**
