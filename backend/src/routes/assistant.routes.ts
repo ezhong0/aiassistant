@@ -37,21 +37,21 @@ const router = express.Router();
 // Apply logging middleware to all assistant routes
 router.use(assistantApiLogging);
 
+import { createMasterAgent } from '../config/agent-factory-init';
+
 // Initialize services
 let masterAgent: MasterAgent | null = null;
 
-// Initialize MasterAgent with OpenAI if available
+// Initialize MasterAgent with consistent configuration
 try {
   const openaiApiKey = process.env.OPENAI_API_KEY;
   if (openaiApiKey) {
-    masterAgent = new MasterAgent({
+    masterAgent = createMasterAgent({
       openaiApiKey,
       model: 'gpt-4o-mini'
     });
-    logger.info('MasterAgent initialized with OpenAI integration');
   } else {
-    masterAgent = new MasterAgent();
-    logger.info('MasterAgent initialized with rule-based routing only');
+    masterAgent = createMasterAgent();
   }
 } catch (error) {
   logger.error('Failed to initialize MasterAgent:', error);

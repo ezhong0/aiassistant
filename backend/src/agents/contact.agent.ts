@@ -276,5 +276,5 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   }
 }
 
-// Export singleton instance
-export const contactAgent = new ContactAgent();
+// Export the class for use with AgentFactory
+export { ContactAgent };

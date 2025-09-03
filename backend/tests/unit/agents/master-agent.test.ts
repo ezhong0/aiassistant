@@ -16,8 +16,8 @@ describe('MasterAgent', () => {
 
     describe('Tool routing (Unit)', () => {
       it('should handle basic routing logic without services', async () => {
-        const { MasterAgent } = await import('../../../src/agents/master.agent');
-        const masterAgent = new MasterAgent();
+        const { createMasterAgent } = await import('../../../src/config/agent-factory-init');
+        const masterAgent = createMasterAgent();
         
         // Test basic routing without full service initialization
         const sessionId = TestUtils.createTestSessionId('routing-unit');
@@ -32,8 +32,8 @@ describe('MasterAgent', () => {
       });
 
       it('should generate system prompt correctly', async () => {
-        const { MasterAgent } = await import('../../../src/agents/master.agent');
-        const masterAgent = new MasterAgent();
+        const { createMasterAgent } = await import('../../../src/config/agent-factory-init');
+        const masterAgent = createMasterAgent();
         
         const systemPrompt = masterAgent.getSystemPrompt();
         

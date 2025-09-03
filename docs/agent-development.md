@@ -602,4 +602,59 @@ Key migration steps:
 5. Remove manual error handling and logging
 6. Register with AgentFactory
 
+### Agent Creation Best Practices
+
+#### ✅ **Use AgentFactory for Agent Creation**
+```typescript
+// ✅ Correct - Use AgentFactory for tool agents
+const agent = AgentFactory.getAgent('emailAgent');
+const result = await AgentFactory.executeAgent('emailAgent', params, context);
+
+// ✅ Correct - Use createMasterAgent for orchestrator
+const masterAgent = createMasterAgent(config);
+```
+
+#### ❌ **Avoid Direct Instantiation**
+```typescript
+// ❌ Avoid - Direct instantiation
+const agent = new EmailAgent();
+
+// ❌ Avoid - Singleton exports
+export const emailAgent = new EmailAgent();
+```
+
+#### ✅ **Export Agent Classes**
+```typescript
+// ✅ Correct - Export the class
+export { EmailAgent };
+```
+
+#### ❌ **Don't Export Singleton Instances**
+```typescript
+// ❌ Avoid - Exporting singleton instances
+export const emailAgent = new EmailAgent();
+```
+
+### Session Management
+
+The system now uses a unified session management approach through `SessionService`:
+
+```typescript
+// ✅ Correct - Use SessionService for all session operations
+const sessionService = serviceManager.getService('sessionService') as SessionService;
+
+// Get or create session
+const session = await sessionService.getOrCreateSession(sessionId, userId);
+
+// Store OAuth tokens
+await sessionService.storeOAuthTokens(sessionId, tokens);
+
+// Get OAuth tokens
+const tokens = await sessionService.getOAuthTokens(sessionId);
+
+// Slack-specific session operations
+const slackSession = await sessionService.getSlackSession(teamId, userId);
+await sessionService.storeSlackOAuthTokens(teamId, userId, tokens);
+```
+
 The BaseAgent framework provides a solid foundation for scalable, maintainable agent development while dramatically reducing boilerplate code and improving consistency across the system.

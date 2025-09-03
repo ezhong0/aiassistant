@@ -8,7 +8,6 @@ import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
 import { SlackFormatterService } from './slack-formatter.service';
 import { DatabaseService } from './database.service';
-import { SlackSessionManager } from './slack-session-manager';
 import { TokenManager } from './token-manager';
 import { CacheService } from './cache.service';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -143,18 +142,10 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 9. SlackSessionManager - Depends on sessionService
-    const slackSessionManager = new SlackSessionManager(sessionService);
-    serviceManager.registerService('slackSessionManager', slackSessionManager, {
-      dependencies: ['sessionService'],
-      priority: 85,
-      autoStart: true
-    });
-
-    // 10. TokenManager - Depends on slackSessionManager and authService
-    const tokenManager = new TokenManager(slackSessionManager, authService);
+    // 9. TokenManager - Depends on sessionService and authService
+    const tokenManager = new TokenManager(sessionService, authService);
     serviceManager.registerService('tokenManager', tokenManager, {
-      dependencies: ['slackSessionManager', 'authService'],
+      dependencies: ['sessionService', 'authService'],
       priority: 90,
       autoStart: true
     });

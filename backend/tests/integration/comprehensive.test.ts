@@ -7,8 +7,8 @@ describe('MasterAgent Integration Tests', () => {
 
     it('should handle basic integration without full services', async () => {
       await TestUtils.runWithCleanup(async () => {
-        const { MasterAgent } = await import('../../src/agents/master.agent');
-        const masterAgent = new MasterAgent();
+        const { createMasterAgent } = await import('../../src/config/agent-factory-init');
+        const masterAgent = createMasterAgent();
         
         // Simple integration test without service dependencies
         const sessionId = TestUtils.createTestSessionId('integration-basic');
@@ -30,8 +30,8 @@ describe('MasterAgent Integration Tests', () => {
 
     it('should handle edge cases without services', async () => {
       await TestUtils.runWithCleanup(async () => {
-        const { MasterAgent } = await import('../../src/agents/master.agent');
-        const masterAgent = new MasterAgent();
+        const { createMasterAgent } = await import('../../src/config/agent-factory-init');
+        const masterAgent = createMasterAgent();
         
         // Test empty input
         const sessionId1 = TestUtils.createTestSessionId('edge-empty');
@@ -49,8 +49,8 @@ describe('MasterAgent Integration Tests', () => {
 
     it('should perform basic operations within reasonable time', async () => {
       await TestUtils.runWithCleanup(async () => {
-        const { MasterAgent } = await import('../../src/agents/master.agent');
-        const masterAgent = new MasterAgent();
+        const { createMasterAgent } = await import('../../src/config/agent-factory-init');
+        const masterAgent = createMasterAgent();
         
         const sessionId = TestUtils.createTestSessionId('performance');
         const startTime = Date.now();
