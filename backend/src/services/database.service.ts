@@ -543,6 +543,33 @@ export class DatabaseService extends BaseService {
   }
 
   /**
+   * Execute a raw SQL query (for optimization and maintenance)
+   */
+  async query(sql: string, params: any[] = []): Promise<QueryResult> {
+    const client = await this.getClient();
+    try {
+      logger.debug('Executing SQL query', { 
+        sql: sql.substring(0, 100) + (sql.length > 100 ? '...' : ''),
+        paramCount: params.length 
+      });
+      
+      const result = await client.query(sql, params);
+      
+      logger.debug('SQL query completed', { 
+        rowCount: result.rowCount,
+        commandType: result.command 
+      });
+      
+      return result;
+    } catch (error) {
+      logger.error('SQL query failed', { sql, params, error });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Get service health status
    */
   getHealth(): { healthy: boolean; details?: any } {

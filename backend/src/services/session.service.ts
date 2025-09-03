@@ -7,14 +7,19 @@ import {
 } from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config';
 import { BaseService } from './base-service';
+import { CacheService } from './cache.service';
 import logger from '../utils/logger';
 import { DatabaseService, SessionData, OAuthTokenData } from './database.service';
 
 export class SessionService extends BaseService {
   private databaseService: DatabaseService | null = null;
+  private cacheService: CacheService | null = null;
   private sessions: Map<string, SessionContext> | null = null;
   private readonly defaultTimeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes;
   private cleanupInterval: NodeJS.Timeout | null = null;
+  
+  // Cache TTL constants
+  private readonly SESSION_CACHE_TTL = 1800; // 30 minutes
 
   constructor(timeoutMinutes: number = EXECUTION_CONFIG.session.defaultTimeoutMinutes) {
     super('SessionService');
@@ -31,6 +36,7 @@ export class SessionService extends BaseService {
     const serviceManager = (this as any).serviceManager;
     if (serviceManager) {
       this.databaseService = serviceManager.getService('databaseService') as DatabaseService;
+      this.cacheService = serviceManager.getService('cacheService') as CacheService;
     }
     
     if (!this.databaseService) {
@@ -42,6 +48,12 @@ export class SessionService extends BaseService {
       this.logInfo('✅ Database service available for persistent OAuth token storage');
       this.logInfo(`Database service state: ${this.databaseService.state}`);
       this.logInfo(`Database service ready: ${this.databaseService.isReady()}`);
+    }
+    
+    if (this.cacheService) {
+      this.logInfo('✅ Cache service available for session caching');
+    } else {
+      this.logInfo('Cache service not available, operating without session caching');
     }
     
     // Clean up expired sessions using configured interval
@@ -168,6 +180,15 @@ export class SessionService extends BaseService {
   async getSession(sessionId: string): Promise<SessionContext | undefined> {
     this.assertReady();
     
+    // Try cache first
+    if (this.cacheService) {
+      const cachedSession = await this.cacheService.get<SessionContext>(`session:${sessionId}`);
+      if (cachedSession) {
+        this.logDebug('Cache hit for session', { sessionId });
+        return cachedSession;
+      }
+    }
+    
     if (this.databaseService) {
       const sessionData = await this.databaseService.getSession(sessionId);
       if (sessionData) {
@@ -185,7 +206,19 @@ export class SessionService extends BaseService {
         if (this.isSessionExpired(session)) {
           this.logWarn('Session expired', { sessionId, expiresAt: session.expiresAt });
           await this.databaseService.deleteSession(sessionId);
+          
+          // Remove from cache as well
+          if (this.cacheService) {
+            await this.cacheService.del(`session:${sessionId}`);
+          }
+          
           return undefined;
+        }
+        
+        // Cache the session for future use
+        if (this.cacheService) {
+          await this.cacheService.set(`session:${sessionId}`, session, this.SESSION_CACHE_TTL);
+          this.logDebug('Cached session for future use', { sessionId });
         }
         
         return session;

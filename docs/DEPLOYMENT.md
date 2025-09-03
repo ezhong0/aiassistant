@@ -37,6 +37,8 @@ JWT_SECRET=your-super-secret-jwt-key-here
 # Database
 DATABASE_URL=postgresql://username:password@host:5432/database
 
+# Note: See docs/POSTGRESQL_INTEGRATION.md for detailed database setup and configuration
+
 # Google OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
@@ -50,6 +52,9 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_CLIENT_ID=your-slack-client-id
 SLACK_CLIENT_SECRET=your-slack-client-secret
 SLACK_OAUTH_REDIRECT_URI=https://your-domain.railway.app/slack/oauth/callback
+
+# Note: See docs/OAUTH_FLOW_FIXES.md and docs/OAUTH_PERSISTENCE_FIX.md 
+# for detailed OAuth implementation and troubleshooting
 ```
 
 #### **Optional Configuration**

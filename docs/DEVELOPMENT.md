@@ -47,10 +47,8 @@ npm install
 cp ../.env.example .env
 # Edit .env with your credentials
 
-# 4. Install backend dependencies
-cd backend
-open AssistantApp.xcodeproj
-# Configure GoogleService-Info.plist
+# 4. Setup database (if using PostgreSQL)
+npm run db:setup
 ```
 
 ### **Development Scripts**
@@ -86,7 +84,9 @@ npm run test:master            # Run master agent tests
 npm run test:comprehensive     # Run comprehensive test suite
 
 # Database Operations
-npm run migrate:tokens         # Migrate file tokens to database
+npm run db:setup               # Setup database and tables
+npm run db:test                # Test database connection
+npm run db:integration         # Run database integration tests
 
 # Deployment
 npm run railway:build          # Railway production build

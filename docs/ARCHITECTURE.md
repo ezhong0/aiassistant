@@ -254,11 +254,14 @@ export class SlackInterface {
 #### **Service Registration Order**
 1. **Database Service** (priority: 5) - Foundation for all data operations
 2. **Session Service** (priority: 10) - Depends on database service
-3. **Auth Service** (priority: 15) - Authentication and OAuth
-4. **Google Services** (priority: 20) - Gmail, Calendar, Contacts
-5. **OpenAI Service** (priority: 25) - AI capabilities
-6. **Agent Services** (priority: 30) - Multi-agent system
-7. **Tool Executor** (priority: 35) - Tool execution framework
+3. **Session Migration Service** (priority: 12) - Session data migration
+4. **Token Manager** (priority: 13) - Centralized token management
+5. **Slack Session Manager** (priority: 14) - Slack session management
+6. **Auth Service** (priority: 15) - Authentication and OAuth
+7. **Google Services** (priority: 20) - Gmail, Calendar, Contacts
+8. **OpenAI Service** (priority: 25) - AI capabilities
+9. **Agent Services** (priority: 30) - Multi-agent system
+10. **Tool Executor** (priority: 35) - Tool execution framework
 
 ### **3. Error Handling Pattern**
 

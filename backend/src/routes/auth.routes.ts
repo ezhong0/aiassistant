@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
+import { SlackSessionManager } from '../services/slack-session-manager';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {
   GoogleTokens,
@@ -783,29 +784,10 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           hasTokens: !!tokens.access_token
         });
         
-        const sessionService = getService('sessionService');
-        if (sessionService) {
-          // Create a session ID that matches the Slack interface format
-          // Use 'main' suffix to match the default Slack session creation
-          const slackSessionId = `slack_${slackContext.team_id}_${slackContext.user_id}_main`;
-          
-          logger.info('Creating/retrieving session for OAuth token storage', {
-            sessionId: slackSessionId,
-            teamId: slackContext.team_id,
-            userId: slackContext.user_id
-          });
-          
-          // Get or create session
-          const session = await (sessionService as any).getOrCreateSession(slackSessionId, slackContext.user_id);
-          
-          logger.info('Session retrieved for OAuth token storage', {
-            sessionId: slackSessionId,
-            sessionExists: !!session,
-            hasOAuthTokens: !!session?.oauthTokens
-          });
-          
-          // Store OAuth tokens in the session
-          const tokensStored = await (sessionService as any).storeOAuthTokens(slackSessionId, {
+        const sessionManager = getService('slackSessionManager') as unknown as SlackSessionManager;
+        if (sessionManager) {
+          // Use simplified session management - one session per user
+          const stored = await sessionManager.storeOAuthTokens(slackContext.team_id, slackContext.user_id, {
             google: {
               access_token: tokens.access_token,
               refresh_token: tokens.refresh_token,
@@ -820,9 +802,8 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
             }
           });
 
-          if (tokensStored) {
+          if (stored) {
             logger.info('✅ Successfully stored OAuth tokens for Slack user', {
-              sessionId: slackSessionId,
               teamId: slackContext.team_id,
               userId: slackContext.user_id,
               tokenDetails: {
@@ -832,59 +813,14 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
                 scope: tokens.scope
               }
             });
-            
-            // Also store tokens in additional session variations to ensure they can be found
-            // regardless of conversation context (channel, thread, etc.)
-            const additionalSessionIds = [
-              `slack_${slackContext.team_id}_${slackContext.user_id}_channel_${slackContext.channel_id}`,
-              `slack_${slackContext.team_id}_${slackContext.user_id}_thread_${Date.now()}`,
-              `slack_${slackContext.team_id}_${slackContext.user_id}_fallback_${Date.now()}`
-            ];
-            
-            for (const additionalSessionId of additionalSessionIds) {
-              try {
-                // Create the additional session
-                (sessionService as any).getOrCreateSession(additionalSessionId, slackContext.user_id);
-                
-                // Store the same OAuth tokens
-                const additionalTokensStored = await (sessionService as any).storeOAuthTokens(additionalSessionId, {
-                  google: {
-                    access_token: tokens.access_token,
-                    refresh_token: tokens.refresh_token,
-                    expires_in: tokens.expires_in,
-                    token_type: tokens.token_type,
-                    scope: tokens.scope,
-                    expiry_date: tokens.expiry_date
-                  },
-                  slack: {
-                    team_id: slackContext.team_id,
-                    user_id: slackContext.user_id
-                  }
-                });
-                
-                if (additionalTokensStored) {
-                  logger.debug('✅ Stored OAuth tokens in additional session', { 
-                    additionalSessionId,
-                    teamId: slackContext.team_id,
-                    userId: slackContext.user_id
-                  });
-                }
-              } catch (additionalError) {
-                logger.debug('Could not store tokens in additional session (non-critical)', { 
-                  additionalSessionId,
-                  error: additionalError
-                });
-              }
-            }
           } else {
             logger.warn('❌ Failed to store OAuth tokens for Slack user', {
-              sessionId: slackSessionId,
               teamId: slackContext.team_id,
               userId: slackContext.user_id
             });
           }
         } else {
-          logger.error('SessionService not available for OAuth token storage');
+          logger.error('SlackSessionManager not available for OAuth token storage');
         }
       } catch (error) {
         logger.error('Error storing OAuth tokens for Slack user', {
