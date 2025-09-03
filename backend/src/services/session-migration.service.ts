@@ -30,18 +30,32 @@ export class SessionMigrationService {
       const consolidatedUsers = new Set<string>();
       
       for (const session of allSessions) {
+        // Handle both old slack_ format and new user: format
+        let teamId: string | null = null;
+        let userId: string | null = null;
+        
         if (session.sessionId.startsWith('slack_')) {
+          // Old format: slack_${teamId}_${userId}
           const parts = session.sessionId.split('_');
           if (parts.length >= 3) {
-            const teamId = parts[1];
-            const userId = parts[2];
-            const userKey = `${teamId}_${userId}`;
-            
-            if (!consolidatedUsers.has(userKey)) {
-              await this.consolidateUserSessions(teamId, userId);
-              consolidatedUsers.add(userKey);
-              // migratedCount++; // Commented out since it's const
-            }
+            teamId = parts[1];
+            userId = parts[2];
+          }
+        } else if (session.sessionId.startsWith('user:')) {
+          // New format: user:${teamId}:${userId}
+          const parsed = SlackSessionManager.parseSessionId(session.sessionId);
+          if (parsed) {
+            teamId = parsed.teamId;
+            userId = parsed.userId;
+          }
+        }
+        
+        if (teamId && userId) {
+          const userKey = `${teamId}_${userId}`;
+          
+          if (!consolidatedUsers.has(userKey)) {
+            await this.consolidateUserSessions(teamId, userId);
+            consolidatedUsers.add(userKey);
           }
         }
       }
@@ -91,14 +105,19 @@ export class SessionMigrationService {
   }
 
   /**
-   * Find all session variations for a user
+   * Find all session variations for a user (both old and new formats)
    */
   private async findSessionVariations(teamId: string, userId: string): Promise<string[]> {
     const allSessions = await this.getAllSessions();
     const variations: string[] = [];
     
     for (const session of allSessions) {
+      // Check old format: slack_${teamId}_${userId}*
       if (session.sessionId.startsWith(`slack_${teamId}_${userId}`)) {
+        variations.push(session.sessionId);
+      }
+      // Check new format: user:${teamId}:${userId}
+      else if (session.sessionId === `user:${teamId}:${userId}`) {
         variations.push(session.sessionId);
       }
     }
@@ -178,8 +197,12 @@ export class SessionMigrationService {
   private async cleanupOldSessions(sessionIds: string[]): Promise<void> {
     for (const sessionId of sessionIds) {
       try {
-        // Only delete if it's not the simplified session
-        if (!sessionId.match(/^slack_[^_]+_[^_]+$/)) {
+        // Keep the canonical new format (user:teamId:userId)
+        // Delete old formats (slack_teamId_userId_*) and other variations
+        const isCanonicalFormat = sessionId.match(/^user:[^:]+:[^:]+$/);
+        const isOldFormat = sessionId.startsWith('slack_') && sessionId.split('_').length > 3;
+        
+        if (!isCanonicalFormat && (isOldFormat || sessionId.startsWith('slack_'))) {
           await this.sessionService.deleteSession(sessionId);
           logger.debug(`Deleted old session variation: ${sessionId}`);
         }

@@ -9,6 +9,8 @@ import { TIMEOUTS, EXECUTION_CONFIG, REQUEST_LIMITS } from '../config/app-config
 import { BaseService } from './base-service';
 import { CacheService } from './cache.service';
 import logger from '../utils/logger';
+import { CryptoUtil } from '../utils/crypto.util';
+import { AuditLogger } from '../utils/audit-logger';
 import { DatabaseService, SessionData, OAuthTokenData } from './database.service';
 
 export class SessionService extends BaseService {
@@ -124,6 +126,13 @@ export class SessionService extends BaseService {
 
     this.logDebug('Created new session', { sessionId, userId, expiresAt });
     
+    // Audit log session creation
+    AuditLogger.logSessionEvent('SESSION_CREATED', sessionId, {
+      userId,
+      expiresAt: expiresAt.toISOString(),
+      storageType: this.databaseService ? 'database' : 'memory'
+    });
+    
     return session;
   }
 
@@ -205,6 +214,13 @@ export class SessionService extends BaseService {
         
         if (this.isSessionExpired(session)) {
           this.logWarn('Session expired', { sessionId, expiresAt: session.expiresAt });
+          
+          // Audit log session expiry
+          AuditLogger.logSessionEvent('SESSION_EXPIRED', sessionId, {
+            expiresAt: session.expiresAt.toISOString(),
+            cleanupType: 'automatic'
+          });
+          
           await this.databaseService.deleteSession(sessionId);
           
           // Remove from cache as well
@@ -448,15 +464,30 @@ export class SessionService extends BaseService {
     }
 
     if (this.databaseService && tokens.google) {
-      // Store Google tokens in database
+      // Store Google tokens in database with encryption for sensitive data
       const expiresAt = tokens.google.expiry_date 
         ? new Date(tokens.google.expiry_date)
         : new Date(Date.now() + (tokens.google.expires_in || 3600) * 1000);
       
+      // Encrypt the refresh token before storage
+      let encryptedRefreshToken: string | undefined;
+      if (tokens.google.refresh_token) {
+        try {
+          encryptedRefreshToken = CryptoUtil.encryptSensitiveData(tokens.google.refresh_token);
+          this.logDebug('Encrypted refresh token for secure storage', { sessionId });
+        } catch (error) {
+          this.logError('Failed to encrypt refresh token, storing without encryption', { 
+            sessionId, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          });
+          encryptedRefreshToken = tokens.google.refresh_token;
+        }
+      }
+      
       const tokenData: OAuthTokenData = {
         sessionId,
         accessToken: tokens.google.access_token,
-        refreshToken: tokens.google.refresh_token,
+        refreshToken: encryptedRefreshToken,
         expiresAt,
         tokenType: tokens.google.token_type || 'Bearer',
         scope: tokens.google.scope || '',
@@ -473,6 +504,14 @@ export class SessionService extends BaseService {
           expiresAt: expiresAt.toISOString(),
           databaseService: this.databaseService.constructor.name,
           databaseState: this.databaseService.state
+        });
+        
+        // Audit log OAuth token storage
+        AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', sessionId, session.userId, undefined, {
+          hasRefreshToken: !!tokens.google.refresh_token,
+          expiresAt: expiresAt.toISOString(),
+          tokenEncrypted: !!encryptedRefreshToken && encryptedRefreshToken !== tokens.google.refresh_token,
+          storageType: 'database'
         });
       } catch (error) {
         this.logError('❌ Failed to store OAuth tokens in database, falling back to memory', {
@@ -556,17 +595,41 @@ export class SessionService extends BaseService {
       try {
         const tokenData = await this.databaseService.getOAuthTokens(sessionId);
         if (tokenData) {
+          // Decrypt refresh token if it's encrypted
+          let decryptedRefreshToken = tokenData.refreshToken;
+          if (tokenData.refreshToken && CryptoUtil.isEncrypted(tokenData.refreshToken)) {
+            try {
+              decryptedRefreshToken = CryptoUtil.decryptSensitiveData(tokenData.refreshToken);
+              this.logDebug('Decrypted refresh token from storage', { sessionId });
+            } catch (error) {
+              this.logError('Failed to decrypt refresh token, using as-is', { 
+                sessionId, 
+                error: error instanceof Error ? error.message : 'Unknown error' 
+              });
+              decryptedRefreshToken = tokenData.refreshToken;
+            }
+          }
+          
           this.logDebug('✅ Retrieved OAuth tokens from database', {
             sessionId,
             hasAccessToken: !!tokenData.accessToken,
-            hasRefreshToken: !!tokenData.refreshToken,
-            expiresAt: tokenData.expiresAt.toISOString()
+            hasRefreshToken: !!decryptedRefreshToken,
+            expiresAt: tokenData.expiresAt.toISOString(),
+            refreshTokenEncrypted: tokenData.refreshToken !== decryptedRefreshToken
+          });
+          
+          // Audit log OAuth token retrieval
+          AuditLogger.logOAuthEvent('OAUTH_TOKENS_RETRIEVED', sessionId, undefined, undefined, {
+            hasAccessToken: !!tokenData.accessToken,
+            hasRefreshToken: !!decryptedRefreshToken,
+            expiresAt: tokenData.expiresAt.toISOString(),
+            decryptionRequired: tokenData.refreshToken !== decryptedRefreshToken
           });
           
           return {
             google: {
               access_token: tokenData.accessToken,
-              refresh_token: tokenData.refreshToken,
+              refresh_token: decryptedRefreshToken,
               expires_in: Math.floor((tokenData.expiresAt.getTime() - Date.now()) / 1000),
               token_type: tokenData.tokenType,
               scope: tokenData.scope,
