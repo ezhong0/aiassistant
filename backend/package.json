@@ -43,7 +43,8 @@
     "test:cache": "npm run test -- tests/unit/services/cache.service.test.ts",
     "test:token-manager": "npm run test -- tests/unit/services/token-manager.test.ts",
     "validate:caching": "npx ts-node scripts/validate-caching-integration.ts",
-    "test:simple-cache": "npx ts-node scripts/simple-cache-test.ts"
+    "test:simple-cache": "npx ts-node scripts/simple-cache-test.ts",
+    "redis:test": "npx ts-node scripts/test-redis.ts"
   },
   "keywords": [],
   "author": "",

@@ -12,30 +12,74 @@ export class CacheService extends BaseService {
 
   constructor() {
     super('cacheService');
-    // Support both REDIS_URL and REDISCLOUD_URL (Railway provides REDISCLOUD_URL)
-    this.REDIS_URL = process.env.REDIS_URL || process.env.REDISCLOUD_URL || 'redis://localhost:6379';
+    
+    // Railway Redis environment variables (Railway provides these when Redis is added)
+    // Check multiple possible environment variable names that Railway might use
+    this.REDIS_URL = process.env.REDIS_URL || 
+                     process.env.REDISCLOUD_URL || 
+                     process.env.REDIS_PRIVATE_URL ||
+                     process.env.REDIS_PUBLIC_URL ||
+                     process.env.RAILWAY_REDIS_URL ||
+                     'redis://localhost:6379';
     
     logger.info('CacheService initializing', {
-      redisUrl: this.REDIS_URL.replace(/\/\/[^@]*@/, '//***:***@'), // Mask credentials
-      isDevelopment: configService.nodeEnv === 'development'
+      redisUrl: this.maskRedisUrl(this.REDIS_URL),
+      environment: configService.nodeEnv,
+      hasRedisEnv: !!(process.env.REDIS_URL || process.env.REDISCLOUD_URL || 
+                     process.env.REDIS_PRIVATE_URL || process.env.REDIS_PUBLIC_URL ||
+                     process.env.RAILWAY_REDIS_URL),
+      availableRedisVars: Object.keys(process.env).filter(key => 
+        key.toLowerCase().includes('redis')).length
     });
+  }
+
+  private maskRedisUrl(url: string): string {
+    try {
+      const maskedUrl = url.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
+      return maskedUrl.replace(/localhost:\d+/, 'localhost:****');
+    } catch {
+      return 'invalid-url';
+    }
   }
 
   protected async onInitialize(): Promise<void> {
     try {
-      // Create Redis client
+      // Check if Redis should be disabled
+      if (process.env.DISABLE_REDIS === 'true') {
+        logger.info('Redis disabled via DISABLE_REDIS environment variable');
+        return;
+      }
+
+      // Log all available Redis-related environment variables for debugging
+      const redisEnvVars = Object.keys(process.env).filter(key => 
+        key.toLowerCase().includes('redis'));
+      if (redisEnvVars.length > 0) {
+        logger.info('Available Redis environment variables:', 
+          redisEnvVars.map(key => `${key}=${this.maskRedisUrl(process.env[key] || '')}`));
+      }
+
+      // Skip Redis if we're using localhost and not in development
+      if (this.REDIS_URL.includes('localhost') && configService.nodeEnv === 'production') {
+        logger.warn('Skipping Redis connection - localhost URL in production environment');
+        return;
+      }
+
+      // Create Redis client with Railway-optimized settings
       this.client = createClient({
         url: this.REDIS_URL,
         socket: {
-          connectTimeout: 10000, // 10 seconds
+          connectTimeout: 10000, // Longer timeout for Railway
           reconnectStrategy: (retries) => {
             if (retries > 3) {
               logger.error('Redis max reconnection attempts reached');
               return false;
             }
-            return Math.min(retries * 100, 3000);
+            // Exponential backoff with max 2 seconds
+            return Math.min(retries * 500, 2000);
           }
-        }
+        },
+        // Railway Redis might need these settings
+        disableOfflineQueue: true
       });
 
       // Set up event handlers
@@ -62,8 +106,12 @@ export class CacheService extends BaseService {
         logger.info('Redis client reconnecting...');
       });
 
-      // Connect to Redis
-      await this.client.connect();
+      // Connect to Redis with timeout
+      const connectPromise = this.client.connect();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 15000));
+      
+      await Promise.race([connectPromise, timeoutPromise]);
       
       // Test the connection
       await this.client.ping();
@@ -73,13 +121,22 @@ export class CacheService extends BaseService {
     } catch (error) {
       logger.error('Failed to initialize CacheService:', error);
       
-      // In development, don't fail - just warn and continue without cache
-      if (configService.nodeEnv === 'development') {
-        logger.warn('Redis unavailable in development - continuing without cache');
-        return; // Allow service to be "ready" but non-functional
+      // Clean up client on failure
+      if (this.client) {
+        try {
+          this.client.disconnect();
+        } catch (disconnectError) {
+          logger.warn('Error disconnecting Redis client:', disconnectError);
+        }
+        this.client = null;
       }
       
-      throw error;
+      // Always continue without cache rather than failing
+      logger.warn('Redis unavailable - continuing without cache functionality');
+      this.isConnected = false;
+      
+      // Don't throw - just continue without Redis
+      return;
     }
   }
 
