@@ -1,6 +1,6 @@
 import logger from '../utils/logger';
 import { OpenAIService } from '../services/openai.service';
-import { SessionService } from '../services/session.service';
+// SessionService removed - agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { initializeAgentFactory } from '../config/agent-factory-init';
@@ -14,7 +14,7 @@ export interface MasterAgentResponse {
 }
 
 export class MasterAgent {
-  private sessionService: SessionService | null = null;
+  // sessionService removed - agents are now stateless
   private useOpenAI: boolean = false;
   private systemPrompt: string;
 
@@ -53,37 +53,16 @@ export class MasterAgent {
     return openaiService;
   }
 
-  /**
-   * Get or initialize the session service from the registry
-   */
-  private getSessionService(): SessionService {
-    if (!this.sessionService) {
-      const service = getService<SessionService>('sessionService');
-      if (!service) {
-        throw new Error('SessionService not available from service registry. Ensure services are initialized.');
-      }
-      if (!service.isReady()) {
-        throw new Error(`SessionService is not ready. Current state: ${service.state}. Ensure services are fully initialized.`);
-      }
-      this.sessionService = service;
-    }
-    return this.sessionService;
-  }
+  // getSessionService removed - agents are now stateless
 
   /**
    * Process user input and determine which tools to call
    */
-  async processUserInput(userInput: string, sessionId: string, userId?: string): Promise<MasterAgentResponse> {
+  async processUserInput(userInput: string, sessionId: string, _userId?: string): Promise<MasterAgentResponse> {
     try {
       logger.info(`MasterAgent processing input: "${userInput}" for session: ${sessionId}`);
       
-      // Get session service from registry
-      const sessionService = this.getSessionService();
-      
-      // Get or create session
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const _session = await sessionService.getOrCreateSession(sessionId, userId);
-      
+      // Agents are now stateless - no session management
       let toolCalls: ToolCall[];
       let message: string;
 
@@ -93,14 +72,10 @@ export class MasterAgent {
         throw new Error('OpenAI service is required but not available. Please check OpenAI configuration.');
       }
 
-      const context = await sessionService.getConversationContext(sessionId);
-      const systemPromptWithContext = context ? 
-        `${this.systemPrompt}\n\n${context}` : 
-        this.systemPrompt;
-
+      // Use system prompt directly (no session context)
       const response = await openaiService.generateToolCalls(
         userInput, 
-        systemPromptWithContext, 
+        this.systemPrompt, 
         sessionId
       );
       

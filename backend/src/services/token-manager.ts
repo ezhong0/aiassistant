@@ -1,4 +1,4 @@
-import { SessionService } from './session.service';
+import { TokenStorageService } from './token-storage.service';
 import { AuthService } from './auth.service';
 import { CacheService } from './cache.service';
 import { GoogleTokens } from '../types/auth.types';
@@ -17,7 +17,7 @@ export interface OAuthTokens {
 }
 
 export class TokenManager extends BaseService {
-  private sessionService: SessionService | null = null;
+  private tokenStorageService: TokenStorageService | null = null;
   private authService: AuthService | null = null;
   private cacheService: CacheService | null = null;
   
@@ -34,12 +34,12 @@ export class TokenManager extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     // Get dependencies from service registry
-    this.sessionService = serviceManager.getService<SessionService>('sessionService') || null;
+    this.tokenStorageService = serviceManager.getService<TokenStorageService>('tokenStorageService') || null;
     this.authService = serviceManager.getService<AuthService>('authService') || null;
     this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
     
-    if (!this.sessionService) {
-      throw new Error('SessionService not available from service registry');
+    if (!this.tokenStorageService) {
+      throw new Error('TokenStorageService not available from service registry');
     }
     
     if (!this.authService) {
@@ -65,7 +65,7 @@ export class TokenManager extends BaseService {
    * Uses unified token validation and caching strategy
    */
   async getValidTokens(teamId: string, userId: string): Promise<string | null> {
-    if (!this.sessionService || !this.authService) {
+    if (!this.tokenStorageService || !this.authService) {
       throw new Error('TokenManager dependencies not initialized');
     }
     
@@ -94,16 +94,17 @@ export class TokenManager extends BaseService {
       }
     }
     
-    // Get tokens from session service (single source of truth)
-    const tokens = await this.sessionService!.getSlackOAuthTokens(teamId, userId);
+    // Get tokens from token storage service (single source of truth)
+    const userId_key = `${teamId}:${userId}`;
+    const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
     
-    if (!tokens?.google?.access_token) {
+    if (!tokens?.googleTokens?.access_token) {
       logger.debug('No OAuth tokens found for Slack user', { teamId, userId });
       return null;
     }
     
     // Unified token validation
-    const validationResult = this.validateToken(tokens.google);
+    const validationResult = this.validateToken(tokens.googleTokens);
     if (!validationResult.isValid) {
       logger.info('OAuth tokens invalid, attempting refresh', { 
         teamId, 
@@ -112,7 +113,7 @@ export class TokenManager extends BaseService {
       });
       
       // Try to refresh token
-      if (tokens.google.refresh_token) {
+      if (tokens.googleTokens.refresh_token) {
         const refreshedTokens = await this.refreshTokens(teamId, userId);
         return refreshedTokens?.google?.access_token || null;
       } else {
@@ -123,13 +124,25 @@ export class TokenManager extends BaseService {
     
     logger.debug('Valid tokens found for Slack user', { teamId, userId });
     
-    // Cache the valid tokens for future use
+    // Cache the valid tokens for future use (convert to OAuthTokens format for cache)
     if (this.cacheService && tokens) {
-      await this.cacheService.set(cacheKey, tokens, this.TOKEN_CACHE_TTL);
+      const cacheTokens: OAuthTokens = {
+        google: {
+          access_token: tokens.googleTokens.access_token,
+          refresh_token: tokens.googleTokens.refresh_token,
+          token_type: tokens.googleTokens.token_type || 'Bearer',
+          expires_in: tokens.googleTokens.expires_at ? 
+            Math.max(0, Math.floor((tokens.googleTokens.expires_at.getTime() - Date.now()) / 1000)) : 3600,
+          scope: tokens.googleTokens.scope,
+          expiry_date: tokens.googleTokens.expires_at?.getTime()
+        },
+        slack: tokens.slackTokens
+      };
+      await this.cacheService.set(cacheKey, cacheTokens, this.TOKEN_CACHE_TTL);
       logger.debug('Cached tokens for Slack user', { teamId, userId });
     }
     
-    return tokens.google.access_token;
+    return tokens.googleTokens.access_token;
   }
   
   /**
@@ -142,7 +155,19 @@ export class TokenManager extends BaseService {
     
     // Check expiry with buffer (refresh 5 minutes early)
     const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
-    if (token.expiry_date && Date.now() > (token.expiry_date - REFRESH_BUFFER_MS)) {
+    
+    // Handle both expiry_date (number) and expires_at (Date)
+    let expiryTime: number;
+    if (token.expiry_date) {
+      expiryTime = token.expiry_date;
+    } else if (token.expires_at) {
+      expiryTime = token.expires_at instanceof Date ? token.expires_at.getTime() : token.expires_at;
+    } else {
+      // No expiry information, assume valid
+      return { isValid: true };
+    }
+    
+    if (Date.now() > (expiryTime - REFRESH_BUFFER_MS)) {
       return { isValid: false, reason: 'expired_or_expiring_soon' };
     }
     
@@ -179,31 +204,43 @@ export class TokenManager extends BaseService {
     // First, invalidate all existing caches to prevent stale data
     await this.invalidateAllTokenCaches(teamId, userId);
     
-    const tokens = await this.sessionService!.getSlackOAuthTokens(teamId, userId);
+    const userId_key = `${teamId}:${userId}`;
+    const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
     
-    if (!tokens?.google?.refresh_token) {
+    if (!tokens?.googleTokens?.refresh_token) {
       logger.warn('No refresh token available for Slack user', { teamId, userId });
       return null;
     }
     
     try {
-      const refreshedTokens = await this.authService!.refreshGoogleToken(tokens.google.refresh_token);
+      const refreshedTokens = await this.authService!.refreshGoogleToken(tokens.googleTokens.refresh_token);
       
-      // Create the new token set
+      // Store the refreshed tokens using TokenStorageService
+      await this.tokenStorageService!.storeUserTokens(userId_key, {
+        google: {
+          access_token: refreshedTokens.access_token,
+          refresh_token: refreshedTokens.refresh_token || tokens.googleTokens.refresh_token,
+          expires_at: refreshedTokens.expiry_date ? new Date(refreshedTokens.expiry_date) : undefined,
+          token_type: refreshedTokens.token_type,
+          scope: refreshedTokens.scope
+        },
+        slack: tokens.slackTokens // Preserve existing Slack tokens
+      });
+      
+      // Create return value in OAuthTokens format
       const newTokens: OAuthTokens = {
         google: {
           access_token: refreshedTokens.access_token,
-          refresh_token: refreshedTokens.refresh_token || tokens.google.refresh_token,
+          refresh_token: refreshedTokens.refresh_token || tokens.googleTokens.refresh_token,
           expires_in: refreshedTokens.expires_in,
           token_type: refreshedTokens.token_type,
           scope: refreshedTokens.scope,
           expiry_date: refreshedTokens.expiry_date
         },
-        slack: tokens.slack // Preserve existing Slack tokens
+        slack: tokens.slackTokens // Preserve existing Slack tokens
       };
       
-      // Store the refreshed tokens (single source of truth)
-      const stored = await this.sessionService!.storeSlackOAuthTokens(teamId, userId, newTokens);
+      const stored = true; // TokenStorageService throws on failure
       
       if (stored) {
         logger.info('Successfully refreshed and stored OAuth tokens', { 
@@ -266,7 +303,8 @@ export class TokenManager extends BaseService {
       }
     }
     
-    const tokens = await this.sessionService!.getSlackOAuthTokens(teamId, userId);
+    const userId_key = `${teamId}:${userId}`;
+    const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
     
     if (!tokens) {
       const status = { 
@@ -283,11 +321,11 @@ export class TokenManager extends BaseService {
       return status;
     }
     
-    const hasAccessToken = !!tokens.google?.access_token;
-    const hasRefreshToken = !!tokens.google?.refresh_token;
+    const hasAccessToken = !!tokens.googleTokens?.access_token;
+    const hasRefreshToken = !!tokens.googleTokens?.refresh_token;
     
     // Use unified validation logic
-    const validationResult = tokens.google ? this.validateToken(tokens.google) : { isValid: false, reason: 'no_google_tokens' };
+    const validationResult = tokens.googleTokens ? this.validateToken(tokens.googleTokens) : { isValid: false, reason: 'no_google_tokens' };
     
     const status = {
       hasTokens: true,
@@ -298,9 +336,9 @@ export class TokenManager extends BaseService {
       status: !hasAccessToken ? 'no_access_token' : 
               !validationResult.isValid ? 'invalid' :
               'valid',
-      expiryDate: tokens.google?.expiry_date ? new Date(tokens.google.expiry_date).toISOString() : null,
-      expiresIn: tokens.google?.expires_in,
-      timeUntilExpiry: tokens.google?.expiry_date ? Math.max(0, tokens.google.expiry_date - Date.now()) : null,
+      expiryDate: tokens.googleTokens?.expires_at ? tokens.googleTokens.expires_at.toISOString() : null,
+      expiresIn: tokens.googleTokens?.expires_at ? Math.max(0, tokens.googleTokens.expires_at.getTime() - Date.now()) / 1000 : null,
+      timeUntilExpiry: tokens.googleTokens?.expires_at ? Math.max(0, tokens.googleTokens.expires_at.getTime() - Date.now()) : null,
       sessionId: `user:${teamId}:${userId}`,
       lastChecked: new Date().toISOString()
     };
