@@ -52,12 +52,33 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 0.5. CacheService - No dependencies, high priority
-    const cacheService = new CacheService();
-    serviceManager.registerService('cacheService', cacheService, {
-      priority: 6,
-      autoStart: true
-    });
+    // 0.5. CacheService - No dependencies, high priority (optional)
+    // Only register if Redis is available or explicitly enabled
+    if (process.env.DISABLE_REDIS !== 'true') {
+      // Check for Railway Redis environment variables
+      const hasRedisConfig = !!(
+        process.env.REDIS_URL || 
+        process.env.REDISCLOUD_URL || 
+        process.env.REDIS_PRIVATE_URL ||
+        process.env.REDIS_PUBLIC_URL ||
+        process.env.RAILWAY_REDIS_URL
+      );
+      
+      if (hasRedisConfig || ENVIRONMENT.NODE_ENV === 'development') {
+        const cacheService = new CacheService();
+        serviceManager.registerService('cacheService', cacheService, {
+          priority: 6,
+          autoStart: true
+        });
+        logger.info('CacheService registered', { hasRedisConfig, nodeEnv: ENVIRONMENT.NODE_ENV });
+      } else {
+        logger.warn('CacheService skipped - no Redis configuration found for production environment');
+        logger.info('Available Redis environment variables for Railway:', 
+          Object.keys(process.env).filter(key => key.toLowerCase().includes('redis')));
+      }
+    } else {
+      logger.info('CacheService disabled via DISABLE_REDIS environment variable');
+    }
 
     // 1. SessionService - Depends on databaseService
     const sessionService = new SessionService();
