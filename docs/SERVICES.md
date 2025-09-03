@@ -10,25 +10,17 @@ This document defines the **service layer architecture** that provides business 
 ```
 ServiceManager (Lifecycle Management)
 ├── DatabaseService (Priority: 5) - Data persistence
-├── SessionService (Priority: 10) - Session management
-├── SessionMigrationService (Priority: 12) - Session data migration
-├── TokenManager (Priority: 13) - Centralized token management
-├── SlackSessionManager (Priority: 14) - Slack session management
-├── AuthService (Priority: 15) - Authentication & OAuth
-├── Google Services (Priority: 20)
+├── CacheService (Priority: 6) - Redis caching (optional)
+├── SessionService (Priority: 10) - Unified session management
+├── ToolExecutorService (Priority: 20) - Tool execution
+├── AuthService (Priority: 30) - Authentication & OAuth
+├── Google Services (Priority: 40-60)
+│   ├── ContactService - Contact operations
 │   ├── GmailService - Email operations
-│   ├── CalendarService - Calendar operations
-│   └── ContactService - Contact operations
-├── OpenAIService (Priority: 25) - AI capabilities
-├── Agent Services (Priority: 30)
-│   ├── MasterAgent - Intelligent routing
-│   ├── EmailAgent - Email workflows
-│   ├── ContactAgent - Contact workflows
-│   ├── CalendarAgent - Calendar workflows
-│   ├── ThinkAgent - Reasoning & verification
-│   ├── ContentCreatorAgent - Content generation
-│   └── TavilyAgent - Web search
-└── ToolExecutorService (Priority: 35) - Tool execution
+│   └── CalendarService - Calendar operations
+├── OpenAIService (Priority: 70) - AI capabilities
+├── SlackFormatterService (Priority: 80) - Slack message formatting
+└── TokenManager (Priority: 90) - Centralized token management
 ```
 
 ### **Service Lifecycle**
@@ -167,54 +159,12 @@ export class SessionMigrationService extends BaseService {
 }
 ```
 
-### **4. TokenManager**
+### **2. SessionService (Unified Session Management)**
 
 #### **Purpose**
-- **Primary**: Centralized OAuth token management
-- **Responsibility**: Token storage, refresh, validation, and cleanup
-- **Priority**: 13
-
-#### **Key Features**
-```typescript
-export class TokenManager {
-  // Token management
-  async storeTokens(sessionId: string, tokens: OAuthTokens): Promise<void>
-  async getTokens(sessionId: string): Promise<OAuthTokens | null>
-  async refreshTokens(sessionId: string): Promise<OAuthTokens | null>
-  async deleteTokens(sessionId: string): Promise<boolean>
-  
-  // Token validation
-  async validateTokens(tokens: OAuthTokens): Promise<boolean>
-  async isTokenExpired(tokens: OAuthTokens): boolean
-  
-  // Cleanup operations
-  async cleanupExpiredTokens(): Promise<number>
-}
-```
-
-### **5. SlackSessionManager**
-
-#### **Purpose**
-- **Primary**: Slack-specific session context management
-- **Responsibility**: Slack user sessions, team context, workspace integration
-- **Priority**: 14
-
-#### **Key Features**
-```typescript
-export class SlackSessionManager {
-  // Slack session management
-  async createSlackSession(teamId: string, userId: string): Promise<string>
-  async getSlackSession(sessionId: string): Promise<SlackSessionContext | null>
-  async updateSlackSession(sessionId: string, updates: Partial<SlackSessionContext>): Promise<void>
-  
-  // Slack context
-  async getSlackContext(sessionId: string): Promise<SlackContext>
-  async linkGoogleAccount(sessionId: string, googleUserId: string): Promise<void>
-  
-  // Session cleanup
-  async cleanupSlackSessions(): Promise<number>
-}
-```
+- **Primary**: Unified session management for all platforms (web, Slack, etc.)
+- **Responsibility**: Session lifecycle, OAuth tokens, conversation context, tool results
+- **Priority**: 10
 
 #### **Key Features**
 ```typescript
@@ -222,7 +172,7 @@ export class SessionService extends BaseService {
   private databaseService: DatabaseService | null = null;
   private sessions: Map<string, SessionContext> | null = null; // Fallback storage
   
-  // Session management
+  // Core session management
   async getOrCreateSession(sessionId: string, userId?: string): Promise<SessionContext>
   async getSession(sessionId: string): Promise<SessionContext | undefined>
   async deleteSession(sessionId: string): Promise<boolean>
@@ -240,7 +190,37 @@ export class SessionService extends BaseService {
   async storeOAuthTokens(sessionId: string, tokens: OAuthTokens): Promise<void>
   async getOAuthTokens(sessionId: string): Promise<OAuthTokens | null>
   async getGoogleAccessToken(sessionId: string): Promise<string | null>
+  
+  // Slack-specific session methods
+  async getSlackSession(teamId: string, userId: string): Promise<SlackSessionContext>
+  async storeSlackOAuthTokens(teamId: string, userId: string, tokens: OAuthTokens): Promise<boolean>
+  async getSlackOAuthTokens(teamId: string, userId: string): Promise<OAuthTokens | null>
+  async getSlackGoogleAccessToken(teamId: string, userId: string): Promise<string | null>
+  async updateSlackConversationContext(teamId: string, userId: string, channelId: string, threadTs?: string, context?: any): Promise<void>
+  async hasSlackValidOAuthTokens(teamId: string, userId: string): Promise<boolean>
+  async getSlackSessionStats(teamId: string, userId: string): Promise<any>
+  
+  // Session ID utilities
+  private generateSlackSessionId(teamId: string, userId: string): string
+  public static parseSlackSessionId(sessionId: string): { teamId: string; userId: string } | null
 }
+```
+
+#### **Unified Session Management**
+The SessionService now provides a unified interface for all session operations, eliminating the need for separate SlackSessionManager:
+
+```typescript
+// ✅ Use SessionService for all session operations
+const sessionService = serviceManager.getService('sessionService') as SessionService;
+
+// Standard session operations
+const session = await sessionService.getOrCreateSession(sessionId, userId);
+await sessionService.storeOAuthTokens(sessionId, tokens);
+
+// Slack-specific operations (now part of SessionService)
+const slackSession = await sessionService.getSlackSession(teamId, userId);
+await sessionService.storeSlackOAuthTokens(teamId, userId, tokens);
+const hasTokens = await sessionService.hasSlackValidOAuthTokens(teamId, userId);
 ```
 
 ### **6. AuthService**

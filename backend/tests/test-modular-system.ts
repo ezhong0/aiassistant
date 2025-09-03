@@ -46,7 +46,8 @@ async function testModularSystem() {
 
     // 4. Test Master Agent
     console.log('4️⃣ Testing Master Agent with Registry...');
-    const masterAgent = new MasterAgent();
+    const { createMasterAgent } = await import('../src/config/agent-factory-init');
+    const masterAgent = createMasterAgent();
     
     const testQuery = 'send an email to alice asking about the project';
     console.log(`🤖 Processing: "${testQuery}"`);

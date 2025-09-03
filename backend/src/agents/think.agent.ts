@@ -524,4 +524,5 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   }
 }
 
-export const thinkAgent = new ThinkAgent();
+// Export the class for use with AgentFactory
+export { ThinkAgent };

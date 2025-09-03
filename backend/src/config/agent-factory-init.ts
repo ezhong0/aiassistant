@@ -1,5 +1,6 @@
 import logger from '../utils/logger';
 import { AgentFactory } from '../framework/agent-factory';
+import { MasterAgent, MasterAgentConfig } from '../agents/master.agent';
 
 /**
  * Simple initialization function that only uses AgentFactory
@@ -50,4 +51,28 @@ export const getAgentFactory = () => {
 export const isAgentFactoryInitialized = (): boolean => {
   const stats = AgentFactory.getStats();
   return stats.totalAgents > 0 && stats.totalTools > 0;
+}
+
+/**
+ * Create a MasterAgent instance with consistent configuration
+ * This standardizes MasterAgent creation across the application
+ */
+export const createMasterAgent = (config?: MasterAgentConfig): MasterAgent => {
+  try {
+    // Ensure AgentFactory is initialized
+    if (!isAgentFactoryInitialized()) {
+      initializeAgentFactory();
+    }
+    
+    const masterAgent = new MasterAgent(config);
+    logger.info('MasterAgent created successfully', {
+      hasOpenAI: !!config?.openaiApiKey,
+      model: config?.model || 'default'
+    });
+    
+    return masterAgent;
+  } catch (error) {
+    logger.error('Failed to create MasterAgent:', error);
+    throw error;
+  }
 }

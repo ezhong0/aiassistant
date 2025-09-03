@@ -631,5 +631,5 @@ Guidelines:
   }
 }
 
-// Export singleton instance with OpenAI integration
-export const emailAgent = new EmailAgent();
+// Export the class for use with AgentFactory
+export { EmailAgent };

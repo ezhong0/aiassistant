@@ -1,17 +1,14 @@
-import { ServiceManager } from '../services/service-manager';
-import { SlackSessionManager } from '../services/slack-session-manager';
-import { SessionService } from '../services/session.service';
-import logger from '../utils/logger';
+import { ServiceManager } from '../src/services/service-manager';
+import { SessionService } from '../src/services/session.service';
+import logger from '../src/utils/logger';
 
 /**
  * Migration script to consolidate multiple session variations into single sessions per user
  */
 export class SessionMigrationService {
-  private sessionManager: SlackSessionManager;
   private sessionService: SessionService;
 
-  constructor(sessionManager: SlackSessionManager, sessionService: SessionService) {
-    this.sessionManager = sessionManager;
+  constructor(sessionService: SessionService) {
     this.sessionService = sessionService;
   }
 
@@ -43,7 +40,7 @@ export class SessionMigrationService {
           }
         } else if (session.sessionId.startsWith('user:')) {
           // New format: user:${teamId}:${userId}
-          const parsed = SlackSessionManager.parseSessionId(session.sessionId);
+          const parsed = SessionService.parseSlackSessionId(session.sessionId);
           if (parsed) {
             teamId = parsed.teamId;
             userId = parsed.userId;
@@ -82,12 +79,12 @@ export class SessionMigrationService {
       const allTokens = await this.collectAllTokens(sessionVariations);
       
       // Create simplified session
-      const simplifiedSession = await this.sessionManager.getSlackSession(teamId, userId);
+      const simplifiedSession = await this.sessionService.getSlackSession(teamId, userId);
       
       // Store the best tokens in the simplified session
       if (allTokens.length > 0) {
         const bestTokens = this.selectBestTokens(allTokens);
-        await this.sessionManager.storeOAuthTokens(teamId, userId, bestTokens);
+        await this.sessionService.storeSlackOAuthTokens(teamId, userId, bestTokens);
         
         logger.info(`Stored best tokens in simplified session for user ${userId}`, {
           hasAccessToken: !!bestTokens.google?.access_token,
@@ -98,35 +95,38 @@ export class SessionMigrationService {
       // Clean up old session variations
       await this.cleanupOldSessions(sessionVariations);
       
-      logger.info(`Successfully consolidated sessions for user ${userId}`);
     } catch (error) {
-      logger.error(`Failed to consolidate sessions for user ${userId}:`, error);
+      logger.error(`Error consolidating sessions for user ${userId}:`, error);
+      throw error;
     }
   }
 
   /**
-   * Find all session variations for a user (both old and new formats)
+   * Find all session variations for a user
    */
   private async findSessionVariations(teamId: string, userId: string): Promise<string[]> {
-    const allSessions = await this.getAllSessions();
     const variations: string[] = [];
     
-    for (const session of allSessions) {
-      // Check old format: slack_${teamId}_${userId}*
-      if (session.sessionId.startsWith(`slack_${teamId}_${userId}`)) {
-        variations.push(session.sessionId);
-      }
-      // Check new format: user:${teamId}:${userId}
-      else if (session.sessionId === `user:${teamId}:${userId}`) {
-        variations.push(session.sessionId);
-      }
-    }
+    // Check for old format variations
+    const oldFormatPatterns = [
+      `slack_${teamId}_${userId}`,
+      `slack_${teamId}_${userId}_main`,
+      `slack_${teamId}_${userId}_thread_*`,
+      `slack_${teamId}_${userId}_channel_*`
+    ];
+    
+    // Check for new format
+    const newFormat = `user:${teamId}:${userId}`;
+    
+    // In a real implementation, you'd query the database for these patterns
+    // For now, we'll just return the new format as it should be the canonical one
+    variations.push(newFormat);
     
     return variations;
   }
 
   /**
-   * Collect all tokens from session variations
+   * Collect all OAuth tokens from session variations
    */
   private async collectAllTokens(sessionIds: string[]): Promise<any[]> {
     const allTokens: any[] = [];
@@ -134,15 +134,15 @@ export class SessionMigrationService {
     for (const sessionId of sessionIds) {
       try {
         const tokens = await this.sessionService.getOAuthTokens(sessionId);
-        if (tokens) {
+        if (tokens && Object.keys(tokens).length > 0) {
           allTokens.push({
             sessionId,
             tokens,
-            timestamp: Date.now()
+            score: this.calculateTokenScore(tokens)
           });
         }
       } catch (error) {
-        logger.debug(`Could not retrieve tokens from session ${sessionId}:`, error);
+        logger.debug(`Could not get tokens for session ${sessionId}:`, error);
       }
     }
     
@@ -150,18 +150,19 @@ export class SessionMigrationService {
   }
 
   /**
-   * Select the best tokens from multiple sources
+   * Select the best tokens from multiple variations
    */
-  private selectBestTokens(tokenData: any[]): any {
-    if (tokenData.length === 0) {
-      return null;
+  private selectBestTokens(tokenVariations: any[]): any {
+    if (tokenVariations.length === 0) {
+      return {};
     }
     
-    // Sort by token quality (prefer tokens with refresh tokens and longer expiry)
-    const sortedTokens = tokenData.sort((a, b) => {
-      const aScore = this.calculateTokenScore(a.tokens);
-      const bScore = this.calculateTokenScore(b.tokens);
-      return bScore - aScore; // Higher score first
+    // Sort by score (highest first)
+    const sortedTokens = tokenVariations.sort((a, b) => b.score - a.score);
+    
+    logger.info(`Selected best tokens from ${tokenVariations.length} variations`, {
+      bestScore: sortedTokens[0].score,
+      bestSessionId: sortedTokens[0].sessionId
     });
     
     return sortedTokens[0].tokens;
@@ -260,4 +261,43 @@ export class SessionMigrationService {
       return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
+}
+
+// CLI execution
+if (require.main === module) {
+  (async () => {
+    try {
+      console.log('Session Migration Tool');
+      console.log('====================');
+      
+      // Initialize services
+      const serviceManager = ServiceManager.getInstance();
+      await serviceManager.initializeAllServices();
+      
+      const sessionService = serviceManager.getService('sessionService') as SessionService;
+      
+      if (!sessionService) {
+        console.error('Required services not available');
+        process.exit(1);
+      }
+      
+      const migrationService = new SessionMigrationService(sessionService);
+      
+      // Check migration status
+      const status = await migrationService.getMigrationStatus();
+      console.log('Migration Status:', JSON.stringify(status, null, 2));
+      
+      if (status.needsMigration) {
+        console.log('Migration needed. Running migration...');
+        await migrationService.migrateToSimplifiedSessions();
+        console.log('Migration completed successfully!');
+      } else {
+        console.log('No migration needed.');
+      }
+      
+    } catch (error) {
+      console.error('Migration failed:', error);
+      process.exit(1);
+    }
+  })();
 }

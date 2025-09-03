@@ -3,7 +3,7 @@ import { WebClient } from '@slack/web-api';
 import { ServiceManager } from '../services/service-manager';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../types/slack.types';
 import { ToolExecutionContext, ToolResult } from '../types/tools';
-import { SlackSessionManager } from '../services/slack-session-manager';
+import { SessionService } from '../services/session.service';
 import { TokenManager } from '../services/token-manager';
 import logger from '../utils/logger';
 
@@ -22,7 +22,7 @@ export class SlackInterface {
   private receiver: ExpressReceiver;
   private serviceManager: ServiceManager;
   private config: SlackConfig;
-  private sessionManager: SlackSessionManager | null = null;
+  private sessionService: SessionService | null = null;
   private tokenManager: TokenManager | null = null;
 
   constructor(config: SlackConfig, serviceManager: ServiceManager) {
@@ -30,7 +30,7 @@ export class SlackInterface {
     this.serviceManager = serviceManager;
 
     // Initialize session and token managers
-    this.sessionManager = this.serviceManager.getService('slackSessionManager') as unknown as SlackSessionManager;
+    this.sessionService = this.serviceManager.getService('sessionService') as unknown as SessionService;
     this.tokenManager = this.serviceManager.getService('tokenManager') as unknown as TokenManager;
 
     // Create Express receiver for Slack with default endpoints
@@ -873,13 +873,13 @@ export class SlackInterface {
    */
   private async createOrGetSession(slackContext: SlackContext): Promise<string> {
     try {
-      if (!this.sessionManager) {
-        logger.warn('SlackSessionManager not available for Slack integration');
-        throw new Error('SlackSessionManager not available');
+      if (!this.sessionService) {
+        logger.warn('SessionService not available for Slack integration');
+        throw new Error('SessionService not available');
       }
 
       // Use simplified session management - one session per user
-      const session = await this.sessionManager.getSlackSession(slackContext.teamId, slackContext.userId);
+      const session = await this.sessionService.getSlackSession(slackContext.teamId, slackContext.userId);
       
       logger.info('Created/retrieved simplified Slack session', { 
         sessionId: session.sessionId, 
@@ -1145,9 +1145,9 @@ export class SlackInterface {
         logger.error('Error retrieving OAuth tokens for Slack user', { error, sessionId });
       }
       
-      // 3. Initialize MasterAgent with OpenAI configuration
-      const { MasterAgent } = await import('../agents/master.agent');
-      masterAgent = new MasterAgent({ 
+      // 3. Initialize MasterAgent with consistent configuration
+      const { createMasterAgent } = await import('../config/agent-factory-init');
+      masterAgent = createMasterAgent({ 
         openaiApiKey: process.env.OPENAI_API_KEY || 'dummy-key' 
       });
       

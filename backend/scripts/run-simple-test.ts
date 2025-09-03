@@ -14,13 +14,13 @@ process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
 process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/auth/google/callback';
 process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
 
-import { MasterAgent } from '../src/agents/master.agent';
+import { createMasterAgent } from '../src/config/agent-factory-init';
 
 async function runSimpleTest() {
   console.log('🧪 Running Simple Master Agent Test');
   
   try {
-    const masterAgent = new MasterAgent();
+    const masterAgent = createMasterAgent();
     
     // Test 1: Basic email routing
     console.log('\n📧 Test 1: Email routing');
