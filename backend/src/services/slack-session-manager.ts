@@ -49,10 +49,31 @@ export class SlackSessionManager extends BaseService {
   }
 
   /**
-   * Generate a consistent session ID for a Slack user
+   * Generate a consistent, canonical session ID for a Slack user
+   * Format: user:${teamId}:${userId} (standardized across all services)
    */
   private generateSessionId(teamId: string, userId: string): string {
-    return `slack_${teamId}_${userId}`;
+    // Validate inputs to prevent malformed session IDs
+    if (!teamId || !userId || typeof teamId !== 'string' || typeof userId !== 'string') {
+      throw new Error(`Invalid session ID parameters: teamId=${teamId}, userId=${userId}`);
+    }
+    
+    // Use standardized format across all services
+    return `user:${teamId}:${userId}`;
+  }
+  
+  /**
+   * Parse a session ID to extract team and user information
+   */
+  public static parseSessionId(sessionId: string): { teamId: string; userId: string } | null {
+    const match = sessionId.match(/^user:([^:]+):([^:]+)$/);
+    if (!match || match.length < 3) {
+      return null;
+    }
+    return {
+      teamId: match[1]!,
+      userId: match[2]!
+    };
   }
 
   /**
