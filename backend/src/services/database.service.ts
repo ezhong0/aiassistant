@@ -1,7 +1,8 @@
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
-import configService from '../config/config.service';
+import { serviceManager } from './service-manager';
+import { ConfigService } from '../config/config.service';
 
 export interface DatabaseConfig {
   host: string;
@@ -63,43 +64,54 @@ export class DatabaseService extends BaseService {
   constructor() {
     super('DatabaseService');
     
-    // Parse DATABASE_URL or use individual config
-    const databaseUrl = configService.databaseUrl;
-    if (databaseUrl) {
-      const url = new URL(databaseUrl);
-      this.config = {
-        host: url.hostname,
-        port: parseInt(url.port) || 5432,
-        database: url.pathname.slice(1), // Remove leading slash
-        user: url.username,
-        password: url.password,
-        ssl: {
-          rejectUnauthorized: false // Allow self-signed certificates for Railway
-        },
-        max: 20,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000
-      };
-    } else {
-      // Fallback to environment variables
-      this.config = {
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT || '5432'),
-        database: process.env.DB_NAME || 'assistantapp',
-        user: process.env.DB_USER || 'postgres',
-        password: process.env.DB_PASSWORD || '',
-        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-        max: parseInt(process.env.DB_MAX_CONNECTIONS || '20'),
-        idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
-        connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000')
-      };
-    }
+    // Initialize with default config, will be updated in onInitialize
+    this.config = {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'assistantapp',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '',
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      max: parseInt(process.env.DB_MAX_CONNECTIONS || '20'),
+      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
+      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000')
+    };
   }
 
   /**
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
+    // Get config service from ServiceManager
+    const configService = serviceManager.getService<ConfigService>('configService');
+    
+    if (configService) {
+      // Parse DATABASE_URL or use individual config
+      const databaseUrl = configService.databaseUrl;
+      if (databaseUrl) {
+        const url = new URL(databaseUrl);
+        this.config = {
+          host: url.hostname,
+          port: parseInt(url.port) || 5432,
+          database: url.pathname.slice(1), // Remove leading slash
+          user: url.username,
+          password: url.password,
+          ssl: {
+            rejectUnauthorized: false // Allow self-signed certificates for Railway
+          },
+          max: 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000
+        };
+      }
+    }
+    
+    // In test environment, skip actual database connection
+    if (process.env.NODE_ENV === 'test') {
+      this.logInfo('Database service initialized in test mode - skipping actual connection');
+      return;
+    }
+    
     try {
       this.logInfo('Initializing database connection pool...', {
         host: this.config.host,

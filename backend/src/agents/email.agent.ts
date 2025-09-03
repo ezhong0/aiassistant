@@ -630,6 +630,3 @@ Guidelines:
     return params;
   }
 }
-
-// Export the class for use with AgentFactory
-export { EmailAgent };

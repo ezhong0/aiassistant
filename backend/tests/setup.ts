@@ -68,7 +68,7 @@ afterAll(async () => {
   if (serviceInitialized) {
     try {
       const { serviceManager } = await import('../src/services/service-manager');
-      await serviceManager.getInstance().shutdown();
+      await serviceManager.getInstance().forceCleanup();
       serviceInitialized = false;
       console.log('✅ Services cleaned up after tests');
     } catch (error) {
@@ -91,6 +91,7 @@ afterEach(async () => {
     try {
       const { serviceManager } = await import('../src/services/service-manager');
       const manager = serviceManager.getInstance();
+      
       // Reset service states without full shutdown
       for (const serviceName of manager.getRegisteredServices()) {
         const service = manager.getService(serviceName);
@@ -98,26 +99,45 @@ afterEach(async () => {
           // Reset to initial state if possible
           if (service.initialize && typeof service.initialize === 'function') {
             try {
-              await service.initialize();
+              // Reset service state for next test
+              if (service.state === 'error') {
+                // Re-initialize errored services
+                await service.initialize();
+              }
             } catch (error) {
-              // Ignore initialization errors during cleanup
+              // Ignore reset errors in tests
             }
           }
         }
       }
     } catch (error) {
-      // Ignore cleanup errors
+      // Ignore service reset errors in tests
     }
   }
-  
-  // Force garbage collection between tests if available
-  if (global.gc) {
-    global.gc();
+});
+
+// Global test utilities
+global.getService = async (serviceName: string) => {
+  if (!serviceInitialized) {
+    const { initializeAllCoreServices } = await import('../src/services/service-initialization');
+    await initializeAllCoreServices();
+    serviceInitialized = true;
   }
   
-  // Small delay to allow async cleanup to complete
-  await new Promise(resolve => setTimeout(resolve, 10));
-});
+  const { serviceManager } = await import('../src/services/service-manager');
+  return serviceManager.getInstance().getService(serviceName);
+};
+
+global.getServiceManager = async () => {
+  if (!serviceInitialized) {
+    const { initializeAllCoreServices } = await import('../src/services/service-initialization');
+    await initializeAllCoreServices();
+    serviceInitialized = true;
+  }
+  
+  const { serviceManager } = await import('../src/services/service-manager');
+  return serviceManager.getInstance();
+};
 
 // Handle unhandled promise rejections in tests
 process.on('unhandledRejection', (reason, promise) => {

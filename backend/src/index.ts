@@ -7,7 +7,7 @@ const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
-import configService from './config/config.service';
+import { configService } from './config/config.service';
 import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
 import { initializeAllCoreServices } from './services/service-initialization';

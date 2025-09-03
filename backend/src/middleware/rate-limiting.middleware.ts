@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './auth.middleware';
-import configService from '../config/config.service';
+import { configService } from '../config/config.service';
 import logger from '../utils/logger';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';

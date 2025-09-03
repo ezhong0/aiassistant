@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import configService from '../config/config.service';
+import { configService } from '../config/config.service';
 import logger from '../utils/logger';
 
 /**
@@ -10,7 +10,7 @@ import logger from '../utils/logger';
  */
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    const allowedOrigins = configService.corsOrigin.split(',').map(o => o.trim());
+    const allowedOrigins = configService.corsOrigin.split(',').map((o: string) => o.trim());
     
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);

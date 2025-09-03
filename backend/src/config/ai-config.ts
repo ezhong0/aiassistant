@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import logger from '../utils/logger';
+import { BaseService } from '../services/base-service';
 
 // Configuration schemas for type safety
 const OpenAIConfigSchema = z.object({
@@ -98,54 +99,45 @@ export const PROMPT_TEMPLATES: Record<string, PromptTemplate> = {
       
       Rules:
       1. Call contactAgent first if email/calendar needs contact lookup
-      2. Always call Think tool last for verification
-      3. Multiple tools can be called in one response
-      
-      Return tool calls as JSON array.`,
+      2. Always call Think tool last to verify actions
+      3. Return structured tool calls`,
     variables: ["currentDateTime", "userInput", "availableTools"],
-    description: "Master agent routing prompt"
+    description: "Master agent system prompt with dynamic tool information"
   }
 };
 
-// Agent AI configurations
+// Agent-specific AI configurations
 export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
-  emailAgent: {
+  master: {
     timeout: 30000,
     retries: 3,
     enabled: true,
     fallback_strategy: 'retry'
   },
   
-  contactAgent: {
+  email: {
+    timeout: 25000,
+    retries: 2,
+    enabled: true,
+    fallback_strategy: 'retry'
+  },
+  
+  contact: {
     timeout: 15000,
     retries: 2,
     enabled: true,
     fallback_strategy: 'retry'
   },
   
-  calendarAgent: {
-    timeout: 30000,
+  calendar: {
+    timeout: 20000,
     retries: 2,
     enabled: true,
     fallback_strategy: 'retry'
   },
   
-  contentCreator: {
+  content: {
     timeout: 45000,
-    retries: 2,
-    enabled: true,
-    fallback_strategy: 'retry'
-  },
-  
-  Tavily: {
-    timeout: 30000,
-    retries: 2,
-    enabled: true,
-    fallback_strategy: 'retry'
-  },
-  
-  Think: {
-    timeout: 15000,
     retries: 1,
     enabled: true,
     fallback_strategy: 'fail'
@@ -156,17 +148,41 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
  * Unified AI Configuration Service
  * Provides type-safe access to AI models, prompts, and agent settings
  */
-export class AIConfigService {
-  private static instance: AIConfigService;
+export class AIConfigService extends BaseService {
+  
+  constructor() {
+    super('AIConfigService');
+  }
   
   /**
-   * Get singleton instance
+   * Service-specific initialization
    */
-  static getInstance(): AIConfigService {
-    if (!AIConfigService.instance) {
-      AIConfigService.instance = new AIConfigService();
-    }
-    return AIConfigService.instance;
+  protected async onInitialize(): Promise<void> {
+    // Validate all configurations on startup
+    this.validateAllConfigurations();
+  }
+
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    // No cleanup needed for configuration
+  }
+
+  /**
+   * Get service health status
+   */
+  getHealth(): { healthy: boolean; details?: any } {
+    const healthy = this.isReady();
+    return {
+      healthy,
+      details: {
+        openaiConfigs: Object.keys(OPENAI_CONFIGS).length,
+        promptTemplates: Object.keys(PROMPT_TEMPLATES).length,
+        agentConfigs: Object.keys(AGENT_AI_CONFIGS).length,
+        timestamp: new Date().toISOString()
+      }
+    };
   }
   
   /**
@@ -247,168 +263,55 @@ export class AIConfigService {
   /**
    * Get all available OpenAI configurations
    */
-  getAvailableOpenAIConfigs(): string[] {
-    return Object.keys(OPENAI_CONFIGS);
+  getAllOpenAIConfigs(): Record<string, OpenAIConfig> {
+    return { ...OPENAI_CONFIGS };
   }
   
   /**
    * Get all available prompt templates
    */
-  getAvailablePrompts(): string[] {
-    return Object.keys(PROMPT_TEMPLATES);
+  getAllPromptTemplates(): Record<string, PromptTemplate> {
+    return { ...PROMPT_TEMPLATES };
   }
   
   /**
    * Get all available agent configurations
    */
-  getAvailableAgentConfigs(): string[] {
-    return Object.keys(AGENT_AI_CONFIGS);
+  getAllAgentConfigs(): Record<string, AgentAIConfig> {
+    return { ...AGENT_AI_CONFIGS };
   }
   
   /**
-   * Update OpenAI configuration at runtime (for testing/development)
+   * Validate all configurations on startup
    */
-  updateOpenAIConfig(purpose: string, config: Partial<OpenAIConfig>): void {
-    if (!OPENAI_CONFIGS[purpose]) {
-      throw new Error(`OpenAI configuration not found for purpose: ${purpose}`);
-    }
-    
-    const updatedConfig = { ...OPENAI_CONFIGS[purpose], ...config };
-    
+  private validateAllConfigurations(): void {
     try {
-      OpenAIConfigSchema.parse(updatedConfig);
-      OPENAI_CONFIGS[purpose] = updatedConfig;
-      logger.info(`Updated OpenAI configuration for ${purpose}`, updatedConfig);
-    } catch (error) {
-      logger.error(`Invalid OpenAI configuration update for ${purpose}:`, error);
-      throw new Error(`Invalid OpenAI configuration update for ${purpose}`);
-    }
-  }
-  
-  /**
-   * Update agent configuration at runtime (for testing/development)
-   */
-  updateAgentConfig(agentName: string, config: Partial<AgentAIConfig>): void {
-    if (!AGENT_AI_CONFIGS[agentName]) {
-      throw new Error(`Agent configuration not found for: ${agentName}`);
-    }
-    
-    const updatedConfig = { ...AGENT_AI_CONFIGS[agentName], ...config };
-    
-    try {
-      AgentConfigSchema.parse(updatedConfig);
-      AGENT_AI_CONFIGS[agentName] = updatedConfig;
-      logger.info(`Updated agent configuration for ${agentName}`, updatedConfig);
-    } catch (error) {
-      logger.error(`Invalid agent configuration update for ${agentName}:`, error);
-      throw new Error(`Invalid agent configuration update for ${agentName}`);
-    }
-  }
-  
-  /**
-   * Get configuration summary for debugging
-   */
-  getConfigSummary(): {
-    openai: string[];
-    prompts: string[];
-    agents: string[];
-  } {
-    return {
-      openai: this.getAvailableOpenAIConfigs(),
-      prompts: this.getAvailablePrompts(),
-      agents: this.getAvailableAgentConfigs()
-    };
-  }
-  
-  /**
-   * Validate all configurations
-   */
-  validateAllConfigs(): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-    
-    // Validate OpenAI configs
-    for (const [purpose, config] of Object.entries(OPENAI_CONFIGS)) {
-      try {
+      // Validate OpenAI configurations
+      Object.entries(OPENAI_CONFIGS).forEach(([key, config]) => {
         OpenAIConfigSchema.parse(config);
-      } catch (error) {
-        errors.push(`Invalid OpenAI config for ${purpose}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-    
-    // Validate prompt templates
-    for (const [key, template] of Object.entries(PROMPT_TEMPLATES)) {
-      try {
+      });
+      
+      // Validate prompt templates
+      Object.entries(PROMPT_TEMPLATES).forEach(([key, template]) => {
         PromptTemplateSchema.parse(template);
-      } catch (error) {
-        errors.push(`Invalid prompt template for ${key}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-    
-    // Validate agent configs
-    for (const [agentName, config] of Object.entries(AGENT_AI_CONFIGS)) {
-      try {
+      });
+      
+      // Validate agent configurations
+      Object.entries(AGENT_AI_CONFIGS).forEach(([key, config]) => {
         AgentConfigSchema.parse(config);
-      } catch (error) {
-        errors.push(`Invalid agent config for ${agentName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+      });
+      
+      logger.info('All AI configurations validated successfully', {
+        openaiConfigs: Object.keys(OPENAI_CONFIGS).length,
+        promptTemplates: Object.keys(PROMPT_TEMPLATES).length,
+        agentConfigs: Object.keys(AGENT_AI_CONFIGS).length
+      });
+    } catch (error) {
+      logger.error('AI configuration validation failed:', error);
+      throw new Error('AI configuration validation failed');
     }
-    
-    if (errors.length > 0) {
-      logger.error('AI configuration validation failed:', errors);
-    } else {
-      logger.info('All AI configurations validated successfully');
-    }
-    
-    return {
-      valid: errors.length === 0,
-      errors
-    };
   }
 }
 
-// Export singleton instance
-export const aiConfigService = AIConfigService.getInstance();
-
-// Export for backward compatibility and convenience
-export const aiConfig = aiConfigService;
-
-// Validate all configurations on module load
-aiConfigService.validateAllConfigs();
-
-// Development hot-reload capabilities
-if (process.env.NODE_ENV === 'development') {
-  // Allow runtime configuration updates via environment variable changes
-  const originalEnv = { ...process.env };
-  
-  // Check for configuration changes every 30 seconds in development
-  const configCheckInterval = setInterval(() => {
-    let hasChanges = false;
-    
-    // Check for environment variable changes that might affect configuration
-    const relevantEnvVars = ['OPENAI_API_KEY', 'LOG_LEVEL', 'NODE_ENV'];
-    for (const envVar of relevantEnvVars) {
-      if (process.env[envVar] !== originalEnv[envVar]) {
-        hasChanges = true;
-        originalEnv[envVar] = process.env[envVar];
-      }
-    }
-    
-    if (hasChanges) {
-      logger.info('🔄 Environment changes detected, configuration remains type-safe');
-      aiConfigService.validateAllConfigs();
-    }
-  }, 30000);
-  
-  // Clean up interval on process exit
-  process.on('SIGINT', () => {
-    clearInterval(configCheckInterval);
-  });
-  
-  process.on('SIGTERM', () => {
-    clearInterval(configCheckInterval);
-  });
-  
-  logger.info('🔥 Development mode: Basic configuration monitoring enabled');
-}
-
-logger.info('✅ AI configuration service initialized with TypeScript configs');
+// Export singleton instance for backward compatibility
+export const aiConfigService = new AIConfigService();
