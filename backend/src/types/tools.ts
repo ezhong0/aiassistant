@@ -61,6 +61,16 @@ export interface SessionContext {
       user_id?: string;
     };
   };
+  // Conversation context for Slack users
+  conversations?: {
+    [channelId: string]: {
+      [threadTs: string]: {
+        lastActivity: Date;
+        messageCount: number;
+        context?: any;
+      }
+    }
+  };
 }
 
 export interface ConversationEntry {

@@ -3,6 +3,8 @@ import { WebClient } from '@slack/web-api';
 import { ServiceManager } from '../services/service-manager';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../types/slack.types';
 import { ToolExecutionContext, ToolResult } from '../types/tools';
+import { SlackSessionManager } from '../services/slack-session-manager';
+import { TokenManager } from '../services/token-manager';
 import logger from '../utils/logger';
 
 export interface SlackConfig {
@@ -20,10 +22,16 @@ export class SlackInterface {
   private receiver: ExpressReceiver;
   private serviceManager: ServiceManager;
   private config: SlackConfig;
+  private sessionManager: SlackSessionManager | null = null;
+  private tokenManager: TokenManager | null = null;
 
   constructor(config: SlackConfig, serviceManager: ServiceManager) {
     this.config = config;
     this.serviceManager = serviceManager;
+
+    // Initialize session and token managers
+    this.sessionManager = this.serviceManager.getService('slackSessionManager') as unknown as SlackSessionManager;
+    this.tokenManager = this.serviceManager.getService('tokenManager') as unknown as TokenManager;
 
     // Create Express receiver for Slack with default endpoints
     // The receiver will be mounted at /slack/bolt, so default endpoints will work
@@ -861,76 +869,31 @@ export class SlackInterface {
 
 
   /**
-   * Create or get session for Slack user with enhanced context management
+   * Create or get session for Slack user with simplified management
    */
   private async createOrGetSession(slackContext: SlackContext): Promise<string> {
     try {
-      const sessionService = this.serviceManager.getService('sessionService');
-      if (!sessionService) {
-        logger.warn('SessionService not available for Slack integration');
-        throw new Error('SessionService not available');
+      if (!this.sessionManager) {
+        logger.warn('SlackSessionManager not available for Slack integration');
+        throw new Error('SlackSessionManager not available');
       }
 
-      // Create unique session ID for Slack context
-      // Format: slack_{teamId}_{userId}_{threadTs|channel|main}
-      let sessionSuffix = 'main';
-      if (slackContext.threadTs) {
-        // For threaded conversations, include thread timestamp
-        sessionSuffix = `thread_${slackContext.threadTs.replace('.', '_')}`;
-      } else if (!slackContext.isDirectMessage) {
-        // For channel conversations (non-DM), include channel
-        sessionSuffix = `channel_${slackContext.channelId}`;
-      }
+      // Use simplified session management - one session per user
+      const session = await this.sessionManager.getSlackSession(slackContext.teamId, slackContext.userId);
       
-      const sessionId = `slack_${slackContext.teamId}_${slackContext.userId}_${sessionSuffix}`;
-      
-      logger.info('Creating/retrieving Slack session with detailed context', { 
-        sessionId, 
+      logger.info('Created/retrieved simplified Slack session', { 
+        sessionId: session.sessionId, 
         userId: slackContext.userId,
         teamId: slackContext.teamId,
-        channelId: slackContext.channelId,
-        isDirectMessage: slackContext.isDirectMessage,
-        threadTs: slackContext.threadTs,
-        sessionSuffix,
-        fullSessionId: sessionId
+        hasOAuthTokens: !!session.oauthTokens
       });
       
-      // Get or create session using existing SessionService with enhanced context
-      const session = await (sessionService as any).getOrCreateSession(sessionId, slackContext.userId);
-      
-      // Store Slack-specific context in the session for agents to use
-      if (session && typeof (sessionService as any).updateSessionContext === 'function') {
-        try {
-          await (sessionService as any).updateSessionContext(sessionId, {
-            slack: {
-              teamId: slackContext.teamId,
-              channelId: slackContext.channelId,
-              isDirectMessage: slackContext.isDirectMessage,
-              userName: slackContext.userName,
-              userEmail: slackContext.userEmail,
-              threadTs: slackContext.threadTs,
-              lastInteraction: new Date().toISOString()
-            }
-          });
-        } catch (contextError: any) {
-          logger.debug('Could not update session context (non-critical)', contextError);
-        }
-      }
-      
-      logger.debug('Slack session created/retrieved', { 
-        sessionId, 
-        userId: slackContext.userId,
-        teamId: slackContext.teamId,
-        isDirectMessage: slackContext.isDirectMessage,
-        hasThread: !!slackContext.threadTs
-      });
-      
-      return sessionId;
+      return session.sessionId;
     } catch (error: any) {
       logger.error('Error creating/retrieving Slack session', error);
       
-      // Enhanced fallback with more context preservation
-      const fallbackId = `slack_fallback_${slackContext.teamId}_${slackContext.userId}_${Date.now()}`;
+      // Fallback to simple session ID
+      const fallbackId = `slack_${slackContext.teamId}_${slackContext.userId}`;
       
       logger.warn('Using fallback session ID for Slack', { 
         fallbackId,
@@ -1153,84 +1116,29 @@ export class SlackInterface {
       // 2. Get OAuth tokens for this session if available
       let accessToken: string | undefined;
       try {
-        const sessionService = this.serviceManager.getService('sessionService');
-        if (sessionService) {
-          logger.info('Attempting to retrieve OAuth tokens', { 
+        if (!this.tokenManager) {
+          logger.warn('TokenManager not available for Slack integration');
+        } else {
+          logger.info('Retrieving OAuth tokens for Slack user', { 
             sessionId, 
             userId: request.context.userId,
             teamId: request.context.teamId
           });
           
-          // Check what tokens are available
-          const allTokens = await (sessionService as any).getOAuthTokens(sessionId);
-          logger.info('Available OAuth tokens for session', { 
-            sessionId, 
-            hasTokens: !!allTokens,
-            googleToken: !!allTokens?.google?.access_token,
-            slackToken: !!allTokens?.slack,
-            tokenDetails: allTokens ? {
-              google: {
-                hasAccessToken: !!allTokens.google?.access_token,
-                hasRefreshToken: !!allTokens.google?.refresh_token,
-                expiresIn: allTokens.google?.expires_in,
-                expiryDate: allTokens.google?.expiry_date
-              },
-              slack: {
-                teamId: allTokens.slack?.team_id,
-                userId: allTokens.slack?.user_id
-              }
-            } : null
-          });
+          accessToken = await this.tokenManager.getValidTokens(request.context.teamId, request.context.userId) || undefined;
           
-          accessToken = await (sessionService as any).getGoogleAccessToken(sessionId);
           if (accessToken) {
-            logger.info('✅ Retrieved Google OAuth access token for Slack user', { 
+            logger.info('✅ Retrieved valid Google OAuth access token for Slack user', { 
               sessionId, 
               hasToken: !!accessToken,
               tokenLength: accessToken.length
             });
           } else {
-            logger.warn('❌ No Google OAuth access token found for Slack user', { 
+            logger.warn('❌ No valid OAuth tokens found for Slack user', { 
               sessionId,
-              availableTokens: allTokens
+              userId: request.context.userId,
+              teamId: request.context.teamId
             });
-            
-            // Try to find tokens in other possible session locations
-            const possibleSessionIds = [
-              `slack_${request.context.teamId}_${request.context.userId}_main`,
-              `slack_${request.context.teamId}_${request.context.userId}_channel_${request.context.channelId}`,
-              `slack_${request.context.teamId}_${request.context.userId}_fallback_${Date.now()}`
-            ];
-            
-            for (const possibleSessionId of possibleSessionIds) {
-              if (possibleSessionId === sessionId) continue; // Skip the current session
-              
-              try {
-                const possibleTokens = await (sessionService as any).getOAuthTokens(possibleSessionId);
-                if (possibleTokens?.google?.access_token) {
-                  accessToken = possibleTokens.google.access_token;
-                  logger.info('✅ Found OAuth tokens in alternative session', { 
-                    originalSessionId: sessionId,
-                    foundInSessionId: possibleSessionId,
-                    hasToken: !!accessToken
-                  });
-                  break;
-                }
-              } catch (alternativeError) {
-                logger.debug('Could not check alternative session for tokens', { 
-                  alternativeSessionId: possibleSessionId,
-                  error: alternativeError
-                });
-              }
-            }
-            
-            if (!accessToken) {
-              logger.warn('❌ No OAuth tokens found in any session location', { 
-                checkedSessions: [sessionId, ...possibleSessionIds],
-                userId: request.context.userId,
-                teamId: request.context.teamId
-              });
-            }
           }
         }
       } catch (error) {
@@ -1960,39 +1868,11 @@ export class SlackInterface {
    */
   private async hasOAuthTokens(slackContext: SlackContext): Promise<boolean> {
     try {
-      const sessionService = this.serviceManager.getService('sessionService');
-      if (!sessionService) {
+      if (!this.tokenManager) {
         return false;
       }
 
-      // Check multiple possible session locations (consistent with createOrGetSession logic)
-      const possibleSessionIds = [];
-      
-      // Add thread-specific session if in a thread
-      if (slackContext.threadTs) {
-        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_thread_${slackContext.threadTs.replace('.', '_')}`);
-      }
-      
-      // Add channel-specific session if not a DM
-      if (!slackContext.isDirectMessage) {
-        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`);
-      }
-      
-      // Add main session as fallback
-      possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_main`);
-
-      for (const sessionId of possibleSessionIds) {
-        try {
-          const tokens = await (sessionService as any).getOAuthTokens(sessionId);
-          if (tokens?.google?.access_token) {
-            return true;
-          }
-        } catch (error) {
-          logger.debug('Could not check session for OAuth tokens', { sessionId, error });
-        }
-      }
-
-      return false;
+      return await this.tokenManager.hasValidOAuthTokens(slackContext.teamId, slackContext.userId);
     } catch (error) {
       logger.error('Error checking OAuth tokens', { error, userId: slackContext.userId });
       return false;

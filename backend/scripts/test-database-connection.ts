@@ -2,9 +2,10 @@
 
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import path from 'path';
 
-// Load environment variables
-dotenv.config();
+// Load environment variables from root directory
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 async function testDatabaseConnection() {
   console.log('🔍 Testing Database Connection...\n');

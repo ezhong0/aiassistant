@@ -11,6 +11,9 @@ This document defines the **service layer architecture** that provides business 
 ServiceManager (Lifecycle Management)
 ├── DatabaseService (Priority: 5) - Data persistence
 ├── SessionService (Priority: 10) - Session management
+├── SessionMigrationService (Priority: 12) - Session data migration
+├── TokenManager (Priority: 13) - Centralized token management
+├── SlackSessionManager (Priority: 14) - Slack session management
 ├── AuthService (Priority: 15) - Authentication & OAuth
 ├── Google Services (Priority: 20)
 │   ├── GmailService - Email operations
@@ -141,6 +144,78 @@ CREATE TABLE slack_users (
 - **Responsibility**: User session lifecycle, conversation history, OAuth token management
 - **Priority**: 10 (depends on DatabaseService)
 
+### **3. SessionMigrationService**
+
+#### **Purpose**
+- **Primary**: Migration of session data to simplified format
+- **Responsibility**: Convert existing session data structures, handle legacy data
+- **Priority**: 12 (depends on DatabaseService)
+- **Documentation**: See `docs/SESSION_SIMPLIFICATION.md` for complete implementation details
+
+#### **Key Features**
+```typescript
+export class SessionMigrationService extends BaseService {
+  // Session migration operations
+  async migrateSession(sessionId: string): Promise<boolean>
+  async migrateAllSessions(): Promise<number>
+  async checkMigrationStatus(): Promise<MigrationStatus>
+  
+  // Data validation
+  async validateSessionData(sessionId: string): Promise<ValidationResult>
+  private isLegacySession(session: any): boolean
+  private convertToSimplifiedFormat(session: any): SimplifiedSession
+}
+```
+
+### **4. TokenManager**
+
+#### **Purpose**
+- **Primary**: Centralized OAuth token management
+- **Responsibility**: Token storage, refresh, validation, and cleanup
+- **Priority**: 13
+
+#### **Key Features**
+```typescript
+export class TokenManager {
+  // Token management
+  async storeTokens(sessionId: string, tokens: OAuthTokens): Promise<void>
+  async getTokens(sessionId: string): Promise<OAuthTokens | null>
+  async refreshTokens(sessionId: string): Promise<OAuthTokens | null>
+  async deleteTokens(sessionId: string): Promise<boolean>
+  
+  // Token validation
+  async validateTokens(tokens: OAuthTokens): Promise<boolean>
+  async isTokenExpired(tokens: OAuthTokens): boolean
+  
+  // Cleanup operations
+  async cleanupExpiredTokens(): Promise<number>
+}
+```
+
+### **5. SlackSessionManager**
+
+#### **Purpose**
+- **Primary**: Slack-specific session context management
+- **Responsibility**: Slack user sessions, team context, workspace integration
+- **Priority**: 14
+
+#### **Key Features**
+```typescript
+export class SlackSessionManager {
+  // Slack session management
+  async createSlackSession(teamId: string, userId: string): Promise<string>
+  async getSlackSession(sessionId: string): Promise<SlackSessionContext | null>
+  async updateSlackSession(sessionId: string, updates: Partial<SlackSessionContext>): Promise<void>
+  
+  // Slack context
+  async getSlackContext(sessionId: string): Promise<SlackContext>
+  async linkGoogleAccount(sessionId: string, googleUserId: string): Promise<void>
+  
+  // Session cleanup
+  async cleanupSlackSessions(): Promise<number>
+}
+```
+
 #### **Key Features**
 ```typescript
 export class SessionService extends BaseService {
@@ -168,7 +243,7 @@ export class SessionService extends BaseService {
 }
 ```
 
-### **3. AuthService**
+### **6. AuthService**
 
 #### **Purpose**
 - **Primary**: Authentication and OAuth token management
@@ -193,7 +268,7 @@ export class AuthService extends BaseService {
 }
 ```
 
-### **4. Google Services**
+### **7. Google Services**
 
 #### **GmailService**
 ```typescript
@@ -243,7 +318,7 @@ export class ContactService extends BaseService {
 }
 ```
 
-### **5. OpenAIService**
+### **8. OpenAIService**
 
 #### **Purpose**
 - **Primary**: OpenAI API integration for AI capabilities
@@ -276,7 +351,7 @@ export class OpenAIService extends BaseService {
 }
 ```
 
-### **6. Agent Services**
+### **9. Agent Services**
 
 #### **MasterAgent**
 ```typescript
@@ -305,7 +380,7 @@ export class MasterAgent extends BaseAgent {
 - **ContentCreatorAgent**: Content generation using OpenAI
 - **TavilyAgent**: Web search and information retrieval
 
-### **7. ToolExecutorService**
+### **10. ToolExecutorService**
 
 #### **Purpose**
 - **Primary**: Tool execution and workflow orchestration
@@ -347,6 +422,12 @@ export class ToolExecutorService extends BaseService {
 DatabaseService (5)
     ↓
 SessionService (10)
+    ↓
+SessionMigrationService (12) ← DatabaseService
+    ↓
+TokenManager (13) ← SessionService
+    ↓
+SlackSessionManager (14) ← SessionService, TokenManager
     ↓
 AuthService (15)
     ↓
