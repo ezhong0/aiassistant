@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
-import { SlackSessionManager } from '../services/slack-session-manager';
+import { SessionService } from '../services/session.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {
   GoogleTokens,
@@ -784,10 +784,10 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           hasTokens: !!tokens.access_token
         });
         
-        const sessionManager = getService('slackSessionManager') as unknown as SlackSessionManager;
-        if (sessionManager) {
-          // Use simplified session management - one session per user
-          const stored = await sessionManager.storeOAuthTokens(slackContext.team_id, slackContext.user_id, {
+        const sessionService = getService('sessionService') as unknown as SessionService;
+        if (sessionService) {
+          // Use unified session management - one session per user
+          const stored = await sessionService.storeSlackOAuthTokens(slackContext.team_id, slackContext.user_id, {
             google: {
               access_token: tokens.access_token,
               refresh_token: tokens.refresh_token,
@@ -820,7 +820,7 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
             });
           }
         } else {
-          logger.error('SlackSessionManager not available for OAuth token storage');
+          logger.error('SessionService not available for OAuth token storage');
         }
       } catch (error) {
         logger.error('Error storing OAuth tokens for Slack user', {

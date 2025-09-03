@@ -523,6 +523,3 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
     return this.systemPrompt;
   }
 }
-
-// Export the class for use with AgentFactory
-export { ThinkAgent };

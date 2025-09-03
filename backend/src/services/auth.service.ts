@@ -14,13 +14,14 @@ import {
   validateGoogleUserInfo,
   retryOAuthOperation
 } from '../utils/auth-errors';
-import configService from '../config/config.service';
+import { serviceManager } from './service-manager';
+import { ConfigService } from '../config/config.service';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
 export class AuthService extends BaseService {
   private oauth2Client!: OAuth2Client;
-  private readonly config = configService;
+  private config: ConfigService | null = null;
 
   constructor() {
     super('AuthService');
@@ -30,9 +31,14 @@ export class AuthService extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    // Validate configuration
-    this.config.validate();
+    // Get config service from ServiceManager
+    this.config = serviceManager.getService<ConfigService>('configService') || null;
     
+    if (!this.config) {
+      throw new Error('ConfigService not available from service registry');
+    }
+    
+    // Configuration is already validated in ConfigService constructor
     this.oauth2Client = new OAuth2Client(
       this.config.googleClientId,
       this.config.googleClientSecret,
@@ -54,6 +60,16 @@ export class AuthService extends BaseService {
   }
 
   /**
+   * Check if service is ready and config is available
+   */
+  private assertConfig(): ConfigService {
+    if (!this.config) {
+      throw new Error('AuthService config not initialized');
+    }
+    return this.config;
+  }
+
+  /**
    * Generate Google OAuth authorization URL
    */
   generateAuthUrl(scopes: string[] = [
@@ -67,6 +83,7 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
+      const config = this.assertConfig();
       const authOptions: any = {
         access_type: 'offline',
         scope: scopes,
@@ -94,13 +111,14 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
+      const config = this.assertConfig();
       this.logDebug('Exchanging authorization code for tokens', {
         codeLength: code.length,
         codePrefix: code.substring(0, 20) + '...',
         clientConfig: {
-          clientId: this.config.googleClientId.substring(0, 20) + '...',
-          redirectUri: this.config.googleRedirectUri,
-          hasClientSecret: !!this.config.googleClientSecret
+          clientId: config.googleClientId.substring(0, 20) + '...',
+          redirectUri: config.googleRedirectUri,
+          hasClientSecret: !!config.googleClientSecret
         }
       });
       
@@ -133,8 +151,8 @@ export class AuthService extends BaseService {
         errorDetails: error.response?.data,
         status: error.response?.status,
         clientConfig: {
-          clientId: this.config.googleClientId.substring(0, 20) + '...',
-          redirectUri: this.config.googleRedirectUri
+          clientId: this.config?.googleClientId?.substring(0, 20) + '...' || 'unknown',
+          redirectUri: this.config?.googleRedirectUri || 'unknown'
         }
       });
       this.handleError(error, 'exchangeCodeForTokens');
@@ -182,13 +200,14 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
+      const config = this.assertConfig();
       const payload: JWTPayload = {
         sub: userId,
         email,
-        iss: this.config.jwtIssuer,
-        aud: this.config.jwtAudience,
+        iss: config.jwtIssuer,
+        aud: config.jwtAudience,
         iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(this.config.jwtExpiresIn),
+        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(config.jwtExpiresIn),
         ...additionalClaims
       };
 
@@ -196,12 +215,12 @@ export class AuthService extends BaseService {
         algorithm: 'HS256'
       };
 
-      const token = jwt.sign(payload, this.config.jwtSecret, options);
+      const token = jwt.sign(payload, config.jwtSecret, options);
       
       this.logDebug('Generated JWT token', { 
         userId, 
         email, 
-        expiresIn: this.config.jwtExpiresIn 
+        expiresIn: config.jwtExpiresIn 
       });
       
       return token;
@@ -217,15 +236,16 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
+      const config = this.assertConfig();
       // Validate token format first
       const formatValidation = validateTokenFormat(token);
       if (!formatValidation.valid) {
         throw new Error(`Invalid token format: ${formatValidation.error}`);
       }
 
-      const decoded = jwt.verify(token, this.config.jwtSecret, {
-        issuer: this.config.jwtIssuer,
-        audience: this.config.jwtAudience
+      const decoded = jwt.verify(token, config.jwtSecret, {
+        issuer: config.jwtIssuer,
+        audience: config.jwtAudience
       }) as JWTPayload;
 
       this.logDebug('JWT token verified successfully', { 
@@ -395,14 +415,15 @@ export class AuthService extends BaseService {
   getHealth(): { healthy: boolean; details?: any } {
     try {
       const healthy = this.isReady() && !!this.oauth2Client;
+      const config = this.config; // May be null if not initialized
       const details = {
         oauth2Client: !!this.oauth2Client,
-        config: {
-          hasGoogleClientId: !!this.config.googleClientId,
-          hasGoogleClientSecret: !!this.config.googleClientSecret,
-          hasGoogleRedirectUri: !!this.config.googleRedirectUri,
-          hasJWTSecret: !!this.config.jwtSecret
-        }
+        config: config ? {
+          hasGoogleClientId: !!config.googleClientId,
+          hasGoogleClientSecret: !!config.googleClientSecret,
+          hasGoogleRedirectUri: !!config.googleRedirectUri,
+          hasJWTSecret: !!config.jwtSecret
+        } : null
       };
 
       return { healthy, details };

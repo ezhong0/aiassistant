@@ -3,7 +3,7 @@ import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
 import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
 import {
-  Contact,
+  Contact as ContactType,
   ContactSearchRequest
 } from '../types/contact.types';
 import { CONTACT_CONSTANTS } from '../config/constants';
@@ -12,7 +12,7 @@ import { CONTACT_CONSTANTS } from '../config/constants';
  * Contact operation result interface
  */
 export interface ContactResult {
-  contacts: Contact[];
+  contacts: ContactType[];
   totalCount: number;
   operation: 'search' | 'create' | 'update';
   searchTerm?: string;
@@ -235,7 +235,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   /**
    * Format contacts for use by other agents (especially EmailAgent)
    */
-  static formatContactsForAgent(contacts: Contact[]): Array<{
+  static formatContactsForAgent(contacts: ContactType[]): Array<{
     name: string;
     email: string;
     phone?: string;
@@ -250,7 +250,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   /**
    * Get the best matching contact from a search result
    */
-  static getBestMatch(contacts: Contact[]): Contact | null {
+  static getBestMatch(contacts: ContactType[]): ContactType | null {
     if (contacts.length === 0) return null;
     
     // Return the first contact (highest confidence due to ranking)
@@ -260,7 +260,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   /**
    * Check if a search result is ambiguous (multiple good matches)
    */
-  static isAmbiguous(contacts: Contact[], confidenceThreshold: number = CONTACT_CONSTANTS.HIGH_CONFIDENCE_THRESHOLD): boolean {
+  static isAmbiguous(contacts: ContactType[], confidenceThreshold: number = CONTACT_CONSTANTS.HIGH_CONFIDENCE_THRESHOLD): boolean {
     if (contacts.length < 2) return false;
     
     // Check if we have multiple contacts with high confidence
@@ -271,10 +271,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   /**
    * Filter contacts by minimum confidence score
    */
-  static filterByConfidence(contacts: Contact[], minConfidence: number = CONTACT_CONSTANTS.MIN_CONFIDENCE_SCORE): Contact[] {
+  static filterByConfidence(contacts: ContactType[], minConfidence: number = CONTACT_CONSTANTS.MIN_CONFIDENCE_SCORE): ContactType[] {
     return contacts.filter(contact => (contact.confidence || 0) >= minConfidence);
   }
 }
-
-// Export the class for use with AgentFactory
-export { ContactAgent };

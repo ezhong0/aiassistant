@@ -360,7 +360,7 @@ export class ServiceManager {
    */
   areAllServicesHealthy(): boolean {
     const health = this.getAllServicesHealth();
-    return Object.values(health).every(service => service.healthy);
+    return Object.values(health).every(service => service.health?.healthy);
   }
 
   /**
@@ -379,8 +379,8 @@ export class ServiceManager {
 
     return {
       totalServices: services.length,
-      healthyServices: services.filter(s => s.healthy).length,
-      unhealthyServices: services.filter(s => !s.healthy).length,
+      healthyServices: services.filter(s => s.health?.healthy).length,
+      unhealthyServices: services.filter(s => !s.health?.healthy).length,
       readyServices: services.filter(s => s.state === 'ready').length,
       initializingServices: services.filter(s => s.state === 'initializing').length,
       errorServices: services.filter(s => s.state === 'error').length

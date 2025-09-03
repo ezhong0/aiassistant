@@ -1,6 +1,7 @@
 import logger from '../utils/logger';
 import { AgentFactory } from '../framework/agent-factory';
-import { MasterAgent, MasterAgentConfig } from '../agents/master.agent';
+import { MasterAgent } from '../agents/master.agent';
+import { MasterAgentConfig } from '../types/tools';
 
 /**
  * Simple initialization function that only uses AgentFactory

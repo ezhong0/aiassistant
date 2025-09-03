@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import logger from '../utils/logger';
+import { BaseService } from '../services/base-service';
 
 // Environment schema validation
 const envSchema = z.object({
@@ -39,12 +40,47 @@ const envSchema = z.object({
 
 export type Config = z.infer<typeof envSchema>;
 
-class ConfigService {
+export class ConfigService extends BaseService {
   private config: Config;
   
   constructor() {
+    super('ConfigService');
     this.config = this.loadAndValidateConfig();
     this.logConfigSummary();
+  }
+  
+  /**
+   * Service-specific initialization
+   */
+  protected async onInitialize(): Promise<void> {
+    // Configuration is already loaded in constructor
+    // No additional initialization needed
+  }
+
+  /**
+   * Service-specific cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    // No cleanup needed for configuration
+  }
+
+  /**
+   * Get service health status
+   */
+  getHealth(): { healthy: boolean; details?: any } {
+    const healthy = this.isReady();
+    return {
+      healthy,
+      details: {
+        nodeEnv: this.config.NODE_ENV,
+        port: this.config.PORT,
+        logLevel: this.config.LOG_LEVEL,
+        // Never include sensitive values in health checks
+        googleClientIdSet: !!this.config.GOOGLE_CLIENT_ID,
+        googleClientSecretSet: !!this.config.GOOGLE_CLIENT_SECRET,
+        jwtSecretSet: !!this.config.JWT_SECRET,
+      }
+    };
   }
   
   private loadAndValidateConfig(): Config {
@@ -117,23 +153,11 @@ class ConfigService {
   get databaseUrl(): string | undefined { return this.config.DATABASE_URL; }
   get redisUrl(): string | undefined { return this.config.REDIS_URL; }
   
-  // Utility methods
-  getAll(): Config {
+  // Get full config object (use with caution)
+  getConfig(): Config {
     return { ...this.config };
-  }
-  
-  validate(): void {
-    // Additional runtime validation can be added here
-    if (this.isProduction && this.config.JWT_SECRET.length < 64) {
-      throw new Error('JWT_SECRET must be at least 64 characters in production');
-    }
-    
-    if (this.isProduction && this.config.CORS_ORIGIN === '*') {
-      logger.warn('CORS origin is set to "*" in production. Consider restricting it.');
-    }
   }
 }
 
-// Export singleton instance
+// Export singleton instance for backward compatibility
 export const configService = new ConfigService();
-export default configService;

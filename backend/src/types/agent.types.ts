@@ -2,15 +2,6 @@ import { ToolCall, ToolResult, ToolExecutionContext } from './tools';
 import { BaseAgent } from '../framework/base-agent';
 
 /**
- * Legacy IAgent interface has been removed.
- * All agents now extend the modern BaseAgent framework.
- * 
- * @deprecated Use BaseAgent from '../framework/base-agent' instead
- */
-
-
-
-/**
  * Standard response interface for all agents
  */
 export interface StandardAgentResponse {

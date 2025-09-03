@@ -4,7 +4,8 @@ module.exports = {
   
   transform: {
     '^.+\\.(ts|tsx)$': ['ts-jest', {
-      sourceMap: false
+      sourceMap: false,
+      tsconfig: 'tsconfig.test.json'
     }]
   },
   

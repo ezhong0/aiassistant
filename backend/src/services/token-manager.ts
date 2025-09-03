@@ -17,26 +17,34 @@ export interface OAuthTokens {
 }
 
 export class TokenManager extends BaseService {
-  private sessionService: SessionService;
-  private authService: AuthService;
+  private sessionService: SessionService | null = null;
+  private authService: AuthService | null = null;
   private cacheService: CacheService | null = null;
   
   // Cache TTL constants
   private readonly TOKEN_CACHE_TTL = 900; // 15 minutes
   private readonly STATUS_CACHE_TTL = 300; // 5 minutes
 
-  constructor(sessionService: SessionService, authService: AuthService) {
+  constructor() {
     super('TokenManager');
-    this.sessionService = sessionService;
-    this.authService = authService;
   }
 
   /**
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    // Get cache service (optional dependency)
+    // Get dependencies from service registry
+    this.sessionService = serviceManager.getService<SessionService>('sessionService') || null;
+    this.authService = serviceManager.getService<AuthService>('authService') || null;
     this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
+    
+    if (!this.sessionService) {
+      throw new Error('SessionService not available from service registry');
+    }
+    
+    if (!this.authService) {
+      throw new Error('AuthService not available from service registry');
+    }
     
     if (this.cacheService) {
       this.logInfo('TokenManager initialized with caching enabled');
@@ -57,6 +65,10 @@ export class TokenManager extends BaseService {
    * Uses unified token validation and caching strategy
    */
   async getValidTokens(teamId: string, userId: string): Promise<string | null> {
+    if (!this.sessionService || !this.authService) {
+      throw new Error('TokenManager dependencies not initialized');
+    }
+    
     logger.debug('Getting valid tokens for Slack user', { teamId, userId });
     
     const cacheKey = this.getTokenCacheKey(teamId, userId);
@@ -83,7 +95,7 @@ export class TokenManager extends BaseService {
     }
     
     // Get tokens from session service (single source of truth)
-    const tokens = await this.sessionService.getSlackOAuthTokens(teamId, userId);
+    const tokens = await this.sessionService!.getSlackOAuthTokens(teamId, userId);
     
     if (!tokens?.google?.access_token) {
       logger.debug('No OAuth tokens found for Slack user', { teamId, userId });
@@ -167,7 +179,7 @@ export class TokenManager extends BaseService {
     // First, invalidate all existing caches to prevent stale data
     await this.invalidateAllTokenCaches(teamId, userId);
     
-    const tokens = await this.sessionService.getSlackOAuthTokens(teamId, userId);
+    const tokens = await this.sessionService!.getSlackOAuthTokens(teamId, userId);
     
     if (!tokens?.google?.refresh_token) {
       logger.warn('No refresh token available for Slack user', { teamId, userId });
@@ -175,7 +187,7 @@ export class TokenManager extends BaseService {
     }
     
     try {
-      const refreshedTokens = await this.authService.refreshGoogleToken(tokens.google.refresh_token);
+      const refreshedTokens = await this.authService!.refreshGoogleToken(tokens.google.refresh_token);
       
       // Create the new token set
       const newTokens: OAuthTokens = {
@@ -191,7 +203,7 @@ export class TokenManager extends BaseService {
       };
       
       // Store the refreshed tokens (single source of truth)
-      const stored = await this.sessionService.storeSlackOAuthTokens(teamId, userId, newTokens);
+      const stored = await this.sessionService!.storeSlackOAuthTokens(teamId, userId, newTokens);
       
       if (stored) {
         logger.info('Successfully refreshed and stored OAuth tokens', { 
@@ -254,7 +266,7 @@ export class TokenManager extends BaseService {
       }
     }
     
-    const tokens = await this.sessionService.getSlackOAuthTokens(teamId, userId);
+    const tokens = await this.sessionService!.getSlackOAuthTokens(teamId, userId);
     
     if (!tokens) {
       const status = { 

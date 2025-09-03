@@ -35,7 +35,7 @@ export class TestHelper {
 
     try {
       const { serviceManager } = require('../src/services/service-manager');
-      await serviceManager.getInstance().shutdown();
+      await serviceManager.forceCleanup();
       servicesInitialized = false;
       console.log('✅ Services cleaned up after test');
     } catch (error) {
@@ -48,5 +48,64 @@ export class TestHelper {
    */
   static areServicesInitialized(): boolean {
     return servicesInitialized;
+  }
+
+  /**
+   * Get a service from the ServiceManager
+   */
+  static async getService<T>(serviceName: string): Promise<T | undefined> {
+    if (!servicesInitialized) {
+      await this.initializeServices();
+    }
+
+    const { serviceManager } = require('../src/services/service-manager');
+    return serviceManager.getService<T>(serviceName);
+  }
+
+  /**
+   * Get the ServiceManager instance
+   */
+  static async getServiceManager() {
+    if (!servicesInitialized) {
+      await this.initializeServices();
+    }
+
+    const { serviceManager } = require('../src/services/service-manager');
+    return serviceManager;
+  }
+
+  /**
+   * Reset service states for testing
+   */
+  static async resetServices(): Promise<void> {
+    if (!servicesInitialized) {
+      return;
+    }
+
+    try {
+      const { serviceManager } = require('../src/services/service-manager');
+      const manager = serviceManager;
+      
+      // Reset service states without full shutdown
+      for (const serviceName of manager.getRegisteredServices()) {
+        const service = manager.getService(serviceName);
+        if (service && service.state !== 'destroyed') {
+          // Reset to initial state if possible
+          if (service.initialize && typeof service.initialize === 'function') {
+            try {
+              // Reset service state for next test
+              if (service.state === 'error') {
+                // Re-initialize errored services
+                await service.initialize();
+              }
+            } catch (error) {
+              // Ignore reset errors in tests
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore service reset errors in tests
+    }
   }
 }

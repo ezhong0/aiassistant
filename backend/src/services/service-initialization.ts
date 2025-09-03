@@ -10,6 +10,8 @@ import { SlackFormatterService } from './slack-formatter.service';
 import { DatabaseService } from './database.service';
 import { TokenManager } from './token-manager';
 import { CacheService } from './cache.service';
+import { ConfigService } from '../config/config.service';
+import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import logger from '../utils/logger';
 
@@ -44,14 +46,28 @@ export const initializeAllCoreServices = async (): Promise<void> => {
  */
 const registerCoreServices = async (): Promise<void> => {
   try {
-    // 0. DatabaseService - No dependencies, highest priority
+    // 0. ConfigService - No dependencies, highest priority (configuration)
+    const configService = new ConfigService();
+    serviceManager.registerService('configService', configService, {
+      priority: 1,
+      autoStart: true
+    });
+
+    // 1. AIConfigService - No dependencies, high priority (AI configuration)
+    const aiConfigService = new AIConfigService();
+    serviceManager.registerService('aiConfigService', aiConfigService, {
+      priority: 2,
+      autoStart: true
+    });
+
+    // 2. DatabaseService - No dependencies, high priority
     const databaseService = new DatabaseService();
     serviceManager.registerService('databaseService', databaseService, {
       priority: 5,
       autoStart: true
     });
 
-    // 0.5. CacheService - No dependencies, high priority (optional)
+    // 3. CacheService - No dependencies, high priority (optional)
     // Only register if Redis is available or explicitly enabled
     if (process.env.DISABLE_REDIS !== 'true') {
       // Check for Railway Redis environment variables
@@ -79,7 +95,7 @@ const registerCoreServices = async (): Promise<void> => {
       logger.info('CacheService disabled via DISABLE_REDIS environment variable');
     }
 
-    // 1. SessionService - Depends on databaseService
+    // 4. SessionService - Depends on databaseService
     const sessionService = new SessionService();
     serviceManager.registerService('sessionService', sessionService, {
       dependencies: ['databaseService'],
@@ -87,66 +103,66 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 2. ToolExecutorService - Depends on sessionService
-    const toolExecutorService = new ToolExecutorService();
-    serviceManager.registerService('toolExecutorService', toolExecutorService, {
-      dependencies: ['sessionService'],
+    // 5. AuthService - No external dependencies
+    const authService = new AuthService();
+    serviceManager.registerService('authService', authService, {
+      priority: 15,
+      autoStart: true
+    });
+
+    // 6. TokenManager - Depends on sessionService and authService
+    const tokenManager = new TokenManager();
+    serviceManager.registerService('tokenManager', tokenManager, {
+      dependencies: ['sessionService', 'authService'],
       priority: 20,
       autoStart: true
     });
 
-    // 3. AuthService - No external dependencies
-    const authService = new AuthService();
-    serviceManager.registerService('authService', authService, {
+    // 7. ToolExecutorService - Depends on sessionService
+    const toolExecutorService = new ToolExecutorService();
+    serviceManager.registerService('toolExecutorService', toolExecutorService, {
+      dependencies: ['sessionService'],
+      priority: 25,
+      autoStart: true
+    });
+
+    // 8. ContactService - Depends on authService
+    const contactService = new ContactService();
+    serviceManager.registerService('contactService', contactService, {
+      dependencies: ['authService'],
       priority: 30,
       autoStart: true
     });
 
-    // 4. ContactService - Depends on authService
-    const contactService = new ContactService();
-    serviceManager.registerService('contactService', contactService, {
+    // 9. GmailService - Depends on authService
+    const gmailService = new GmailService();
+    serviceManager.registerService('gmailService', gmailService, {
+      dependencies: ['authService'],
+      priority: 35,
+      autoStart: true
+    });
+
+    // 10. CalendarService - Depends on authService
+    const calendarService = new CalendarService();
+    serviceManager.registerService('calendarService', calendarService, {
       dependencies: ['authService'],
       priority: 40,
       autoStart: true
     });
 
-    // 5. GmailService - Depends on authService
-    const gmailService = new GmailService();
-    serviceManager.registerService('gmailService', gmailService, {
-      dependencies: ['authService'],
-      priority: 50,
-      autoStart: true
-    });
-
-    // 6. CalendarService - Depends on authService
-    const calendarService = new CalendarService();
-    serviceManager.registerService('calendarService', calendarService, {
-      dependencies: ['authService'],
-      priority: 60,
-      autoStart: true
-    });
-
-    // 7. OpenAIService - No external dependencies
+    // 11. OpenAIService - No external dependencies
     const openaiService = new OpenAIService({
       apiKey: process.env.OPENAI_API_KEY || 'dummy-key'
     });
     serviceManager.registerService('openaiService', openaiService, {
-      priority: 70,
+      priority: 45,
       autoStart: true
     });
 
-    // 8. SlackFormatterService - No external dependencies
+    // 12. SlackFormatterService - No external dependencies
     const slackFormatterService = new SlackFormatterService();
     serviceManager.registerService('slackFormatterService', slackFormatterService, {
-      priority: 80,
-      autoStart: true
-    });
-
-    // 9. TokenManager - Depends on sessionService and authService
-    const tokenManager = new TokenManager(sessionService, authService);
-    serviceManager.registerService('tokenManager', tokenManager, {
-      dependencies: ['sessionService', 'authService'],
-      priority: 90,
+      priority: 50,
       autoStart: true
     });
 

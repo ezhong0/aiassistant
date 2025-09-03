@@ -2,7 +2,7 @@ import { createClient, RedisClientType } from 'redis';
 import { BaseService } from './base-service';
 import { ServiceState } from './service-manager';
 import logger from '../utils/logger';
-import configService from '../config/config.service';
+import { configService } from '../config/config.service';
 
 export class CacheService extends BaseService {
   private client: RedisClientType | null = null;
