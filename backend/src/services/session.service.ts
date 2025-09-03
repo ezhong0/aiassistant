@@ -61,12 +61,15 @@ export class SessionService extends BaseService {
       this.logInfo('Cache service not available, operating without session caching');
     }
     
-    // Clean up expired sessions using configured interval
+    // Clean up expired sessions using configured interval (now less frequent for long-lived sessions)
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpiredSessions();
     }, TIMEOUTS.sessionCleanup);
 
-    this.logInfo(`SessionService initialized with ${this.defaultTimeoutMinutes} minute timeout`);
+    // Log session persistence info
+    this.logInfo(`SessionService initialized with ${this.defaultTimeoutMinutes} minute timeout (~${Math.round(this.defaultTimeoutMinutes / (24 * 60))} days)`);
+    this.logInfo(`Session cleanup runs every ${Math.round(TIMEOUTS.sessionCleanup / (60 * 60 * 1000))} hours`);
+    this.logInfo('🔐 OAuth tokens will persist across deployments and restarts');
     this.logInfo('SessionService initialization completed successfully');
   }
 
@@ -752,13 +755,102 @@ export class SessionService extends BaseService {
       return null;
     }
 
-    // Check if token is expired
+    // Check if token is expired and try to refresh
     if (tokens.google.expiry_date && Date.now() > tokens.google.expiry_date) {
-      this.logWarn('Google access token is expired', { sessionId });
+      this.logInfo('Google access token is expired, attempting refresh', { sessionId });
+      
+      // Try to refresh the token
+      const refreshedTokens = await this.refreshGoogleAccessToken(sessionId, tokens.google.refresh_token);
+      if (refreshedTokens) {
+        this.logInfo('Successfully refreshed Google access token', { sessionId });
+        return refreshedTokens.access_token;
+      }
+      
+      this.logWarn('Failed to refresh Google access token', { sessionId });
       return null;
     }
 
     return tokens.google.access_token;
+  }
+
+  /**
+   * Refresh Google access token using refresh token
+   */
+  private async refreshGoogleAccessToken(sessionId: string, refreshToken: string | undefined): Promise<{ access_token: string; expires_in: number } | null> {
+    if (!refreshToken) {
+      this.logWarn('No refresh token available for Google OAuth renewal', { sessionId });
+      return null;
+    }
+
+    try {
+      const configService = (this as any).serviceManager?.getService('configService');
+      if (!configService) {
+        this.logError('Config service not available for token refresh', { sessionId });
+        return null;
+      }
+
+      const response = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: configService.googleClientId,
+          client_secret: configService.googleClientSecret,
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logError('Failed to refresh Google access token', { 
+          sessionId, 
+          status: response.status,
+          error: errorText 
+        });
+        return null;
+      }
+
+      const tokenData = await response.json() as {
+        access_token: string;
+        expires_in: number;
+        refresh_token?: string;
+      };
+      
+      // Update stored tokens with new access token
+      const currentTokens = await this.getOAuthTokens(sessionId);
+      if (currentTokens?.google) {
+        const updatedTokens = {
+          ...currentTokens,
+          google: {
+            ...currentTokens.google,
+            access_token: tokenData.access_token,
+            expiry_date: Date.now() + (tokenData.expires_in * 1000),
+            // Keep existing refresh token or update if provided
+            refresh_token: tokenData.refresh_token || currentTokens.google.refresh_token
+          }
+        };
+        
+        await this.storeOAuthTokens(sessionId, updatedTokens);
+      }
+
+      return {
+        access_token: tokenData.access_token,
+        expires_in: tokenData.expires_in
+      };
+
+    } catch (error: any) {
+      this.logError('Error refreshing Google access token', { sessionId, error: error?.message || error });
+      
+      // If refresh fails with 400 (invalid refresh token), mark for re-authentication
+      if (error?.status === 400 || error?.message?.includes('invalid_grant')) {
+        this.logWarn('Refresh token is invalid, user will need to re-authenticate', { sessionId });
+        // Could optionally clean up the invalid session here
+      }
+      
+      return null;
+    }
   }
 
   /**

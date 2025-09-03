@@ -424,6 +424,104 @@ export class DatabaseService extends BaseService {
   }
 
   /**
+   * New simplified token storage methods
+   */
+  async storeUserTokens(userTokens: any): Promise<void> {
+    const client = await this.getClient();
+    try {
+      await client.query(`
+        INSERT INTO user_tokens (
+          user_id, 
+          google_access_token, google_refresh_token, google_expires_at, google_token_type, google_scope,
+          slack_access_token, slack_team_id, slack_user_id,
+          created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (user_id) DO UPDATE SET
+          google_access_token = EXCLUDED.google_access_token,
+          google_refresh_token = EXCLUDED.google_refresh_token,
+          google_expires_at = EXCLUDED.google_expires_at,
+          google_token_type = EXCLUDED.google_token_type,
+          google_scope = EXCLUDED.google_scope,
+          slack_access_token = EXCLUDED.slack_access_token,
+          slack_team_id = EXCLUDED.slack_team_id,
+          slack_user_id = EXCLUDED.slack_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        userTokens.userId,
+        userTokens.googleTokens?.access_token,
+        userTokens.googleTokens?.refresh_token,
+        userTokens.googleTokens?.expires_at,
+        userTokens.googleTokens?.token_type,
+        userTokens.googleTokens?.scope,
+        userTokens.slackTokens?.access_token,
+        userTokens.slackTokens?.team_id,
+        userTokens.slackTokens?.user_id,
+        userTokens.createdAt,
+        userTokens.updatedAt
+      ]);
+    } finally {
+      client.release();
+    }
+  }
+
+  async getUserTokens(userId: string): Promise<any | null> {
+    const client = await this.getClient();
+    try {
+      const result = await client.query(`
+        SELECT * FROM user_tokens WHERE user_id = $1
+      `, [userId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        userId: row.user_id,
+        googleTokens: row.google_access_token ? {
+          access_token: row.google_access_token,
+          refresh_token: row.google_refresh_token,
+          expires_at: row.google_expires_at,
+          token_type: row.google_token_type,
+          scope: row.google_scope
+        } : undefined,
+        slackTokens: row.slack_access_token ? {
+          access_token: row.slack_access_token,
+          team_id: row.slack_team_id,
+          user_id: row.slack_user_id
+        } : undefined,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteUserTokens(userId: string): Promise<void> {
+    const client = await this.getClient();
+    try {
+      await client.query(`DELETE FROM user_tokens WHERE user_id = $1`, [userId]);
+    } finally {
+      client.release();
+    }
+  }
+
+  async cleanupExpiredUserTokens(): Promise<number> {
+    const client = await this.getClient();
+    try {
+      const result = await client.query(`
+        DELETE FROM user_tokens 
+        WHERE google_expires_at IS NOT NULL 
+        AND google_expires_at < CURRENT_TIMESTAMP
+      `);
+      return result.rowCount || 0;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Slack workspace management methods
    */
   async storeSlackWorkspace(workspaceData: SlackWorkspaceData): Promise<void> {

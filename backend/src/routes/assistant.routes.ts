@@ -18,8 +18,8 @@ import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
 import { getService } from '../services/service-manager';
 import { ToolExecutorService } from '../services/tool-executor.service';
-import { SessionService } from '../services/session.service';
-import { ToolExecutionContext, SessionExpiredError } from '../types/tools';
+import { TokenStorageService } from '../services/token-storage.service';
+import { ToolExecutionContext } from '../types/tools';
 import { 
   TextCommandRequest, 
   TextCommandResponse, 
@@ -62,12 +62,12 @@ try {
 // const sessionService = new SessionService();
 
 /**
- * Helper function to safely get the session service
+ * Helper function to safely get the token storage service
  */
-const getSessionService = (): SessionService => {
-  const service = getService<SessionService>('sessionService');
+const getTokenStorageService = (): TokenStorageService => {
+  const service = getService<TokenStorageService>('tokenStorageService');
   if (!service) {
-    throw new Error('SessionService not available. Ensure services are initialized.');
+    throw new Error('TokenStorageService not available. Ensure services are initialized.');
   }
   return service;
 }
@@ -133,24 +133,18 @@ router.post('/text-command',
 
     const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
     
-              // Get session context from backend session service (includes pending actions)
-    const sessionContext = await getSessionService().getSession(finalSessionId);
+              // Note: Session management removed - tokens are now stored per user
+    // For now, we'll work with client-provided context only
+    const sessionContext = null;
     
-    logger.info('Session context retrieved', {
+    logger.info('Using client context only (session management removed)', {
       sessionId: finalSessionId,
-      sessionFound: !!sessionContext,
-      sessionPendingActions: sessionContext?.pendingActions?.length || 0,
-      sessionPendingActionsData: sessionContext?.pendingActions,
       clientPendingActions: context?.pendingActions?.length || 0,
       clientPendingActionsData: context?.pendingActions
     });
     
-    // Merge client context with session context (session context takes precedence for pending actions)
-    const mergedContext = {
-      ...context,
-      pendingActions: sessionContext?.pendingActions || context?.pendingActions,
-      conversationHistory: context?.conversationHistory || sessionContext?.conversationHistory
-    };
+    // Use client context directly (no session merging)
+    const mergedContext = context || {};
     
     logger.info('Processing assistant text command', { 
       userId: user.userId, 
@@ -409,88 +403,19 @@ router.get('/session/:id',
       });
 
               try {
-          const session = await getSessionService().getSession(sessionId);
+          // Session functionality removed - return not found
+          const session = null;
         
-        if (!session) {
-          return res.status(404).json({
-            success: false,
-            type: 'error',
-            error: 'SESSION_NOT_FOUND',
-            message: 'Session not found'
-          });
-        }
-
-        // Security check: Ensure user owns this session or is admin
-        if (session.userId && session.userId !== user.userId) {
-          logger.warn('Unauthorized session access attempt', {
-            sessionId,
-            requestingUser: user.userId,
-            sessionOwner: session.userId
-          });
-
-          return res.status(403).json({
-            success: false,
-            type: 'error',
-            error: 'SESSION_ACCESS_DENIED',
-            message: 'Access denied to this session'
-          });
-        }
-
-                  // Get session statistics
-          const stats = getSessionService().getSessionStats();
-
-        // Format conversation history for client
-        const formattedHistory = session.conversationHistory.map(entry => ({
-          timestamp: entry.timestamp.toISOString(),
-          userInput: entry.type === 'user' ? entry.content : '',
-          agentResponse: entry.type === 'agent' ? entry.content : '',
-          toolsUsed: entry.toolCalls?.map(tc => tc.name) || [],
-          success: entry.toolResults?.every(tr => tr.success) || false
-        }));
-
-        // Format recent tool results
-        const recentToolResults = session.toolResults.slice(-10).map((result: any) => ({
-          toolName: result.toolName,
-          success: result.success,
-          timestamp: new Date().toISOString(), // Note: ToolResult doesn't have timestamp in current schema
-          executionTime: result.executionTime,
-          error: result.error
-        }));
-
-        logger.info('Session retrieved successfully', { 
-          sessionId, 
-          conversationCount: session.conversationHistory.length,
-          toolExecutionCount: session.toolResults.length
-        });
-
-        return res.json({
-          success: true,
-          type: 'session_data',
-          message: 'Session retrieved successfully',
-          data: {
-            session: {
-              sessionId: session.sessionId,
-              userId: session.userId,
-              createdAt: session.createdAt.toISOString(),
-              lastActivity: session.lastActivity.toISOString(),
-              expiresAt: session.expiresAt.toISOString(),
-              isActive: new Date() < session.expiresAt
-            },
-            conversationHistory: formattedHistory,
-            recentToolResults,
-            statistics: stats
-          }
+        // Sessions no longer exist - return not found
+        return res.status(404).json({
+          success: false,
+          type: 'error',
+          error: 'SESSION_NOT_FOUND',
+          message: 'Sessions are no longer supported. Use stateless requests instead.'
         });
 
       } catch (error) {
-        if (error instanceof SessionExpiredError) {
-          return res.status(410).json({
-            success: false,
-            type: 'error',
-            error: 'SESSION_EXPIRED',
-            message: 'Session has expired'
-          });
-        }
+        // Session expired error handling removed
         throw error;
       }
 
@@ -527,80 +452,14 @@ router.delete('/session/:id',
         userId: user.userId 
       });
 
-              // First check if session exists and get it for authorization
-        let session;
-        try {
-          session = await getSessionService().getSession(sessionId);
-      } catch (error) {
-        if (error instanceof SessionExpiredError) {
-          // Session already expired and cleaned up
-          return res.json({
-            success: true,
-            type: 'response',
-            message: 'Session already expired and removed'
-          });
-        }
-        throw error;
-      }
-
-      if (!session) {
+              // Session functionality removed
+        // Sessions no longer exist - return not found
         return res.status(404).json({
           success: false,
           type: 'error',
           error: 'SESSION_NOT_FOUND',
-          message: 'Session not found'
+          message: 'Sessions are no longer supported. Use stateless requests instead.'
         });
-      }
-
-      // Security check: Ensure user owns this session
-      if (session.userId && session.userId !== user.userId) {
-        logger.warn('Unauthorized session deletion attempt', {
-          sessionId,
-          requestingUser: user.userId,
-          sessionOwner: session.userId
-        });
-
-        return res.status(403).json({
-          success: false,
-          type: 'error',
-          error: 'SESSION_ACCESS_DENIED',
-          message: 'Access denied to this session'
-        });
-      }
-
-              // Get session stats before deletion for response
-        const statsBeforeDeletion = getSessionService().getSessionStats();
-
-        // Delete the session
-        const deleted = getSessionService().deleteSession(sessionId);
-
-      if (deleted) {
-        logger.info('Session deleted successfully', { 
-          sessionId,
-          userId: user.userId,
-          totalSessions: statsBeforeDeletion?.totalSessions || 0,
-          activeSessions: statsBeforeDeletion?.activeSessions || 0
-        });
-
-        return res.json({
-          success: true,
-          type: 'response',
-          message: 'Session deleted successfully',
-          data: {
-            sessionId,
-            deletedAt: new Date().toISOString(),
-            totalSessions: statsBeforeDeletion?.totalSessions || 0,
-            activeSessions: statsBeforeDeletion?.activeSessions || 0
-          }
-        });
-      } else {
-        return res.status(500).json({
-          success: false,
-          type: 'error',
-          error: 'SESSION_DELETION_FAILED',
-          message: 'Failed to delete session'
-        });
-      }
 
     } catch (error) {
       logger.error('Session deletion error:', error);

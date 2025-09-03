@@ -1,5 +1,5 @@
 import { serviceManager } from './service-manager';
-import { SessionService } from './session.service';
+import { TokenStorageService } from './token-storage.service';
 import { ToolExecutorService } from './tool-executor.service';
 import { AuthService } from './auth.service';
 import { ContactService } from './contact.service';
@@ -8,7 +8,6 @@ import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
 import { SlackFormatterService } from './slack-formatter.service';
 import { DatabaseService } from './database.service';
-import { TokenManager } from './token-manager';
 import { CacheService } from './cache.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
@@ -20,7 +19,7 @@ import logger from '../utils/logger';
  */
 export const initializeAllCoreServices = async (): Promise<void> => {
   // Check if core services are already registered (not just any services)
-  if (serviceManager.getService('sessionService')) {
+  if (serviceManager.getService('tokenStorageService')) {
     logger.debug('Core services already registered');
     return;
   }
@@ -95,9 +94,9 @@ const registerCoreServices = async (): Promise<void> => {
       logger.info('CacheService disabled via DISABLE_REDIS environment variable');
     }
 
-    // 4. SessionService - Depends on databaseService
-    const sessionService = new SessionService();
-    serviceManager.registerService('sessionService', sessionService, {
+    // 4. TokenStorageService - Depends on databaseService (replaces SessionService)
+    const tokenStorageService = new TokenStorageService();
+    serviceManager.registerService('tokenStorageService', tokenStorageService, {
       dependencies: ['databaseService'],
       priority: 10,
       autoStart: true
@@ -110,18 +109,10 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 6. TokenManager - Depends on sessionService and authService
-    const tokenManager = new TokenManager();
-    serviceManager.registerService('tokenManager', tokenManager, {
-      dependencies: ['sessionService', 'authService'],
-      priority: 20,
-      autoStart: true
-    });
-
-    // 7. ToolExecutorService - Depends on sessionService
+    // 6. ToolExecutorService - Now depends on tokenStorageService instead of sessionService
     const toolExecutorService = new ToolExecutorService();
     serviceManager.registerService('toolExecutorService', toolExecutorService, {
-      dependencies: ['sessionService'],
+      dependencies: ['tokenStorageService'],
       priority: 25,
       autoStart: true
     });
@@ -168,6 +159,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
+    // Note: SessionService removed - using simplified token storage instead
 
     logger.info('Core services registered successfully', {
       serviceCount: serviceManager.getServiceCount(),

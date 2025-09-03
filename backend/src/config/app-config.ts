@@ -17,8 +17,8 @@ export const TIMEOUTS = {
   /** Rate limit cleanup interval (5 minutes) */
   rateLimitCleanup: 5 * 60 * 1000,
   
-  /** Session cleanup interval (5 minutes) */
-  sessionCleanup: 5 * 60 * 1000,
+  /** Session cleanup interval (24 hours - for long-lived sessions) */
+  sessionCleanup: 24 * 60 * 60 * 1000,
   
   /** Graceful shutdown timeout (10 seconds) */
   gracefulShutdown: 10000,
@@ -137,10 +137,10 @@ export const EXECUTION_CONFIG = {
   
   /** Session configuration */
   session: {
-    /** Default session timeout in minutes */
-    defaultTimeoutMinutes: 30,
-    /** Maximum session timeout in minutes */
-    maxTimeoutMinutes: 480
+    /** Default session timeout in minutes (90 days) */
+    defaultTimeoutMinutes: 90 * 24 * 60,
+    /** Maximum session timeout in minutes (1 year) */
+    maxTimeoutMinutes: 365 * 24 * 60
   },
   
   /** Tool execution modes */

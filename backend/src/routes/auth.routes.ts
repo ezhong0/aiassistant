@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
-import { SessionService } from '../services/session.service';
+import { TokenStorageService } from '../services/token-storage.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import {
   GoogleTokens,
@@ -571,29 +571,16 @@ router.get('/debug/oauth-validation', async (req: Request, res: Response) => {
  */
 router.get('/debug/sessions', (req: Request, res: Response) => {
   try {
-    const sessionService = getService('sessionService');
-    if (!sessionService) {
-      return res.status(500).json({ error: 'SessionService not available' });
+    const tokenStorageService = getService('tokenStorageService') as TokenStorageService;
+    if (!tokenStorageService) {
+      return res.status(500).json({ error: 'TokenStorageService not available' });
     }
 
-    const stats = (sessionService as any).getSessionStats();
-    const sessionsMap = (sessionService as any).sessions;
-    const sessions = Array.from(sessionsMap.entries()).map((entry: any) => {
-      const [id, session] = entry;
-      return {
-        sessionId: id,
-        userId: session.userId,
-        hasOAuthTokens: !!session.oauthTokens,
-        googleToken: !!session.oauthTokens?.google?.access_token,
-        slackToken: !!session.oauthTokens?.slack,
-        createdAt: session.createdAt,
-        lastActivity: session.lastActivity
-      };
-    });
-
+    // TokenStorageService doesn't have session stats, return basic info
     return res.json({
-      stats,
-      sessions: sessions.slice(0, 20) // Limit to first 20 sessions
+      message: 'Token storage service is operational',
+      serviceType: 'TokenStorageService',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     logger.error('Error in debug endpoint:', error);
@@ -784,43 +771,37 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           hasTokens: !!tokens.access_token
         });
         
-        const sessionService = getService('sessionService') as unknown as SessionService;
-        if (sessionService) {
-          // Use unified session management - one session per user
-          const stored = await sessionService.storeSlackOAuthTokens(slackContext.team_id, slackContext.user_id, {
+        const tokenStorageService = getService('tokenStorageService') as unknown as TokenStorageService;
+        if (tokenStorageService) {
+          // Store OAuth tokens for the Slack user
+          const userId = `${slackContext.team_id}:${slackContext.user_id}`;
+          await tokenStorageService.storeUserTokens(userId, {
             google: {
               access_token: tokens.access_token,
               refresh_token: tokens.refresh_token,
-              expires_in: tokens.expires_in,
+              expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
               token_type: tokens.token_type,
-              scope: tokens.scope,
-              expiry_date: tokens.expiry_date
+              scope: tokens.scope
             },
             slack: {
+              access_token: tokens.access_token,
               team_id: slackContext.team_id,
               user_id: slackContext.user_id
             }
           });
 
-          if (stored) {
-            logger.info('✅ Successfully stored OAuth tokens for Slack user', {
-              teamId: slackContext.team_id,
-              userId: slackContext.user_id,
-              tokenDetails: {
-                hasAccessToken: !!tokens.access_token,
-                hasRefreshToken: !!tokens.refresh_token,
-                expiresIn: tokens.expires_in,
-                scope: tokens.scope
-              }
-            });
-          } else {
-            logger.warn('❌ Failed to store OAuth tokens for Slack user', {
-              teamId: slackContext.team_id,
-              userId: slackContext.user_id
-            });
-          }
+          logger.info('✅ Successfully stored OAuth tokens for Slack user', {
+            teamId: slackContext.team_id,
+            userId: slackContext.user_id,
+            tokenDetails: {
+              hasAccessToken: !!tokens.access_token,
+              hasRefreshToken: !!tokens.refresh_token,
+              expiresIn: tokens.expires_in,
+              scope: tokens.scope
+            }
+          });
         } else {
-          logger.error('SessionService not available for OAuth token storage');
+          logger.error('TokenStorageService not available for OAuth token storage');
         }
       } catch (error) {
         logger.error('Error storing OAuth tokens for Slack user', {

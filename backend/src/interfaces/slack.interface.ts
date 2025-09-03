@@ -3,7 +3,7 @@ import { WebClient } from '@slack/web-api';
 import { ServiceManager } from '../services/service-manager';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../types/slack.types';
 import { ToolExecutionContext, ToolResult } from '../types/tools';
-import { SessionService } from '../services/session.service';
+import { TokenStorageService } from '../services/token-storage.service';
 import { TokenManager } from '../services/token-manager';
 import logger from '../utils/logger';
 
@@ -22,15 +22,15 @@ export class SlackInterface {
   private receiver: ExpressReceiver;
   private serviceManager: ServiceManager;
   private config: SlackConfig;
-  private sessionService: SessionService | null = null;
+  private tokenStorageService: TokenStorageService | null = null;
   private tokenManager: TokenManager | null = null;
 
   constructor(config: SlackConfig, serviceManager: ServiceManager) {
     this.config = config;
     this.serviceManager = serviceManager;
 
-    // Initialize session and token managers
-    this.sessionService = this.serviceManager.getService('sessionService') as unknown as SessionService;
+    // Initialize token storage and token managers
+    this.tokenStorageService = this.serviceManager.getService('tokenStorageService') as unknown as TokenStorageService;
     this.tokenManager = this.serviceManager.getService('tokenManager') as unknown as TokenManager;
 
     // Create Express receiver for Slack with default endpoints
@@ -872,37 +872,16 @@ export class SlackInterface {
    * Create or get session for Slack user with simplified management
    */
   private async createOrGetSession(slackContext: SlackContext): Promise<string> {
-    try {
-      if (!this.sessionService) {
-        logger.warn('SessionService not available for Slack integration');
-        throw new Error('SessionService not available');
-      }
-
-      // Use simplified session management - one session per user
-      const session = await this.sessionService.getSlackSession(slackContext.teamId, slackContext.userId);
-      
-      logger.info('Created/retrieved simplified Slack session', { 
-        sessionId: session.sessionId, 
-        userId: slackContext.userId,
-        teamId: slackContext.teamId,
-        hasOAuthTokens: !!session.oauthTokens
-      });
-      
-      return session.sessionId;
-    } catch (error: any) {
-      logger.error('Error creating/retrieving Slack session', error);
-      
-      // Fallback to simple session ID
-      const fallbackId = `slack_${slackContext.teamId}_${slackContext.userId}`;
-      
-      logger.warn('Using fallback session ID for Slack', { 
-        fallbackId,
-        originalError: error?.message,
-        userId: slackContext.userId
-      });
-      
-      return fallbackId;
-    }
+    // Generate deterministic session ID (sessions are no longer stored)
+    const sessionId = `slack_${slackContext.teamId}_${slackContext.userId}_${Date.now()}`;
+    
+    logger.info('Generated session ID for Slack user', { 
+      sessionId, 
+      userId: slackContext.userId,
+      teamId: slackContext.teamId
+    });
+    
+    return sessionId;
   }
 
   /**
@@ -1705,52 +1684,13 @@ export class SlackInterface {
    */
   private async isRecentlyConnected(slackContext: SlackContext): Promise<boolean> {
     try {
-      const sessionService = this.serviceManager.getService('sessionService');
-      if (!sessionService) {
-        return false;
-      }
-
-      // Check if tokens were stored recently (within the last 30 seconds)
-      // This prevents showing the success message multiple times
-      const thirtySecondsAgo = Date.now() - (30 * 1000);
+      // Since session storage is removed, skip recent connection detection
+      // This functionality could be implemented with a dedicated cache if needed
+      logger.debug('Skipping recent connection check (session storage removed)', { 
+        userId: slackContext.userId, 
+        teamId: slackContext.teamId 
+      });
       
-      // Check multiple possible session locations (consistent with createOrGetSession logic)
-      const possibleSessionIds = [];
-      
-      // Add thread-specific session if in a thread
-      if (slackContext.threadTs) {
-        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_thread_${slackContext.threadTs.replace('.', '_')}`);
-      }
-      
-      // Add channel-specific session if not a DM
-      if (!slackContext.isDirectMessage) {
-        possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_channel_${slackContext.channelId}`);
-      }
-      
-      // Add main session as fallback
-      possibleSessionIds.push(`slack_${slackContext.teamId}_${slackContext.userId}_main`);
-
-      for (const sessionId of possibleSessionIds) {
-        try {
-          const session = await (sessionService as any).getSession(sessionId);
-          if (session?.oauthTokens?.google?.access_token && session.lastActivity) {
-            const lastActivity = new Date(session.lastActivity).getTime();
-            if (lastActivity > thirtySecondsAgo) {
-              // Check if we've already shown the success message for this session
-              const successMessageKey = `oauth_success_shown_${sessionId}`;
-              const hasShownSuccess = await this.checkIfSuccessMessageShown(successMessageKey);
-              if (!hasShownSuccess) {
-                // Mark that we've shown the success message
-                await this.markSuccessMessageShown(successMessageKey);
-                return true;
-              }
-            }
-          }
-        } catch (error) {
-          logger.debug('Could not check session for recent connection', { sessionId, error });
-        }
-      }
-
       return false;
     } catch (error) {
       logger.error('Error checking if recently connected', { error, userId: slackContext.userId });
@@ -1763,16 +1703,10 @@ export class SlackInterface {
    */
   private async checkIfSuccessMessageShown(successMessageKey: string): Promise<boolean> {
     try {
-      const sessionService = this.serviceManager.getService('sessionService');
-      if (!sessionService) {
-        return false;
-      }
-
-      // Use a simple in-memory cache for this check
-      // In a production environment, you might want to use Redis or database
-      const cacheKey = `oauth_success_${successMessageKey}`;
-      const cached = (sessionService as any).getSession(cacheKey);
-      return !!cached;
+      // Success message tracking removed with session storage
+      // This could be implemented with a dedicated cache if needed
+      logger.debug('Skipping success message check (session storage removed)', { successMessageKey });
+      return false;
     } catch (error) {
       logger.debug('Error checking if success message was shown', { error, successMessageKey });
       return false;
@@ -1784,17 +1718,9 @@ export class SlackInterface {
    */
   private async markSuccessMessageShown(successMessageKey: string): Promise<void> {
     try {
-      const sessionService = this.serviceManager.getService('sessionService');
-      if (!sessionService) {
-        return;
-      }
-
-      // Store a simple flag to prevent duplicate messages
-      const cacheKey = `oauth_success_${successMessageKey}`;
-      await (sessionService as any).createOrUpdateSession(cacheKey, {
-        shown: true,
-        timestamp: new Date().toISOString()
-      });
+      // Success message marking removed with session storage  
+      // This could be implemented with a dedicated cache if needed
+      logger.debug('Skipping success message marking (session storage removed)', { successMessageKey });
     } catch (error) {
       logger.debug('Error marking success message as shown', { error, successMessageKey });
     }
