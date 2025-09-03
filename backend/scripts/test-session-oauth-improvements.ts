@@ -5,10 +5,10 @@
  * Tests all critical fixes implemented for session identity, token management, and security
  */
 
-import { SlackSessionManager } from '../src/services/slack-session-manager';
-import { TokenManager } from '../src/services/token-manager';
+import { ServiceManager } from '../src/services/service-manager';
 import { SessionService } from '../src/services/session.service';
 import { AuthService } from '../src/services/auth.service';
+import { TokenManager } from '../src/services/token-manager';
 import { CryptoUtil } from '../src/utils/crypto.util';
 import { AuditLogger } from '../src/utils/audit-logger';
 import logger from '../src/utils/logger';
@@ -45,8 +45,8 @@ class SessionOAuthTester {
       // Test 5: Audit logging functionality
       await this.testAuditLogging();
       
-      // Test 6: Session migration compatibility
-      await this.testSessionMigration();
+          // Test 6: Session ID format validation
+    await this.testSessionIdValidation();
       
     } catch (error) {
       this.addResult('Test Suite', false, error instanceof Error ? error.message : 'Unknown error');
@@ -63,18 +63,17 @@ class SessionOAuthTester {
     
     try {
       // Test new session ID format generation
-      const mockSlackSessionManager = new SlackSessionManager({} as any);
       
       // Test session ID parsing
       const testSessionId = 'user:T12345:U67890';
-      const parsed = SlackSessionManager.parseSessionId(testSessionId);
+      const parsed = SessionService.parseSlackSessionId(testSessionId);
       
       if (!parsed || parsed.teamId !== 'T12345' || parsed.userId !== 'U67890') {
         throw new Error('Session ID parsing failed');
       }
       
       // Test invalid session ID parsing
-      const invalidParsed = SlackSessionManager.parseSessionId('slack_old_format');
+      const invalidParsed = SessionService.parseSlackSessionId('invalid_format');
       if (invalidParsed !== null) {
         throw new Error('Invalid session ID should return null');
       }
@@ -144,9 +143,9 @@ class SessionOAuthTester {
     
     try {
       // Create a mock token manager
-      const mockSessionManager = {} as SlackSessionManager;
+      const mockSessionService = {} as SessionService;
       const mockAuthService = {} as AuthService;
-      const tokenManager = new TokenManager(mockSessionManager, mockAuthService);
+      const tokenManager = new TokenManager();
       
       // Test validation logic through the private method (we'll test the public interface)
       const validToken = {
@@ -185,9 +184,9 @@ class SessionOAuthTester {
       const userId = 'U67890';
       
       // Mock the private methods by creating a token manager and checking key formats
-      const mockSessionManager = {} as SlackSessionManager;
+      const mockSessionService = {} as SessionService;
       const mockAuthService = {} as AuthService;
-      const tokenManager = new TokenManager(mockSessionManager, mockAuthService);
+      const tokenManager = new TokenManager();
       
       // Test that cache invalidation would work with the new session ID format
       const expectedSessionId = `user:${teamId}:${userId}`;
@@ -247,52 +246,33 @@ class SessionOAuthTester {
   }
 
   /**
-   * Test 6: Session migration compatibility
+   * Test 6: Session ID Format Validation
    */
-  async testSessionMigration(): Promise<void> {
-    console.log('🔄 Test 6: Session Migration Compatibility');
+  async testSessionIdValidation(): Promise<void> {
+    console.log('🔄 Test 6: Session ID Format Validation');
     
     try {
-      // Test that migration service can handle both old and new formats
-      const oldFormatSessions = [
-        'slack_T12345_U67890',
-        'slack_T12345_U67890_channel_123',
-        'slack_T12345_U67890_thread_456'
-      ];
-      
+      // Test new standardized format
       const newFormatSessions = [
-        'user:T12345:U67890'
+        'user:T12345:U67890',
+        'user:TEAM123:USER456'
       ];
       
-      // Test session ID parsing for migration
-      for (const oldSession of oldFormatSessions) {
-        if (oldSession.startsWith('slack_')) {
-          const parts = oldSession.split('_');
-          if (parts.length >= 3) {
-            const teamId = parts[1];
-            const userId = parts[2];
-            if (!teamId || !userId) {
-              throw new Error(`Failed to parse old session format: ${oldSession}`);
-            }
-          }
-        }
-      }
-      
+      // Test session ID parsing for new format
       for (const newSession of newFormatSessions) {
-        const parsed = SlackSessionManager.parseSessionId(newSession);
+        const parsed = SessionService.parseSlackSessionId(newSession);
         if (!parsed) {
           throw new Error(`Failed to parse new session format: ${newSession}`);
         }
       }
       
-      this.addResult('Session Migration Compatibility', true, undefined, {
-        oldFormatParsing: true,
+      this.addResult('Session ID Format Validation', true, undefined, {
         newFormatParsing: true,
-        migrationLogicExists: true
+        formatValidation: true
       });
       
     } catch (error) {
-      this.addResult('Session Migration Compatibility', false, error instanceof Error ? error.message : 'Unknown error');
+      this.addResult('Session ID Format Validation', false, error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
@@ -341,7 +321,7 @@ class SessionOAuthTester {
     console.log('  ✅ Proper cache invalidation cascading');
     console.log('  ✅ Token encryption for sensitive data (refresh tokens)');
     console.log('  ✅ Comprehensive audit logging for security events');
-    console.log('  ✅ Session migration compatibility for old formats');
+          console.log('  ✅ Session ID format validation');
     
     console.log('\n🚀 Architecture is now production-ready with enhanced security and performance!');
   }

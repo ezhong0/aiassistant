@@ -6,7 +6,6 @@ import path from 'path';
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import { SessionService } from '../src/services/session.service';
-import { SlackSessionManager } from '../src/services/slack-session-manager';
 import logger from '../src/utils/logger';
 
 async function testSlackAuthFix() {
@@ -17,9 +16,6 @@ async function testSlackAuthFix() {
     const sessionService = new SessionService();
     await sessionService.initialize();
     
-    const slackSessionManager = new SlackSessionManager(sessionService);
-    await slackSessionManager.initialize();
-
     console.log('✅ Services initialized');
 
     // Test data
@@ -47,17 +43,17 @@ async function testSlackAuthFix() {
       }
     };
 
-    const stored = await slackSessionManager.storeOAuthTokens(testTeamId, testUserId, testTokens);
+    const stored = await sessionService.storeSlackOAuthTokens(testTeamId, testUserId, testTokens);
     console.log('  → Tokens stored successfully:', stored);
 
     // Step 2: Check if tokens can be retrieved (simulating Slack message processing)
     console.log('\n🔍 Step 2: Checking token retrieval (Slack message)...');
-    const hasValidTokens = await slackSessionManager.hasValidOAuthTokens(testTeamId, testUserId);
+    const hasValidTokens = await sessionService.hasSlackValidOAuthTokens(testTeamId, testUserId);
     console.log('  → Has valid tokens:', hasValidTokens);
 
     // Step 3: Retrieve tokens directly
     console.log('\n🔍 Step 3: Retrieving tokens directly...');
-    const retrievedTokens = await slackSessionManager.getOAuthTokens(testTeamId, testUserId);
+    const retrievedTokens = await sessionService.getSlackOAuthTokens(testTeamId, testUserId);
     console.log('  → Tokens retrieved:', {
       hasTokens: !!retrievedTokens,
       hasGoogle: !!retrievedTokens?.google,

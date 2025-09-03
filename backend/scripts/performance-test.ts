@@ -3,7 +3,6 @@
 import { DatabaseService } from '../src/services/database.service';
 import { CacheService } from '../src/services/cache.service';
 import { TokenManager } from '../src/services/token-manager';
-import { SlackSessionManager } from '../src/services/slack-session-manager';
 import { SessionService } from '../src/services/session.service';
 import { AuthService } from '../src/services/auth.service';
 import { ServiceManager } from '../src/services/service-manager';
@@ -39,7 +38,6 @@ class PerformanceTester {
   private cacheService!: CacheService;
   private tokenManager!: TokenManager;
   private sessionService!: SessionService;
-  private slackSessionManager!: SlackSessionManager;
   private authService!: AuthService;
 
   constructor() {
@@ -81,10 +79,8 @@ class PerformanceTester {
     await this.serviceManager.initializeAllServices();
 
     // Create dependent services
-    this.slackSessionManager = new SlackSessionManager(this.sessionService);
-    this.tokenManager = new TokenManager(this.slackSessionManager, this.authService);
+    this.tokenManager = new TokenManager();
     
-    await this.slackSessionManager.initialize();
     await this.tokenManager.initialize();
 
     logger.info('All services initialized successfully');
@@ -94,7 +90,6 @@ class PerformanceTester {
     logger.info('Cleaning up services...');
     
     await this.tokenManager?.destroy();
-    await this.slackSessionManager?.destroy();
     await this.serviceManager.destroyAllServices();
   }
 
@@ -306,7 +301,7 @@ class PerformanceTester {
 
       // Create test tokens in database
       try {
-        await this.slackSessionManager.storeOAuthTokens(teamId, userId, {
+        await this.sessionService.storeSlackOAuthTokens(teamId, userId, {
           google: {
             access_token: `test-token-${i}`,
             refresh_token: `refresh-token-${i}`,

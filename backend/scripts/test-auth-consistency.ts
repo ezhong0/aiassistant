@@ -6,7 +6,6 @@ import path from 'path';
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import { SessionService } from '../src/services/session.service';
-import { SlackSessionManager } from '../src/services/slack-session-manager';
 import { TokenManager } from '../src/services/token-manager';
 import { AuthService } from '../src/services/auth.service';
 import logger from '../src/utils/logger';
@@ -19,13 +18,10 @@ async function testAuthenticationFlow() {
     const sessionService = new SessionService();
     await sessionService.initialize();
     
-    const slackSessionManager = new SlackSessionManager(sessionService);
-    await slackSessionManager.initialize();
-    
     const authService = new AuthService();
     await authService.initialize();
     
-    const tokenManager = new TokenManager(slackSessionManager, authService);
+    const tokenManager = new TokenManager();
     await tokenManager.initialize();
 
     console.log('✅ All services initialized');
@@ -41,13 +37,13 @@ async function testAuthenticationFlow() {
     // Step 1: Check session ID generation consistency
     console.log('\n🔍 Step 1: Checking session ID generation...');
     const sessionId1 = `user:${testTeamId}:${testUserId}`;
-    const sessionId2 = slackSessionManager['generateSessionId'](testTeamId, testUserId);
+    const sessionId2 = sessionService.generateSlackSessionId(testTeamId, testUserId);
     console.log('  → Manual session ID:', sessionId1);
-    console.log('  → SlackSessionManager session ID:', sessionId2);
+    console.log('  → SessionService session ID:', sessionId2);
     console.log('  → Session IDs match:', sessionId1 === sessionId2);
 
-    // Step 2: Store tokens using SlackSessionManager (like OAuth callback)
-    console.log('\n💾 Step 2: Storing tokens via SlackSessionManager...');
+    // Step 2: Store tokens using SessionService (like OAuth callback)
+    console.log('\n💾 Step 2: Storing tokens via SessionService...');
     const testTokens = {
       google: {
         access_token: 'test_access_token_flow_test',
@@ -63,7 +59,7 @@ async function testAuthenticationFlow() {
       }
     };
 
-    const stored = await slackSessionManager.storeOAuthTokens(testTeamId, testUserId, testTokens);
+    const stored = await sessionService.storeSlackOAuthTokens(testTeamId, testUserId, testTokens);
     console.log('  → Tokens stored successfully:', stored);
 
     // Step 3: Check if TokenManager can find the tokens
@@ -71,10 +67,10 @@ async function testAuthenticationFlow() {
     const hasValidTokens = await tokenManager.hasValidOAuthTokens(testTeamId, testUserId);
     console.log('  → TokenManager hasValidOAuthTokens:', hasValidTokens);
 
-    // Step 4: Check if SlackSessionManager can find the tokens
-    console.log('\n🔍 Step 4: Checking SlackSessionManager access...');
-    const slackHasValidTokens = await slackSessionManager.hasValidOAuthTokens(testTeamId, testUserId);
-    console.log('  → SlackSessionManager hasValidOAuthTokens:', slackHasValidTokens);
+    // Step 4: Check if SessionService can find the tokens
+    console.log('\n🔍 Step 4: Checking SessionService access...');
+    const sessionHasValidTokens = await sessionService.hasSlackValidOAuthTokens(testTeamId, testUserId);
+    console.log('  → SessionService hasValidOAuthTokens:', sessionHasValidTokens);
 
     // Step 5: Direct session service check
     console.log('\n🔍 Step 5: Direct SessionService check...');
@@ -85,10 +81,10 @@ async function testAuthenticationFlow() {
       accessToken: directTokens?.google?.access_token?.substring(0, 20) + '...'
     });
 
-    // Step 6: Check what TokenManager's sessionManager actually gets
-    console.log('\n🔍 Step 6: TokenManager sessionManager check...');
-    const tokenManagerTokens = await tokenManager['sessionManager'].getOAuthTokens(testTeamId, testUserId);
-    console.log('  → TokenManager sessionManager tokens:', {
+    // Step 6: Check what TokenManager's sessionService actually gets
+    console.log('\n🔍 Step 6: TokenManager sessionService check...');
+    const tokenManagerTokens = await sessionService.getSlackOAuthTokens(testTeamId, testUserId);
+    console.log('  → TokenManager sessionService tokens:', {
       hasTokens: !!tokenManagerTokens,
       hasGoogle: !!tokenManagerTokens?.google,
       accessToken: tokenManagerTokens?.google?.access_token?.substring(0, 20) + '...'
@@ -99,11 +95,11 @@ async function testAuthenticationFlow() {
     console.log('  • Session ID consistency:', sessionId1 === sessionId2 ? '✅ Consistent' : '❌ Inconsistent');
     console.log('  • Token storage:', stored ? '✅ Successful' : '❌ Failed');
     console.log('  • TokenManager access:', hasValidTokens ? '✅ Working' : '❌ Failed');
-    console.log('  • SlackSessionManager access:', slackHasValidTokens ? '✅ Working' : '❌ Failed');
+    console.log('  • SessionService access:', sessionHasValidTokens ? '✅ Working' : '❌ Failed');
     console.log('  • Direct SessionService access:', directTokens ? '✅ Working' : '❌ Failed');
     console.log('  • TokenManager sessionManager access:', tokenManagerTokens ? '✅ Working' : '❌ Failed');
 
-    if (hasValidTokens && slackHasValidTokens) {
+    if (hasValidTokens && sessionHasValidTokens) {
       console.log('\n🎉 Authentication flow is consistent!');
       console.log('✅ Users should stay authenticated after OAuth!');
     } else {
@@ -115,7 +111,7 @@ async function testAuthenticationFlow() {
       console.log('  → Session ID used:', sessionId1);
       console.log('  → Tokens stored:', stored);
       console.log('  → TokenManager result:', hasValidTokens);
-      console.log('  → SlackSessionManager result:', slackHasValidTokens);
+      console.log('  → SessionService result:', sessionHasValidTokens);
       console.log('  → Direct SessionService result:', !!directTokens);
       console.log('  → TokenManager sessionManager result:', !!tokenManagerTokens);
     }

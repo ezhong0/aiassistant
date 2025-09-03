@@ -8,7 +8,7 @@ const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
 import { initializeAllCoreServices } from '../src/services/service-initialization';
-import { SlackSessionManager } from '../src/services/slack-session-manager';
+import { SessionService } from '../src/services/session.service';
 import { TokenManager } from '../src/services/token-manager';
 import { serviceManager } from '../src/services/service-manager';
 import logger from '../src/utils/logger';
@@ -21,10 +21,10 @@ async function testSimplifiedSessionManagement() {
     await initializeAllCoreServices();
     
     // Get the new services
-    const sessionManager = serviceManager.getService('slackSessionManager') as unknown as SlackSessionManager;
-    const tokenManager = serviceManager.getService('tokenManager') as unknown as TokenManager;
+    const sessionService = serviceManager.getService('sessionService') as SessionService;
+    const tokenManager = serviceManager.getService('tokenManager') as TokenManager;
     
-    if (!sessionManager || !tokenManager) {
+    if (!sessionService || !tokenManager) {
       throw new Error('Required services not available');
     }
     
@@ -35,7 +35,7 @@ async function testSimplifiedSessionManagement() {
     logger.info('Testing session creation...');
     
     // Test 1: Create session
-    const session = await sessionManager.getSlackSession(testTeamId, testUserId);
+    const session = await sessionService.getSlackSession(testTeamId, testUserId);
     logger.info('✅ Session created successfully', {
       sessionId: session.sessionId,
       userId: session.userId,
@@ -59,11 +59,11 @@ async function testSimplifiedSessionManagement() {
       }
     };
     
-    const stored = await sessionManager.storeOAuthTokens(testTeamId, testUserId, testTokens);
+    const stored = await sessionService.storeSlackOAuthTokens(testTeamId, testUserId, testTokens);
     logger.info('✅ OAuth tokens stored successfully', { stored });
     
     // Test 3: Retrieve OAuth tokens
-    const retrievedTokens = await sessionManager.getOAuthTokens(testTeamId, testUserId);
+    const retrievedTokens = await sessionService.getSlackOAuthTokens(testTeamId, testUserId);
     logger.info('✅ OAuth tokens retrieved successfully', {
       hasTokens: !!retrievedTokens,
       hasAccessToken: !!retrievedTokens?.google?.access_token,
@@ -81,19 +81,20 @@ async function testSimplifiedSessionManagement() {
     const tokenStatus = await tokenManager.getTokenStatus(testTeamId, testUserId);
     logger.info('✅ Token status retrieved successfully', tokenStatus);
     
-    // Test 6: Update conversation context
-    await sessionManager.updateConversationContext(
-      testTeamId, 
-      testUserId, 
-      'C123456789', 
-      '1234567890.123456',
-      { message: 'test message' }
-    );
-    logger.info('✅ Conversation context updated successfully');
+    // Test 6: Add conversation entry
+    await sessionService.addConversationEntry(session.sessionId, {
+      id: 'test-entry',
+      timestamp: new Date(),
+      content: 'test message',
+      type: 'user'
+    });
+    logger.info('✅ Conversation entry added successfully');
     
-    // Test 7: Get session stats
-    const sessionStats = await sessionManager.getSessionStats(testTeamId, testUserId);
-    logger.info('✅ Session stats retrieved successfully', sessionStats);
+    // Test 7: Get conversation history
+    const conversationHistory = await sessionService.getConversationHistory(session.sessionId);
+    logger.info('✅ Conversation history retrieved successfully', {
+      entryCount: conversationHistory.length
+    });
     
     logger.info('🎉 All tests passed! Simplified session management is working correctly.');
     
