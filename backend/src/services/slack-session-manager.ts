@@ -133,6 +133,9 @@ export class SlackSessionManager extends BaseService {
       hasRefreshToken: !!tokens.google?.refresh_token
     });
     
+    // Ensure session exists before storing tokens
+    await this.sessionService.getOrCreateSession(sessionId, userId);
+    
     return await this.sessionService.storeOAuthTokens(sessionId, tokens);
   }
 
