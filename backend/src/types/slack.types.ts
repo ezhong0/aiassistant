@@ -1,4 +1,4 @@
-import { SlackEventMiddlewareArgs, AllMiddlewareArgs, StringIndexed } from '@slack/bolt';
+import { SlackEventMiddlewareArgs } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
 
 /**

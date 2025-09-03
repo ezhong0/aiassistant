@@ -59,7 +59,7 @@ export class TestHelper {
     }
 
     const { serviceManager } = require('../src/services/service-manager');
-    return serviceManager.getService<T>(serviceName);
+    return serviceManager.getService(serviceName) as T;
   }
 
   /**
