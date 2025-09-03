@@ -2,7 +2,6 @@
 
 import { CacheService } from '../src/services/cache.service';
 import { TokenManager } from '../src/services/token-manager';
-import { SlackSessionManager } from '../src/services/slack-session-manager';
 import { AuthService } from '../src/services/auth.service';
 import { SessionService } from '../src/services/session.service';
 import { DatabaseService } from '../src/services/database.service';
@@ -237,10 +236,8 @@ class CachingIntegrationValidator {
       }
 
       // Create dependent services
-      const slackSessionManager = new SlackSessionManager(sessionService);
-      const tokenManager = new TokenManager(slackSessionManager, authService);
+      const tokenManager = new TokenManager();
       
-      await slackSessionManager.initialize();
       await tokenManager.initialize();
 
       const testTeamId = 'test-team-123';
@@ -270,7 +267,6 @@ class CachingIntegrationValidator {
       
       // Cleanup
       await tokenManager.destroy();
-      await slackSessionManager.destroy();
 
       this.results.push({
         name: 'TokenManager Caching',

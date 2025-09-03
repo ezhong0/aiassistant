@@ -54,7 +54,7 @@ async function diagnoseOAuthPersistence() {
 
     // Test 3: Test session creation and OAuth token storage
     console.log('\n💾 Test 3: Session Creation and OAuth Token Storage');
-    const testSessionId = 'slack_T123456_U123456_main';
+    const testSessionId = 'user:T123456:U123456';
     const testUserId = 'U123456';
     
     // Create session
@@ -142,21 +142,12 @@ async function diagnoseOAuthPersistence() {
       userEmail: 'test@example.com'
     };
     
-    const possibleSessionIds = [];
-    if (testContext.threadTs) {
-      possibleSessionIds.push(`slack_${testContext.teamId}_${testContext.userId}_thread_${testContext.threadTs.replace('.', '_')}`);
-    }
-    if (!testContext.isDirectMessage) {
-      possibleSessionIds.push(`slack_${testContext.teamId}_${testContext.userId}_channel_${testContext.channelId}`);
-    }
-    possibleSessionIds.push(`slack_${testContext.teamId}_${testContext.userId}_main`);
+    // Generate session ID using new standardized format
+    const expectedSessionId = `user:${testContext.teamId}:${testContext.userId}`;
     
-    console.log('  → Possible session IDs:');
-    possibleSessionIds.forEach((id, index) => {
-      console.log(`    ${index + 1}. ${id}`);
-    });
-    console.log(`  → Expected session ID: ${testSessionId}`);
-    console.log(`  → Session ID matches: ${possibleSessionIds.includes(testSessionId)}`);
+    console.log(`  → Expected session ID: ${expectedSessionId}`);
+    console.log(`  → Session ID format valid: ${expectedSessionId.startsWith('user:')}`);
+    console.log(`  → Session ID parts: ${expectedSessionId.split(':').join(' | ')}`);
 
     console.log('\n✅ Diagnosis completed!');
     

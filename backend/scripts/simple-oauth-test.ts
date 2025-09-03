@@ -7,7 +7,6 @@ import path from 'path';
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 import { AuthService } from '../src/services/auth.service';
-import { SlackSessionManager } from '../src/services/slack-session-manager';
 import { SessionService } from '../src/services/session.service';
 import { DatabaseService } from '../src/services/database.service';
 import { serviceManager } from '../src/services/service-manager';
@@ -79,35 +78,33 @@ async function simpleOAuthTest() {
       console.log(`  → Expiry date: ${retrieved.google?.expiry_date ? new Date(retrieved.google.expiry_date).toISOString() : 'Not set'}`);
     }
 
-    // Test SlackSessionManager (which is what the app actually uses)
-    console.log('\n🎯 Testing SlackSessionManager...');
-    const slackSessionManager = new SlackSessionManager(sessionService);
-    await slackSessionManager.initialize();
+    // Test SessionService directly (which is what the app actually uses)
+    console.log('\n🎯 Testing SessionService directly...');
     
     const teamId = 'T123456';
     const userId = 'U123456';
     
-    // Store tokens via SlackSessionManager
-    const slackStored = await slackSessionManager.storeOAuthTokens(teamId, userId, testTokens);
-    console.log(`  → Tokens stored via SlackSessionManager: ${slackStored ? '✅ Success' : '❌ Failed'}`);
+    // Store tokens via SessionService
+    const sessionStored = await sessionService.storeSlackOAuthTokens(teamId, userId, testTokens);
+    console.log(`  → Tokens stored via SessionService: ${sessionStored ? '✅ Success' : '❌ Failed'}`);
 
-    // Retrieve tokens via SlackSessionManager
-    const slackRetrieved = await slackSessionManager.getOAuthTokens(teamId, userId);
-    console.log(`  → Tokens retrieved via SlackSessionManager: ${slackRetrieved ? '✅ Success' : '❌ Failed'}`);
+    // Retrieve tokens via SessionService
+    const sessionRetrieved = await sessionService.getSlackOAuthTokens(teamId, userId);
+    console.log(`  → Tokens retrieved via SessionService: ${sessionRetrieved ? '✅ Success' : '❌ Failed'}`);
 
-    if (slackRetrieved) {
-      console.log(`  → Access token via Slack manager: ${slackRetrieved.google?.access_token ? '✅ Yes' : '❌ No'}`);
-      console.log(`  → Refresh token via Slack manager: ${slackRetrieved.google?.refresh_token ? '✅ Yes' : '❌ No'}`);
+    if (sessionRetrieved) {
+      console.log(`  → Access token via Session service: ${sessionRetrieved.google?.access_token ? '✅ Yes' : '❌ No'}`);
+      console.log(`  → Refresh token via Session service: ${sessionRetrieved.google?.refresh_token ? '✅ Yes' : '❌ No'}`);
     }
 
     // Test token validation
-    const hasValidTokens = await slackSessionManager.hasValidOAuthTokens(teamId, userId);
+    const hasValidTokens = await sessionService.hasSlackValidOAuthTokens(teamId, userId);
     console.log(`  → Has valid OAuth tokens: ${hasValidTokens ? '✅ Yes' : '❌ No'}`);
 
     console.log('\n📊 Summary:');
     console.log(`  • Storage backend: ${databaseService.isReady() ? 'Database' : 'Memory'}`);
     console.log(`  • Direct storage/retrieval: ${stored && retrieved ? '✅ Working' : '❌ Failed'}`);
-    console.log(`  • SlackSessionManager storage/retrieval: ${slackStored && slackRetrieved ? '✅ Working' : '❌ Failed'}`);
+    console.log(`  • SessionService storage/retrieval: ${sessionStored && sessionRetrieved ? '✅ Working' : '❌ Failed'}`);
     console.log(`  • Token validation: ${hasValidTokens ? '✅ Working' : '❌ Failed'}`);
     
   } catch (error) {

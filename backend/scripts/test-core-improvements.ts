@@ -5,7 +5,8 @@
  * Tests critical fixes without requiring full service initialization
  */
 
-import { SlackSessionManager } from '../src/services/slack-session-manager';
+import { ServiceManager } from '../src/services/service-manager';
+import { SessionService } from '../src/services/session.service';
 import { CryptoUtil } from '../src/utils/crypto.util';
 import { AuditLogger } from '../src/utils/audit-logger';
 
@@ -45,14 +46,14 @@ function test(name: string, testFn: () => boolean | Promise<boolean>): void {
 // Test 1: Session ID Standardization
 test('Session ID Format Standardization', () => {
   const sessionId = 'user:T12345:U67890';
-  const parsed = SlackSessionManager.parseSessionId(sessionId);
+  const parsed = SessionService.parseSlackSessionId(sessionId);
   
   if (!parsed) return false;
   if (parsed.teamId !== 'T12345') return false;
   if (parsed.userId !== 'U67890') return false;
   
   // Test invalid format rejection
-  const invalid = SlackSessionManager.parseSessionId('slack_old_format');
+  const invalid = SessionService.parseSlackSessionId('invalid_format');
   return invalid === null;
 });
 
@@ -111,19 +112,18 @@ test('Audit Logger Event Structure', () => {
   return requiredEvents.every(event => Object.values(events).includes(event as any));
 });
 
-// Test 6: Session Migration Parsing
-test('Session Migration Format Compatibility', () => {
-  // Test old format parsing logic
-  const oldFormats = [
-    'slack_T12345_U67890',
-    'slack_T12345_U67890_channel_123',
-    'slack_TEAM_USER_extra_data'
+// Test 6: Session ID Format Validation
+test('Session ID Format Validation', () => {
+  // Test new standardized format
+  const newFormats = [
+    'user:T12345:U67890',
+    'user:TEAM123:USER456'
   ];
   
-  for (const oldFormat of oldFormats) {
-    if (oldFormat.startsWith('slack_')) {
-      const parts = oldFormat.split('_');
-      if (parts.length < 3) return false;
+  for (const newFormat of newFormats) {
+    if (newFormat.startsWith('user:')) {
+      const parts = newFormat.split(':');
+      if (parts.length !== 3) return false;
       
       const teamId = parts[1];
       const userId = parts[2];
@@ -165,7 +165,7 @@ setTimeout(() => {
     console.log('  • Unified token validation with security buffers');
     console.log('  • Consistent cache key formats');
     console.log('  • Comprehensive audit logging');
-    console.log('  • Session migration compatibility');
+    console.log('  • Session ID format validation');
     console.log('\n🚀 Architecture is production-ready!');
     process.exit(0);
   } else {

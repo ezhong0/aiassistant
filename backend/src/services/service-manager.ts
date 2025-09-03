@@ -214,11 +214,12 @@ export class ServiceManager {
 
     // Initialize dependencies first
     for (const depName of registration.dependencies) {
-      const depService = this.serviceInstances.get(depName);
-      if (!depService) {
+      const depRegistration = this.services.get(depName);
+      if (!depRegistration) {
         throw new Error(`Dependency ${depName} not found for service ${name}`);
       }
       
+      const depService = depRegistration.service;
       if (!depService.isReady()) {
         await this.initializeService(depName);
       }

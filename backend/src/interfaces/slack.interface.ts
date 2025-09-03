@@ -872,8 +872,8 @@ export class SlackInterface {
    * Create or get session for Slack user with simplified management
    */
   private async createOrGetSession(slackContext: SlackContext): Promise<string> {
-    // Generate deterministic session ID (sessions are no longer stored)
-    const sessionId = `slack_${slackContext.teamId}_${slackContext.userId}_${Date.now()}`;
+    // Generate standardized session ID using the new format
+    const sessionId = `user:${slackContext.teamId}:${slackContext.userId}`;
     
     logger.info('Generated session ID for Slack user', { 
       sessionId, 

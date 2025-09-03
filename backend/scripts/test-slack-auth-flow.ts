@@ -5,26 +5,39 @@ import path from 'path';
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-import { SlackSessionManager } from '../src/services/slack-session-manager';
+import { SessionService } from '../src/services/session.service';
+import { DatabaseService } from '../src/services/database.service';
 import { serviceManager } from '../src/services/service-manager';
-import '../src/services/service-initialization';
 import logger from '../src/utils/logger';
 
 async function testSlackAuthenticationFlow() {
   console.log('🔍 Testing Slack Authentication Flow...\n');
 
   try {
+    // Register services
+    const databaseService = new DatabaseService();
+    serviceManager.registerService('databaseService', databaseService, {
+      priority: 5,
+      autoStart: true
+    });
+
+    const sessionService = new SessionService();
+    serviceManager.registerService('sessionService', sessionService, {
+      dependencies: ['databaseService'],
+      priority: 10,
+      autoStart: true
+    });
+
     // Initialize service manager
     await serviceManager.initializeAllServices();
     console.log('✅ Service manager initialized');
 
-    // Get SlackSessionManager
-    const slackSessionManager = serviceManager.getService('slackSessionManager') as SlackSessionManager;
-    if (!slackSessionManager) {
-      throw new Error('SlackSessionManager not available');
+    // Get SessionService
+    if (!sessionService) {
+      throw new Error('SessionService not available');
     }
 
-    console.log('✅ SlackSessionManager ready');
+    console.log('✅ SessionService ready');
 
     // Test data
     const testTeamId = 'T123456';
@@ -36,7 +49,7 @@ async function testSlackAuthenticationFlow() {
 
     // Step 1: Check if user has tokens initially
     console.log('\n🔍 Step 1: Checking initial authentication status...');
-    const initialHasTokens = await slackSessionManager.hasValidOAuthTokens(testTeamId, testUserId);
+    const initialHasTokens = await sessionService.hasSlackValidOAuthTokens(testTeamId, testUserId);
     console.log('  → Has valid tokens initially:', initialHasTokens);
 
     // Step 2: Simulate OAuth authentication (store tokens)
@@ -56,17 +69,17 @@ async function testSlackAuthenticationFlow() {
       }
     };
 
-    const stored = await slackSessionManager.storeOAuthTokens(testTeamId, testUserId, testTokens);
+    const stored = await sessionService.storeSlackOAuthTokens(testTeamId, testUserId, testTokens);
     console.log('  → Tokens stored successfully:', stored);
 
     // Step 3: Check if user has tokens after authentication
     console.log('\n🔍 Step 3: Checking authentication status after OAuth...');
-    const afterAuthHasTokens = await slackSessionManager.hasValidOAuthTokens(testTeamId, testUserId);
+    const afterAuthHasTokens = await sessionService.hasSlackValidOAuthTokens(testTeamId, testUserId);
     console.log('  → Has valid tokens after OAuth:', afterAuthHasTokens);
 
     // Step 4: Retrieve tokens to verify they're accessible
     console.log('\n🔍 Step 4: Retrieving stored tokens...');
-    const retrievedTokens = await slackSessionManager.getOAuthTokens(testTeamId, testUserId);
+    const retrievedTokens = await sessionService.getSlackOAuthTokens(testTeamId, testUserId);
     console.log('  → Tokens retrieved:', {
       hasTokens: !!retrievedTokens,
       hasGoogle: !!retrievedTokens?.google,
@@ -76,7 +89,7 @@ async function testSlackAuthenticationFlow() {
 
     // Step 5: Test token validation
     console.log('\n🔍 Step 5: Testing token validation...');
-    const finalHasTokens = await slackSessionManager.hasValidOAuthTokens(testTeamId, testUserId);
+    const finalHasTokens = await sessionService.hasSlackValidOAuthTokens(testTeamId, testUserId);
     console.log('  → Final token validation:', finalHasTokens);
 
     // Step 6: Test session persistence

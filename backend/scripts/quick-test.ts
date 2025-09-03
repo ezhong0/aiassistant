@@ -4,7 +4,7 @@
  * Quick test of core improvements
  */
 
-import { SlackSessionManager } from '../src/services/slack-session-manager';
+import { SessionService } from '../src/services/session.service';
 import { CryptoUtil } from '../src/utils/crypto.util';
 
 console.log('🧪 Quick Test of Session & OAuth Improvements\n');
@@ -12,7 +12,7 @@ console.log('🧪 Quick Test of Session & OAuth Improvements\n');
 // Test 1: Session ID parsing
 console.log('1. Session ID Standardization:');
 const sessionId = 'user:T12345:U67890';
-const parsed = SlackSessionManager.parseSessionId(sessionId);
+const parsed = SessionService.parseSlackSessionId(sessionId);
 console.log(`   Original: ${sessionId}`);
 console.log(`   Parsed: ${JSON.stringify(parsed)}`);
 console.log(`   ✅ ${parsed ? 'PASS' : 'FAIL'}\n`);
