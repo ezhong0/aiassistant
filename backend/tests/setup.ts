@@ -68,7 +68,7 @@ afterAll(async () => {
   if (serviceInitialized) {
     try {
       const { serviceManager } = await import('../src/services/service-manager');
-      await serviceManager.getInstance().forceCleanup();
+      await serviceManager.forceCleanup();
       serviceInitialized = false;
       console.log('✅ Services cleaned up after tests');
     } catch (error) {
@@ -90,7 +90,7 @@ afterEach(async () => {
   if (serviceInitialized) {
     try {
       const { serviceManager } = await import('../src/services/service-manager');
-      const manager = serviceManager.getInstance();
+      const manager = serviceManager;
       
       // Reset service states without full shutdown
       for (const serviceName of manager.getRegisteredServices()) {
@@ -117,7 +117,7 @@ afterEach(async () => {
 });
 
 // Global test utilities
-global.getService = async (serviceName: string) => {
+(global as any).getService = async (serviceName: string) => {
   if (!serviceInitialized) {
     const { initializeAllCoreServices } = await import('../src/services/service-initialization');
     await initializeAllCoreServices();
@@ -125,10 +125,10 @@ global.getService = async (serviceName: string) => {
   }
   
   const { serviceManager } = await import('../src/services/service-manager');
-  return serviceManager.getInstance().getService(serviceName);
+  return serviceManager.getService(serviceName);
 };
 
-global.getServiceManager = async () => {
+(global as any).getServiceManager = async () => {
   if (!serviceInitialized) {
     const { initializeAllCoreServices } = await import('../src/services/service-initialization');
     await initializeAllCoreServices();
@@ -136,7 +136,7 @@ global.getServiceManager = async () => {
   }
   
   const { serviceManager } = await import('../src/services/service-manager');
-  return serviceManager.getInstance();
+  return serviceManager;
 };
 
 // Handle unhandled promise rejections in tests

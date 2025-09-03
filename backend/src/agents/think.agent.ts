@@ -1,4 +1,4 @@
-import { ToolCall, ToolResult, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
+import { ToolCall, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
 import { BaseAgent } from '../framework/base-agent';
 
 export interface ThinkAgentResponse extends AgentResponse {
@@ -91,7 +91,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   /**
    * Core thinking and verification logic - required by framework BaseAgent
    */
-  protected async processQuery(params: ThinkParams, context: ToolExecutionContext): Promise<ThinkAgentResponse> {
+  protected async processQuery(params: ThinkParams, _context: ToolExecutionContext): Promise<ThinkAgentResponse> {
     return await this.processThinking(params);
   }
 
@@ -177,7 +177,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   private analyzeIndividualTool(
     toolCall: ToolCall, 
     originalQuery: string, 
-    context?: string
+    _context?: string
   ): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
@@ -214,7 +214,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   /**
    * Analyze ContactAgent usage
    */
-  private analyzeContactAgentUsage(query: string, parameters: any): {
+  private analyzeContactAgentUsage(query: string, _parameters: any): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -248,7 +248,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   /**
    * Analyze EmailAgent usage
    */
-  private analyzeEmailAgentUsage(query: string, parameters: any): {
+  private analyzeEmailAgentUsage(query: string, _parameters: any): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -273,7 +273,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   /**
    * Analyze CalendarAgent usage
    */
-  private analyzeCalendarAgentUsage(query: string, parameters: any): {
+  private analyzeCalendarAgentUsage(query: string, _parameters: any): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -300,7 +300,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   /**
    * Analyze ContentCreator usage
    */
-  private analyzeContentCreatorUsage(query: string, parameters: any): {
+  private analyzeContentCreatorUsage(query: string, _parameters: any): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -336,7 +336,7 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   /**
    * Analyze Tavily search usage
    */
-  private analyzeTavilyUsage(query: string, parameters: any): {
+  private analyzeTavilyUsage(query: string, _parameters: any): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
