@@ -1805,11 +1805,6 @@ export class SlackInterface {
    */
   private async isDuplicateMessage(message: string, context: SlackContext): Promise<boolean> {
     try {
-      const sessionService = this.serviceManager.getService('sessionService');
-      if (!sessionService) {
-        return false;
-      }
-
       // Create a hash of the message and context to identify duplicates
       const messageHash = this.createMessageHash(message, context);
       const cacheKey = `duplicate_check_${messageHash}`;
@@ -1817,10 +1812,13 @@ export class SlackInterface {
       // Check if we've processed this exact message recently (within last 10 seconds)
       const tenSecondsAgo = Date.now() - (10 * 1000);
       
+      // Use file storage for duplicate detection (same as OAuth tokens)
+      const fileTokenStorage = new (await import('../utils/file-token-storage')).FileTokenStorage();
+      
       try {
-        const cached = await (sessionService as any).getSession(cacheKey);
-        if (cached && cached.timestamp) {
-          const cachedTime = new Date(cached.timestamp).getTime();
+        const cached = await fileTokenStorage.getTokens(cacheKey);
+        if (cached && cached.createdAt) {
+          const cachedTime = cached.createdAt;
           if (cachedTime > tenSecondsAgo) {
             logger.info('Duplicate message detected, skipping processing', {
               messageHash,
@@ -1834,12 +1832,19 @@ export class SlackInterface {
         // Cache miss, not a duplicate
       }
 
-      // Mark this message as processed
-      await (sessionService as any).createOrUpdateSession(cacheKey, {
-        processed: true,
-        timestamp: new Date().toISOString(),
+      // Mark this message as processed using file storage
+      const duplicateData = {
+        sessionId: cacheKey,
+        accessToken: 'processed', // Dummy token
+        expiresAt: Date.now() + (10 * 1000), // 10 second TTL
+        tokenType: 'duplicate_check',
+        scope: 'duplicate_detection',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
         message: message.substring(0, 100) // Store first 100 chars for debugging
-      });
+      };
+      
+      await fileTokenStorage.storeTokens(duplicateData);
 
       return false;
     } catch (error) {
