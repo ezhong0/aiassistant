@@ -1738,39 +1738,37 @@ export class SlackInterface {
       // Check if we've processed this exact message recently (within last 10 seconds)
       const tenSecondsAgo = Date.now() - (10 * 1000);
       
-      // Use file storage for duplicate detection (same as OAuth tokens)
-      const fileTokenStorage = new (await import('../utils/file-token-storage')).FileTokenStorage();
+      // Use in-memory cache for duplicate detection since file-token-storage is removed
+      const duplicateCheckMap = (global as any).__duplicateCheckMap || new Map();
+      (global as any).__duplicateCheckMap = duplicateCheckMap;
       
       try {
-        const cached = await fileTokenStorage.getTokens(cacheKey);
-        if (cached && cached.createdAt) {
-          const cachedTime = cached.createdAt;
-          if (cachedTime > tenSecondsAgo) {
-            logger.info('Duplicate message detected, skipping processing', {
-              messageHash,
-              userId: context.userId,
-              message: message.substring(0, 100)
-            });
-            return true;
-          }
+        const cached = duplicateCheckMap.get(cacheKey);
+        if (cached && cached.timestamp > tenSecondsAgo) {
+          logger.info('Duplicate message detected, skipping processing', {
+            messageHash,
+            userId: context.userId,
+            message: message.substring(0, 100)
+          });
+          return true;
         }
       } catch (error) {
         // Cache miss, not a duplicate
       }
 
-      // Mark this message as processed using file storage
-      const duplicateData = {
-        sessionId: cacheKey,
-        accessToken: 'processed', // Dummy token
-        expiresAt: Date.now() + (10 * 1000), // 10 second TTL
-        tokenType: 'duplicate_check',
-        scope: 'duplicate_detection',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        message: message.substring(0, 100) // Store first 100 chars for debugging
-      };
+      // Mark this message as processed using in-memory storage
+      duplicateCheckMap.set(cacheKey, {
+        timestamp: Date.now(),
+        message: message.substring(0, 100)
+      });
       
-      await fileTokenStorage.storeTokens(duplicateData);
+      // Clean up old entries (older than 1 minute)
+      const oneMinuteAgo = Date.now() - (60 * 1000);
+      for (const [key, value] of duplicateCheckMap.entries()) {
+        if (value.timestamp < oneMinuteAgo) {
+          duplicateCheckMap.delete(key);
+        }
+      }
 
       return false;
     } catch (error) {
@@ -1800,12 +1798,25 @@ export class SlackInterface {
   private async hasOAuthTokens(slackContext: SlackContext): Promise<boolean> {
     try {
       if (!this.tokenManager) {
+        logger.warn('TokenManager not available in hasOAuthTokens', { 
+          userId: slackContext.userId,
+          teamId: slackContext.teamId 
+        });
         return false;
       }
 
       return await this.tokenManager.hasValidOAuthTokens(slackContext.teamId, slackContext.userId);
     } catch (error) {
-      logger.error('Error checking OAuth tokens', { error, userId: slackContext.userId });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      logger.error('💥 Error in hasOAuthTokens (Slack interface)', { 
+        error,
+        errorMessage,
+        errorStack,
+        errorType: error?.constructor?.name,
+        userId: slackContext.userId,
+        teamId: slackContext.teamId
+      });
       return false;
     }
   }
