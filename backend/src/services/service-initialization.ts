@@ -1,5 +1,6 @@
 import { serviceManager } from './service-manager';
 import { TokenStorageService } from './token-storage.service';
+import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
 import { AuthService } from './auth.service';
 import { ContactService } from './contact.service';
@@ -60,6 +61,7 @@ const registerCoreServices = async (): Promise<void> => {
     });
 
     // 2. DatabaseService - No dependencies, high priority
+    // In development, we'll handle database failures gracefully in TokenStorageService
     const databaseService = new DatabaseService();
     serviceManager.registerService('databaseService', databaseService, {
       priority: 5,
@@ -109,7 +111,15 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 6. ToolExecutorService - Now depends on tokenStorageService instead of sessionService
+    // 6. TokenManager - Depends on tokenStorageService and authService
+    const tokenManager = new TokenManager();
+    serviceManager.registerService('tokenManager', tokenManager, {
+      dependencies: ['tokenStorageService', 'authService'],
+      priority: 17,
+      autoStart: true
+    });
+
+    // 7. ToolExecutorService - Now depends on tokenStorageService instead of sessionService
     const toolExecutorService = new ToolExecutorService();
     serviceManager.registerService('toolExecutorService', toolExecutorService, {
       dependencies: ['tokenStorageService'],

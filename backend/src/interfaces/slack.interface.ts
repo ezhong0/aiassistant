@@ -168,15 +168,7 @@ export class SlackInterface {
           return;
         }
 
-        // Check for duplicate messages to prevent multiple executions
-        const isDuplicate = await this.isDuplicateMessage(message, context);
-        if (isDuplicate) {
-          logger.info('Skipping duplicate app mention processing', {
-            userId: context.userId,
-            message: message.substring(0, 100)
-          });
-          return;
-        }
+
 
         await this.handleSlackEvent(
           message,
@@ -220,15 +212,7 @@ export class SlackInterface {
             return;
           }
 
-          // Check for duplicate messages to prevent multiple executions
-          const isDuplicate = await this.isDuplicateMessage(messageText, context);
-          if (isDuplicate) {
-            logger.info('Skipping duplicate direct message processing', {
-              userId: context.userId,
-              message: messageText.substring(0, 100)
-            });
-            return;
-          }
+
 
           // Welcome first-time users
           if (this.isFirstTimeUser(context)) {
@@ -924,15 +908,7 @@ export class SlackInterface {
         return;
       }
 
-      // Check for duplicate messages to prevent multiple executions
-      const isDuplicate = await this.isDuplicateMessage(message, context);
-      if (isDuplicate) {
-        logger.info('Skipping duplicate message processing', {
-          userId: context.userId,
-          message: message.substring(0, 100)
-        });
-        return;
-      }
+
 
       // Early detection of email-related requests for better OAuth experience
       const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
@@ -1726,71 +1702,7 @@ export class SlackInterface {
     }
   }
 
-  /**
-   * Check if this is a duplicate message that was recently processed
-   */
-  private async isDuplicateMessage(message: string, context: SlackContext): Promise<boolean> {
-    try {
-      // Create a hash of the message and context to identify duplicates
-      const messageHash = this.createMessageHash(message, context);
-      const cacheKey = `duplicate_check_${messageHash}`;
-      
-      // Check if we've processed this exact message recently (within last 10 seconds)
-      const tenSecondsAgo = Date.now() - (10 * 1000);
-      
-      // Use in-memory cache for duplicate detection since file-token-storage is removed
-      const duplicateCheckMap = (global as any).__duplicateCheckMap || new Map();
-      (global as any).__duplicateCheckMap = duplicateCheckMap;
-      
-      try {
-        const cached = duplicateCheckMap.get(cacheKey);
-        if (cached && cached.timestamp > tenSecondsAgo) {
-          logger.info('Duplicate message detected, skipping processing', {
-            messageHash,
-            userId: context.userId,
-            message: message.substring(0, 100)
-          });
-          return true;
-        }
-      } catch (error) {
-        // Cache miss, not a duplicate
-      }
 
-      // Mark this message as processed using in-memory storage
-      duplicateCheckMap.set(cacheKey, {
-        timestamp: Date.now(),
-        message: message.substring(0, 100)
-      });
-      
-      // Clean up old entries (older than 1 minute)
-      const oneMinuteAgo = Date.now() - (60 * 1000);
-      for (const [key, value] of duplicateCheckMap.entries()) {
-        if (value.timestamp < oneMinuteAgo) {
-          duplicateCheckMap.delete(key);
-        }
-      }
-
-      return false;
-    } catch (error) {
-      logger.debug('Error checking for duplicate message', { error, userId: context.userId });
-      return false;
-    }
-  }
-
-  /**
-   * Create a hash for message deduplication
-   */
-  private createMessageHash(message: string, context: SlackContext): string {
-    const content = `${message.trim().toLowerCase()}_${context.userId}_${context.channelId}`;
-    // Simple hash function - in production, use a proper hash library
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(36);
-  }
 
   /**
    * Check if a user has OAuth tokens for Gmail access

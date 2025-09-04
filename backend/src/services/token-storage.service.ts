@@ -35,6 +35,7 @@ export interface UserTokens {
 export class TokenStorageService extends BaseService {
   private databaseService: DatabaseService | null = null;
   private cacheService: CacheService | null = null;
+  private inMemoryTokens: Map<string, UserTokens> = new Map();
   
   // Cache TTL for tokens (2 hours)
   private readonly TOKEN_CACHE_TTL = 2 * 60 * 60;
@@ -54,7 +55,13 @@ export class TokenStorageService extends BaseService {
     this.cacheService = serviceManager.getService('cacheService') as CacheService;
     
     if (!this.databaseService) {
-      throw new Error('TokenStorageService requires DatabaseService');
+      this.logWarn('Database service not available, falling back to in-memory storage');
+      this.logWarn('⚠️  OAuth tokens will NOT persist across server restarts!');
+    } else if (!(this.databaseService as any)._initializationFailed && this.databaseService.isReady()) {
+      this.logInfo('✅ Database service available for persistent OAuth token storage');
+    } else {
+      this.logWarn('Database service failed to initialize, falling back to in-memory storage');
+      this.logWarn('⚠️  OAuth tokens will NOT persist across server restarts!');
     }
     
     if (this.cacheService) {
@@ -98,8 +105,8 @@ export class TokenStorageService extends BaseService {
       }
     }
 
-    // Store in database
-    if (this.databaseService) {
+    // Store in database if available
+    if (this.databaseService && this.databaseService.isReady()) {
       try {
         const userTokens: UserTokens = {
           userId,
@@ -122,7 +129,7 @@ export class TokenStorageService extends BaseService {
           await this.cacheService.set(`tokens:${userId}`, userTokens, this.TOKEN_CACHE_TTL);
         }
 
-        this.logInfo('Successfully stored user tokens', { 
+        this.logInfo('Successfully stored user tokens in database', { 
           userId,
           hasGoogleTokens: !!tokens.google,
           hasSlackTokens: !!tokens.slack,
@@ -133,15 +140,89 @@ export class TokenStorageService extends BaseService {
         AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', `tokens:${userId}`, userId, undefined, {
           googleTokens: !!tokens.google,
           slackTokens: !!tokens.slack,
-          encrypted: !!encryptedGoogleRefreshToken
+          encrypted: !!encryptedGoogleRefreshToken,
+          storageType: 'database'
         });
 
       } catch (error) {
-        this.logError('Failed to store user tokens', { userId, error });
-        throw new Error(`Failed to store tokens for user ${userId}: ${error}`);
+        this.logError('Failed to store user tokens in database', { userId, error });
+        // Fall back to in-memory storage
+        this.logWarn('Falling back to in-memory storage', { userId });
+        
+        // Store in memory as fallback
+        const userTokens: UserTokens = {
+          userId,
+          googleTokens: tokens.google ? {
+            access_token: tokens.google.access_token,
+            refresh_token: tokens.google.refresh_token, // Store unencrypted in memory
+            expires_at: tokens.google.expires_at,
+            token_type: tokens.google.token_type,
+            scope: tokens.google.scope
+          } : undefined,
+          slackTokens: tokens.slack,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        this.inMemoryTokens.set(userId, userTokens);
+        
+        // Cache the tokens for quick access
+        if (this.cacheService) {
+          await this.cacheService.set(`tokens:${userId}`, userTokens, this.TOKEN_CACHE_TTL);
+        }
+
+        this.logInfo('Successfully stored user tokens in memory (fallback)', { 
+          userId,
+          hasGoogleTokens: !!tokens.google,
+          hasSlackTokens: !!tokens.slack,
+          googleTokenType: tokens.google?.token_type,
+          storageType: 'memory'
+        });
+
+        // Audit log token storage
+        AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', `tokens:${userId}`, userId, undefined, {
+          googleTokens: !!tokens.google,
+          slackTokens: !!tokens.slack,
+          storageType: 'memory'
+        });
       }
     } else {
-      throw new Error('Database service not available for token storage');
+      // Database not available, store in memory directly
+      const userTokens: UserTokens = {
+        userId,
+        googleTokens: tokens.google ? {
+          access_token: tokens.google.access_token,
+          refresh_token: tokens.google.refresh_token, // Store unencrypted in memory
+          expires_at: tokens.google.expires_at,
+          token_type: tokens.google.token_type,
+          scope: tokens.google.scope
+        } : undefined,
+        slackTokens: tokens.slack,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      this.inMemoryTokens.set(userId, userTokens);
+      
+      // Cache the tokens for quick access
+      if (this.cacheService) {
+        await this.cacheService.set(`tokens:${userId}`, userTokens, this.TOKEN_CACHE_TTL);
+      }
+
+      this.logInfo('Successfully stored user tokens in memory', { 
+        userId,
+        hasGoogleTokens: !!tokens.google,
+        hasSlackTokens: !!tokens.slack,
+        googleTokenType: tokens.google?.token_type,
+        storageType: 'memory'
+      });
+
+      // Audit log token storage
+      AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', `tokens:${userId}`, userId, undefined, {
+        googleTokens: !!tokens.google,
+        slackTokens: !!tokens.slack,
+        storageType: 'memory'
+      });
     }
   }
 
@@ -169,16 +250,51 @@ export class TokenStorageService extends BaseService {
     }
 
     // Get from database
-    if (this.databaseService) {
+    if (this.databaseService && this.databaseService.isReady() && !(this.databaseService as any)._initializationFailed) {
       try {
+        this.logInfo('Querying database for tokens', { 
+          userId, 
+          userIdType: typeof userId,
+          userIdLength: userId?.length,
+          databaseServiceReady: this.databaseService.isReady()
+        });
         const tokens = await this.databaseService.getUserTokens(userId);
+        this.logInfo('Database query result', { 
+          userId, 
+          hasTokens: !!tokens, 
+          hasGoogleTokens: !!tokens?.googleTokens,
+          hasGoogleAccessToken: !!tokens?.googleTokens?.access_token,
+          tokensCreatedAt: tokens?.createdAt,
+          tokensUpdatedAt: tokens?.updatedAt
+        });
         if (tokens) {
           // Decrypt Google refresh token if present
           if (tokens.googleTokens?.refresh_token) {
             try {
-              tokens.googleTokens.refresh_token = CryptoUtil.decryptSensitiveData(tokens.googleTokens.refresh_token);
+              // Check if the token is encrypted
+              if (CryptoUtil.isEncrypted(tokens.googleTokens.refresh_token)) {
+                tokens.googleTokens.refresh_token = CryptoUtil.decryptSensitiveData(tokens.googleTokens.refresh_token);
+                this.logDebug('Successfully decrypted Google refresh token', { userId });
+              } else {
+                this.logDebug('Google refresh token is not encrypted (stored in plain text)', { userId });
+                // Encrypt it for security
+                try {
+                  const encrypted = CryptoUtil.encryptSensitiveData(tokens.googleTokens.refresh_token);
+                  await this.databaseService!.updateUserTokenRefreshToken(userId, encrypted);
+                  this.logInfo('Encrypted plain text refresh token for security', { userId });
+                } catch (encryptError) {
+                  this.logWarn('Failed to encrypt plain text refresh token', { userId, error: encryptError });
+                }
+              }
             } catch (error) {
-              this.logWarn('Failed to decrypt Google refresh token, using as-is', { userId });
+              this.logError('Failed to decrypt Google refresh token', { userId, error });
+              // Remove the corrupted token to prevent further issues
+              try {
+                await this.databaseService!.updateUserTokenRefreshToken(userId, null);
+                this.logInfo('Removed corrupted refresh token', { userId });
+              } catch (removeError) {
+                this.logError('Failed to remove corrupted refresh token', { userId, error: removeError });
+              }
             }
           }
 
@@ -191,14 +307,27 @@ export class TokenStorageService extends BaseService {
           return tokens;
         }
         
-        this.logDebug('No tokens found for user', { userId });
-        return null;
+        this.logDebug('No tokens found for user in database', { userId });
       } catch (error) {
-        this.logError('Failed to retrieve user tokens', { userId, error });
-        return null;
+        this.logError('Failed to retrieve user tokens from database', { userId, error });
       }
+    } else {
+      this.logInfo('Database not available, using in-memory storage', { 
+        userId, 
+        hasDatabaseService: !!this.databaseService,
+        databaseReady: this.databaseService?.isReady(),
+        databaseFailed: !!(this.databaseService as any)?._initializationFailed
+      });
     }
 
+    // Fallback to in-memory storage
+    const inMemoryTokens = this.inMemoryTokens.get(userId);
+    if (inMemoryTokens) {
+      this.logDebug('Retrieved tokens from memory', { userId });
+      return inMemoryTokens;
+    }
+    
+    this.logDebug('No tokens found for user in any storage', { userId });
     return null;
   }
 
@@ -243,7 +372,7 @@ export class TokenStorageService extends BaseService {
     }
 
     try {
-      const configService = (this as any).serviceManager?.getService('configService');
+      const configService = serviceManager.getService('configService') as any;
       if (!configService) {
         this.logError('Config service not available for token refresh', { userId });
         return null;
@@ -328,6 +457,9 @@ export class TokenStorageService extends BaseService {
       if (this.databaseService) {
         await this.databaseService.deleteUserTokens(userId);
       }
+
+      // Remove from in-memory storage
+      this.inMemoryTokens.delete(userId);
 
       // Remove from cache
       if (this.cacheService) {

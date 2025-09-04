@@ -289,8 +289,34 @@ export class TokenManager extends BaseService {
         await this.invalidateAllTokenCaches(teamId, userId);
         return null;
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Token refresh failed', { teamId, userId, error });
+      
+      // Handle specific OAuth errors
+      if (error.message?.includes('invalid_grant') || error.code === 'invalid_grant') {
+        logger.warn('Invalid grant error detected - refresh token may be revoked or expired', { 
+          teamId, 
+          userId,
+          error: error.message 
+        });
+        
+        // Remove the invalid refresh token to prevent future failures
+        try {
+          await this.tokenStorageService!.storeUserTokens(userId_key, {
+            google: {
+              access_token: '', // Clear access token
+              refresh_token: '', // Clear refresh token
+              expires_at: new Date(0), // Set to expired
+              token_type: 'Bearer',
+              scope: ''
+            },
+            slack: tokens.slackTokens // Preserve Slack tokens
+          });
+          logger.info('Cleared invalid Google tokens', { teamId, userId });
+        } catch (clearError) {
+          logger.error('Failed to clear invalid tokens', { teamId, userId, error: clearError });
+        }
+      }
       
       // Audit log failed token refresh
       AuditLogger.logTokenRefresh(`user:${teamId}:${userId}`, userId, teamId, false, 

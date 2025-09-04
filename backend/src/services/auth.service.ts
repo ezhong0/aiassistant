@@ -131,9 +131,10 @@ export class AuthService extends BaseService {
       const googleTokens: GoogleTokens = {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token || undefined,
-        expires_in: 3600, // Default to 1 hour
+        expires_in: 3600, // Default to 1 hour (Google OAuth tokens typically expire in 1 hour)
         token_type: tokens.token_type || 'Bearer',
-        scope: tokens.scope || ''
+        scope: tokens.scope || '',
+        expiry_date: Date.now() + (3600 * 1000) // Calculate expiry date (1 hour from now)
       };
 
       this.logInfo('Successfully exchanged code for tokens', {

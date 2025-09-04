@@ -186,8 +186,23 @@ export class ServiceManager {
     // Initialize services in order
     for (const serviceName of this.initializationOrder) {
       logger.info(`Starting initialization of service: ${serviceName}`);
-      await this.initializeService(serviceName);
-      logger.info(`Completed initialization of service: ${serviceName}`);
+      try {
+        await this.initializeService(serviceName);
+        logger.info(`Completed initialization of service: ${serviceName}`);
+      } catch (error) {
+        // In development, allow database service to fail gracefully
+        if (serviceName === 'databaseService' && process.env.NODE_ENV === 'development') {
+          logger.warn(`Database service failed to initialize in development mode, continuing without database`, error);
+          // Mark the service as failed but continue with other services
+          const registration = this.services.get(serviceName);
+          if (registration) {
+            (registration.service as any)._initializationFailed = true;
+          }
+          continue;
+        }
+        // For other services or in production, re-throw the error
+        throw error;
+      }
     }
 
     logger.info('All services initialized successfully');
@@ -220,7 +235,15 @@ export class ServiceManager {
       }
       
       const depService = depRegistration.service;
-      if (!depService.isReady()) {
+      const dependencyFailed = (depService as any)._initializationFailed;
+      
+      // Skip failed dependencies in development if they're optional (like database)
+      if (dependencyFailed && depName === 'databaseService' && process.env.NODE_ENV === 'development') {
+        logger.debug(`Skipping failed dependency ${depName} for service ${name} in development`);
+        continue;
+      }
+      
+      if (!depService.isReady() && !dependencyFailed) {
         await this.initializeService(depName);
       }
     }
