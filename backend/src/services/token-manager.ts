@@ -144,9 +144,9 @@ export class TokenManager extends BaseService {
           refresh_token: tokens.googleTokens.refresh_token,
           token_type: tokens.googleTokens.token_type || 'Bearer',
           expires_in: tokens.googleTokens.expires_at ? 
-            Math.max(0, Math.floor((tokens.googleTokens.expires_at.getTime() - Date.now()) / 1000)) : 3600,
+            Math.max(0, Math.floor((this.ensureDate(tokens.googleTokens.expires_at)!.getTime() - Date.now()) / 1000)) : 3600,
           scope: tokens.googleTokens.scope,
-          expiry_date: tokens.googleTokens.expires_at?.getTime()
+          expiry_date: this.ensureDate(tokens.googleTokens.expires_at)?.getTime()
         },
         slack: tokens.slackTokens
       };
@@ -157,6 +157,15 @@ export class TokenManager extends BaseService {
     return tokens.googleTokens.access_token;
   }
   
+  /**
+   * Ensure expires_at is a Date object (handle both Date and string formats)
+   */
+  private ensureDate(expiresAt: Date | string | number | undefined): Date | undefined {
+    if (!expiresAt) return undefined;
+    if (expiresAt instanceof Date) return expiresAt;
+    return new Date(expiresAt);
+  }
+
   /**
    * Unified token validation logic
    */
@@ -173,7 +182,8 @@ export class TokenManager extends BaseService {
     if (token.expiry_date) {
       expiryTime = token.expiry_date;
     } else if (token.expires_at) {
-      expiryTime = token.expires_at instanceof Date ? token.expires_at.getTime() : token.expires_at;
+      const expiresAtDate = this.ensureDate(token.expires_at);
+      expiryTime = expiresAtDate ? expiresAtDate.getTime() : Date.now();
     } else {
       // No expiry information, assume valid
       return { isValid: true };
@@ -362,9 +372,9 @@ export class TokenManager extends BaseService {
       status: !hasAccessToken ? 'no_access_token' : 
               !validationResult.isValid ? 'invalid' :
               'valid',
-      expiryDate: tokens.googleTokens?.expires_at ? tokens.googleTokens.expires_at.toISOString() : null,
-      expiresIn: tokens.googleTokens?.expires_at ? Math.max(0, tokens.googleTokens.expires_at.getTime() - Date.now()) / 1000 : null,
-      timeUntilExpiry: tokens.googleTokens?.expires_at ? Math.max(0, tokens.googleTokens.expires_at.getTime() - Date.now()) : null,
+      expiryDate: this.ensureDate(tokens.googleTokens?.expires_at)?.toISOString() || null,
+      expiresIn: tokens.googleTokens?.expires_at ? Math.max(0, this.ensureDate(tokens.googleTokens.expires_at)!.getTime() - Date.now()) / 1000 : null,
+      timeUntilExpiry: tokens.googleTokens?.expires_at ? Math.max(0, this.ensureDate(tokens.googleTokens.expires_at)!.getTime() - Date.now()) : null,
       sessionId: `user:${teamId}:${userId}`,
       lastChecked: new Date().toISOString()
     };
