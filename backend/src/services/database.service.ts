@@ -213,12 +213,31 @@ export class DatabaseService extends BaseService {
         )
       `);
 
+      // Create user tokens table for simplified OAuth token storage
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_tokens (
+          user_id VARCHAR(255) PRIMARY KEY,
+          google_access_token TEXT,
+          google_refresh_token TEXT,
+          google_expires_at TIMESTAMP,
+          google_token_type VARCHAR(50) DEFAULT 'Bearer',
+          google_scope TEXT,
+          slack_access_token TEXT,
+          slack_team_id VARCHAR(255),
+          slack_user_id VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Create indexes for better performance
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
         CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
         CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires_at ON oauth_tokens(expires_at);
         CREATE INDEX IF NOT EXISTS idx_slack_users_google_user_id ON slack_users(google_user_id);
+        CREATE INDEX IF NOT EXISTS idx_user_tokens_google_expires_at ON user_tokens(google_expires_at);
+        CREATE INDEX IF NOT EXISTS idx_user_tokens_slack_team_user ON user_tokens(slack_team_id, slack_user_id);
       `);
 
       client.release();
@@ -467,11 +486,25 @@ export class DatabaseService extends BaseService {
   async getUserTokens(userId: string): Promise<any | null> {
     const client = await this.getClient();
     try {
+      logger.info('🔍 DATABASE DEBUG - Executing query', {
+        userId,
+        userIdType: typeof userId,
+        userIdLength: userId?.length,
+        query: 'SELECT * FROM user_tokens WHERE user_id = $1'
+      });
+      
       const result = await client.query(`
         SELECT * FROM user_tokens WHERE user_id = $1
       `, [userId]);
 
+      logger.info('🔍 DATABASE DEBUG - Query result', {
+        userId,
+        rowCount: result.rows.length,
+        hasRows: result.rows.length > 0
+      });
+
       if (result.rows.length === 0) {
+        logger.info('🔍 DATABASE DEBUG - No tokens found', { userId });
         return null;
       }
 
@@ -481,7 +514,7 @@ export class DatabaseService extends BaseService {
         googleTokens: row.google_access_token ? {
           access_token: row.google_access_token,
           refresh_token: row.google_refresh_token,
-          expires_at: row.google_expires_at,
+          expires_at: row.google_expires_at ? new Date(row.google_expires_at) : undefined,
           token_type: row.google_token_type,
           scope: row.google_scope
         } : undefined,
