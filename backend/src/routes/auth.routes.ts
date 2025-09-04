@@ -774,25 +774,34 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
         const tokenStorageService = getService('tokenStorageService') as unknown as TokenStorageService;
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
-          const userId = `${slackContext.team_id}:${slackContext.user_id}`;
+          const userId = `${slackContext.teamId}:${slackContext.userId}`;
+          logger.info('🔍 STORAGE DEBUG - Creating user ID for token storage', {
+            slackContextTeamId: slackContext.teamId,
+            slackContextUserId: slackContext.userId,
+            constructedUserId: userId,
+            teamIdType: typeof slackContext.teamId,
+            userIdType: typeof slackContext.userId,
+            userIdKeyType: typeof userId,
+            userIdKeyLength: userId?.length
+          });
           await tokenStorageService.storeUserTokens(userId, {
             google: {
               access_token: tokens.access_token,
               refresh_token: tokens.refresh_token,
-              expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : undefined,
+              expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + (tokens.expires_in * 1000)),
               token_type: tokens.token_type,
               scope: tokens.scope
             },
             slack: {
               access_token: tokens.access_token,
-              team_id: slackContext.team_id,
-              user_id: slackContext.user_id
+              team_id: slackContext.teamId,
+              user_id: slackContext.userId
             }
           });
 
           logger.info('✅ Successfully stored OAuth tokens for Slack user', {
-            teamId: slackContext.team_id,
-            userId: slackContext.user_id,
+            teamId: slackContext.teamId,
+            userId: slackContext.userId,
             tokenDetails: {
               hasAccessToken: !!tokens.access_token,
               hasRefreshToken: !!tokens.refresh_token,
