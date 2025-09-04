@@ -774,13 +774,13 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
         const tokenStorageService = getService('tokenStorageService') as unknown as TokenStorageService;
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
-          const userId = `${slackContext.teamId}:${slackContext.userId}`;
+          const userId = `${slackContext.team_id}:${slackContext.user_id}`;
           logger.info('🔍 STORAGE DEBUG - Creating user ID for token storage', {
-            slackContextTeamId: slackContext.teamId,
-            slackContextUserId: slackContext.userId,
+            slackContextTeamId: slackContext.team_id,
+            slackContextUserId: slackContext.user_id,
             constructedUserId: userId,
-            teamIdType: typeof slackContext.teamId,
-            userIdType: typeof slackContext.userId,
+            teamIdType: typeof slackContext.team_id,
+            userIdType: typeof slackContext.user_id,
             userIdKeyType: typeof userId,
             userIdKeyLength: userId?.length
           });
@@ -793,15 +793,15 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
               scope: tokens.scope
             },
             slack: {
-              access_token: tokens.access_token,
-              team_id: slackContext.teamId,
-              user_id: slackContext.userId
+              access_token: undefined, // Slack doesn't need access token for this flow
+              team_id: slackContext.team_id,
+              user_id: slackContext.user_id
             }
           });
 
           logger.info('✅ Successfully stored OAuth tokens for Slack user', {
-            teamId: slackContext.teamId,
-            userId: slackContext.userId,
+            teamId: slackContext.team_id,
+            userId: slackContext.user_id,
             tokenDetails: {
               hasAccessToken: !!tokens.access_token,
               hasRefreshToken: !!tokens.refresh_token,

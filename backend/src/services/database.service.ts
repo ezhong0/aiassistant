@@ -531,6 +531,19 @@ export class DatabaseService extends BaseService {
     }
   }
 
+  async updateUserTokenRefreshToken(userId: string, refreshToken: string | null): Promise<void> {
+    const client = await this.getClient();
+    try {
+      await client.query(`
+        UPDATE user_tokens 
+        SET google_refresh_token = $1, updated_at = CURRENT_TIMESTAMP 
+        WHERE user_id = $2
+      `, [refreshToken, userId]);
+    } finally {
+      client.release();
+    }
+  }
+
   async deleteUserTokens(userId: string): Promise<void> {
     const client = await this.getClient();
     try {

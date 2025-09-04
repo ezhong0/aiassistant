@@ -7,19 +7,20 @@ import path from 'path';
 const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
-import { TokenManager } from '../src/services/token-manager';
 import { SessionService } from '../src/services/session.service';
-import { AuthService } from '../src/services/auth.service';
 import logger from '../src/utils/logger';
 
 async function testSimplifiedSessionManagement() {
   try {
     logger.info('Testing simplified session management (standalone)...');
     
-    // Create services directly without service manager
+    // Create SessionService directly
     const sessionService = new SessionService();
-    const authService = new AuthService();
-    const tokenManager = new TokenManager();
+    
+    // Initialize service
+    logger.info('Initializing SessionService...');
+    await sessionService.initialize();
+    logger.info('✅ SessionService initialized successfully');
     
     // Test data
     const testTeamId = 'T123456789';
@@ -63,19 +64,17 @@ async function testSimplifiedSessionManagement() {
       hasRefreshToken: !!retrievedTokens?.google?.refresh_token
     });
     
-    // Test 4: Add conversation entry
-    await sessionService.addConversationEntry(session.sessionId, {
-      id: 'test-entry',
-      timestamp: new Date(),
-      content: 'test message',
-      type: 'user'
-    });
-    logger.info('✅ Conversation entry added successfully');
+    // Test 4: Check if tokens are valid
+    const hasValidTokens = await sessionService.hasSlackValidOAuthTokens(testTeamId, testUserId);
+    logger.info('✅ Token validation check completed', { hasValidTokens });
     
-    // Test 5: Get conversation history
-    const conversationHistory = await sessionService.getConversationHistory(session.sessionId);
-    logger.info('✅ Conversation history retrieved successfully', {
-      entryCount: conversationHistory.length
+    // Test 5: Get session stats
+    const sessionStats = await sessionService.getSlackSessionStats(testTeamId, testUserId);
+    logger.info('✅ Session stats retrieved successfully', {
+      exists: sessionStats.exists,
+      hasOAuthTokens: sessionStats.hasOAuthTokens,
+      hasGoogleTokens: sessionStats.hasGoogleTokens,
+      hasSlackTokens: sessionStats.hasSlackTokens
     });
     
     logger.info('🎉 All tests passed! Simplified session management is working correctly.');
@@ -83,6 +82,14 @@ async function testSimplifiedSessionManagement() {
   } catch (error) {
     logger.error('❌ Test failed:', error);
     process.exit(1);
+  } finally {
+    // Cleanup
+    try {
+      logger.info('Cleaning up services...');
+      // Add cleanup if needed
+    } catch (error) {
+      logger.error('Warning: Error during cleanup:', error);
+    }
   }
 }
 
