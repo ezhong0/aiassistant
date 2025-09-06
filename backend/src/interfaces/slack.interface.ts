@@ -1745,6 +1745,25 @@ export class SlackInterface {
         logger.warn('Could not retrieve access token for confirmed action', { sessionId, error });
       }
 
+      // Check if access token is required and available
+      if ((pendingAction.type === 'email' || pendingAction.type === 'calendar') && !accessToken) {
+        logger.error('Access token required but not available for confirmed action', {
+          sessionId,
+          actionType: pendingAction.type,
+          actionId: pendingAction.actionId
+        });
+
+        return {
+          success: true,
+          response: {
+            text: `❌ **Action Failed**\n\n` +
+              `Cannot execute ${pendingAction.preview.title} because you need to authenticate with Google first.\n\n` +
+              `Please use the OAuth link provided earlier to connect your Google account, then try your request again.`
+          },
+          shouldRespond: true
+        };
+      }
+
       // Create execution context
       const executionContext = {
         sessionId,
@@ -1775,12 +1794,29 @@ export class SlackInterface {
       }
 
       // Execute the tool normally (not in preview mode)
+      logger.info('Executing confirmed action', {
+        sessionId,
+        actionId: pendingAction.actionId,
+        actionType: pendingAction.type,
+        toolName: toolCall.name,
+        hasAccessToken: !!accessToken
+      });
+
       const result = await (toolExecutorService as any).executeTool(
         toolCall,
         executionContext,
         accessToken,
         { preview: false }
       );
+
+      logger.info('Confirmed action execution result', {
+        sessionId,
+        actionId: pendingAction.actionId,
+        success: result.success,
+        hasError: !!result.error,
+        errorMessage: result.error,
+        hasResult: !!result.result
+      });
 
       if (result.success) {
         const successMessage = `✅ **Action Completed Successfully!**\n\n` +
