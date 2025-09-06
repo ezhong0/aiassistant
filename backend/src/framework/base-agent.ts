@@ -1,5 +1,6 @@
 import { Logger } from 'winston';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
+import { ActionPreview, PreviewGenerationResult } from '../types/api.types';
 import logger from '../utils/logger';
 import { aiConfigService } from '../config/ai-config';
 import { setTimeout as sleep } from 'timers/promises';
@@ -47,12 +48,68 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
     }
   }
 
+  /**
+   * Execute in preview mode - generates action preview for confirmation
+   * Returns a special result with awaitingConfirmation: true when confirmation is needed
+   */
+  async executePreview(params: TParams, context: ToolExecutionContext): Promise<ToolResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Pre-execution hooks (but not actual execution)
+      await this.beforeExecution(params, context);
+      this.validateParams(params);
+      this.logger.info('Agent preview execution started', { 
+        params: this.sanitizeForLogging(params),
+        sessionId: context.sessionId,
+        userId: context.userId 
+      });
+      
+      // Generate preview instead of executing
+      const previewResult = await this.generatePreview(params, context);
+      
+      if (!previewResult.success) {
+        throw this.createError(
+          previewResult.error || 'Failed to generate preview',
+          'PREVIEW_GENERATION_FAILED'
+        );
+      }
+      
+      const result = {
+        awaitingConfirmation: true,
+        preview: previewResult.preview,
+        message: previewResult.preview?.description || 'Action preview generated',
+        actionId: previewResult.preview?.actionId,
+        parameters: params,
+        originalQuery: previewResult.preview?.originalQuery
+      } as TResult;
+      
+      this.logger.info('Agent preview completed', {
+        actionId: previewResult.preview?.actionId,
+        actionType: previewResult.preview?.actionType,
+        requiresConfirmation: previewResult.preview?.requiresConfirmation,
+        riskLevel: previewResult.preview?.riskAssessment?.level
+      });
+      
+      return this.createSuccessResult(result, Date.now() - startTime);
+      
+    } catch (error) {
+      return this.createErrorResult(error as Error, Date.now() - startTime);
+    }
+  }
+
   // ABSTRACT METHODS - Must be implemented by subclasses
   
   /**
    * Core business logic - this is where each agent implements its specific functionality
    */
   protected abstract processQuery(params: TParams, context: ToolExecutionContext): Promise<TResult>;
+  
+  /**
+   * Generate a detailed action preview for confirmation purposes
+   * Must be implemented by agents that require confirmation (requiresConfirmation: true)
+   */
+  protected abstract generatePreview(params: TParams, context: ToolExecutionContext): Promise<PreviewGenerationResult>;
   
   // OPTIONAL OVERRIDES - Can be customized by subclasses
   

@@ -1,5 +1,6 @@
 import { ToolExecutionContext } from '../types/tools';
 import { BaseAgent } from '../framework/base-agent';
+import { PreviewGenerationResult } from '../types/api.types';
 
 /**
  * Tavily Agent - Web search and information retrieval
@@ -36,6 +37,16 @@ Always return structured search results with sources and reliability indicators.
   private readonly keywords = ['search', 'web', 'find', 'lookup', 'internet', 'what is', 'who is'];
   private readonly requiresConfirmation = false;
   private readonly isCritical = false;
+
+  /**
+   * Generate preview for Tavily operations (read-only search, no confirmation needed)
+   */
+  protected async generatePreview(params: any, _context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    return {
+      success: true,
+      fallbackMessage: 'Web search operations are read-only and do not require confirmation'
+    };
+  }
 
   /**
    * Core Tavily search logic - required by framework BaseAgent

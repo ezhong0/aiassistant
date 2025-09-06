@@ -1,5 +1,6 @@
 import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
+import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api.types';
 import { getService } from '../services/service-manager';
 import { GmailService } from '../services/gmail.service';
 import { ThreadManager } from '../utils/thread-manager';
@@ -156,6 +157,266 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
       threadId: params.threadId,
       contactsCount: params.contacts?.length || 0
     };
+  }
+
+  /**
+   * Generate detailed email action preview with risk assessment
+   */
+  protected async generatePreview(params: EmailAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    try {
+      const { query } = params;
+      
+      // Determine action type from query
+      const action = this.determineAction(query);
+      
+      // Generate action ID
+      const actionId = `email-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Build email request to extract details
+      let emailRequest: SendEmailRequest;
+      let previewData: EmailPreviewData;
+      let riskAssessment: ActionRiskAssessment;
+      let title: string;
+      let description: string;
+      
+      switch (action.type) {
+        case 'SEND_EMAIL':
+          emailRequest = await this.buildSendEmailRequest(params, action.params);
+          previewData = await this.generateEmailPreviewData(emailRequest, params);
+          riskAssessment = this.assessEmailRisk(emailRequest, previewData);
+          title = `Send Email: ${emailRequest.subject}`;
+          description = `Send email to ${this.formatRecipients(emailRequest)} with subject "${emailRequest.subject}"`;
+          break;
+          
+        case 'REPLY_EMAIL':
+          const replyRequest = await this.buildReplyEmailRequest(params, action.params);
+          // Convert reply to send format for preview purposes
+          emailRequest = {
+            to: '', // Will be filled from thread
+            subject: `Re: ${params.subject || 'Previous Email'}`,
+            body: replyRequest.body,
+            cc: [],
+            bcc: []
+          };
+          previewData = await this.generateEmailPreviewData(emailRequest, params);
+          riskAssessment = this.assessEmailRisk(emailRequest, previewData);
+          title = `Reply to Email`;
+          description = `Reply to email thread with message`;
+          break;
+          
+        default:
+          // For non-write operations (search, get), return no confirmation needed
+          return {
+            success: true,
+            fallbackMessage: `${action.type} operation does not require confirmation`
+          };
+      }
+      
+      const preview: ActionPreview = {
+        actionId,
+        actionType: 'email',
+        title,
+        description,
+        riskAssessment,
+        estimatedExecutionTime: this.estimateExecutionTime(action.type),
+        reversible: false, // Email sending is not reversible
+        requiresConfirmation: true,
+        awaitingConfirmation: true,
+        previewData,
+        originalQuery: query,
+        parameters: params as unknown as Record<string, unknown>
+      };
+      
+      this.logger.info('Email preview generated', {
+        actionId,
+        actionType: action.type,
+        recipientCount: previewData.recipientCount,
+        riskLevel: riskAssessment.level,
+        externalDomains: previewData.externalDomains?.length || 0
+      });
+      
+      return {
+        success: true,
+        preview
+      };
+      
+    } catch (error) {
+      this.logger.error('Failed to generate email preview', {
+        error: error instanceof Error ? error.message : error,
+        sessionId: context.sessionId
+      });
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate email preview',
+        fallbackMessage: `Email operation requires confirmation: ${params.query}`
+      };
+    }
+  }
+
+  /**
+   * Generate detailed email preview data
+   */
+  private async generateEmailPreviewData(emailRequest: SendEmailRequest, params: EmailAgentRequest): Promise<EmailPreviewData> {
+    const toList = Array.isArray(emailRequest.to) ? emailRequest.to : [emailRequest.to];
+    const ccList = Array.isArray(emailRequest.cc) ? emailRequest.cc : emailRequest.cc ? [emailRequest.cc] : [];
+    const bccList = Array.isArray(emailRequest.bcc) ? emailRequest.bcc : emailRequest.bcc ? [emailRequest.bcc] : [];
+    
+    const allRecipients = [...toList, ...ccList, ...bccList].filter(Boolean);
+    const externalDomains = this.extractExternalDomains(allRecipients);
+    
+    // Generate content summary
+    const contentSummary = this.generateContentSummary(emailRequest.body);
+    
+    return {
+      recipients: {
+        to: toList,
+        cc: ccList.length > 0 ? ccList : undefined,
+        bcc: bccList.length > 0 ? bccList : undefined
+      },
+      subject: emailRequest.subject,
+      contentSummary,
+      recipientCount: allRecipients.length,
+      externalDomains: externalDomains.length > 0 ? externalDomains : undefined,
+      sendTimeEstimate: 'Immediate'
+    };
+  }
+
+  /**
+   * Assess risk level for email operation
+   */
+  private assessEmailRisk(emailRequest: SendEmailRequest, previewData: EmailPreviewData): ActionRiskAssessment {
+    const factors: string[] = [];
+    const warnings: string[] = [];
+    let level: 'low' | 'medium' | 'high' = 'low';
+    
+    // Check recipient count
+    if (previewData.recipientCount > 10) {
+      factors.push('Large recipient count');
+      level = 'medium';
+      if (previewData.recipientCount > 50) {
+        level = 'high';
+        warnings.push(`Email will be sent to ${previewData.recipientCount} recipients`);
+      }
+    }
+    
+    // Check external domains
+    if (previewData.externalDomains && previewData.externalDomains.length > 0) {
+      factors.push('External recipients');
+      if (level === 'low') level = 'medium';
+      warnings.push(`Email contains external recipients: ${previewData.externalDomains.join(', ')}`);
+    }
+    
+    // Check content length
+    if (emailRequest.body.length > 5000) {
+      factors.push('Long email content');
+      if (level === 'low') level = 'medium';
+    }
+    
+    // Check for sensitive keywords
+    const sensitiveKeywords = ['confidential', 'secret', 'password', 'urgent', 'immediate', 'deadline'];
+    const bodyLower = emailRequest.body.toLowerCase();
+    const subjectLower = emailRequest.subject.toLowerCase();
+    
+    for (const keyword of sensitiveKeywords) {
+      if (bodyLower.includes(keyword) || subjectLower.includes(keyword)) {
+        factors.push('Contains sensitive keywords');
+        if (level === 'low') level = 'medium';
+        break;
+      }
+    }
+    
+    // If no risk factors, ensure we have at least basic factors
+    if (factors.length === 0) {
+      factors.push('Standard email operation');
+    }
+    
+    return {
+      level,
+      factors,
+      warnings: warnings.length > 0 ? warnings : undefined
+    };
+  }
+
+  /**
+   * Extract external domains from email addresses
+   */
+  private extractExternalDomains(emails: string[]): string[] {
+    const domains = new Set<string>();
+    const emailRegex = /@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+    
+    for (const email of emails) {
+      const match = email.match(emailRegex);
+      if (match && match[1]) {
+        const domain = match[1].toLowerCase();
+        // Consider common public email domains as external
+        if (!domain.includes('gmail.com') && !domain.includes('company.com')) {
+          domains.add(domain);
+        }
+      }
+    }
+    
+    return Array.from(domains);
+  }
+
+  /**
+   * Generate content summary
+   */
+  private generateContentSummary(content: string): string {
+    if (!content) return 'No content';
+    
+    // Remove HTML tags and extra whitespace
+    const cleanContent = content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    
+    if (cleanContent.length <= 200) {
+      return cleanContent;
+    }
+    
+    // Find a good break point near 200 characters
+    const truncated = cleanContent.substring(0, 200);
+    const lastSpace = truncated.lastIndexOf(' ');
+    const lastPeriod = truncated.lastIndexOf('.');
+    
+    const breakPoint = Math.max(lastSpace, lastPeriod);
+    if (breakPoint > 150) {
+      return cleanContent.substring(0, breakPoint) + '...';
+    }
+    
+    return truncated + '...';
+  }
+
+  /**
+   * Format recipients for display
+   */
+  private formatRecipients(emailRequest: SendEmailRequest): string {
+    const toList = Array.isArray(emailRequest.to) ? emailRequest.to : [emailRequest.to];
+    const ccList = Array.isArray(emailRequest.cc) ? emailRequest.cc : emailRequest.cc ? [emailRequest.cc] : [];
+    
+    if (toList.length === 1 && ccList.length === 0) {
+      return toList[0] || 'Unknown recipient';
+    }
+    
+    if (toList.length + ccList.length <= 3) {
+      return [...toList, ...ccList].join(', ');
+    }
+    
+    return `${toList[0]} and ${(toList.length + ccList.length - 1)} others`;
+  }
+
+  /**
+   * Estimate execution time for different operations
+   */
+  private estimateExecutionTime(actionType: string): string {
+    switch (actionType) {
+      case 'SEND_EMAIL':
+        return '2-5 seconds';
+      case 'REPLY_EMAIL':
+        return '1-3 seconds';
+      case 'SEARCH_EMAILS':
+        return '1-2 seconds';
+      default:
+        return '1-5 seconds';
+    }
   }
   
   // PRIVATE IMPLEMENTATION METHODS
