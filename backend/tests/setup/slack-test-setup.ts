@@ -146,18 +146,10 @@ jest.mock('../../src/services/service-manager', () => {
     executeTool: jest.fn(async () => ({ success: true, result: 'Mock result' }))
   };
   
-  const mockSlackFormatterService = {
-    isReady: () => true,
-    initialize: async () => {},
-    destroy: async () => {},
-    formatAgentResponse: jest.fn(async () => ({ text: 'Mock formatted response' }))
-  };
-  
   // Populate mock services
   mockServices.set('tokenStorageService', mockTokenStorageService);
   mockServices.set('tokenManager', mockTokenManager);
   mockServices.set('toolExecutorService', mockToolExecutorService);
-  mockServices.set('slackFormatterService', mockSlackFormatterService);
   
   return {
     serviceManager: {
