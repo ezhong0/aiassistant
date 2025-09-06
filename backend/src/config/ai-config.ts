@@ -115,7 +115,14 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
     fallback_strategy: 'retry'
   },
   
+  // Add both naming conventions for compatibility
   email: {
+    timeout: 25000,
+    retries: 2,
+    enabled: true,
+    fallback_strategy: 'retry'
+  },
+  emailAgent: {
     timeout: 25000,
     retries: 2,
     enabled: true,
@@ -128,8 +135,20 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
     enabled: true,
     fallback_strategy: 'retry'
   },
+  contactAgent: {
+    timeout: 15000,
+    retries: 2,
+    enabled: true,
+    fallback_strategy: 'retry'
+  },
   
   calendar: {
+    timeout: 20000,
+    retries: 2,
+    enabled: true,
+    fallback_strategy: 'retry'
+  },
+  calendarAgent: {
     timeout: 20000,
     retries: 2,
     enabled: true,
@@ -141,6 +160,33 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
     retries: 1,
     enabled: true,
     fallback_strategy: 'fail'
+  },
+  contentCreator: {
+    timeout: 45000,
+    retries: 1,
+    enabled: true,
+    fallback_strategy: 'fail'
+  },
+  
+  // Add other agent names that might be used
+  Think: {
+    timeout: 10000,
+    retries: 1,
+    enabled: true,
+    fallback_strategy: 'fail'
+  },
+  
+  tavily: {
+    timeout: 15000,
+    retries: 2,
+    enabled: true,
+    fallback_strategy: 'retry'
+  },
+  tavilyAgent: {
+    timeout: 15000,
+    retries: 2,
+    enabled: true,
+    fallback_strategy: 'retry'
   }
 };
 
