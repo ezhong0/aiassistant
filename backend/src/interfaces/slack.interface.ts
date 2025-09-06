@@ -1,4 +1,3 @@
-import { App, ExpressReceiver, LogLevel } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
 import { ServiceManager } from '../services/service-manager';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../types/slack.types';
@@ -17,13 +16,12 @@ export interface SlackConfig {
 }
 
 export class SlackInterface {
-  private app: App;
   private client: WebClient;
-  private receiver: ExpressReceiver;
   private serviceManager: ServiceManager;
   private config: SlackConfig;
   private tokenStorageService: TokenStorageService | null = null;
   private tokenManager: TokenManager | null = null;
+  private processedEvents = new Set<string>(); // Track processed events to prevent duplicates
 
   constructor(config: SlackConfig, serviceManager: ServiceManager) {
     this.config = config;
@@ -33,42 +31,23 @@ export class SlackInterface {
     this.tokenStorageService = this.serviceManager.getService('tokenStorageService') as unknown as TokenStorageService;
     this.tokenManager = this.serviceManager.getService('tokenManager') as unknown as TokenManager;
 
-    // Create Express receiver for Slack with default endpoints
-    // The receiver will be mounted at /slack/bolt, so default endpoints will work
-    this.receiver = new ExpressReceiver({
-      signingSecret: config.signingSecret
-    });
-
-    // Initialize Slack app
-    this.app = new App({
-      receiver: this.receiver,
-      token: config.botToken,
-      logLevel: config.development ? LogLevel.DEBUG : LogLevel.INFO
-    });
-
-    // Initialize Slack client
+    // Initialize Slack client for direct API calls
     this.client = new WebClient(config.botToken);
 
-    this.setupEventHandlers();
-    this.setupSlashCommands();
-    this.setupInteractiveComponents();
-  }
-
-  /**
-   * Get the Express router for Slack endpoints
-   */
-  public get router() {
-    return this.receiver.router;
+    logger.info('SlackInterface initialized with manual routing (no Bolt framework)', {
+      development: config.development,
+      hasTokenStorage: !!this.tokenStorageService,
+      hasTokenManager: !!this.tokenManager
+    });
   }
 
   /**
    * Start the Slack interface
-   * Note: We don't call app.start() because we're mounting the receiver manually
+   * No-op since we're using manual routing through /slack/events
    */
   public async start(): Promise<void> {
     try {
-      // Don't call app.start() since we're using the receiver's router directly
-      logger.info('Slack interface started successfully (using manual router mounting)');
+      logger.info('Slack interface started successfully (manual routing only)');
     } catch (error) {
       logger.error('Failed to start Slack interface:', error);
       throw error;
@@ -77,10 +56,10 @@ export class SlackInterface {
 
   /**
    * Stop the Slack interface
+   * No-op since we don't have a Bolt app instance
    */
   public async stop(): Promise<void> {
     try {
-      await this.app.stop();
       logger.info('Slack interface stopped successfully');
     } catch (error) {
       logger.error('Failed to stop Slack interface:', error);
@@ -93,7 +72,32 @@ export class SlackInterface {
    */
   public async handleEvent(event: any, teamId: string): Promise<void> {
     try {
+      // Create unique event ID for deduplication
+      const eventId = `${event.ts}-${event.user}-${event.channel}-${event.type}`;
+      
+      // Check if we've already processed this event
+      if (this.processedEvents.has(eventId)) {
+        logger.info('Duplicate event detected, skipping processing', {
+          eventId,
+          eventType: event.type,
+          userId: event.user,
+          channelId: event.channel
+        });
+        return;
+      }
+      
+      // Mark event as being processed
+      this.processedEvents.add(eventId);
+      
+      // Clean up old events (keep only last 1000 to prevent memory leaks)
+      if (this.processedEvents.size > 1000) {
+        const eventsArray = Array.from(this.processedEvents);
+        const eventsToRemove = eventsArray.slice(0, 500);
+        eventsToRemove.forEach(id => this.processedEvents.delete(id));
+      }
+      
       logger.info('Handling Slack event directly', {
+        eventId,
         eventType: event.type,
         userId: event.user,
         channelId: event.channel
@@ -144,339 +148,30 @@ export class SlackInterface {
   }
 
   /**
-   * Setup Slack event handlers
+   * Setup Slack event handlers - REMOVED
+   * Event handling is now done through manual /slack/events endpoint
    */
   private setupEventHandlers(): void {
-    // Handle app mentions (@assistant)
-    this.app.event('app_mention', async ({ event, say, client, payload }) => {
-      try {
-        logger.info('App mention received', { 
-          user: event.user, 
-          channel: event.channel,
-          text: event.text?.substring(0, 100) + '...'
-        });
-
-        const context = await this.createSlackContextFromEvent(event, payload);
-        const message = this.extractAndCleanMessage(event.text);
-        
-        // Validate message content
-        if (!message.trim()) {
-          await say({
-            text: "I noticed you mentioned me but didn't include a message. How can I help you?",
-            thread_ts: event.thread_ts
-          });
-          return;
-        }
-
-
-
-        await this.handleSlackEvent(
-          message,
-          context,
-          'app_mention',
-          { say, client, thread_ts: event.thread_ts }
-        );
-      } catch (error: any) {
-        logger.error('Error handling app mention:', error, { 
-          user: event.user, 
-          channel: event.channel,
-          error_type: error?.constructor?.name 
-        });
-        
-        await say({
-          text: 'I apologize, but I encountered an error processing your mention. Please try again or contact support if the issue persists.',
-          thread_ts: event.thread_ts
-        });
-      }
-    });
-
-    // Handle direct messages with enhanced context management
-    this.app.message(async ({ message, say, client, payload }) => {
-      try {
-        // Only handle direct messages to the bot and ignore bot messages
-        if (message.channel_type === 'im' && !(message as any).bot_id && (message as any).text) {
-          logger.info('Direct message received', { 
-            user: (message as any).user, 
-            channel: (message as any).channel,
-            text_length: ((message as any).text || '').length 
-          });
-
-          const context = await this.createSlackContextFromEvent(message, payload);
-          const messageText = this.extractAndCleanMessage((message as any).text || '');
-          
-          // Enhanced validation for direct messages
-          if (!messageText.trim()) {
-            await say({
-              text: "I received your message but it appears to be empty. Please send me a message with your request, or type 'help' to see what I can do!"
-            });
-            return;
-          }
-
-
-
-          // Welcome first-time users
-          if (this.isFirstTimeUser(context)) {
-            await this.sendWelcomeMessage(say, context);
-          }
-
-          // Check if this is a first-time email-related request
-          const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
-          const isEmailRelated = emailKeywords.some(keyword => 
-            messageText.toLowerCase().includes(keyword.toLowerCase())
-          );
-
-          if (isEmailRelated && this.isFirstTimeUser(context)) {
-            await this.sendEmailWelcomeMessage(say, context);
-          } else if (isEmailRelated) {
-            // Check if user has OAuth tokens for email requests
-            const hasOAuth = await this.hasOAuthTokens(context);
-            if (!hasOAuth) {
-              await this.sendOAuthRequiredMessage(say, context);
-              return; // Don't process the request without OAuth
-            }
-            // Note: Removed the duplicate OAuth success message check here
-            // It will be handled in handleSlackEvent to ensure proper thread context
-          }
-
-          await this.handleSlackEvent(
-            messageText,
-            context,
-            'message',
-            { say, client, thread_ts: undefined }
-          );
-        }
-      } catch (error: any) {
-        logger.error('Error handling direct message:', error, { 
-          user: (message as any).user, 
-          channel: (message as any).channel,
-          error_type: error?.constructor?.name 
-        });
-        
-        await say({
-          text: 'I apologize, but I encountered an error processing your message. Please try again or contact support if the issue persists.'
-        });
-      }
-    });
-
-    // Handle team join events for new users
-    this.app.event('team_join', async ({ event }) => {
-      try {
-        logger.info('New team member joined', { userId: event.user?.id });
-        // Could send welcome message or setup user here
-      } catch (error) {
-        logger.error('Error handling team join event:', error);
-      }
-    });
-
-    // Handle app uninstalled events
-    this.app.event('app_uninstalled', async ({ event }) => {
-      try {
-        logger.info('Slack app uninstalled', { event });
-        // Could cleanup team data here
-      } catch (error) {
-        logger.error('Error handling app uninstalled event:', error);
-      }
-    });
+    // All event handling removed - now handled through manual /slack/events route
+    logger.info('Event handlers removed - using manual /slack/events routing');
   }
 
   /**
-   * Setup slash commands with enhanced parameter parsing
+   * Setup slash commands - REMOVED
+   * Slash commands are now handled through manual /slack/commands endpoint
    */
   private setupSlashCommands(): void {
-    // Handle slash commands
-    this.app.command('/assistant', async ({ command, ack, respond }) => {
-      await ack();
-      try {
-        logger.info('Slash command received', { 
-          command: command.command,
-          user: command.user_id,
-          channel: command.channel_id,
-          text: command.text?.substring(0, 100) + '...'
-        });
-
-        const context = await this.createSlackContextFromEvent(command, { team: { id: command.team_id } });
-        const message = this.parseSlashCommandText(command.text || '');
-        
-        // Handle special commands
-        if (message.isHelpRequest) {
-          await this.sendHelpMessage(respond, context);
-          return;
-        }
-
-        if (message.message.toLowerCase().includes('auth') || message.message.toLowerCase().includes('connect')) {
-          await this.handleAuthCommand(respond, context);
-          return;
-        }
-
-        if (message.message.toLowerCase().includes('status') || message.message.toLowerCase().includes('check')) {
-          await this.handleStatusCommand(respond, context);
-          return;
-        }
-
-        await this.handleSlackEvent(
-          message.message,
-          context,
-          'slash_command',
-          { 
-            say: respond, 
-            client: this.client,
-            commandInfo: {
-              command: command.command,
-              channelName: command.channel_name || 'unknown',
-              triggerId: command.trigger_id,
-              responseUrl: command.response_url
-            }
-          }
-        );
-      } catch (error: any) {
-        logger.error('Error handling slash command:', error, { 
-          user: command.user_id, 
-          channel: command.channel_id,
-          error_type: error?.constructor?.name 
-        });
-        
-        await respond({
-          text: 'I apologize, but I encountered an error processing your command. Please try again or contact support if the issue persists.',
-          response_type: 'ephemeral'
-        });
-      }
-    });
+    // All slash command handling removed - now handled through manual /slack/commands route
+    logger.info('Slash command handlers removed - using manual /slack/commands routing');
   }
 
   /**
-   * Setup interactive components with enhanced handling
+   * Setup interactive components - REMOVED
+   * Interactive components are now handled through manual /slack/interactive endpoint
    */
   private setupInteractiveComponents(): void {
-    // Handle help button clicks
-    this.app.action('show_help', async ({ ack, respond, client, body }) => {
-      await ack();
-      try {
-        logger.info('Help button clicked', { user: body.user?.id });
-        const helpResponse = this.formatHelpResponse();
-        await respond(helpResponse);
-      } catch (error) {
-        logger.error('Error handling help button:', error);
-        await respond({
-          response_type: 'ephemeral' as const,
-          text: 'Sorry, I encountered an error. Please try again.'
-        });
-      }
-    });
-
-    // Handle full help button clicks
-    this.app.action('show_full_help', async ({ ack, respond, client, body }) => {
-      await ack();
-      try {
-        logger.info('Full help button clicked', { user: body.user?.id });
-        const helpResponse = this.formatHelpResponse();
-        await respond(helpResponse);
-      } catch (error) {
-        logger.error('Error handling full help button:', error);
-        await respond({
-          response_type: 'ephemeral' as const,
-          text: 'Sorry, I encountered an error. Please try again.'
-        });
-      }
-    });
-
-    // Handle quick email check button
-    this.app.action('quick_email_check', async ({ ack, respond, client, body }) => {
-      await ack();
-      try {
-        logger.info('Quick email check button clicked', { user: body.user?.id });
-        
-        const context: SlackContext = {
-          userId: body.user?.id || 'unknown',
-          channelId: body.channel?.id || 'unknown',
-          teamId: body.team?.id || 'unknown',
-          isDirectMessage: true
-        };
-
-        await this.handleSlackEvent(
-          'check my email',
-          context,
-          'interactive_component',
-          { say: respond, client }
-        );
-      } catch (error) {
-        logger.error('Error handling quick email check:', error);
-        await respond({
-          response_type: 'ephemeral' as const,
-          text: 'Sorry, I encountered an error checking your email. Please try again.'
-        });
-      }
-    });
-
-    // Handle OAuth button clicks
-    this.app.action('gmail_oauth', async ({ ack, body, client }) => {
-      await ack();
-      try {
-        logger.info('OAuth button clicked', { 
-          user: body.user?.id,
-          channel: body.channel?.id,
-          teamId: body.team?.id
-        });
-
-        // Send a confirmation message
-        const channelId = body.channel?.id || (body as any).channel_id;
-        if (channelId) {
-          await client.chat.postEphemeral({
-            channel: channelId,
-            user: body.user?.id || 'unknown',
-            text: '🔗 *OAuth Redirect*\n\nYou\'re being redirected to Google to connect your Gmail account. Please complete the authorization process and then return to Slack to try your request again.'
-          });
-        }
-      } catch (error) {
-        logger.error('Error handling OAuth button click', { error, body });
-      }
-    });
-
-    // Handle other button clicks
-    this.app.action(/.*/, async ({ ack, body, client }) => {
-      await ack();
-      try {
-        logger.info('Generic button action received', { 
-          actionId: (body as any).actions?.[0]?.action_id,
-          user: body.user?.id,
-          channel: body.channel?.id
-        });
-        
-        // Handle other button actions as needed
-      } catch (error) {
-        logger.error('Error handling button action', { error, body });
-      }
-    });
-
-    // Handle modal submissions
-    this.app.view('email_compose_modal', async ({ ack, body, view, client }) => {
-      await ack();
-      try {
-        logger.info('Email compose modal submitted', { user: body.user?.id });
-        
-        // Extract modal data
-        const values = view.state?.values;
-        if (values) {
-          // Process email composition from modal
-          logger.debug('Modal values received:', values);
-        }
-      } catch (error) {
-        logger.error('Error handling modal submission:', error);
-      }
-    });
-
-    // Handle other view submissions
-    this.app.view(/.*/, async ({ ack, body, view, client }) => {
-      await ack();
-      try {
-        logger.info('Generic view submitted:', { 
-          viewId: view.callback_id,
-          user: body.user?.id 
-        });
-        // Handle other view types as needed
-      } catch (error) {
-        logger.error('Error handling view submission:', error);
-      }
-    });
+    // All interactive component handling removed - now handled through manual /slack/interactive route
+    logger.info('Interactive component handlers removed - using manual /slack/interactive routing');
   }
 
   /**
@@ -964,6 +659,14 @@ export class SlackInterface {
 
       // Enhanced response handling
       if (agentResponse.shouldRespond !== false) {
+        logger.info('Sending response to Slack', {
+          eventId: `${context.userId}-${Date.now()}`,
+          hasBlocks: !!(agentResponse.response.blocks && agentResponse.response.blocks.length > 0),
+          hasText: !!agentResponse.response.text,
+          blocksCount: agentResponse.response.blocks?.length || 0,
+          responseMethod: agentResponse.response.blocks && agentResponse.response.blocks.length > 0 ? 'sendFormattedMessage' : 'say'
+        });
+
         if (agentResponse.response.blocks && agentResponse.response.blocks.length > 0) {
           await this.sendFormattedMessage(
             context.channelId, 
@@ -974,12 +677,18 @@ export class SlackInterface {
               response_type: eventType === 'slash_command' ? 'in_channel' : undefined
             }
           );
+          logger.info('Formatted message sent successfully');
         } else if (agentResponse.response.text) {
           await slackHandlers.say({
             text: agentResponse.response.text,
             thread_ts: slackHandlers.thread_ts
           });
+          logger.info('Text message sent successfully via say()');
+        } else {
+          logger.warn('No response content to send', { agentResponse: agentResponse.response });
         }
+      } else {
+        logger.info('Agent response marked as shouldRespond=false, skipping response');
       }
 
       // Handle follow-up actions
@@ -2010,7 +1719,8 @@ export class SlackInterface {
       
       logger.debug('Slack message sent successfully', { 
         channel: channelId, 
-        timestamp: result.ts 
+        timestamp: result.ts,
+        messageId: result.ts 
       });
     } catch (error) {
       logger.error('Error sending formatted message to Slack:', error, {
@@ -2020,11 +1730,16 @@ export class SlackInterface {
         error_data: (error as any).data
       });
       
-      // Try fallback text message
-      try {
-        await this.sendFallbackTextMessage(channelId, 'I encountered an error sending a formatted response. Please try again.');
-      } catch (fallbackError) {
-        logger.error('Fallback message also failed:', fallbackError);
+      // Only send fallback if the error indicates message wasn't sent
+      const errorCode = (error as any).code;
+      if (errorCode !== 'channel_not_found' && errorCode !== 'not_in_channel') {
+        try {
+          await this.sendFallbackTextMessage(channelId, 'I encountered an error sending a formatted response. Please try again.');
+        } catch (fallbackError) {
+          logger.error('Fallback message also failed:', fallbackError);
+        }
+      } else {
+        logger.error('Channel access issue, not sending fallback message', { errorCode });
       }
     }
   }
@@ -2157,10 +1872,11 @@ Need more help? Just ask!`;
           configured: isConfigured,
           development: this.config.development,
           endpoints: {
-            events: '/slack/bolt/events',
-            commands: '/slack/bolt/commands',
-            interactive: '/slack/bolt/interactive'
-          }
+            events: '/slack/events',
+            commands: '/slack/commands',
+            interactive: '/slack/interactive'
+          },
+          note: 'Using manual routing (no Bolt framework)'
         }
       };
     } catch (error) {

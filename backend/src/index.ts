@@ -29,7 +29,10 @@ import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 import { createSlackRoutes } from './routes/slack.routes';
 import { serviceManager } from './services/service-manager';
-import { initializeInterfaces, startInterfaces } from './interfaces';
+import { initializeInterfaces, startInterfaces, InterfaceManager } from './interfaces';
+
+// Global interfaces store
+let globalInterfaces: InterfaceManager | null = null;
 
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
@@ -85,20 +88,18 @@ app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 app.use('/api/assistant', assistantRoutes);
 
-// Slack routes
-app.use('/slack', createSlackRoutes(serviceManager));
+// Slack routes - pass global interfaces for event handling
+app.use('/slack', createSlackRoutes(serviceManager, () => globalInterfaces));
 
 // Slack interface integration
 const setupSlackInterface = async () => {
   try {
-    const interfaces = await initializeInterfaces(serviceManager);
-    if (interfaces.slackInterface) {
-      // Mount the Bolt framework routes at /slack/bolt to avoid conflicts
-      // The main /slack/events endpoint handles the URL verification challenge
-      // The Bolt framework handles actual event processing at /slack/bolt/events
-      app.use('/slack/bolt', interfaces.slackInterface.router);
-      await startInterfaces(interfaces);
-      logger.info('Slack interface integrated successfully');
+    globalInterfaces = await initializeInterfaces(serviceManager);
+    if (globalInterfaces.slackInterface) {
+      // Only initialize the SlackInterface service without mounting Bolt routes
+      // The manual /slack/events endpoint handles all Slack events directly
+      await startInterfaces(globalInterfaces);
+      logger.info('Slack interface initialized successfully (manual routing only)');
     } else {
       logger.warn('Slack interface not available - running without Slack integration');
     }
