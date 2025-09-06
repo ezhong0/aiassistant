@@ -64,13 +64,45 @@ export class ToolExecutorService extends BaseService {
       // Determine if this tool needs confirmation
       const needsConfirmation = this.toolNeedsConfirmation(toolCall.name);
       
+      this.logInfo(`Tool ${toolCall.name} confirmation check`, { 
+        needsConfirmation, 
+        isPreviewMode: mode.preview,
+        willExecutePreview: mode.preview && needsConfirmation 
+      });
+      
       if (mode.preview && needsConfirmation) {
-        // In preview mode for confirmation-required tools, return action preview
-        // TODO: Implement preview functionality in AgentFactory if needed
-        this.logInfo(`Tool ${toolCall.name} requires confirmation, but preview not implemented yet`);
-        result = { success: true, message: `Preview for ${toolCall.name}: ${toolCall.parameters.query || 'action'}` };
+        // In preview mode for confirmation-required tools, execute agent in preview mode
+        this.logInfo(`Tool ${toolCall.name} requires confirmation, executing in preview mode`);
+        const agent = AgentFactory.getAgent(toolCall.name);
+        
+        if (agent && typeof (agent as any).executePreview === 'function') {
+          // Add access token to parameters if provided
+          const executionParameters = accessToken 
+            ? { ...toolCall.parameters, accessToken }
+            : toolCall.parameters;
+          
+          // Execute agent in preview mode
+          result = await (agent as any).executePreview(executionParameters, context);
+          
+          // Ensure the result has the expected structure for preview mode
+          if (result && typeof result === 'object' && 'result' in result) {
+            // Extract the actual result data which should contain awaitingConfirmation
+            result = result.result;
+          }
+        } else {
+          // Fallback for agents that don't support preview mode yet
+          this.logWarn(`Agent ${toolCall.name} does not support preview mode, using fallback`);
+          result = { 
+            success: true, 
+            awaitingConfirmation: true,
+            message: `Confirmation required for ${toolCall.name}`,
+            actionId: `preview-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            parameters: toolCall.parameters,
+            originalQuery: toolCall.parameters.query
+          };
+        }
       } else {
-        // Execute the tool using AgentFactory
+        // Execute the tool using AgentFactory normally
         result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context, accessToken);
       }
 
@@ -185,7 +217,12 @@ export class ToolExecutorService extends BaseService {
    */
   private toolNeedsConfirmation(toolName: string): boolean {
     try {
-      return AgentFactory.toolNeedsConfirmation(toolName);
+      const needsConfirmation = AgentFactory.toolNeedsConfirmation(toolName);
+      this.logInfo(`AgentFactory confirmation check for ${toolName}`, { 
+        needsConfirmation,
+        factoryStats: AgentFactory.getStats()
+      });
+      return needsConfirmation;
     } catch (error) {
       this.logWarn(`Could not determine confirmation requirement for ${toolName}`, { error });
       return false; // Default to no confirmation required

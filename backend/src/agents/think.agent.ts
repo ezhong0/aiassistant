@@ -1,5 +1,6 @@
 import { ToolCall, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
 import { BaseAgent } from '../framework/base-agent';
+import { PreviewGenerationResult } from '../types/api.types';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {
@@ -93,6 +94,16 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
    */
   protected async processQuery(params: ThinkParams, _context: ToolExecutionContext): Promise<ThinkAgentResponse> {
     return await this.processThinking(params);
+  }
+
+  /**
+   * Generate preview for Think operations (not needed for read-only analysis)
+   */
+  protected async generatePreview(params: ThinkParams, _context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    return {
+      success: true,
+      fallbackMessage: 'Think operations are read-only and do not require confirmation'
+    };
   }
 
   /**

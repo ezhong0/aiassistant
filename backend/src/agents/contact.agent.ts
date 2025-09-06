@@ -1,5 +1,6 @@
 import { BaseAgent } from '../framework/base-agent';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
+import { PreviewGenerationResult } from '../types/api.types';
 import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
 import {
@@ -42,6 +43,16 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
     });
   }
   
+  /**
+   * Generate preview for Contact operations (read-only, no confirmation needed)
+   */
+  protected async generatePreview(params: ContactAgentRequest, _context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    return {
+      success: true,
+      fallbackMessage: 'Contact operations are read-only and do not require confirmation'
+    };
+  }
+
   /**
    * Core contact processing logic - simplified and focused
    */

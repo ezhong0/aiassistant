@@ -205,6 +205,12 @@ router.post('/text-command',
         timestamp: new Date()
       };
       
+      logger.info('Starting preview mode execution', {
+        toolCalls: masterResponse.toolCalls.map(tc => ({ name: tc.name, hasParams: !!tc.parameters })),
+        sessionId: finalSessionId,
+        userId: user.userId
+      });
+      
       // First, run in preview mode to see if confirmation is needed
       const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
       if (!toolExecutorService) {
@@ -217,11 +223,33 @@ router.post('/text-command',
         { preview: true } // Run in preview mode
       );
       
+      logger.info('Preview mode execution completed', {
+        previewResultsCount: previewResults.length,
+        results: previewResults.map(r => ({
+          toolName: r.toolName,
+          success: r.success,
+          hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
+          awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : undefined
+        }))
+      });
+      
       // Check if any tools require confirmation
       const needsConfirmation = previewResults.some(result => 
         result.result && typeof result.result === 'object' && 
-        'awaitingConfirmation' in result.result
+        'awaitingConfirmation' in result.result && 
+        result.result.awaitingConfirmation === true
       );
+      
+      logger.info('Confirmation check completed', {
+        needsConfirmation,
+        previewResults: previewResults.map(r => ({
+          toolName: r.toolName,
+          hasResult: !!r.result,
+          resultType: typeof r.result,
+          hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
+          awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : 'N/A'
+        }))
+      });
       
       if (needsConfirmation) {
         // Store pending actions in session context

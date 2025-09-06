@@ -1,5 +1,6 @@
 import { ToolExecutionContext } from '../types/tools';
 import { BaseAgent } from '../framework/base-agent';
+import { PreviewGenerationResult } from '../types/api.types';
 
 /**
  * Content Creator Agent - Creates blog posts, articles, and other written content
@@ -36,6 +37,16 @@ Always return structured content with metadata and formatting suggestions.`;
   private readonly keywords = ['blog', 'write', 'create', 'content', 'article', 'post', 'draft'];
   private readonly requiresConfirmation = false;
   private readonly isCritical = false;
+
+  /**
+   * Generate preview for Content operations (no confirmation needed for content generation)
+   */
+  protected async generatePreview(params: any, _context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    return {
+      success: true,
+      fallbackMessage: 'Content creation operations do not require confirmation'
+    };
+  }
 
   /**
    * Core content creation logic - required by framework BaseAgent

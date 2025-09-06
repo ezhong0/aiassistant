@@ -354,12 +354,90 @@ export interface ApiRequestHeaders {
 }
 
 // ============================================================================
+// Action Preview Types
+// ============================================================================
+
+export interface ActionRiskAssessment {
+  level: 'low' | 'medium' | 'high';
+  factors: string[];
+  warnings?: string[];
+}
+
+export interface EmailPreviewData {
+  recipients: {
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+  };
+  subject: string;
+  contentSummary: string;
+  attachmentCount?: number;
+  totalAttachmentSize?: number;
+  sendTimeEstimate?: string;
+  externalDomains?: string[];
+  recipientCount: number;
+}
+
+export interface CalendarPreviewData {
+  title: string;
+  startTime: string;
+  endTime: string;
+  duration: string;
+  attendees?: string[];
+  conflicts?: Array<{
+    conflictType: 'time_overlap' | 'busy_attendee' | 'resource_conflict';
+    details: string;
+    severity: 'low' | 'medium' | 'high';
+  }>;
+  location?: string;
+  timeZone?: string;
+  attendeeCount?: number;
+}
+
+export interface ActionPreview {
+  actionId: string;
+  actionType: 'email' | 'calendar' | 'contact' | 'content' | 'search';
+  title: string;
+  description: string;
+  riskAssessment: ActionRiskAssessment;
+  estimatedExecutionTime?: string;
+  reversible: boolean;
+  requiresConfirmation: boolean;
+  awaitingConfirmation: boolean;
+  previewData: EmailPreviewData | CalendarPreviewData | Record<string, unknown>;
+  originalQuery: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface PreviewGenerationResult {
+  success: boolean;
+  preview?: ActionPreview;
+  error?: string;
+  fallbackMessage?: string;
+}
+
+// ============================================================================
+// Enhanced Confirmation Types
+// ============================================================================
+
+export interface EnhancedConfirmationData extends ConfirmationRequiredData {
+  preview: ActionPreview;
+  toolResults: ToolResultInfo[];
+}
+
+export interface EnhancedConfirmationResponse extends BaseApiResponse {
+  type: 'confirmation_required';
+  data: EnhancedConfirmationData;
+}
+
+// ============================================================================
 // Union Types for API Responses
 // ============================================================================
 
 export type AssistantApiResponse = 
   | TextCommandResponse
   | ConfirmationRequiredResponse
+  | EnhancedConfirmationResponse
   | ConfirmActionResponse
   | SessionDataResponse
   | SessionDeleteResponse
