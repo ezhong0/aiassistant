@@ -5,8 +5,6 @@ import { EmailAgent } from '../agents/email.agent';
 import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
 import { CalendarAgent } from '../agents/calendar.agent';
-import { ContentCreatorAgent } from '../agents/content-creator.agent';
-import { TavilyAgent } from '../agents/tavily.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import logger from '../utils/logger';
 
@@ -289,8 +287,6 @@ export class AgentFactory {
       this.registerAgentClass('contactAgent', ContactAgent);
       this.registerAgentClass('Think', ThinkAgent);
       this.registerAgentClass('calendarAgent', CalendarAgent);
-      this.registerAgentClass('contentCreator', ContentCreatorAgent);
-      this.registerAgentClass('Tavily', TavilyAgent);
       
       // Register tool metadata for all agents
       this.registerToolMetadata({

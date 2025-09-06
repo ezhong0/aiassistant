@@ -150,7 +150,7 @@ npm run db:test      # Test database connection
 - **Database:** PostgreSQL with connection pooling
 - **AI Integration:** OpenAI GPT-4
 - **Authentication:** JWT + Google/Slack OAuth 2.0
-- **External APIs:** Google Workspace, Slack API, Tavily
+- **External APIs:** Google Workspace, Slack API
 - **Testing:** Jest with comprehensive test coverage
 
 ## 🎯 Development Philosophy
@@ -173,7 +173,7 @@ This platform demonstrates **AI-assisted development** with clear architectural 
 
 ### ✅ Completed Features
 - **Backend Foundation** - Express server with TypeScript and comprehensive middleware
-- **Multi-Agent System** - Master agent with 6 specialized sub-agents
+- **Multi-Agent System** - Master agent with 4 specialized sub-agents
 - **Service Architecture** - Dependency injection and lifecycle management
 - **Authentication** - Complete OAuth 2.0 flow with Google and Slack
 - **Database Integration** - PostgreSQL for persistent storage

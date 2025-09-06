@@ -147,32 +147,6 @@ export class SlackInterface {
     }
   }
 
-  /**
-   * Setup Slack event handlers - REMOVED
-   * Event handling is now done through manual /slack/events endpoint
-   */
-  private setupEventHandlers(): void {
-    // All event handling removed - now handled through manual /slack/events route
-    logger.info('Event handlers removed - using manual /slack/events routing');
-  }
-
-  /**
-   * Setup slash commands - REMOVED
-   * Slash commands are now handled through manual /slack/commands endpoint
-   */
-  private setupSlashCommands(): void {
-    // All slash command handling removed - now handled through manual /slack/commands route
-    logger.info('Slash command handlers removed - using manual /slack/commands routing');
-  }
-
-  /**
-   * Setup interactive components - REMOVED
-   * Interactive components are now handled through manual /slack/interactive endpoint
-   */
-  private setupInteractiveComponents(): void {
-    // All interactive component handling removed - now handled through manual /slack/interactive route
-    logger.info('Interactive component handlers removed - using manual /slack/interactive routing');
-  }
 
   /**
    * Enhanced context extraction from Slack events
@@ -1798,30 +1772,12 @@ export class SlackInterface {
    * Process follow-up actions
    */
   private async processFollowUpActions(actions: any[], context: SlackContext): Promise<void> {
-    for (const action of actions) {
-      try {
-        switch (action.type) {
-          case 'schedule_message':
-            // TODO: Implement scheduled message sending
-            logger.debug('Scheduling follow-up message', action);
-            break;
-            
-          case 'update_message':
-            // TODO: Implement message updating
-            logger.debug('Updating message', action);
-            break;
-            
-          case 'send_dm':
-            // TODO: Implement DM sending
-            logger.debug('Sending DM', action);
-            break;
-            
-          default:
-            logger.warn('Unknown follow-up action type', { type: action.type });
-        }
-      } catch (error) {
-        logger.error('Error processing follow-up action', error, { action });
-      }
+    // Follow-up actions not currently implemented
+    if (actions.length > 0) {
+      logger.debug('Follow-up actions received but not implemented', { 
+        actionCount: actions.length,
+        actionTypes: actions.map(a => a.type)
+      });
     }
   }
 

@@ -1,0 +1,13 @@
+
+# Build artifacts
+dist/
+coverage/
+temp-build/
+
+# Logs
+logs/*.log
+logs/*.gz
+
+# Test artifacts
+*.coverage
+.nyc_output/

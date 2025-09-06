@@ -1,11 +1,7 @@
 import express from 'express';
 import { ServiceManager } from '../services/service-manager';
-import { SlackInterface } from '../interfaces/slack.interface';
 import logger from '../utils/logger';
 
-// Import fetch for Node.js (available in Node 18+)
-// For older versions, you might need to install node-fetch
-const fetch = globalThis.fetch || require('node-fetch');
 
 /**
  * Slack routes for handling OAuth callbacks and other Slack-specific endpoints
@@ -33,8 +29,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         return;
       }
 
-      // TODO: Implement OAuth token exchange
-      // This will be implemented when we add the full OAuth flow
+      // Slack OAuth implementation not currently needed - using Google OAuth for authentication
 
       logger.info('Slack OAuth callback received', { code: typeof code, state });
       

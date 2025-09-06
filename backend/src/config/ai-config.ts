@@ -161,12 +161,6 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
     enabled: true,
     fallback_strategy: 'fail'
   },
-  contentCreator: {
-    timeout: 45000,
-    retries: 1,
-    enabled: true,
-    fallback_strategy: 'fail'
-  },
   
   // Add other agent names that might be used
   Think: {
@@ -177,12 +171,6 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
   },
   
   tavily: {
-    timeout: 15000,
-    retries: 2,
-    enabled: true,
-    fallback_strategy: 'retry'
-  },
-  tavilyAgent: {
     timeout: 15000,
     retries: 2,
     enabled: true,

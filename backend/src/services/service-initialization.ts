@@ -96,7 +96,7 @@ const registerCoreServices = async (): Promise<void> => {
       logger.info('CacheService disabled via DISABLE_REDIS environment variable');
     }
 
-    // 4. TokenStorageService - Depends on databaseService (replaces SessionService)
+    // 4. TokenStorageService - Depends on databaseService
     const tokenStorageService = new TokenStorageService();
     serviceManager.registerService('tokenStorageService', tokenStorageService, {
       dependencies: ['databaseService'],
@@ -169,7 +169,6 @@ const registerCoreServices = async (): Promise<void> => {
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
-    // Note: SessionService removed - using simplified token storage instead
 
     logger.info('Core services registered successfully', {
       serviceCount: serviceManager.getServiceCount(),
