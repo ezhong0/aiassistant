@@ -18,7 +18,7 @@ process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only-must-be-at-least-
 process.env.OPENAI_API_KEY = 'test-openai-key';
 process.env.TAVILY_API_KEY = 'test-tavily-key';
 
-// Import service initialization for tests
+// Import service initialization for tests (disabled by default to prevent Redis/DB connection issues)
 let serviceInitialized = false;
 
 // Reduce console output during tests for cleaner output
@@ -26,8 +26,8 @@ const originalError = console.error;
 const originalWarn = console.warn;
 
 beforeAll(async () => {
-  // Initialize services for tests if not already done
-  if (!serviceInitialized) {
+  // Only initialize services if explicitly requested via environment variable
+  if (process.env.INIT_SERVICES === 'true' && !serviceInitialized) {
     try {
       const { initializeAllCoreServices } = await import('../src/services/service-initialization');
       await initializeAllCoreServices();

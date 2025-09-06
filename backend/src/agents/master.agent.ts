@@ -1,6 +1,6 @@
 import logger from '../utils/logger';
 import { OpenAIService } from '../services/openai.service';
-// SessionService removed - agents are now stateless
+// Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { initializeAgentFactory } from '../config/agent-factory-init';
@@ -19,8 +19,7 @@ export class MasterAgent {
   private systemPrompt: string;
 
   constructor(config?: MasterAgentConfig) {
-    // Don't create SessionService here - it will be obtained from the service registry
-    // this.sessionService = new SessionService(config?.sessionTimeoutMinutes);
+    // Agents are now stateless - no session management needed
     
     // Initialize AgentFactory if not already done
     if (!AgentFactory.getStats().totalTools) {
@@ -53,7 +52,7 @@ export class MasterAgent {
     return openaiService;
   }
 
-  // getSessionService removed - agents are now stateless
+  // Agents are now stateless - no session service needed
 
   /**
    * Process user input and determine which tools to call

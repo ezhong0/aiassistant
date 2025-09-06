@@ -24,12 +24,13 @@ module.exports = {
     '\\.broken\\.'
   ],
   
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  globalSetup: '<rootDir>/tests/test-setup.ts',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   
-  testTimeout: 5000,
+  testTimeout: 30000, // Increased for service initialization
   clearMocks: true,
   restoreMocks: true,
   resetMocks: true,

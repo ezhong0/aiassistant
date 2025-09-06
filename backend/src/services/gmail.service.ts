@@ -73,11 +73,17 @@ export class GmailService extends BaseService {
         attachments: options.attachments
       });
 
-      // Send the email
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
+      // Send the email with proper OAuth authentication
       const response = await this.gmailService.users.messages.send({
         userId: 'me',
         requestBody: { raw: message },
-        access_token: accessToken
+        auth: auth
       });
 
       if (!response.data.id) {
@@ -110,11 +116,17 @@ export class GmailService extends BaseService {
     try {
       this.logDebug('Getting email', { messageId });
 
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
       const response = await this.gmailService.users.messages.get({
         userId: 'me',
         id: messageId,
         format: 'full',
-        access_token: accessToken
+        auth: auth
       });
 
       if (!response.data) {
@@ -180,11 +192,17 @@ export class GmailService extends BaseService {
         attachments: options.attachments
       });
 
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
       // Send the reply
       const response = await this.gmailService.users.messages.send({
         userId: 'me',
         requestBody: { raw: message },
-        access_token: accessToken
+        auth: auth
       });
 
       if (!response.data.id) {
@@ -217,11 +235,17 @@ export class GmailService extends BaseService {
     try {
       this.logDebug('Getting email thread', { threadId });
 
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
       const response = await this.gmailService.users.threads.get({
         userId: 'me',
         id: threadId,
         format: 'full',
-        access_token: accessToken
+        auth: auth
       });
 
       if (!response.data) {
@@ -258,12 +282,18 @@ export class GmailService extends BaseService {
         maxResults: options.maxResults || 10 
       });
 
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
       const response = await this.gmailService.users.messages.list({
         userId: 'me',
         q: query,
         maxResults: options.maxResults || 10,
         includeSpamTrash: options.includeSpamTrash || false,
-        access_token: accessToken
+        auth: auth
       });
 
       if (!response.data.messages) {
@@ -295,11 +325,17 @@ export class GmailService extends BaseService {
     try {
       this.logDebug('Getting email attachment', { messageId, attachmentId });
 
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
       const response = await this.gmailService.users.messages.attachments.get({
         userId: 'me',
         messageId,
         id: attachmentId,
-        access_token: accessToken
+        auth: auth
       });
 
       if (!response.data.data) {

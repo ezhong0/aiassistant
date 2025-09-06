@@ -58,8 +58,7 @@ try {
   logger.warn('Assistant will operate in fallback mode');
 }
 
-// Remove manual session service creation - use service registry instead
-// const sessionService = new SessionService();
+// Using TokenStorageService from service registry instead of SessionService
 
 /**
  * Helper function to safely get the token storage service
@@ -236,8 +235,7 @@ router.post('/text-command',
           previewResultsAwaitingConfirmation: previewResults.filter(r => r.result?.awaitingConfirmation).length
         });
         
-        // Note: SessionService doesn't have updateSession method
-        // The session is automatically updated when adding conversation entries or tool calls
+        // Note: Using stateless architecture with TokenStorageService now
         
         // Generate dynamic confirmation message
         const confirmationMessage = await generateDynamicConfirmationMessage(masterResponse.toolCalls, previewResults, command);

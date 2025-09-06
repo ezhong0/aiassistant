@@ -120,17 +120,23 @@ jest.mock('@slack/bolt', () => ({
 jest.mock('../../src/services/service-manager', () => {
   const mockServices = new Map();
   
-  // Create mock services
-  const mockSessionService = {
+  // Create mock services (using TokenStorageService instead of SessionService)
+  const mockTokenStorageService = {
     isReady: () => true,
     initialize: async () => {},
     destroy: async () => {},
-    getOrCreateSession: jest.fn((sessionId: string, userId: string) => ({
-      id: sessionId,
-      userId,
-      createdAt: new Date(),
-      lastActivity: new Date()
-    }))
+    storeUserTokens: jest.fn(async () => true),
+    getStoredTokens: jest.fn(async () => ({ access_token: 'mock-token' })),
+    deleteUserTokens: jest.fn(async () => true)
+  };
+
+  const mockTokenManager = {
+    isReady: () => true,
+    initialize: async () => {},
+    destroy: async () => {},
+    getValidTokens: jest.fn(async () => 'mock-token'),
+    hasValidOAuthTokens: jest.fn(async () => true),
+    refreshTokensIfNeeded: jest.fn(async () => 'mock-token')
   };
   
   const mockToolExecutorService = {
@@ -148,7 +154,8 @@ jest.mock('../../src/services/service-manager', () => {
   };
   
   // Populate mock services
-  mockServices.set('sessionService', mockSessionService);
+  mockServices.set('tokenStorageService', mockTokenStorageService);
+  mockServices.set('tokenManager', mockTokenManager);
   mockServices.set('toolExecutorService', mockToolExecutorService);
   mockServices.set('slackFormatterService', mockSlackFormatterService);
   
