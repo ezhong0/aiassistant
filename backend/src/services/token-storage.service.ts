@@ -70,7 +70,7 @@ export class TokenStorageService extends BaseService {
       this.logInfo('Cache service not available, operating without token caching');
     }
 
-    this.logInfo('🔐 TokenStorageService initialized - simplified OAuth token management');
+    this.logInfo('TokenStorageService initialized with OAuth token management');
     this.logInfo('TokenStorageService initialization completed successfully');
   }
 

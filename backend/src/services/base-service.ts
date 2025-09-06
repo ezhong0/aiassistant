@@ -51,7 +51,7 @@ export abstract class BaseService implements IService {
 
       this.initialized = true;
       this._state = ServiceState.READY;
-      logger.info(`Service initialized successfully: ${this.name}`);
+      logger.debug(`Service initialized successfully: ${this.name}`);
     } catch (error) {
       this._state = ServiceState.ERROR;
       logger.error(`Failed to initialize service ${this.name}:`, error);

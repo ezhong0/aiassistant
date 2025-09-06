@@ -792,7 +792,7 @@ export class SlackInterface {
           accessToken = await this.tokenManager.getValidTokens(request.context.teamId, request.context.userId) || undefined;
           
           if (accessToken) {
-            logger.debug('Retrieved valid Google OAuth access token for Slack user', { 
+            logger.info('✅ Retrieved valid Google OAuth access token for Slack user', { 
               sessionId, 
               hasToken: !!accessToken,
               tokenLength: accessToken.length

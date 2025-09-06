@@ -76,7 +76,7 @@ export class TokenManager extends BaseService {
       throw new Error(`TokenManager dependencies not initialized: ${JSON.stringify(errorDetails)}`);
     }
     
-    logger.info(`🔍 RETRIEVAL DEBUG - Getting valid tokens for teamId="${teamId}", userId="${userId}" (types: ${typeof teamId}, ${typeof userId})`);
+    logger.debug(`Getting valid tokens for teamId="${teamId}", userId="${userId}"`);
     
     const cacheKey = this.getTokenCacheKey(teamId, userId);
     
@@ -103,10 +103,10 @@ export class TokenManager extends BaseService {
     
     // Get tokens from token storage service (single source of truth)
     const userId_key = `${teamId}:${userId}`;
-    logger.info(`🔍 RETRIEVAL DEBUG - Retrieving tokens with key="${userId_key}" (constructed from teamId="${teamId}" + userId="${userId}")`);
+    logger.debug(`Retrieving tokens with key="${userId_key}"`);
     const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
     
-    logger.info(`🔍 RETRIEVAL DEBUG - Retrieved tokens from storage: hasTokens=${!!tokens}, hasGoogleTokens=${!!tokens?.googleTokens}, hasAccessToken=${!!tokens?.googleTokens?.access_token}`);
+    logger.debug(`Retrieved tokens from storage`, { hasTokens: !!tokens, hasGoogleTokens: !!tokens?.googleTokens, hasAccessToken: !!tokens?.googleTokens?.access_token });
     
     if (!tokens?.googleTokens?.access_token) {
       logger.debug('No OAuth tokens found for Slack user', { teamId, userId, userId_key });
@@ -114,9 +114,9 @@ export class TokenManager extends BaseService {
     }
     
     // Unified token validation
-    logger.info(`🔍 VALIDATION DEBUG - Starting token validation for key="${userId_key}"`);
+    logger.debug(`Validating token for key="${userId_key}"`);
     const validationResult = this.validateToken(tokens.googleTokens);
-    logger.info(`🔍 VALIDATION DEBUG - Token validation result: isValid=${validationResult.isValid}, reason=${validationResult.reason || 'none'}`);
+    logger.debug(`Token validation result`, { isValid: validationResult.isValid, reason: validationResult.reason });
     if (!validationResult.isValid) {
       logger.info('OAuth tokens invalid, attempting refresh', { 
         teamId, 
@@ -347,10 +347,10 @@ export class TokenManager extends BaseService {
    */
   async hasValidOAuthTokens(teamId: string, userId: string): Promise<boolean> {
     try {
-      logger.info(`🔍 hasValidOAuthTokens called with teamId="${teamId}", userId="${userId}"`);
+      logger.debug(`Checking OAuth tokens for teamId="${teamId}", userId="${userId}"`);
       const accessToken = await this.getValidTokens(teamId, userId);
       const hasValidTokens = !!accessToken;
-      logger.info(`🔍 hasValidOAuthTokens result: hasValidTokens=${hasValidTokens}, accessToken exists=${!!accessToken}`);
+      logger.debug(`OAuth token check result`, { hasValidTokens, hasAccessToken: !!accessToken });
       return hasValidTokens;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
