@@ -174,23 +174,37 @@ export class TokenManager extends BaseService {
       return { isValid: false, reason: 'no_access_token' };
     }
     
+    // Validate token format (Google OAuth tokens typically start with "ya29.")
+    if (typeof token.access_token !== 'string' || token.access_token.length < 20) {
+      return { isValid: false, reason: 'invalid_token_format' };
+    }
+    
     // Check expiry with buffer (refresh 5 minutes early)
     const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
     
     // Handle both expiry_date (number) and expires_at (Date)
-    let expiryTime: number;
+    let expiryTime: number | null = null;
     if (token.expiry_date) {
-      expiryTime = token.expiry_date;
+      expiryTime = typeof token.expiry_date === 'number' ? token.expiry_date : new Date(token.expiry_date).getTime();
     } else if (token.expires_at) {
       const expiresAtDate = this.ensureDate(token.expires_at);
-      expiryTime = expiresAtDate ? expiresAtDate.getTime() : Date.now();
-    } else {
-      // No expiry information, assume valid
-      return { isValid: true };
+      expiryTime = expiresAtDate ? expiresAtDate.getTime() : null;
     }
     
-    if (Date.now() > (expiryTime - REFRESH_BUFFER_MS)) {
-      return { isValid: false, reason: 'expired_or_expiring_soon' };
+    // If we have expiry information, validate it
+    if (expiryTime !== null) {
+      if (isNaN(expiryTime) || Date.now() > (expiryTime - REFRESH_BUFFER_MS)) {
+        return { isValid: false, reason: 'expired_or_expiring_soon' };
+      }
+    } else {
+      // No expiry information - this is suspicious for OAuth tokens
+      // Google OAuth tokens should always have expiry information
+      logger.warn('Token has no expiry information - treating as potentially invalid', {
+        hasExpiryDate: !!token.expiry_date,
+        hasExpiresAt: !!token.expires_at,
+        tokenPreview: token.access_token ? `${token.access_token.substring(0, 10)}...` : 'none'
+      });
+      return { isValid: false, reason: 'no_expiry_information' };
     }
     
     return { isValid: true };

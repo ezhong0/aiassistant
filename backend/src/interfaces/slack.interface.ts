@@ -976,7 +976,7 @@ export class SlackInterface {
       
       if (error?.message?.includes('OpenAI service is required')) {
         errorMessage = 'I\'m having trouble with my AI processing service. Please try again in a moment.';
-      } else if (error?.message?.includes('SessionService not available')) {
+      } else if (error?.message?.includes('TokenStorageService not available')) {
         errorMessage = 'I\'m experiencing some connection issues. Please try again.';
       } else if (error?.message?.includes('Tool execution system')) {
         errorMessage = 'I\'m having trouble accessing my tools. Please try again shortly.';
