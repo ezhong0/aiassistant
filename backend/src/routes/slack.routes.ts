@@ -11,7 +11,7 @@ const fetch = globalThis.fetch || require('node-fetch');
  * Slack routes for handling OAuth callbacks and other Slack-specific endpoints
  * Note: These routes are separate from the Bolt framework routes
  */
-export function createSlackRoutes(serviceManager: ServiceManager): express.Router {
+export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?: () => any): express.Router {
   const router = express.Router();
 
   /**
@@ -146,20 +146,41 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
    * This is the main endpoint that Slack calls for all events
    */
   router.post('/events', async (req, res): Promise<void> => {
+    const requestStartTime = Date.now();
+    
     try {
       const { challenge, type, event, team_id, api_app_id } = req.body;
       
-      logger.info('Slack event received', { 
+      // Log comprehensive event details for duplicate analysis
+      logger.info('Slack event received - FULL ANALYSIS', { 
         type, 
         eventType: event?.type,
         teamId: team_id,
         apiAppId: api_app_id,
-        hasChallenge: !!challenge
+        hasChallenge: !!challenge,
+        requestStartTime,
+        // Event details
+        eventTs: event?.ts,
+        eventUser: event?.user,
+        eventChannel: event?.channel,
+        eventText: event?.text?.substring(0, 100) + '...',
+        eventClientMsgId: event?.client_msg_id,
+        // Request metadata
+        userAgent: req.get('User-Agent'),
+        xSlackSignature: req.get('X-Slack-Signature')?.substring(0, 20) + '...',
+        xSlackRequestTimestamp: req.get('X-Slack-Request-Timestamp'),
+        contentType: req.get('Content-Type'),
+        // Full event object (first 500 chars)
+        fullEventPreview: JSON.stringify(event).substring(0, 500) + '...'
       });
 
       // Handle URL verification challenge (required for Slack app setup)
       if (type === 'url_verification' && challenge) {
-        logger.info('Slack URL verification challenge received', { challenge: challenge.substring(0, 10) + '...' });
+        const responseTime = Date.now() - requestStartTime;
+        logger.info('Slack URL verification challenge received', { 
+          challenge: challenge.substring(0, 10) + '...',
+          responseTimeMs: responseTime
+        });
         
         // Respond with the challenge value to verify the endpoint
         res.status(200).json({ challenge });
@@ -171,25 +192,32 @@ export function createSlackRoutes(serviceManager: ServiceManager): express.Route
         logger.info('Slack event callback received, processing directly', { 
           eventType: event.type,
           userId: event.user,
-          channelId: event.channel
+          channelId: event.channel,
+          eventTs: event.ts,
+          eventClientMsgId: event.client_msg_id,
+          // Check if this is the exact same event
+          eventHash: `${event.ts}-${event.user}-${event.channel}-${event.type}`,
+          requestTimestamp: req.get('X-Slack-Request-Timestamp')
         });
 
-        try {
-          // Get the Slack interface from service manager to handle the event
-          const interfaces = await require('../interfaces').initializeInterfaces(serviceManager);
-          if (interfaces.slackInterface) {
-            // Process the event directly using SlackInterface
-            await interfaces.slackInterface.handleEvent(event, team_id);
-          } else {
-            logger.warn('SlackInterface not available to process event');
-          }
-          
-          // Always acknowledge to Slack
-          res.status(200).json({ ok: true });
-        } catch (processError) {
-          logger.error('Error processing Slack event directly', processError);
-          // Still acknowledge to Slack to prevent retries
-          res.status(200).json({ ok: true });
+        // IMMEDIATELY acknowledge to Slack to prevent retries
+        const responseTime = Date.now() - requestStartTime;
+        logger.info('Sending acknowledgment to Slack', { 
+          responseTimeMs: responseTime,
+          eventType: event.type,
+          eventTs: event.ts
+        });
+        res.status(200).json({ ok: true });
+        
+        // Process the event asynchronously (don't await)
+        const interfaces = getInterfaces ? getInterfaces() : null;
+        if (interfaces?.slackInterface) {
+          // Process in background - don't block the response
+          interfaces.slackInterface.handleEvent(event, team_id).catch((processError: any) => {
+            logger.error('Error processing Slack event asynchronously', processError);
+          });
+        } else {
+          logger.warn('SlackInterface not available - may not be initialized yet');
         }
         return;
       }
