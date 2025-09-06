@@ -22,6 +22,7 @@ export class SlackInterface {
   private tokenStorageService: TokenStorageService | null = null;
   private tokenManager: TokenManager | null = null;
   private processedEvents = new Set<string>(); // Track processed events to prevent duplicates
+  private pendingActions = new Map<string, any>(); // Store pending actions awaiting confirmation
 
   constructor(config: SlackConfig, serviceManager: ServiceManager) {
     this.config = config;
@@ -767,6 +768,12 @@ export class SlackInterface {
         isDirectMessage: request.context.isDirectMessage
       });
 
+      // Check for confirmation responses first
+      const confirmationResponse = await this.handleConfirmationResponse(request);
+      if (confirmationResponse) {
+        return confirmationResponse;
+      }
+
       // 1. Create or get session for Slack user with enhanced context
       const sessionId = await this.createOrGetSession(request.context);
       
@@ -856,7 +863,79 @@ export class SlackInterface {
           hasAccessToken: !!accessToken
         });
 
-        // Execute all tool calls in sequence with proper error handling
+        // Step 1: First run tools in preview mode to check for confirmation needs
+        const previewResults = [];
+        for (const toolCall of masterResponse.toolCalls) {
+          try {
+            logger.debug(`Running preview for tool: ${toolCall.name}`, { 
+              parameters: Object.keys(toolCall.parameters || {}),
+              hasAccessToken: !!accessToken
+            });
+
+            // Check if this tool requires OAuth and we don't have a token
+            if (this.toolRequiresOAuth(toolCall.name) && !accessToken) {
+              logger.warn(`Tool ${toolCall.name} requires OAuth but no access token available`, { sessionId });
+              
+              // Add failed result to collection
+              previewResults.push({
+                toolName: toolCall.name,
+                success: false,
+                error: 'OAuth authentication required. Please authenticate with Gmail first.',
+                result: null,
+                executionTime: 0
+              });
+              
+              continue; // Skip execution and move to next tool
+            }
+
+            const executionContext: any = {
+              ...baseExecutionContext,
+              previousResults: previewResults // Pass previous results for context
+            };
+
+            // First run in preview mode to check for confirmation needs
+            const previewResult: any = await (toolExecutorService as any).executeTool(
+              toolCall,
+              executionContext,
+              accessToken,
+              { preview: true } // Run in preview mode first
+            );
+
+            previewResults.push(previewResult);
+            
+          } catch (error) {
+            logger.error(`Preview execution failed for tool ${toolCall.name}:`, error);
+            previewResults.push({
+              toolName: toolCall.name,
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              result: null,
+              executionTime: 0
+            });
+          }
+        }
+
+        // Step 2: Check if any tools require confirmation
+        const needsConfirmation = previewResults.some(result => 
+          result.result && typeof result.result === 'object' && 
+          'awaitingConfirmation' in result.result && 
+          result.result.awaitingConfirmation === true
+        );
+
+        logger.info('Slack preview check completed', {
+          needsConfirmation,
+          previewResultsCount: previewResults.length,
+          toolsRequiringConfirmation: previewResults
+            .filter(r => r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result)
+            .map(r => r.toolName)
+        });
+
+        if (needsConfirmation) {
+          // Return confirmation request to Slack
+          return this.createConfirmationResponse(previewResults, sessionId, request.message, request.context.channelId);
+        }
+
+        // Step 3: No confirmation needed, execute tools normally
         for (const toolCall of masterResponse.toolCalls) {
           try {
             logger.debug(`Executing tool: ${toolCall.name}`, { 
@@ -888,7 +967,8 @@ export class SlackInterface {
             const result = await (toolExecutorService as any).executeTool(
               toolCall,
               executionContext,
-              accessToken // Pass the OAuth access token to the tool executor
+              accessToken,
+              { preview: false } // Execute normally
             );
 
             // Collect results for response formatting
@@ -1499,6 +1579,253 @@ export class SlackInterface {
     ];
     
     return oauthRequiredTools.includes(toolName);
+  }
+
+  /**
+   * Create confirmation response for Slack with action preview
+   */
+  private createConfirmationResponse(previewResults: any[], sessionId: string, userMessage: string, channel: string): SlackAgentResponse {
+    // Extract the main preview data
+    const mainPreview = previewResults.find(r => 
+      r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result && r.result.preview
+    );
+
+    if (!mainPreview?.result?.preview) {
+      return {
+        success: true,
+        response: {
+          text: 'I need your confirmation before proceeding with this action. Reply with "yes" to confirm or "no" to cancel.'
+        },
+        shouldRespond: true
+      };
+    }
+
+    const preview = mainPreview.result.preview;
+    
+    // Create detailed preview message for Slack
+    let previewText = `🔍 **Action Preview**\n\n`;
+    previewText += `**${preview.title}**\n`;
+    previewText += `${preview.description}\n\n`;
+
+    // Add risk assessment
+    const riskEmoji = preview.riskAssessment.level === 'high' ? '🔴' : 
+                     preview.riskAssessment.level === 'medium' ? '🟡' : '🟢';
+    previewText += `${riskEmoji} **Risk Level:** ${preview.riskAssessment.level.toUpperCase()}\n`;
+    previewText += `**Risk Factors:** ${preview.riskAssessment.factors.join(', ')}\n`;
+
+    // Add warnings if any
+    if (preview.riskAssessment.warnings) {
+      previewText += `⚠️ **Warnings:**\n`;
+      preview.riskAssessment.warnings.forEach((warning: string) => {
+        previewText += `• ${warning}\n`;
+      });
+    }
+
+    // Add specific preview data based on action type
+    if (preview.actionType === 'email' && preview.previewData) {
+      const emailData = preview.previewData as any;
+      previewText += `\n📧 **Email Details:**\n`;
+      previewText += `• **To:** ${emailData.recipients.to.join(', ')}\n`;
+      if (emailData.recipients.cc?.length > 0) {
+        previewText += `• **CC:** ${emailData.recipients.cc.join(', ')}\n`;
+      }
+      previewText += `• **Subject:** ${emailData.subject}\n`;
+      previewText += `• **Content:** ${emailData.contentSummary}\n`;
+      previewText += `• **Recipients:** ${emailData.recipientCount}\n`;
+      if (emailData.externalDomains?.length > 0) {
+        previewText += `• **External Domains:** ${emailData.externalDomains.join(', ')}\n`;
+      }
+    } else if (preview.actionType === 'calendar' && preview.previewData) {
+      const calendarData = preview.previewData as any;
+      previewText += `\n📅 **Calendar Details:**\n`;
+      previewText += `• **Title:** ${calendarData.title}\n`;
+      previewText += `• **Start:** ${new Date(calendarData.startTime).toLocaleString()}\n`;
+      previewText += `• **Duration:** ${calendarData.duration}\n`;
+      if (calendarData.attendees?.length > 0) {
+        previewText += `• **Attendees:** ${calendarData.attendees.join(', ')}\n`;
+      }
+      if (calendarData.location) {
+        previewText += `• **Location:** ${calendarData.location}\n`;
+      }
+      if (calendarData.conflicts?.length > 0) {
+        previewText += `⚠️ **Conflicts:** ${calendarData.conflicts.length} detected\n`;
+      }
+    }
+
+    previewText += `\n**Estimated Execution Time:** ${preview.estimatedExecutionTime}\n`;
+    previewText += `**Reversible:** ${preview.reversible ? 'Yes' : 'No'}\n\n`;
+    previewText += `Do you want to proceed with this action?\nReply with **"yes"** to confirm or **"no"** to cancel.`;
+
+    // Store pending action for confirmation handling
+    const pendingAction = {
+      actionId: preview.actionId,
+      type: preview.actionType,
+      parameters: preview.parameters,
+      awaitingConfirmation: true,
+      originalQuery: userMessage,
+      sessionId: sessionId,
+      preview: preview,
+      timestamp: Date.now()
+    };
+
+    this.pendingActions.set(`${sessionId}:${channel}`, pendingAction);
+
+    // Set timeout to clean up pending action after 5 minutes
+    setTimeout(() => {
+      this.pendingActions.delete(`${sessionId}:${channel}`);
+    }, 5 * 60 * 1000);
+
+    return {
+      success: true,
+      response: {
+        text: previewText
+      },
+      shouldRespond: true
+    };
+  }
+
+  /**
+   * Handle confirmation responses from users
+   */
+  private async handleConfirmationResponse(request: SlackAgentRequest): Promise<SlackAgentResponse | null> {
+    const sessionId = await this.createOrGetSession(request.context);
+    const pendingActionKey = `${sessionId}:${request.context.channelId}`;
+    const pendingAction = this.pendingActions.get(pendingActionKey);
+
+    if (!pendingAction) {
+      return null; // No pending action, continue with normal processing
+    }
+
+    const message = request.message.toLowerCase().trim();
+    const confirmationWords = ['yes', 'y', 'confirm', 'ok', 'okay', 'proceed', 'go ahead', 'do it'];
+    const rejectionWords = ['no', 'n', 'cancel', 'abort', 'stop', 'nevermind', 'never mind'];
+
+    const isConfirmation = confirmationWords.includes(message);
+    const isRejection = rejectionWords.includes(message);
+
+    if (!isConfirmation && !isRejection) {
+      return null; // Not a confirmation response, continue with normal processing
+    }
+
+    // Remove pending action
+    this.pendingActions.delete(pendingActionKey);
+
+    logger.info('Processing confirmation response', {
+      sessionId,
+      actionId: pendingAction.actionId,
+      confirmed: isConfirmation,
+      userMessage: message
+    });
+
+    if (isRejection) {
+      return {
+        success: true,
+        response: {
+          text: `✅ Action cancelled. The ${pendingAction.type} operation will not be performed.`
+        },
+        shouldRespond: true
+      };
+    }
+
+    // Execute the confirmed action
+    try {
+      const toolExecutorService = this.serviceManager.getService('toolExecutorService');
+      if (!toolExecutorService) {
+        throw new Error('Tool executor service not available');
+      }
+
+      // Get access token
+      let accessToken: string | undefined;
+      try {
+        if (this.tokenManager) {
+          const token = await this.tokenManager.getValidTokens(request.context.teamId, request.context.userId);
+          accessToken = token || undefined;
+        }
+      } catch (error) {
+        logger.warn('Could not retrieve access token for confirmed action', { sessionId, error });
+      }
+
+      // Create execution context
+      const executionContext = {
+        sessionId,
+        userId: request.context.userId,
+        timestamp: new Date()
+      };
+
+      // Create tool call based on action type
+      let toolCall: any;
+      if (pendingAction.type === 'email') {
+        toolCall = {
+          name: 'emailAgent',
+          parameters: { 
+            query: pendingAction.originalQuery,
+            accessToken 
+          }
+        };
+      } else if (pendingAction.type === 'calendar') {
+        toolCall = {
+          name: 'calendarAgent',
+          parameters: { 
+            query: pendingAction.originalQuery,
+            accessToken
+          }
+        };
+      } else {
+        throw new Error(`Unsupported action type: ${pendingAction.type}`);
+      }
+
+      // Execute the tool normally (not in preview mode)
+      const result = await (toolExecutorService as any).executeTool(
+        toolCall,
+        executionContext,
+        accessToken,
+        { preview: false }
+      );
+
+      if (result.success) {
+        const successMessage = `✅ **Action Completed Successfully!**\n\n` +
+          `${pendingAction.preview.title} has been executed.\n\n` +
+          `${result.result?.message || 'Operation completed successfully.'}`;
+
+        return {
+          success: true,
+          response: {
+            text: successMessage
+          },
+          shouldRespond: true
+        };
+      } else {
+        const errorMessage = `❌ **Action Failed**\n\n` +
+          `Failed to execute ${pendingAction.preview.title}.\n\n` +
+          `Error: ${result.error || 'Unknown error occurred'}`;
+
+        return {
+          success: true,
+          response: {
+            text: errorMessage
+          },
+          shouldRespond: true
+        };
+      }
+
+    } catch (error) {
+      logger.error('Failed to execute confirmed action', {
+        actionId: pendingAction.actionId,
+        error: error instanceof Error ? error.message : error
+      });
+
+      const errorMessage = `❌ **Execution Error**\n\n` +
+        `An error occurred while executing ${pendingAction.preview.title}.\n\n` +
+        `Please try again or contact support if the issue persists.`;
+
+      return {
+        success: true,
+        response: {
+          text: errorMessage
+        },
+        shouldRespond: true
+      };
+    }
   }
 
   /**
