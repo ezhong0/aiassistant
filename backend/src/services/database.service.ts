@@ -486,25 +486,22 @@ export class DatabaseService extends BaseService {
   async getUserTokens(userId: string): Promise<any | null> {
     const client = await this.getClient();
     try {
-      logger.info('🔍 DATABASE DEBUG - Executing query', {
+      logger.debug('Executing getUserTokens query', {
         userId,
-        userIdType: typeof userId,
-        userIdLength: userId?.length,
-        query: 'SELECT * FROM user_tokens WHERE user_id = $1'
+        userIdType: typeof userId
       });
       
       const result = await client.query(`
         SELECT * FROM user_tokens WHERE user_id = $1
       `, [userId]);
 
-      logger.info('🔍 DATABASE DEBUG - Query result', {
+      logger.debug('Database query result', {
         userId,
-        rowCount: result.rows.length,
-        hasRows: result.rows.length > 0
+        rowCount: result.rows.length
       });
 
       if (result.rows.length === 0) {
-        logger.info('🔍 DATABASE DEBUG - No tokens found', { userId });
+        logger.debug('No tokens found in database', { userId });
         return null;
       }
 

@@ -86,7 +86,7 @@ const registerCoreServices = async (): Promise<void> => {
           priority: 6,
           autoStart: true
         });
-        logger.info('CacheService registered', { hasRedisConfig, nodeEnv: ENVIRONMENT.nodeEnv });
+        logger.debug('CacheService registered', { hasRedisConfig, nodeEnv: ENVIRONMENT.nodeEnv });
       } else {
         logger.warn('CacheService skipped - no Redis configuration found for production environment');
         logger.info('Available Redis environment variables for Railway:', 

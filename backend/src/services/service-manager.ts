@@ -100,7 +100,7 @@ export class ServiceManager {
     this.services.set(name, registration);
     this.serviceInstances.set(name, service);
 
-    logger.info(`Service registered: ${name}`, {
+    logger.debug(`Service registered: ${name}`, {
       dependencies: registration.dependencies,
       priority: registration.priority,
       autoStart: registration.autoStart
@@ -177,18 +177,18 @@ export class ServiceManager {
     }
 
     logger.info(`Initializing ${this.services.size} services...`);
-    logger.info('Registered services:', Array.from(this.services.keys()));
+    logger.debug('Registered services:', Array.from(this.services.keys()));
 
     // Calculate initialization order based on dependencies
     this.calculateInitializationOrder();
-    logger.info('Initialization order:', this.initializationOrder);
+    logger.debug('Initialization order:', this.initializationOrder);
 
     // Initialize services in order
     for (const serviceName of this.initializationOrder) {
-      logger.info(`Starting initialization of service: ${serviceName}`);
+      logger.debug(`Starting initialization of service: ${serviceName}`);
       try {
         await this.initializeService(serviceName);
-        logger.info(`Completed initialization of service: ${serviceName}`);
+        logger.debug(`Completed initialization of service: ${serviceName}`);
       } catch (error) {
         // In development, allow database service to fail gracefully
         if (serviceName === 'databaseService' && process.env.NODE_ENV === 'development') {
@@ -260,7 +260,7 @@ export class ServiceManager {
         throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
       }
       
-      logger.info(`Service initialized successfully: ${name}`);
+      logger.debug(`Service initialized successfully: ${name}`);
     } catch (error) {
       logger.error(`Failed to initialize service ${name}:`, error);
       throw error;

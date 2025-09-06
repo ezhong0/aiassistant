@@ -22,7 +22,7 @@ export class CacheService extends BaseService {
                      process.env.RAILWAY_REDIS_URL ||
                      'redis://localhost:6379';
     
-    logger.info('CacheService initializing', {
+    logger.debug('CacheService initializing', {
       redisUrl: this.maskRedisUrl(this.REDIS_URL),
       environment: configService.nodeEnv,
       hasRedisEnv: !!(process.env.REDIS_URL || process.env.REDISCLOUD_URL || 
@@ -116,7 +116,7 @@ export class CacheService extends BaseService {
       // Test the connection
       await this.client.ping();
       
-      logger.info('CacheService initialized successfully');
+      logger.debug('CacheService initialized successfully');
 
     } catch (error) {
       logger.error('Failed to initialize CacheService:', error);

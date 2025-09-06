@@ -35,7 +35,10 @@ BASE_URL=http://localhost:3000         # Base URL for OAuth redirects
 
 # Database Configuration
 DATABASE_URL=postgresql://user:password@localhost:5432/assistantapp
-REDIS_URL=redis://localhost:6379      # For caching (future use)
+
+# Redis Configuration (Optional - for caching)
+REDIS_URL=redis://localhost:6379
+# Railway automatically sets: REDIS_PRIVATE_URL, REDIS_PUBLIC_URL
 
 # External APIs
 OPENAI_API_KEY=your_openai_api_key     # For AI functionality
