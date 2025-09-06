@@ -1012,24 +1012,7 @@ export class SlackInterface {
         hasExecutionMetadata: !!masterResponse.executionMetadata
       });
 
-      // 1. First try to use SlackFormatterService for rich formatting
-      const slackFormatterService = this.serviceManager.getService('slackFormatterService');
-      
-      if (slackFormatterService && typeof (slackFormatterService as any).formatAgentResponse === 'function') {
-        try {
-          const formattedResponse = await (slackFormatterService as any).formatAgentResponse(
-            masterResponse, 
-            slackContext
-          );
-          
-          if (formattedResponse && (formattedResponse.text || formattedResponse.blocks)) {
-            logger.debug('Using SlackFormatterService response');
-            return formattedResponse;
-          }
-        } catch (formatterError: any) {
-          logger.warn('SlackFormatterService failed, using fallback formatting', formatterError);
-        }
-      }
+      // Use simple fallback formatting
       
       // 2. Enhanced fallback formatting with tool results integration
       let responseText = masterResponse.message || 'I processed your request successfully.';

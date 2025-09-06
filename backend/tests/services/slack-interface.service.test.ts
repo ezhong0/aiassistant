@@ -1,7 +1,6 @@
 import { SlackInterfaceService } from '../../src/services/slack-interface.service';
 import { TokenManager } from '../../src/services/token-manager';
 import { ToolExecutorService } from '../../src/services/tool-executor.service';
-import { SlackFormatterService } from '../../src/services/slack-formatter.service';
 import { ServiceManager } from '../../src/services/service-manager';
 import { SlackContext, SlackEventType } from '../../src/types/slack.types';
 import { WebClient } from '@slack/web-api';
@@ -62,7 +61,6 @@ describe('SlackInterfaceService', () => {
   let slackService: SlackInterfaceService;
   let mockTokenManager: jest.Mocked<TokenManager>;
   let mockToolExecutor: jest.Mocked<ToolExecutorService>;
-  let mockSlackFormatter: jest.Mocked<SlackFormatterService>;
   let mockServiceManager: jest.Mocked<ServiceManager>;
 
   const mockSlackConfig = {
@@ -113,17 +111,6 @@ describe('SlackInterfaceService', () => {
       destroyed: false
     } as unknown as jest.Mocked<ToolExecutorService>;
 
-    mockSlackFormatter = {
-      formatAgentResponse: jest.fn().mockResolvedValue({
-        text: 'Formatted response',
-        blocks: []
-      }),
-      isReady: jest.fn().mockReturnValue(true),
-      name: 'slackFormatterService',
-      state: 'ready',
-      initialized: true,
-      destroyed: false
-    } as unknown as jest.Mocked<SlackFormatterService>;
 
     // Setup service manager mock
     const mockServiceManagerInstance = {
@@ -133,8 +120,6 @@ describe('SlackInterfaceService', () => {
             return mockTokenManager;
           case 'toolExecutorService':
             return mockToolExecutor;
-          case 'slackFormatterService':
-            return mockSlackFormatter;
           default:
             return null;
         }
@@ -338,12 +323,7 @@ describe('SlackInterfaceService', () => {
       await slackService.initialize();
     });
 
-    it('should use SlackFormatterService when available', async () => {
-      mockSlackFormatter.formatAgentResponse.mockResolvedValue({
-        text: 'Formatted by service',
-        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: 'Formatted content' } }]
-      });
-
+    it('should use fallback formatting', async () => {
       const mockEvent = {
         type: 'message',
         user: 'U123456',
@@ -355,7 +335,8 @@ describe('SlackInterfaceService', () => {
 
       await slackService.handleEvent(mockEvent, 'T123456');
 
-      expect(mockSlackFormatter.formatAgentResponse).toHaveBeenCalled();
+      // Verify that the event was handled without errors
+      expect(mockToolExecutor.handleRequest).toHaveBeenCalled();
     });
 
     it('should use fallback formatting when service is unavailable', async () => {

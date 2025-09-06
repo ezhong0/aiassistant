@@ -8,7 +8,6 @@ import { serviceManager } from '../../src/services/service-manager';
 // Mock the service dependencies
 jest.mock('../../src/services/token-manager');
 jest.mock('../../src/services/tool-executor.service');
-jest.mock('../../src/services/slack-formatter.service');
 jest.mock('@slack/web-api');
 jest.mock('../../src/config/agent-factory-init');
 jest.mock('../../src/config/environment');

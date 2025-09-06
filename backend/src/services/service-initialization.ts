@@ -7,7 +7,6 @@ import { ContactService } from './contact.service';
 import { GmailService } from './gmail.service';
 import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
-import { SlackFormatterService } from './slack-formatter.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { ConfigService } from '../config/config.service';
@@ -160,12 +159,6 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 12. SlackFormatterService - No external dependencies
-    const slackFormatterService = new SlackFormatterService();
-    serviceManager.registerService('slackFormatterService', slackFormatterService, {
-      priority: 50,
-      autoStart: true
-    });
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

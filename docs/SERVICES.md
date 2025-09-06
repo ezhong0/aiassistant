@@ -19,7 +19,6 @@ ServiceManager (Lifecycle Management)
 │   ├── GmailService - Email operations
 │   └── CalendarService - Calendar operations
 ├── OpenAIService (Priority: 70) - AI capabilities
-├── SlackFormatterService (Priority: 80) - Slack message formatting
 └── TokenManager (Priority: 90) - Centralized token management
 ```
 

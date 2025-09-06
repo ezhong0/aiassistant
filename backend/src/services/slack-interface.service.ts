@@ -3,7 +3,6 @@ import { BaseService } from './base-service';
 import { ServiceManager } from './service-manager';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
-import { SlackFormatterService } from './slack-formatter.service';
 import { 
   SlackContext, 
   SlackEventType, 
@@ -37,7 +36,6 @@ export class SlackInterfaceService extends BaseService {
   // Injected service dependencies
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
-  private slackFormatterService: SlackFormatterService | null = null;
 
   constructor(config: SlackConfig) {
     super('SlackInterfaceService');
@@ -69,8 +67,7 @@ export class SlackInterfaceService extends BaseService {
 
       this.logInfo('SlackInterface initialized successfully', {
         hasTokenManager: !!this.tokenManager,
-        hasToolExecutor: !!this.toolExecutorService,
-        hasSlackFormatter: !!this.slackFormatterService
+        hasToolExecutor: !!this.toolExecutorService
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -88,7 +85,6 @@ export class SlackInterfaceService extends BaseService {
       // Reset service references
       this.tokenManager = null;
       this.toolExecutorService = null;
-      this.slackFormatterService = null;
 
       this.logInfo('SlackInterface destroyed successfully');
     } catch (error) {
@@ -130,13 +126,6 @@ export class SlackInterfaceService extends BaseService {
       this.logDebug('ToolExecutorService injected successfully');
     }
 
-    // Get SlackFormatterService
-    this.slackFormatterService = serviceManager.getService('slackFormatterService') as SlackFormatterService;
-    if (!this.slackFormatterService) {
-      this.logWarn('SlackFormatterService not available - will use fallback formatting');
-    } else {
-      this.logDebug('SlackFormatterService injected successfully');
-    }
   }
 
   /**
@@ -499,27 +488,13 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Format agent response for Slack using SlackFormatterService
+   * Format agent response for Slack
    */
   private async formatAgentResponse(
     masterResponse: any, 
     slackContext: SlackContext
   ): Promise<SlackResponse> {
     try {
-      // Try to use SlackFormatterService if available
-      if (this.slackFormatterService && 
-          typeof (this.slackFormatterService as any).formatAgentResponse === 'function') {
-        const formatted = await (this.slackFormatterService as any).formatAgentResponse(
-          masterResponse, 
-          slackContext
-        );
-        
-        if (formatted && (formatted.text || formatted.blocks)) {
-          return formatted;
-        }
-      }
-      
-      // Fallback formatting
       return this.createFallbackResponse(masterResponse, slackContext);
     } catch (error) {
       this.logError('Error formatting agent response', error);
@@ -748,7 +723,6 @@ export class SlackInterfaceService extends BaseService {
         dependencies: {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
-          slackFormatterService: !!this.slackFormatterService
         },
         processedEventsCount: this.processedEvents.size
       }
