@@ -209,14 +209,6 @@ export interface SessionDataResponse extends BaseApiResponse {
   };
 }
 
-export interface SessionDeleteResponse extends BaseApiResponse {
-  data: {
-    sessionId: string;
-    deletedAt: string;
-    conversationCount: number;
-    toolExecutionCount: number;
-  };
-}
 
 // ============================================================================
 // Email Agent Types
@@ -440,7 +432,7 @@ export type AssistantApiResponse =
   | EnhancedConfirmationResponse
   | ConfirmActionResponse
   | SessionDataResponse
-  | SessionDeleteResponse
+  
   | EmailOperationResponse
   | AuthRequiredResponse
   | ValidationErrorResponse

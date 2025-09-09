@@ -179,7 +179,6 @@ const registerCoreServices = async (): Promise<void> => {
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
-    // Note: SessionService removed - using simplified token storage instead
 
     logger.info('Core services registered successfully', {
       serviceCount: serviceManager.getServiceCount(),

@@ -105,7 +105,7 @@ export interface SlackResponse {
   attachments?: any[];
   response_type?: 'in_channel' | 'ephemeral';
   replace_original?: boolean;
-  delete_original?: boolean;
+  
 }
 
 /**

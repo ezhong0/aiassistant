@@ -148,32 +148,6 @@ export class SlackInterface {
     }
   }
 
-  /**
-   * Setup Slack event handlers - REMOVED
-   * Event handling is now done through manual /slack/events endpoint
-   */
-  private setupEventHandlers(): void {
-    // All event handling removed - now handled through manual /slack/events route
-    logger.info('Event handlers removed - using manual /slack/events routing');
-  }
-
-  /**
-   * Setup slash commands - REMOVED
-   * Slash commands are now handled through manual /slack/commands endpoint
-   */
-  private setupSlashCommands(): void {
-    // All slash command handling removed - now handled through manual /slack/commands route
-    logger.info('Slash command handlers removed - using manual /slack/commands routing');
-  }
-
-  /**
-   * Setup interactive components - REMOVED
-   * Interactive components are now handled through manual /slack/interactive endpoint
-   */
-  private setupInteractiveComponents(): void {
-    // All interactive component handling removed - now handled through manual /slack/interactive route
-    logger.info('Interactive component handlers removed - using manual /slack/interactive routing');
-  }
 
   /**
    * Enhanced context extraction from Slack events
@@ -529,7 +503,7 @@ export class SlackInterface {
   }
 
   /**
-   * Create Slack context from event (legacy method for compatibility)
+   * Create Slack context from event
    */
   private async createSlackContext(event: any): Promise<SlackContext> {
     return this.createSlackContextFromEvent(event);
@@ -745,7 +719,7 @@ export class SlackInterface {
   }
 
   /**
-   * Clean Slack message (remove mentions, etc.) - Legacy method
+   * Clean Slack message (remove mentions, etc.)
    */
   private cleanSlackMessage(message: string): string {
     return this.extractAndCleanMessage(message);
