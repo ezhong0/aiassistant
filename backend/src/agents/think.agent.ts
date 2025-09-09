@@ -1,5 +1,5 @@
 import { ToolCall, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
-import { BaseAgent } from '../framework/base-agent';
+import { AIAgent } from '../framework/ai-agent';
 import { PreviewGenerationResult } from '../types/api.types';
 
 export interface ThinkAgentResponse extends AgentResponse {
@@ -16,7 +16,7 @@ export interface ThinkAgentResponse extends AgentResponse {
   };
 }
 
-export class ThinkAgent extends BaseAgent<ThinkParams, ThinkAgentResponse> {
+export class ThinkAgent extends AIAgent<ThinkParams, ThinkAgentResponse> {
   
   constructor() {
     super({
@@ -24,7 +24,15 @@ export class ThinkAgent extends BaseAgent<ThinkParams, ThinkAgentResponse> {
       description: 'Analyze and reason about user requests, verify correct actions were taken',
       enabled: true,
       timeout: 15000,
-      retryCount: 2
+      retryCount: 2,
+      aiPlanning: {
+        enableAIPlanning: false, // Disable AI planning for analysis operations
+        maxPlanningSteps: 3,
+        planningTimeout: 10000,
+        cachePlans: true,
+        planningTemperature: 0.1,
+        planningMaxTokens: 1000
+      }
     });
   }
 
@@ -90,10 +98,45 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
 `;
 
   /**
-   * Core thinking and verification logic - required by framework BaseAgent
+   * Core thinking and verification logic with AI planning support
    */
-  protected async processQuery(params: ThinkParams, _context: ToolExecutionContext): Promise<ThinkAgentResponse> {
+  protected async processQuery(params: ThinkParams, context: ToolExecutionContext): Promise<ThinkAgentResponse> {
+    // Think operations are typically simple analysis, so we'll use manual execution
+    return this.executeManually(params, context);
+  }
+
+  /**
+   * Manual execution fallback - traditional thinking logic
+   */
+  protected async executeManually(params: ThinkParams, _context: ToolExecutionContext): Promise<ThinkAgentResponse> {
     return await this.processThinking(params);
+  }
+
+  /**
+   * Build final result from AI planning execution
+   */
+  protected buildFinalResult(
+    summary: any,
+    successfulResults: any[],
+    failedResults: any[],
+    params: ThinkParams,
+    _context: ToolExecutionContext
+  ): ThinkAgentResponse {
+    // For think operations, we typically want the first successful result
+    if (successfulResults.length > 0) {
+      return successfulResults[0] as ThinkAgentResponse;
+    }
+
+    // If no successful results, create a summary result
+    return {
+      success: failedResults.length === 0,
+      message: failedResults.length > 0 ? 'Analysis failed' : 'Analysis completed',
+      data: {
+        verificationStatus: 'unclear',
+        reasoning: 'Unable to complete analysis',
+        overallAssessment: 'Analysis could not be completed'
+      }
+    };
   }
 
   /**

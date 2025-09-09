@@ -1,4 +1,4 @@
-import { BaseAgent } from '../framework/base-agent';
+import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api.types';
 import { getService } from '../services/service-manager';
@@ -41,10 +41,10 @@ export interface EmailAgentRequest extends EmailAgentParams {
 }
 
 /**
- * Enhanced EmailAgent using BaseAgent framework
- * Handles all email operations via Gmail API with consistent error handling and logging
+ * Enhanced EmailAgent using AIAgent framework
+ * Handles all email operations via Gmail API with AI planning and manual fallbacks
  */
-export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
+export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
 
   constructor() {
     super({
@@ -52,11 +52,16 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
       description: 'Handles email operations via Gmail API',
       enabled: true,
       timeout: 30000,
-      retryCount: 3
+      retryCount: 3,
+      aiPlanning: {
+        enableAIPlanning: true, // Enable AI planning by default
+        maxPlanningSteps: 5,
+        planningTimeout: 20000,
+        cachePlans: true,
+        planningTemperature: 0.1,
+        planningMaxTokens: 1500
+      }
     });
-    
-    // Initialize OpenAI service if available
-    // OpenAI service will be retrieved from service registry when needed
   }
 
   /**
@@ -73,10 +78,49 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
   }
   
   /**
-   * Core email processing logic - no boilerplate!
+   * Core email processing logic with AI planning support
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected async processQuery(params: EmailAgentRequest, _context: ToolExecutionContext): Promise<EmailResult> {
+  protected async processQuery(params: EmailAgentRequest, context: ToolExecutionContext): Promise<EmailResult> {
+    // Try AI planning first if enabled and suitable
+    if (this.aiConfig.enableAIPlanning && this.canUseAIPlanning(params)) {
+      try {
+        this.logger.info('Attempting AI-driven email execution', {
+          agent: this.config.name,
+          sessionId: context.sessionId
+        });
+
+        const aiResult = await this.executeWithAIPlanning(params, context);
+        
+        this.logger.info('AI-driven email execution completed', {
+          agent: this.config.name,
+          sessionId: context.sessionId
+        });
+        
+        return aiResult;
+
+      } catch (error) {
+        this.logAIPlanningFallback(error as Error, 'planning_failed', context);
+
+        // Fall back to manual implementation
+        return this.executeManually(params, context);
+      }
+    }
+
+    // Use manual implementation
+    const reason = this.aiConfig.enableAIPlanning ? 'AI planning not suitable for this query' : 'AI planning disabled';
+    this.logAIPlanningFallback(
+      new Error(reason), 
+      this.aiConfig.enableAIPlanning ? 'unsuitable_query' : 'service_unavailable', 
+      context
+    );
+
+    return this.executeManually(params, context);
+  }
+
+  /**
+   * Manual execution fallback - traditional email logic
+   */
+  protected async executeManually(params: EmailAgentRequest, _context: ToolExecutionContext): Promise<EmailResult> {
     const { query } = params;
     
     // Determine action type from query
@@ -98,6 +142,30 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
       default:
         throw this.createError(`Unknown email action: ${action.type}`, 'UNKNOWN_ACTION');
     }
+  }
+
+  /**
+   * Build final result from AI planning execution
+   */
+  protected buildFinalResult(
+    summary: any,
+    successfulResults: any[],
+    failedResults: any[],
+    params: EmailAgentRequest,
+    _context: ToolExecutionContext
+  ): EmailResult {
+    // For email operations, we typically want the first successful result
+    if (successfulResults.length > 0) {
+      return successfulResults[0] as EmailResult;
+    }
+
+    // If no successful results, create a summary result
+    return {
+      action: 'search', // Default action
+      count: successfulResults.length,
+      messageId: summary.planId,
+      threadId: summary.planId
+    };
   }
   
   /**
@@ -488,7 +556,7 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
       );
     }
 
-    // Use retry mechanism from BaseAgent for reliability
+    // Use retry mechanism from AIAgent for reliability
     const sentEmail = await this.withRetries(async () => {
       const gmailService = getService<GmailService>('gmailService');
       if (!gmailService) {
