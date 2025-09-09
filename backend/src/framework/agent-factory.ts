@@ -1,4 +1,4 @@
-import { BaseAgent } from './base-agent';
+import { AIAgent } from './ai-agent';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agent.types';
 import { EmailAgent } from '../agents/email.agent';
@@ -15,14 +15,14 @@ import logger from '../utils/logger';
  * This replaces the need for a separate tool registry system
  */
 export class AgentFactory {
-  private static agents = new Map<string, BaseAgent>();
+  private static agents = new Map<string, AIAgent>();
   private static toolMetadata = new Map<string, ToolMetadata>();
   private static initialized = false;
   
   /**
    * Register a single agent instance
    */
-  static registerAgent(name: string, agent: BaseAgent): void {
+  static registerAgent(name: string, agent: AIAgent): void {
     if (this.agents.has(name)) {
       logger.warn(`Agent ${name} is already registered, replacing with new instance`);
     }
@@ -31,7 +31,8 @@ export class AgentFactory {
     
     logger.info(`Framework agent registered: ${name}`, {
       config: agent.getConfig(),
-      enabled: agent.isEnabled()
+      enabled: agent.isEnabled(),
+      aiPlanningEnabled: agent.getAIConfig().enableAIPlanning
     });
   }
   
@@ -40,7 +41,7 @@ export class AgentFactory {
    */
   static registerAgentClass<TParams, TResult>(
     name: string, 
-    AgentClass: new () => BaseAgent<TParams, TResult>
+    AgentClass: new () => AIAgent<TParams, TResult>
   ): void {
     try {
       const agent = new AgentClass();
@@ -66,7 +67,7 @@ export class AgentFactory {
   /**
    * Get an agent by name
    */
-  static getAgent(name: string): BaseAgent | undefined {
+  static getAgent(name: string): AIAgent | undefined {
     const agent = this.agents.get(name);
     
     if (!agent) {
@@ -95,14 +96,14 @@ export class AgentFactory {
   /**
    * Get all registered agents
    */
-  static getAllAgents(): BaseAgent[] {
+  static getAllAgents(): AIAgent[] {
     return Array.from(this.agents.values());
   }
   
   /**
    * Get only enabled agents
    */
-  static getEnabledAgents(): BaseAgent[] {
+  static getEnabledAgents(): AIAgent[] {
     return Array.from(this.agents.values()).filter(agent => agent.isEnabled());
   }
   
@@ -151,9 +152,14 @@ export class AgentFactory {
         executionTime: 0
       };
       
-      logger.error('Agent execution failed - agent not found', {
+      // Log fallback warning for missing agent
+      logger.warn('🚨 CRITICAL FALLBACK - Agent Not Found', {
         agentName: name,
-        availableAgents: this.getEnabledAgentNames()
+        availableAgents: this.getEnabledAgentNames(),
+        fallbackType: 'Agent Availability Fallback',
+        reason: `Agent "${name}" not found or disabled`,
+        severity: 'CRITICAL',
+        timestamp: new Date().toISOString()
       });
       
       return errorResult;
@@ -170,7 +176,7 @@ export class AgentFactory {
         ? { ...parameters, accessToken }
         : parameters;
       
-      // Execute the framework BaseAgent
+      // Execute the framework AIAgent
       return await agent.execute(executionParameters, context);
       
     } catch (error) {
@@ -182,9 +188,15 @@ export class AgentFactory {
         executionTime: 0
       };
       
-      logger.error(`Agent execution failed: ${name}`, {
+      // Log fallback warning for execution failure
+      logger.warn('⚠️ HIGH PRIORITY FALLBACK - Agent Execution Failed', {
+        agentName: name,
         error: error instanceof Error ? error.message : error,
-        sessionId: context.sessionId
+        sessionId: context.sessionId,
+        fallbackType: 'Agent Execution Fallback',
+        reason: `Agent "${name}" execution failed with error`,
+        severity: 'HIGH',
+        timestamp: new Date().toISOString()
       });
       
       return errorResult;
@@ -617,8 +629,8 @@ export class AgentFactory {
       return false;
     }
     
-    // Note: BaseAgent doesn't have enable/disable methods in current implementation
-    // This would require extending the BaseAgent class to support dynamic enable/disable
+    // Note: AIAgent doesn't have enable/disable methods in current implementation
+    // This would require extending the AIAgent class to support dynamic enable/disable
     logger.info(`Agent enabled: ${name}`);
     return true;
   }
@@ -633,8 +645,8 @@ export class AgentFactory {
       return false;
     }
     
-    // Note: BaseAgent doesn't have enable/disable methods in current implementation
-    // This would require extending the BaseAgent class to support dynamic enable/disable
+    // Note: AIAgent doesn't have enable/disable methods in current implementation
+    // This would require extending the AIAgent class to support dynamic enable/disable
     logger.info(`Agent disabled: ${name}`);
     return true;
   }
@@ -738,7 +750,7 @@ export const initializeAgentFactory = (): void => {
 /**
  * Convenience function to get an agent
  */
-export const getAgent = (name: string): BaseAgent | undefined => {
+export const getAgent = (name: string): AIAgent | undefined => {
   return AgentFactory.getAgent(name);
 }
 

@@ -1,5 +1,5 @@
 import { ToolExecutionContext } from '../types/tools';
-import { BaseAgent } from '../framework/base-agent';
+import { AIAgent } from '../framework/ai-agent';
 import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api.types';
 import { CalendarService, CalendarEvent } from '../services/calendar.service';
 import { getService } from '../services/service-manager';
@@ -38,9 +38,9 @@ export interface CalendarAgentResponse {
 
 /**
  * Calendar Agent - Manages calendar events and scheduling
- * Integrates with Google Calendar API for comprehensive calendar management
+ * Integrates with Google Calendar API for comprehensive calendar management with AI planning
  */
-export class CalendarAgent extends BaseAgent<CalendarAgentRequest, CalendarAgentResponse> {
+export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentResponse> {
   
   constructor() {
     super({
@@ -48,7 +48,15 @@ export class CalendarAgent extends BaseAgent<CalendarAgentRequest, CalendarAgent
       description: 'Create, update, and manage calendar events and scheduling',
       enabled: true,
       timeout: 30000,
-      retryCount: 2
+      retryCount: 2,
+      aiPlanning: {
+        enableAIPlanning: true, // Enable AI planning for complex calendar operations
+        maxPlanningSteps: 8,
+        planningTimeout: 25000,
+        cachePlans: true,
+        planningTemperature: 0.1,
+        planningMaxTokens: 2000
+      }
     });
   }
 
@@ -70,9 +78,49 @@ You receive structured requests for calendar operations and execute them using G
 Always return structured execution status with event details and confirmation.`;
 
   /**
-   * Core calendar processing logic - routes to appropriate calendar operations
+   * Core calendar processing logic with AI planning support
    */
   protected async processQuery(parameters: CalendarAgentRequest, context: ToolExecutionContext): Promise<CalendarAgentResponse> {
+    // Try AI planning first if enabled and suitable
+    if (this.aiConfig.enableAIPlanning && this.canUseAIPlanning(parameters)) {
+      try {
+        this.logger.info('Attempting AI-driven calendar execution', {
+          agent: this.config.name,
+          sessionId: context.sessionId
+        });
+
+        const aiResult = await this.executeWithAIPlanning(parameters, context);
+        
+        this.logger.info('AI-driven calendar execution completed', {
+          agent: this.config.name,
+          sessionId: context.sessionId
+        });
+        
+        return aiResult;
+
+      } catch (error) {
+        this.logAIPlanningFallback(error as Error, 'planning_failed', context);
+
+        // Fall back to manual implementation
+        return this.executeManually(parameters, context);
+      }
+    }
+
+    // Use manual implementation
+    const reason = this.aiConfig.enableAIPlanning ? 'AI planning not suitable for this query' : 'AI planning disabled';
+    this.logAIPlanningFallback(
+      new Error(reason), 
+      this.aiConfig.enableAIPlanning ? 'unsuitable_query' : 'service_unavailable', 
+      context
+    );
+
+    return this.executeManually(parameters, context);
+  }
+
+  /**
+   * Manual execution fallback - traditional calendar logic
+   */
+  protected async executeManually(parameters: CalendarAgentRequest, context: ToolExecutionContext): Promise<CalendarAgentResponse> {
     try {
       this.logger.info('Calendar agent execution', { 
         action: parameters.action,
@@ -111,6 +159,29 @@ Always return structured execution status with event details and confirmation.`;
         error: error instanceof Error ? error.message : 'CALENDAR_ERROR'
       };
     }
+  }
+
+  /**
+   * Build final result from AI planning execution
+   */
+  protected buildFinalResult(
+    summary: any,
+    successfulResults: any[],
+    failedResults: any[],
+    params: CalendarAgentRequest,
+    _context: ToolExecutionContext
+  ): CalendarAgentResponse {
+    // For calendar operations, we typically want the first successful result
+    if (successfulResults.length > 0) {
+      return successfulResults[0] as CalendarAgentResponse;
+    }
+
+    // If no successful results, create a summary result
+    return {
+      success: failedResults.length === 0,
+      message: failedResults.length > 0 ? 'Some calendar operations failed' : 'Calendar operations completed',
+      data: { events: [] }
+    };
   }
 
   /**

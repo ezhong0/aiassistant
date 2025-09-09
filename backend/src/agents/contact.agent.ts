@@ -1,4 +1,4 @@
-import { BaseAgent } from '../framework/base-agent';
+import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api.types';
 import { getService } from '../services/service-manager';
@@ -28,10 +28,10 @@ export interface ContactAgentRequest extends ContactAgentParams {
 }
 
 /**
- * Enhanced ContactAgent using BaseAgent framework
- * Handles contact search and management using Google Contacts API
+ * Enhanced ContactAgent using AIAgent framework
+ * Handles contact search and management using Google Contacts API with AI planning
  */
-export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> {
+export class ContactAgent extends AIAgent<ContactAgentRequest, ContactResult> {
   
   constructor() {
     super({
@@ -39,7 +39,15 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
       description: 'Search and manage contacts from Google Contacts and email history',
       enabled: true,
       timeout: 15000,
-      retryCount: 2
+      retryCount: 2,
+      aiPlanning: {
+        enableAIPlanning: false, // Disable AI planning for simple contact operations
+        maxPlanningSteps: 3,
+        planningTimeout: 10000,
+        cachePlans: true,
+        planningTemperature: 0.1,
+        planningMaxTokens: 1000
+      }
     });
   }
   
@@ -54,10 +62,17 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
   }
 
   /**
-   * Core contact processing logic - simplified and focused
+   * Core contact processing logic with AI planning support
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected async processQuery(params: ContactAgentRequest, _context: ToolExecutionContext): Promise<ContactResult> {
+  protected async processQuery(params: ContactAgentRequest, context: ToolExecutionContext): Promise<ContactResult> {
+    // Contact operations are typically simple, so we'll use manual execution
+    return this.executeManually(params, context);
+  }
+
+  /**
+   * Manual execution fallback - traditional contact logic
+   */
+  protected async executeManually(params: ContactAgentRequest, _context: ToolExecutionContext): Promise<ContactResult> {
     const { query } = params;
     
     // Determine the operation type
@@ -74,6 +89,30 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
         // Default to search for most queries
         return await this.handleSearchContacts(params);
     }
+  }
+
+  /**
+   * Build final result from AI planning execution
+   */
+  protected buildFinalResult(
+    summary: any,
+    successfulResults: any[],
+    failedResults: any[],
+    params: ContactAgentRequest,
+    _context: ToolExecutionContext
+  ): ContactResult {
+    // For contact operations, we typically want the first successful result
+    if (successfulResults.length > 0) {
+      return successfulResults[0] as ContactResult;
+    }
+
+    // If no successful results, create a summary result
+    return {
+      contacts: [],
+      totalCount: 0,
+      operation: 'search',
+      searchTerm: params.query
+    };
   }
   
   /**
@@ -151,7 +190,7 @@ export class ContactAgent extends BaseAgent<ContactAgentRequest, ContactResult> 
       includeOtherContacts: true // Always include frequently contacted
     };
 
-    // Use retry mechanism from BaseAgent for reliability
+    // Use retry mechanism from AIAgent for reliability
     const searchResult = await this.withRetries(async () => {
       const contactService = getService<ContactService>('contactService');
       if (!contactService) {

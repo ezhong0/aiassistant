@@ -1,5 +1,5 @@
 import { ToolCall, ToolResult, ToolExecutionContext } from './tools';
-import { BaseAgent } from '../framework/base-agent';
+import { AIAgent } from '../framework/ai-agent';
 
 /**
  * Standard response interface for all agents
@@ -44,7 +44,7 @@ export interface ToolMetadata {
   /** Whether this tool is critical */
   isCritical: boolean;
   
-  /** Agent class constructor (for BaseAgent framework) */
-  agentClass?: new () => BaseAgent<any, any>;
+  /** Agent class constructor (for AIAgent framework) */
+  agentClass?: new () => AIAgent<any, any>;
 }
 

@@ -819,7 +819,48 @@ Provide a clear subject line and professional body text.`;
   }
 
   /**
-   * Sanitize parameters for logging (override from BaseAgent)
+   * Core email processing logic with AI planning support
+   */
+  protected async processQuery(params: EmailAgentRequest, context: ToolExecutionContext): Promise<EmailResult> {
+    // Try AI planning first if enabled and suitable
+    if (this.aiConfig.enableAIPlanning && this.canUseAIPlanning(params)) {
+      try {
+        this.logger.info('Attempting AI-driven email execution', {
+          agent: this.config.name,
+          sessionId: context.sessionId
+        });
+
+        const aiResult = await this.executeWithAIPlanning(params, context);
+        
+        this.logger.info('AI-driven email execution completed', {
+          agent: this.config.name,
+          sessionId: context.sessionId
+        });
+        
+        return aiResult;
+
+      } catch (error) {
+        this.logAIPlanningFallback(error as Error, 'planning_failed', context);
+
+        // Fall back to manual implementation
+        return this.executeManually(params, context);
+      }
+    }
+
+    // Use manual implementation
+    const reason = this.aiConfig.enableAIPlanning ? 'AI planning not suitable for this query' : 'AI planning disabled';
+    this.logAIPlanningFallback(
+      new Error(reason), 
+      this.aiConfig.enableAIPlanning ? 'unsuitable_query' : 'service_unavailable', 
+      context
+    );
+
+    return this.executeManually(params, context);
+  }
+
+
+  /**
+   * Sanitize parameters for logging (override from AIAgent)
    */
   protected sanitizeForLogging(params: EmailAgentRequest): any {
     return {

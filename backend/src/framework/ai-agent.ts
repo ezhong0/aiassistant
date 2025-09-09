@@ -1,8 +1,12 @@
-import { BaseAgent } from './base-agent';
-import { ToolExecutionContext, AgentConfig } from '../types/tools';
-import { PreviewGenerationResult, ActionPreview, ActionRiskAssessment } from '../types/api.types';
+import { Logger } from 'winston';
+import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
+import { ActionPreview, PreviewGenerationResult, ActionRiskAssessment } from '../types/api.types';
 import { OpenAIService } from '../services/openai.service';
 import { getService } from '../services/service-manager';
+import logger from '../utils/logger';
+import { aiConfigService } from '../config/ai-config';
+import { AGENT_HELPERS } from '../config/agent-config';
+import { setTimeout as sleep } from 'timers/promises';
 
 /**
  * AI Planning Configuration
@@ -75,20 +79,23 @@ export interface AIPlanningResult {
 }
 
 /**
- * Enhanced BaseAgent with AI-driven planning and tool orchestration
+ * Enhanced AIAgent that replaces BaseAgent as the single base class for all agents
  * 
- * This abstract class extends BaseAgent to provide intelligent, AI-driven execution
- * that can understand user queries, plan multi-step operations, and orchestrate
- * multiple tools automatically while maintaining all BaseAgent patterns.
+ * This abstract class provides intelligent, AI-driven execution that can understand 
+ * user queries, plan multi-step operations, and orchestrate multiple tools automatically
+ * while maintaining all BaseAgent patterns and providing manual fallbacks.
  */
-export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TParams, TResult> {
+export abstract class AIAgent<TParams = any, TResult = any> {
+  protected logger: Logger;
+  protected config: AgentConfig;
   protected aiConfig: AIPlanningConfig;
   protected openaiService: OpenAIService | undefined;
   protected toolRegistry: Map<string, AITool> = new Map();
   protected planCache: Map<string, AIPlan> = new Map();
-
+  
   constructor(config: AgentConfig & { aiPlanning?: AIPlanningConfig }) {
-    super(config);
+    this.config = config;
+    this.logger = logger.child({ agent: config.name });
     
     this.aiConfig = {
       enableAIPlanning: true,
@@ -107,6 +114,213 @@ export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TP
     this.registerDefaultTools();
   }
 
+  // ============================================================================
+  // FALLBACK WARNING SYSTEM
+  // ============================================================================
+
+  /**
+   * Fallback warning severity levels
+   */
+  private static readonly FALLBACK_SEVERITY = {
+    CRITICAL: '🚨 CRITICAL FALLBACK',
+    HIGH: '⚠️ HIGH PRIORITY FALLBACK', 
+    MEDIUM: '⚡ MEDIUM FALLBACK',
+    LOW: 'ℹ️ LOW IMPACT FALLBACK'
+  } as const;
+
+  /**
+   * Log a fallback warning with enhanced visibility
+   */
+  protected logFallbackWarning(
+    fallbackType: string,
+    reason: string,
+    severity: keyof typeof AIAgent.FALLBACK_SEVERITY = 'MEDIUM',
+    context?: any
+  ): void {
+    const severityPrefix = AIAgent.FALLBACK_SEVERITY[severity];
+    const timestamp = new Date().toISOString();
+    
+    // Enhanced warning message with clear formatting
+    const warningMessage = `${severityPrefix} - ${fallbackType}`;
+    
+    // Log with high visibility
+    this.logger.warn(warningMessage, {
+      agent: this.config.name,
+      fallbackType,
+      reason,
+      severity,
+      timestamp,
+      context: context || {},
+      // Add structured data for monitoring
+      fallbackMetrics: {
+        agentName: this.config.name,
+        aiPlanningEnabled: this.aiConfig.enableAIPlanning,
+        openaiAvailable: !!this.openaiService,
+        fallbackTimestamp: timestamp
+      }
+    });
+
+    // Also log to console for immediate visibility in development
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`\n${'='.repeat(80)}`);
+      console.warn(`${severityPrefix}`);
+      console.warn(`Agent: ${this.config.name}`);
+      console.warn(`Fallback Type: ${fallbackType}`);
+      console.warn(`Reason: ${reason}`);
+      console.warn(`Time: ${timestamp}`);
+      if (context) {
+        console.warn(`Context:`, context);
+      }
+      console.warn(`${'='.repeat(80)}\n`);
+    }
+  }
+
+  /**
+   * Log AI planning fallback with detailed context
+   */
+  protected logAIPlanningFallback(
+    error: Error,
+    fallbackReason: 'service_unavailable' | 'planning_failed' | 'timeout' | 'unsuitable_query',
+    context: ToolExecutionContext
+  ): void {
+    const fallbackType = 'AI Planning → Manual Execution';
+    let reason: string;
+    let severity: keyof typeof AIAgent.FALLBACK_SEVERITY;
+
+    switch (fallbackReason) {
+      case 'service_unavailable':
+        reason = 'OpenAI service unavailable or not configured';
+        severity = 'HIGH';
+        break;
+      case 'planning_failed':
+        reason = `AI planning failed: ${error.message}`;
+        severity = 'MEDIUM';
+        break;
+      case 'timeout':
+        reason = 'AI planning timed out';
+        severity = 'MEDIUM';
+        break;
+      case 'unsuitable_query':
+        reason = 'Query not suitable for AI planning';
+        severity = 'LOW';
+        break;
+      default:
+        reason = 'Unknown AI planning fallback';
+        severity = 'MEDIUM';
+    }
+
+    this.logFallbackWarning(fallbackType, reason, severity, {
+      error: error.message,
+      fallbackReason,
+      sessionId: context.sessionId,
+      userId: context.userId,
+      aiConfig: {
+        enableAIPlanning: this.aiConfig.enableAIPlanning,
+        maxPlanningSteps: this.aiConfig.maxPlanningSteps,
+        planningTimeout: this.aiConfig.planningTimeout
+      }
+    });
+  }
+
+  /**
+   * Log retry strategy fallback
+   */
+  protected logRetryFallback(
+    operation: string,
+    attempt: number,
+    maxRetries: number,
+    error: Error,
+    strategy: 'retry' | 'fail' | 'queue'
+  ): void {
+    const fallbackType = 'Retry Strategy Fallback';
+    const reason = `Operation "${operation}" failed after ${attempt}/${maxRetries} attempts using "${strategy}" strategy`;
+    const severity: keyof typeof AIAgent.FALLBACK_SEVERITY = 
+      strategy === 'fail' ? 'HIGH' : 'MEDIUM';
+
+    this.logFallbackWarning(fallbackType, reason, severity, {
+      operation,
+      attempt,
+      maxRetries,
+      strategy,
+      error: error.message,
+      finalAttempt: attempt === maxRetries
+    });
+  }
+
+  /**
+   * Log service availability fallback
+   */
+  protected logServiceFallback(
+    serviceName: string,
+    operation: string,
+    reason: 'unavailable' | 'timeout' | 'error'
+  ): void {
+    const fallbackType = 'Service Availability Fallback';
+    const severity: keyof typeof AIAgent.FALLBACK_SEVERITY = 'HIGH';
+
+    this.logFallbackWarning(fallbackType, `${serviceName} service ${reason} during ${operation}`, severity, {
+      serviceName,
+      operation,
+      reason
+    });
+  }
+
+  /**
+   * Log timeout fallback
+   */
+  protected logTimeoutFallback(
+    operation: string,
+    timeoutMs: number,
+    context?: any
+  ): void {
+    const fallbackType = 'Timeout Fallback';
+    const reason = `Operation "${operation}" timed out after ${timeoutMs}ms`;
+    const severity: keyof typeof AIAgent.FALLBACK_SEVERITY = 'MEDIUM';
+
+    this.logFallbackWarning(fallbackType, reason, severity, {
+      operation,
+      timeoutMs,
+      context
+    });
+  }
+
+  /**
+   * Log configuration-based fallback
+   */
+  protected logConfigFallback(
+    configKey: string,
+    reason: string,
+    fallbackValue: any
+  ): void {
+    const fallbackType = 'Configuration Fallback';
+    const severity: keyof typeof AIAgent.FALLBACK_SEVERITY = 'LOW';
+
+    this.logFallbackWarning(fallbackType, `Using fallback for ${configKey}: ${reason}`, severity, {
+      configKey,
+      reason,
+      fallbackValue
+    });
+  }
+
+  /**
+   * Get fallback statistics for monitoring
+   */
+  protected getFallbackStats(): {
+    aiPlanningEnabled: boolean;
+    openaiAvailable: boolean;
+    fallbackStrategy: string;
+    timeout: number;
+    retries: number;
+  } {
+    return {
+      aiPlanningEnabled: this.aiConfig.enableAIPlanning ?? true,
+      openaiAvailable: !!this.openaiService,
+      fallbackStrategy: this.getFallbackStrategy(),
+      timeout: this.getTimeout(),
+      retries: this.getRetries()
+    };
+  }
+
   /**
    * Initialize AI services for planning
    */
@@ -114,16 +328,11 @@ export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TP
     try {
       this.openaiService = getService<OpenAIService>('openaiService');
       if (!this.openaiService) {
-        this.logger.warn('OpenAI service not available - AI planning disabled', {
-          agent: this.config.name
-        });
+        this.logServiceFallback('OpenAI', 'initialization', 'unavailable');
         this.aiConfig.enableAIPlanning = false;
       }
     } catch (error) {
-      this.logger.warn('Failed to initialize AI services for planning', {
-        agent: this.config.name,
-        error: error instanceof Error ? error.message : error
-      });
+      this.logServiceFallback('OpenAI', 'initialization', 'error');
       this.aiConfig.enableAIPlanning = false;
     }
   }
@@ -154,6 +363,113 @@ export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TP
   }
 
   /**
+   * Template method - handles all common concerns
+   * This is the main entry point that orchestrates the entire execution flow
+   */
+  async execute(params: TParams, context: ToolExecutionContext): Promise<ToolResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Pre-execution hooks
+      await this.beforeExecution(params, context);
+      this.validateParams(params);
+      this.logger.info('Agent execution started', { 
+        params: this.sanitizeForLogging(params),
+        sessionId: context.sessionId,
+        userId: context.userId 
+      });
+      
+      // Core business logic (implemented by subclass)
+      const result = await this.processQuery(params, context);
+      
+      // Post-execution hooks
+      await this.afterExecution(result, context);
+      
+      return this.createSuccessResult(result, Date.now() - startTime);
+      
+    } catch (error) {
+      return this.createErrorResult(error as Error, Date.now() - startTime);
+    }
+  }
+
+  /**
+   * Execute in preview mode - generates action preview for confirmation
+   * Returns a special result with awaitingConfirmation: true when confirmation is needed
+   */
+  async executePreview(params: TParams, context: ToolExecutionContext): Promise<ToolResult> {
+    const startTime = Date.now();
+    
+    try {
+      // Pre-execution hooks (but not actual execution)
+      await this.beforeExecution(params, context);
+      this.validateParams(params);
+      this.logger.info('Agent preview execution started', { 
+        params: this.sanitizeForLogging(params),
+        sessionId: context.sessionId,
+        userId: context.userId 
+      });
+      
+      // Check if this operation actually needs confirmation
+      const operation = this.detectOperation(params);
+      const needsConfirmation = this.operationRequiresConfirmation(operation);
+      
+      this.logger.info('Operation confirmation check', {
+        operation,
+        needsConfirmation,
+        agentName: this.config.name,
+        sessionId: context.sessionId
+      });
+      
+      // If operation doesn't need confirmation, execute directly
+      if (!needsConfirmation) {
+        this.logger.info('Operation does not require confirmation, executing directly', {
+          operation,
+          reason: this.getOperationConfirmationReason(operation)
+        });
+        return await this.execute(params, context);
+      }
+      
+      // Generate preview for operations that need confirmation
+      if (!this.generatePreview) {
+        throw this.createError(
+          `Agent ${this.config.name} does not support preview generation`,
+          'PREVIEW_NOT_SUPPORTED'
+        );
+      }
+
+      const previewResult = await this.generatePreview(params, context);
+      
+      if (!previewResult.success) {
+        throw this.createError(
+          previewResult.error || 'Failed to generate preview',
+          'PREVIEW_GENERATION_FAILED'
+        );
+      }
+      
+      const result = {
+        awaitingConfirmation: true,
+        preview: previewResult.preview,
+        message: previewResult.preview?.description || 'Action preview generated',
+        actionId: previewResult.preview?.actionId,
+        parameters: params,
+        originalQuery: previewResult.preview?.originalQuery
+      } as TResult;
+      
+      this.logger.info('Agent preview completed', {
+        actionId: previewResult.preview?.actionId,
+        actionType: previewResult.preview?.actionType,
+        requiresConfirmation: previewResult.preview?.requiresConfirmation,
+        riskLevel: previewResult.preview?.riskAssessment?.level
+      });
+      
+      return this.createSuccessResult(result, Date.now() - startTime);
+      
+    } catch (error) {
+      return this.createErrorResult(error as Error, Date.now() - startTime);
+    }
+  }
+
+  /**
    * Register a tool for AI planning
    */
   protected registerTool(tool: AITool): void {
@@ -167,49 +483,9 @@ export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TP
   /**
    * Enhanced processQuery that uses AI planning as primary execution path
    * Falls back to manual implementation when AI planning fails or is disabled
+   * This method is now abstract and must be implemented by subclasses
    */
-  protected async processQuery(params: TParams, context: ToolExecutionContext): Promise<TResult> {
-    const startTime = Date.now();
-    
-    // Try AI planning first if enabled
-    if (this.aiConfig.enableAIPlanning && this.canUseAIPlanning(params)) {
-      try {
-        this.logger.info('Attempting AI-driven execution', {
-          agent: this.config.name,
-          sessionId: context.sessionId
-        });
-
-        const aiResult = await this.executeWithAIPlanning(params, context);
-        
-        this.logger.info('AI-driven execution completed', {
-          agent: this.config.name,
-          executionTime: Date.now() - startTime,
-          sessionId: context.sessionId
-        });
-        
-        return aiResult;
-
-      } catch (error) {
-        this.logger.warn('AI planning failed, falling back to manual execution', {
-          agent: this.config.name,
-          error: error instanceof Error ? error.message : error,
-          sessionId: context.sessionId
-        });
-
-        // Fall back to manual implementation
-        return this.executeManually(params, context);
-      }
-    }
-
-    // Use manual implementation
-    this.logger.debug('Using manual execution', {
-      agent: this.config.name,
-      reason: this.aiConfig.enableAIPlanning ? 'AI planning not suitable for this query' : 'AI planning disabled',
-      sessionId: context.sessionId
-    });
-
-    return this.executeManually(params, context);
-  }
+  protected abstract processQuery(params: TParams, context: ToolExecutionContext): Promise<TResult>;
 
   /**
    * AI-driven execution with planning and tool orchestration
@@ -510,6 +786,13 @@ export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TP
   }
 
   // ABSTRACT METHODS - Must be implemented by subclasses
+  
+  /**
+   * Generate a detailed action preview for confirmation purposes
+   * Must be implemented by agents that require confirmation (requiresConfirmation: true)
+   * Can be left unimplemented for agents that don't need confirmation
+   */
+  protected generatePreview?(params: TParams, context: ToolExecutionContext): Promise<PreviewGenerationResult>;
 
   /**
    * Manual execution fallback when AI planning fails or is disabled
@@ -528,6 +811,309 @@ export abstract class AIAgent<TParams = any, TResult = any> extends BaseAgent<TP
     params: TParams,
     context: ToolExecutionContext
   ): TResult;
+
+  // OPTIONAL OVERRIDES - Can be customized by subclasses
+  
+  /**
+   * Validate input parameters before execution
+   * Override this method to add agent-specific validation
+   */
+  protected validateParams(params: TParams): void {
+    if (!params) {
+      throw new Error('Parameters are required');
+    }
+  }
+  
+  /**
+   * Pre-execution hook - called before processQuery
+   * Use this for setup, authorization checks, etc.
+   */
+  protected async beforeExecution(params: TParams, context: ToolExecutionContext): Promise<void> {
+    // Override for pre-execution logic
+    this.logger.debug('Pre-execution hook called', { 
+      agent: this.config.name,
+      sessionId: context.sessionId 
+    });
+  }
+  
+  /**
+   * Post-execution hook - called after successful processQuery
+   * Use this for cleanup, notifications, caching, etc.
+   */
+  protected async afterExecution(result: TResult, context: ToolExecutionContext): Promise<void> {
+    // Override for post-execution logic
+    this.logger.debug('Post-execution hook called', { 
+      agent: this.config.name,
+      sessionId: context.sessionId 
+    });
+  }
+  
+  /**
+   * Sanitize parameters for logging - remove sensitive data
+   * Override this to customize what gets logged
+   */
+  protected sanitizeForLogging(params: TParams): any {
+    // Default implementation - override to remove sensitive data from logs
+    return params;
+  }
+
+  // STANDARD IMPLEMENTATIONS - Consistent across all agents
+  
+  /**
+   * Create a successful tool result with standardized format
+   */
+  protected createSuccessResult(result: TResult, executionTime: number): ToolResult {
+    this.logger.info('Agent execution completed successfully', { 
+      executionTime,
+      agent: this.config.name,
+      resultType: typeof result
+    });
+    
+    return {
+      toolName: this.config.name,
+      result,
+      success: true,
+      executionTime
+    };
+  }
+  
+  /**
+   * Create an error tool result with standardized format and logging
+   */
+  protected createErrorResult(error: Error, executionTime: number): ToolResult {
+    this.logger.error('Agent execution failed', {
+      error: error.message,
+      stack: error.stack,
+      executionTime,
+      agent: this.config.name,
+      errorType: error.constructor.name
+    });
+    
+    return {
+      toolName: this.config.name,
+      result: null,
+      success: false,
+      error: error.message,
+      executionTime
+    };
+  }
+
+  /**
+   * Get agent configuration
+   */
+  getConfig(): AgentConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Check if agent is enabled
+   */
+  isEnabled(): boolean {
+    return this.config.enabled !== false; // Default to enabled if not specified
+  }
+
+  /**
+   * Get agent timeout in milliseconds
+   */
+  getTimeout(): number {
+    // Try to get timeout from AI configuration first, then fall back to local config
+    try {
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
+      return aiAgentConfig.timeout;
+    } catch (error) {
+      // Fall back to local config or default
+      return this.config.timeout || 30000; // Default 30 seconds
+    }
+  }
+
+  /**
+   * Get retry count
+   */
+  getRetries(): number {
+    // Try to get retries from AI configuration first, then fall back to local config
+    try {
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
+      return aiAgentConfig.retries;
+    } catch (error) {
+      // Fall back to local config or default
+      return this.config.retryCount || 3; // Default 3 retries
+    }
+  }
+
+  /**
+   * Get agent fallback strategy from AI configuration
+   */
+  getFallbackStrategy(): 'fail' | 'retry' | 'queue' {
+    try {
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
+      return aiAgentConfig.fallback_strategy;
+    } catch (error) {
+      // Default fallback strategy
+      return 'retry';
+    }
+  }
+
+  /**
+   * Check if agent is enabled from AI configuration
+   */
+  isEnabledFromConfig(): boolean {
+    try {
+      const aiAgentConfig = aiConfigService.getAgentConfig(this.config.name);
+      return aiAgentConfig.enabled;
+    } catch (error) {
+      // Fall back to local config
+      return this.isEnabled();
+    }
+  }
+
+  /**
+   * Helper method to create typed errors with consistent structure
+   */
+  protected createError(message: string, code?: string, details?: any): Error {
+    const error = new Error(message) as any;
+    if (code) error.code = code;
+    if (details) error.details = details;
+    return error;
+  }
+
+  /**
+   * Helper method for timeout handling
+   */
+  protected async withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
+    const timeout = timeoutMs || this.getTimeout();
+    
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          this.logTimeoutFallback('agent execution', timeout);
+          reject(this.createError(
+            `Agent execution timed out after ${timeout}ms`,
+            'EXECUTION_TIMEOUT'
+          ));
+        }, timeout);
+      })
+    ]);
+  }
+
+  /**
+   * Helper method for retry logic with AI configuration fallback strategy
+   */
+  protected async withRetries<T>(
+    operation: () => Promise<T>, 
+    maxRetries?: number,
+    delay?: number
+  ): Promise<T> {
+    const retries = maxRetries || this.getRetries();
+    const retryDelay = delay || 1000;
+    const fallbackStrategy = this.getFallbackStrategy();
+    
+    let lastError: Error | null = null;
+    
+    // Handle different fallback strategies
+    if (fallbackStrategy === 'fail') {
+      // No retries, fail immediately
+      try {
+        return await operation();
+      } catch (error) {
+        this.logRetryFallback('operation', 0, retries, error as Error, 'fail');
+        throw error;
+      }
+    }
+    
+    // For queue strategy, we'll implement basic retry for now
+    // In a full implementation, this would add to a queue for later processing
+    if (fallbackStrategy === 'queue') {
+      this.logConfigFallback('fallback_strategy', 'queue strategy not fully implemented, using retry', 'retry');
+    }
+    
+    // Standard retry logic (for both 'retry' and 'queue' strategies)
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        if (attempt > 0) {
+          this.logger.warn(`Retry attempt ${attempt}/${retries}`, {
+            agent: this.config.name,
+            lastError: lastError?.message,
+            strategy: fallbackStrategy
+          });
+          
+          // Wait before retry
+          await sleep(retryDelay * attempt);
+        }
+        
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        
+        if (attempt === retries) {
+          this.logRetryFallback('operation', attempt + 1, retries, lastError, fallbackStrategy as 'retry' | 'fail' | 'queue');
+          throw lastError;
+        }
+      }
+    }
+    
+    throw lastError;
+  }
+
+  // OPERATION DETECTION METHODS
+
+  /**
+   * Detect the operation type from user parameters
+   * Override this method in subclasses for agent-specific operation detection
+   */
+  protected detectOperation(params: TParams): string {
+    // Default implementation - try to extract operation from query parameter
+    if (params && typeof params === 'object' && 'query' in params) {
+      const query = (params as any).query;
+      if (typeof query === 'string') {
+        const configAgentName = this.getConfigAgentName();
+        return AGENT_HELPERS.detectOperation(configAgentName as any, query);
+      }
+    }
+    
+    // Fallback to 'unknown' if no query found
+    return 'unknown';
+  }
+
+  /**
+   * Map agent names from AIAgent to AGENT_CONFIG names
+   */
+  private getConfigAgentName(): string {
+    const agentNameMapping: Record<string, string> = {
+      'emailAgent': 'email',
+      'contactAgent': 'contact', 
+      'calendarAgent': 'calendar',
+      'contentCreator': 'content',
+      'Tavily': 'search',
+      'Think': 'think'
+    };
+    
+    return agentNameMapping[this.config.name] || this.config.name;
+  }
+
+  /**
+   * Check if the detected operation requires confirmation
+   */
+  protected operationRequiresConfirmation(operation: string): boolean {
+    const configAgentName = this.getConfigAgentName();
+    return AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
+  }
+
+  /**
+   * Get the reason why an operation requires or doesn't require confirmation
+   */
+  protected getOperationConfirmationReason(operation: string): string {
+    const configAgentName = this.getConfigAgentName();
+    return AGENT_HELPERS.getOperationConfirmationReason(configAgentName as any, operation);
+  }
+
+  /**
+   * Check if the detected operation is read-only
+   */
+  protected isReadOnlyOperation(operation: string): boolean {
+    const configAgentName = this.getConfigAgentName();
+    return AGENT_HELPERS.isReadOnlyOperation(configAgentName as any, operation);
+  }
 
   // UTILITY METHODS - Can be overridden for customization
 
@@ -810,6 +1396,24 @@ Please provide a detailed execution plan that accomplishes this request efficien
       keys: Array.from(this.planCache.keys())
     };
   }
+}
+
+/**
+ * Utility types for better type safety
+ */
+export type AgentExecutor<TParams, TResult> = (
+  params: TParams, 
+  context: ToolExecutionContext
+) => Promise<ToolResult>;
+
+/**
+ * Factory function for creating agent instances
+ */
+export const createAgent = <TParams, TResult>(
+  AgentClass: new (config: AgentConfig & { aiPlanning?: AIPlanningConfig }) => AIAgent<TParams, TResult>,
+  config: AgentConfig & { aiPlanning?: AIPlanningConfig }
+): AIAgent<TParams, TResult> => {
+  return new AgentClass(config);
 }
 
 /**

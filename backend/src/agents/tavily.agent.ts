@@ -1,12 +1,12 @@
 import { ToolExecutionContext } from '../types/tools';
-import { BaseAgent } from '../framework/base-agent';
+import { AIAgent } from '../framework/ai-agent';
 import { PreviewGenerationResult } from '../types/api.types';
 
 /**
- * Tavily Agent - Web search and information retrieval
+ * Tavily Agent - Web search and information retrieval with AI planning
  * TODO: Implement full Tavily API integration
  */
-export class TavilyAgent extends BaseAgent<any, any> {
+export class TavilyAgent extends AIAgent<any, any> {
   
   constructor() {
     super({
@@ -14,7 +14,15 @@ export class TavilyAgent extends BaseAgent<any, any> {
       description: 'Search the web for information using Tavily API',
       enabled: true,
       timeout: 30000,
-      retryCount: 2
+      retryCount: 2,
+      aiPlanning: {
+        enableAIPlanning: false, // Disable AI planning for simple search operations
+        maxPlanningSteps: 3,
+        planningTimeout: 15000,
+        cachePlans: true,
+        planningTemperature: 0.1,
+        planningMaxTokens: 1000
+      }
     });
   }
 
@@ -49,9 +57,17 @@ Always return structured search results with sources and reliability indicators.
   }
 
   /**
-   * Core Tavily search logic - required by framework BaseAgent
+   * Core Tavily search logic with AI planning support
    */
   protected async processQuery(parameters: any, context: ToolExecutionContext): Promise<any> {
+    // Tavily operations are typically simple, so we'll use manual execution
+    return this.executeManually(parameters, context);
+  }
+
+  /**
+   * Manual execution fallback - traditional search logic
+   */
+  protected async executeManually(parameters: any, context: ToolExecutionContext): Promise<any> {
     try {
       // Placeholder implementation - Tavily search functionality not yet implemented
       this.logger.info('Tavily search agent execution (placeholder)', { 
@@ -80,6 +96,29 @@ Always return structured search results with sources and reliability indicators.
       this.logger.error('Tavily search agent execution failed:', error);
       return this.createError('Tavily search failed', 'SEARCH_ERROR');
     }
+  }
+
+  /**
+   * Build final result from AI planning execution
+   */
+  protected buildFinalResult(
+    summary: any,
+    successfulResults: any[],
+    failedResults: any[],
+    params: any,
+    _context: ToolExecutionContext
+  ): any {
+    // For search operations, we typically want the first successful result
+    if (successfulResults.length > 0) {
+      return successfulResults[0];
+    }
+
+    // If no successful results, create a summary result
+    return {
+      success: failedResults.length === 0,
+      message: failedResults.length > 0 ? 'Search failed' : 'Search completed',
+      data: { searchQuery: params.query }
+    };
   }
 
 
