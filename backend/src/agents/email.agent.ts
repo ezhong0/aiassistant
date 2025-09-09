@@ -160,13 +160,66 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
   }
 
   /**
+   * Enhanced operation detection for email agent
+   */
+  protected detectOperation(params: EmailAgentRequest): string {
+    const { query } = params;
+    const lowerQuery = query.toLowerCase();
+
+    // Check for specific email operations
+    if (lowerQuery.includes('send') && (lowerQuery.includes('email') || lowerQuery.includes('message'))) {
+      return 'send';
+    }
+    
+    if (lowerQuery.includes('reply') || lowerQuery.includes('respond')) {
+      return 'reply';
+    }
+    
+    if (lowerQuery.includes('search') || lowerQuery.includes('find') || lowerQuery.includes('look for')) {
+      return 'search';
+    }
+    
+    if (lowerQuery.includes('draft') || (lowerQuery.includes('create') && lowerQuery.includes('email'))) {
+      return 'draft';
+    }
+    
+    if (lowerQuery.includes('get email') || lowerQuery.includes('show email')) {
+      return 'get';
+    }
+    
+    if (lowerQuery.includes('thread') || lowerQuery.includes('conversation')) {
+      return 'get';
+    }
+    
+    // Default to search for read operations
+    return 'search';
+  }
+
+  /**
    * Generate detailed email action preview with risk assessment
    */
   protected async generatePreview(params: EmailAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
     try {
       const { query } = params;
       
-      // Determine action type from query
+      // Use enhanced operation detection
+      const operation = this.detectOperation(params);
+      
+      // Check if this operation actually needs confirmation
+      const needsConfirmation = this.operationRequiresConfirmation(operation);
+      
+      if (!needsConfirmation) {
+        this.logger.info('Email operation does not require confirmation', {
+          operation,
+          reason: this.getOperationConfirmationReason(operation)
+        });
+        return {
+          success: true,
+          fallbackMessage: `${operation} operation does not require confirmation`
+        };
+      }
+      
+      // Determine action type from query for preview generation
       const action = this.determineAction(query);
       
       // Generate action ID
@@ -205,7 +258,7 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
           break;
           
         default:
-          // For non-write operations (search, get), return no confirmation needed
+          // This should not happen since we check needsConfirmation above
           return {
             success: true,
             fallbackMessage: `${action.type} operation does not require confirmation`
@@ -230,6 +283,7 @@ export class EmailAgent extends BaseAgent<EmailAgentRequest, EmailResult> {
       this.logger.info('Email preview generated', {
         actionId,
         actionType: action.type,
+        operation,
         recipientCount: previewData.recipientCount,
         riskLevel: riskAssessment.level,
         externalDomains: previewData.externalDomains?.length || 0

@@ -41,7 +41,13 @@ export const AGENT_CONFIG = {
     requiresConfirmation: false,
     isCritical: false,
     /** Used for analysis without executing actual actions */
-    isReadOnly: true
+    isReadOnly: true,
+    /** Operation-specific confirmation rules */
+    operationConfirmation: {
+      analyze: { requiresConfirmation: false, reason: 'Read-only analysis operation' },
+      verify: { requiresConfirmation: false, reason: 'Read-only verification operation' },
+      check: { requiresConfirmation: false, reason: 'Read-only check operation' }
+    }
   },
   
   email: {
@@ -52,7 +58,24 @@ export const AGENT_CONFIG = {
     /** Requires Google OAuth access token */
     requiresAuth: true,
     /** Can modify external state (send emails) */
-    hasExternalEffects: true
+    hasExternalEffects: true,
+    /** Operation-specific confirmation rules */
+    operationConfirmation: {
+      // Read operations - no confirmation needed
+      search: { requiresConfirmation: false, reason: 'Read-only email search operation' },
+      get: { requiresConfirmation: false, reason: 'Read-only email retrieval operation' },
+      list: { requiresConfirmation: false, reason: 'Read-only email listing operation' },
+      find: { requiresConfirmation: false, reason: 'Read-only email finding operation' },
+      show: { requiresConfirmation: false, reason: 'Read-only email display operation' },
+      
+      // Write operations - confirmation required
+      send: { requiresConfirmation: true, reason: 'Email sending modifies external state' },
+      reply: { requiresConfirmation: true, reason: 'Email reply modifies external state' },
+      draft: { requiresConfirmation: true, reason: 'Draft creation modifies external state' },
+      create: { requiresConfirmation: true, reason: 'Email creation modifies external state' },
+      update: { requiresConfirmation: true, reason: 'Email update modifies external state' },
+      delete: { requiresConfirmation: true, reason: 'Email deletion modifies external state' }
+    }
   },
   
   contact: {
@@ -63,7 +86,16 @@ export const AGENT_CONFIG = {
     /** Requires Google OAuth access token */
     requiresAuth: true,
     /** Read-only access to contacts */
-    isReadOnly: true
+    isReadOnly: true,
+    /** Operation-specific confirmation rules */
+    operationConfirmation: {
+      search: { requiresConfirmation: false, reason: 'Read-only contact search operation' },
+      find: { requiresConfirmation: false, reason: 'Read-only contact finding operation' },
+      lookup: { requiresConfirmation: false, reason: 'Read-only contact lookup operation' },
+      get: { requiresConfirmation: false, reason: 'Read-only contact retrieval operation' },
+      list: { requiresConfirmation: false, reason: 'Read-only contact listing operation' },
+      show: { requiresConfirmation: false, reason: 'Read-only contact display operation' }
+    }
   },
   
   calendar: {
@@ -74,7 +106,26 @@ export const AGENT_CONFIG = {
     /** Requires Google OAuth access token */
     requiresAuth: true,
     /** Can modify external state (create events) */
-    hasExternalEffects: true
+    hasExternalEffects: true,
+    /** Operation-specific confirmation rules */
+    operationConfirmation: {
+      // Read operations - no confirmation needed
+      list: { requiresConfirmation: false, reason: 'Read-only calendar listing operation' },
+      get: { requiresConfirmation: false, reason: 'Read-only calendar retrieval operation' },
+      show: { requiresConfirmation: false, reason: 'Read-only calendar display operation' },
+      check: { requiresConfirmation: false, reason: 'Read-only availability check operation' },
+      find: { requiresConfirmation: false, reason: 'Read-only slot finding operation' },
+      search: { requiresConfirmation: false, reason: 'Read-only calendar search operation' },
+      
+      // Write operations - confirmation required
+      create: { requiresConfirmation: true, reason: 'Calendar event creation modifies external state' },
+      schedule: { requiresConfirmation: true, reason: 'Calendar scheduling modifies external state' },
+      book: { requiresConfirmation: true, reason: 'Calendar booking modifies external state' },
+      update: { requiresConfirmation: true, reason: 'Calendar event update modifies external state' },
+      modify: { requiresConfirmation: true, reason: 'Calendar event modification modifies external state' },
+      delete: { requiresConfirmation: true, reason: 'Calendar event deletion modifies external state' },
+      cancel: { requiresConfirmation: true, reason: 'Calendar event cancellation modifies external state' }
+    }
   },
   
   content: {
@@ -85,7 +136,14 @@ export const AGENT_CONFIG = {
     /** No external authentication required */
     requiresAuth: false,
     /** Generates content but doesn't publish externally */
-    hasExternalEffects: false
+    hasExternalEffects: false,
+    /** Operation-specific confirmation rules */
+    operationConfirmation: {
+      create: { requiresConfirmation: false, reason: 'Content creation is local operation' },
+      write: { requiresConfirmation: false, reason: 'Content writing is local operation' },
+      generate: { requiresConfirmation: false, reason: 'Content generation is local operation' },
+      draft: { requiresConfirmation: false, reason: 'Content drafting is local operation' }
+    }
   },
   
   search: {
@@ -96,7 +154,14 @@ export const AGENT_CONFIG = {
     /** Uses Tavily API key from environment */
     requiresAuth: false,
     /** Read-only web search */
-    isReadOnly: true
+    isReadOnly: true,
+    /** Operation-specific confirmation rules */
+    operationConfirmation: {
+      search: { requiresConfirmation: false, reason: 'Read-only web search operation' },
+      find: { requiresConfirmation: false, reason: 'Read-only web finding operation' },
+      lookup: { requiresConfirmation: false, reason: 'Read-only web lookup operation' },
+      query: { requiresConfirmation: false, reason: 'Read-only web query operation' }
+    }
   }
 };
 
@@ -199,5 +264,116 @@ export const AGENT_HELPERS = {
     return Object.entries(AGENT_CONFIG)
       .filter(([_, config]) => config.isCritical)
       .map(([name]) => name);
+  },
+
+  /**
+   * Check if a specific operation for an agent requires confirmation
+   */
+  operationRequiresConfirmation: (agentName: keyof typeof AGENT_CONFIG, operation: string): boolean => {
+    const agent = AGENT_CONFIG[agentName];
+    if (!agent) {
+      return false;
+    }
+    
+    // Check if agent has operation-specific confirmation rules
+    if ('operationConfirmation' in agent && agent.operationConfirmation) {
+      const operationConfig = (agent as any).operationConfirmation[operation];
+      if (operationConfig) {
+        return operationConfig.requiresConfirmation;
+      }
+    }
+    
+    // Fall back to agent-level confirmation requirement
+    return 'requiresConfirmation' in agent ? agent.requiresConfirmation : false;
+  },
+
+  /**
+   * Get the reason why an operation requires or doesn't require confirmation
+   */
+  getOperationConfirmationReason: (agentName: keyof typeof AGENT_CONFIG, operation: string): string => {
+    const agent = AGENT_CONFIG[agentName];
+    if (!agent) {
+      return 'Agent not found';
+    }
+    
+    // Check if agent has operation-specific confirmation rules
+    if ('operationConfirmation' in agent && agent.operationConfirmation) {
+      const operationConfig = (agent as any).operationConfirmation[operation];
+      if (operationConfig) {
+        return operationConfig.reason;
+      }
+    }
+    
+    // Fall back to agent-level requirement
+    const agentRequiresConfirmation = 'requiresConfirmation' in agent ? agent.requiresConfirmation : false;
+    return agentRequiresConfirmation ? 'Agent-level confirmation required' : 'Agent-level confirmation not required';
+  },
+
+  /**
+   * Detect operation type from user query for an agent
+   */
+  detectOperation: (agentName: keyof typeof AGENT_CONFIG, query: string): string => {
+    const lowerQuery = query.toLowerCase();
+    const agent = AGENT_CONFIG[agentName];
+    
+    if (!agent || !('operationConfirmation' in agent) || !agent.operationConfirmation) {
+      return 'unknown';
+    }
+    
+    const operationConfirmation = (agent as any).operationConfirmation;
+    const operations = Object.keys(operationConfirmation);
+    
+    // Check for exact operation matches first
+    for (const operation of operations) {
+      if (lowerQuery.includes(operation)) {
+        return operation;
+      }
+    }
+    
+    // Check for common operation patterns
+    const operationPatterns: Record<string, string[]> = {
+      search: ['search', 'find', 'look for', 'lookup', 'query'],
+      get: ['get', 'retrieve', 'fetch', 'show', 'display'],
+      list: ['list', 'show all', 'display all'],
+      send: ['send', 'email', 'message'],
+      reply: ['reply', 'respond', 'answer'],
+      create: ['create', 'make', 'new', 'add'],
+      update: ['update', 'modify', 'change', 'edit'],
+      delete: ['delete', 'remove', 'cancel'],
+      schedule: ['schedule', 'book', 'plan', 'arrange'],
+      check: ['check', 'verify', 'confirm availability']
+    };
+    
+    for (const [operation, patterns] of Object.entries(operationPatterns)) {
+      if (operations.includes(operation)) {
+        for (const pattern of patterns) {
+          if (lowerQuery.includes(pattern)) {
+            return operation;
+          }
+        }
+      }
+    }
+    
+    return 'unknown';
+  },
+
+  /**
+   * Check if an operation is read-only
+   */
+  isReadOnlyOperation: (agentName: keyof typeof AGENT_CONFIG, operation: string): boolean => {
+    const agent = AGENT_CONFIG[agentName];
+    
+    if (!agent) {
+      return false;
+    }
+    
+    // If agent is marked as read-only, all operations are read-only
+    if ('isReadOnly' in agent && agent.isReadOnly) {
+      return true;
+    }
+    
+    // Check operation-specific rules
+    const requiresConfirmation = AGENT_HELPERS.operationRequiresConfirmation(agentName, operation);
+    return !requiresConfirmation;
   }
 };

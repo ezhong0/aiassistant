@@ -257,11 +257,66 @@ export class AgentFactory {
   }
 
   /**
-   * Check if a tool requires confirmation
+   * Check if a tool requires confirmation at the agent level
+   * This should be used in combination with operation-specific logic
    */
   static toolNeedsConfirmation(toolName: string): boolean {
     const metadata = this.toolMetadata.get(toolName);
     return metadata?.requiresConfirmation || false;
+  }
+
+  /**
+   * Check if a tool requires confirmation based on operation
+   * This is the preferred method for determining confirmation needs
+   */
+  static toolNeedsConfirmationForOperation(toolName: string, operation: string): boolean {
+    // Import AGENT_HELPERS dynamically to avoid circular imports
+    const { AGENT_HELPERS } = require('../config/agent-config');
+    
+    // Map AgentFactory tool names to AGENT_CONFIG names
+    const toolNameMapping: Record<string, string> = {
+      'emailAgent': 'email',
+      'contactAgent': 'contact', 
+      'calendarAgent': 'calendar',
+      'contentCreator': 'content',
+      'Tavily': 'search',
+      'Think': 'think'
+    };
+    
+    const configAgentName = toolNameMapping[toolName] || toolName;
+    return AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
+  }
+
+  /**
+   * Detect operation from tool parameters
+   * Maps AgentFactory tool names to AGENT_CONFIG names
+   */
+  static detectOperationFromParameters(toolName: string, parameters: any): string {
+    const { AGENT_HELPERS } = require('../config/agent-config');
+    
+    // Map AgentFactory tool names to AGENT_CONFIG names
+    const toolNameMapping: Record<string, string> = {
+      'emailAgent': 'email',
+      'contactAgent': 'contact', 
+      'calendarAgent': 'calendar',
+      'contentCreator': 'content',
+      'Tavily': 'search',
+      'Think': 'think'
+    };
+    
+    const configAgentName = toolNameMapping[toolName] || toolName;
+    const query = parameters.query || parameters.query || '';
+    
+    if (typeof query === 'string') {
+      return AGENT_HELPERS.detectOperation(configAgentName as any, query);
+    }
+    
+    // Check for explicit action parameter (used by calendar agent)
+    if (parameters.action) {
+      return parameters.action;
+    }
+    
+    return 'unknown';
   }
 
   /**

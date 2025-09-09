@@ -36,6 +36,8 @@ export class SlackInterfaceService extends BaseService {
   // Injected service dependencies
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
+  private confirmationService: any | null = null;
+  private responseFormatterService: any | null = null;
 
   constructor(config: SlackConfig) {
     super('SlackInterfaceService');
@@ -85,6 +87,8 @@ export class SlackInterfaceService extends BaseService {
       // Reset service references
       this.tokenManager = null;
       this.toolExecutorService = null;
+      this.confirmationService = null;
+      this.responseFormatterService = null;
 
       this.logInfo('SlackInterface destroyed successfully');
     } catch (error) {
@@ -124,6 +128,22 @@ export class SlackInterfaceService extends BaseService {
       throw new Error('ToolExecutorService is required but not available');
     } else {
       this.logDebug('ToolExecutorService injected successfully');
+    }
+
+    // Get ConfirmationService (optional for confirmation workflow)
+    this.confirmationService = serviceManager.getService('confirmationService');
+    if (!this.confirmationService) {
+      this.logWarn('ConfirmationService not available - confirmation workflow will be limited');
+    } else {
+      this.logDebug('ConfirmationService injected successfully');
+    }
+
+    // Get ResponseFormatterService (optional for consistent formatting)
+    this.responseFormatterService = serviceManager.getService('responseFormatterService');
+    if (!this.responseFormatterService) {
+      this.logWarn('ResponseFormatterService not available - will use fallback formatting');
+    } else {
+      this.logDebug('ResponseFormatterService injected successfully');
     }
 
   }
@@ -371,6 +391,9 @@ export class SlackInterfaceService extends BaseService {
   private async routeToAgent(request: SlackAgentRequest): Promise<SlackAgentResponse> {
     const startTime = Date.now();
     
+    // Generate session ID (move outside try block so it's available in catch)
+    const sessionId = `user:${request.context.teamId}:${request.context.userId}`;
+    
     try {
       if (!this.toolExecutorService) {
         throw new Error('ToolExecutorService not available');
@@ -381,9 +404,6 @@ export class SlackInterfaceService extends BaseService {
         eventType: request.eventType,
         userId: request.context.userId
       });
-
-      // Generate session ID
-      const sessionId = `user:${request.context.teamId}:${request.context.userId}`;
       
       // Get OAuth tokens if available
       let accessToken: string | undefined;
@@ -413,6 +433,8 @@ export class SlackInterfaceService extends BaseService {
 
       // Execute tool calls if present
       const toolResults: ToolResult[] = [];
+      const confirmationFlows: any[] = [];
+      
       if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
         const executionContext: ToolExecutionContext = {
           sessionId,
@@ -423,17 +445,60 @@ export class SlackInterfaceService extends BaseService {
 
         for (const toolCall of masterResponse.toolCalls) {
           try {
-            const result = await this.toolExecutorService.executeTool(
+            // Use executeWithConfirmation to handle confirmation flow
+            const result = await this.toolExecutorService!.executeWithConfirmation(
               toolCall,
               executionContext,
               accessToken
             );
             
-            if (result) {
-              toolResults.push(result);
+            // Check if this is a confirmation flow result
+            if (result && typeof result === 'object' && 'confirmationFlow' in result) {
+              // This tool requires confirmation - result is ConfirmationFlowResult
+              const confirmationResult = result as any; // Type assertion for the union type
+              if (confirmationResult.confirmationFlow) {
+                confirmationFlows.push(confirmationResult.confirmationFlow);
+                this.logInfo(`Tool ${toolCall.name} requires confirmation`, {
+                  confirmationId: confirmationResult.confirmationFlow.confirmationId,
+                  actionType: confirmationResult.confirmationFlow.actionPreview?.actionType,
+                  riskLevel: confirmationResult.confirmationFlow.actionPreview?.riskAssessment?.level,
+                  sessionId
+                });
+              }
+            } else if (result && 'toolName' in result) {
+              // Regular tool result - result is ToolResult
+              const toolResult = result as ToolResult;
+              toolResults.push(toolResult);
+              this.logDebug(`Tool ${toolCall.name} executed successfully`, {
+                success: toolResult.success,
+                executionTime: toolResult.executionTime,
+                sessionId
+              });
+            } else {
+              this.logWarn(`Tool ${toolCall.name} returned no result`, { sessionId });
             }
           } catch (error) {
-            this.logError(`Error executing tool ${toolCall.name}`, error);
+            // Enhanced error handling for tool execution
+            const errorContext = {
+              toolName: toolCall.name,
+              sessionId,
+              userId: request.context.userId,
+              hasAccessToken: !!accessToken,
+              toolParameters: Object.keys(toolCall.parameters || {})
+            };
+
+            this.logError(`Error executing tool ${toolCall.name}`, error, errorContext);
+            
+            // Check if this is a confirmation service error
+            if (error && typeof error === 'object' && 'confirmationId' in error) {
+              this.logError('Confirmation workflow error detected', error, errorContext);
+            }
+            
+            // Check if this is an OAuth error
+            if (error instanceof Error && error.message.includes('OAuth')) {
+              this.logInfo('OAuth error detected, may need re-authentication', errorContext);
+            }
+
             toolResults.push({
               toolName: toolCall.name,
               success: false,
@@ -447,7 +512,7 @@ export class SlackInterfaceService extends BaseService {
 
       // Format response for Slack
       const slackResponse = await this.formatAgentResponse(
-        { ...masterResponse, toolResults },
+        { ...masterResponse, toolResults, confirmationFlows },
         request.context
       );
       
@@ -460,28 +525,52 @@ export class SlackInterfaceService extends BaseService {
         executionMetadata: {
           processingTime,
           toolResults,
+          confirmationFlows,
           masterAgentResponse: masterResponse.message
         }
       };
       
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      this.logError('Error routing to agent', error, {
+      const errorContext = {
         processingTimeMs: processingTime,
-        userId: request.context.userId
-      });
+        userId: request.context.userId,
+        sessionId: sessionId,
+        eventType: request.eventType,
+        messageLength: request.message?.length || 0,
+        hasToolExecutor: !!this.toolExecutorService,
+        hasTokenManager: !!this.tokenManager
+      };
+
+      this.logError('Error routing to agent', error, errorContext);
+
+      // Determine error type and provide appropriate response
+      let errorMessage = 'I apologize, but I encountered an error while processing your request. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('ToolExecutorService')) {
+          errorMessage = 'The tool execution service is temporarily unavailable. Please try again in a moment.';
+        } else if (error.message.includes('OAuth') || error.message.includes('authentication')) {
+          errorMessage = 'Authentication issue detected. You may need to reconnect your account.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'The request timed out. Please try a simpler request or try again.';
+        }
+      }
 
       return {
         success: true,
         response: {
-          text: 'I apologize, but I encountered an error while processing your request. Please try again.'
+          text: errorMessage
         },
         shouldRespond: true,
         error: error instanceof Error ? error.message : 'Unknown error',
         executionMetadata: {
           processingTime,
           toolResults: [],
-          error: error instanceof Error ? error.message : 'Unknown error'
+          confirmationFlows: [],
+          error: error instanceof Error ? error.message : 'Unknown error',
+          errorType: error instanceof Error ? error.constructor.name : 'UnknownError',
+          errorContext
         }
       };
     }
@@ -495,10 +584,138 @@ export class SlackInterfaceService extends BaseService {
     slackContext: SlackContext
   ): Promise<SlackResponse> {
     try {
+      // Check if we have confirmation flows to handle
+      if (masterResponse.confirmationFlows && masterResponse.confirmationFlows.length > 0) {
+        return this.formatConfirmationResponse(masterResponse.confirmationFlows, masterResponse, slackContext);
+      }
+      
       return this.createFallbackResponse(masterResponse, slackContext);
     } catch (error) {
       this.logError('Error formatting agent response', error);
       return { text: masterResponse.message || 'I processed your request successfully.' };
+    }
+  }
+
+  /**
+   * Format confirmation response using ResponseFormatterService
+   */
+  private async formatConfirmationResponse(
+    confirmationFlows: any[], 
+    masterResponse: any, 
+    slackContext: SlackContext
+  ): Promise<SlackResponse> {
+    try {
+      // For now, handle single confirmation (can be extended for multiple)
+      const confirmationFlow = confirmationFlows[0];
+      
+      if (this.responseFormatterService && typeof this.responseFormatterService.formatConfirmationMessage === 'function') {
+        this.logDebug('Using ResponseFormatterService for confirmation formatting', {
+          confirmationId: confirmationFlow.confirmationId
+        });
+        
+        const formattedMessage = this.responseFormatterService.formatConfirmationMessage(
+          confirmationFlow,
+          { 
+            includeRiskAssessment: true,
+            includeExecutionTime: true,
+            showDetailedPreview: true,
+            useCompactFormat: false 
+          }
+        );
+        
+        return formattedMessage;
+      } else {
+        this.logWarn('ResponseFormatterService not available, using fallback confirmation formatting');
+        return this.createFallbackConfirmationResponse(confirmationFlow, masterResponse);
+      }
+    } catch (error) {
+      this.logError('Error formatting confirmation response', error);
+      return this.createFallbackConfirmationResponse(confirmationFlows[0], masterResponse);
+    }
+  }
+
+  /**
+   * Create fallback confirmation response when ResponseFormatterService is not available
+   */
+  private createFallbackConfirmationResponse(
+    confirmationFlow: any, 
+    masterResponse: any
+  ): SlackResponse {
+    const { actionPreview } = confirmationFlow;
+    const actionIcon = this.getActionIcon(actionPreview.actionType);
+    
+    return {
+      text: `${actionIcon} Action Preview: ${actionPreview.title}`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${actionIcon} **Action Preview**\n*${actionPreview.title}*\n\n${actionPreview.description}`
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `🟡 **Risk Level: ${actionPreview.riskAssessment.level.toUpperCase()}**`
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*Do you want to proceed with this action?*\nClick a button below to confirm or cancel.'
+          }
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: 'Yes, proceed',
+                emoji: true
+              },
+              value: `confirm_${confirmationFlow.confirmationId}`,
+              action_id: `confirm_${confirmationFlow.confirmationId}`,
+              style: 'primary'
+            },
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: 'No, cancel',
+                emoji: true
+              },
+              value: `reject_${confirmationFlow.confirmationId}`,
+              action_id: `reject_${confirmationFlow.confirmationId}`,
+              style: 'danger'
+            }
+          ]
+        }
+      ]
+    };
+  }
+
+  /**
+   * Get action icon based on action type
+   */
+  private getActionIcon(actionType: string): string {
+    switch (actionType) {
+      case 'email':
+        return '📧';
+      case 'calendar':
+        return '📅';
+      case 'contact':
+        return '👤';
+      case 'content':
+        return '📝';
+      case 'search':
+        return '🔍';
+      default:
+        return '⚙️';
     }
   }
 
@@ -723,6 +940,8 @@ export class SlackInterfaceService extends BaseService {
         dependencies: {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
+          confirmationService: !!this.confirmationService,
+          responseFormatterService: !!this.responseFormatterService,
         },
         processedEventsCount: this.processedEvents.size
       }

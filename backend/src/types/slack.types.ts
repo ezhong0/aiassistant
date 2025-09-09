@@ -184,9 +184,13 @@ export interface SlackAgentResponse {
       success: boolean;
       executionTime: number;
       error?: string;
+      result?: any;
     }>;
+    confirmationFlows?: Array<any>;
     masterAgentResponse?: string;
     error?: string;
+    errorType?: string;
+    errorContext?: any;
   };
 }
 

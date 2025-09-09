@@ -114,29 +114,83 @@ Always return structured execution status with event details and confirmation.`;
   }
 
   /**
+   * Enhanced operation detection for calendar agent
+   */
+  protected detectOperation(params: CalendarAgentRequest): string {
+    const { query, action } = params;
+    
+    // If action is explicitly provided, use it
+    if (action) {
+      return action;
+    }
+    
+    // Otherwise, detect from query
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      
+      // Check for specific calendar operations
+      if (lowerQuery.includes('create') || lowerQuery.includes('schedule') || lowerQuery.includes('book')) {
+        return 'create';
+      }
+      
+      if (lowerQuery.includes('update') || lowerQuery.includes('modify') || lowerQuery.includes('change')) {
+        return 'update';
+      }
+      
+      if (lowerQuery.includes('delete') || lowerQuery.includes('cancel') || lowerQuery.includes('remove')) {
+        return 'delete';
+      }
+      
+      if (lowerQuery.includes('list') || lowerQuery.includes('show') || lowerQuery.includes('display')) {
+        return 'list';
+      }
+      
+      if (lowerQuery.includes('check') || lowerQuery.includes('availability')) {
+        return 'check';
+      }
+      
+      if (lowerQuery.includes('find') || lowerQuery.includes('slot')) {
+        return 'find';
+      }
+    }
+    
+    // Default to list for read operations
+    return 'list';
+  }
+
+  /**
    * Generate detailed calendar action preview with conflict detection
    */
   protected async generatePreview(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
     try {
-      const { action, query } = params;
+      const { query } = params;
+      
+      // Use enhanced operation detection
+      const operation = this.detectOperation(params);
+      
+      // Check if this operation actually needs confirmation
+      const needsConfirmation = this.operationRequiresConfirmation(operation);
+      
+      if (!needsConfirmation) {
+        this.logger.info('Calendar operation does not require confirmation', {
+          operation,
+          reason: this.getOperationConfirmationReason(operation)
+        });
+        return {
+          success: true,
+          fallbackMessage: `${operation} operation does not require confirmation`
+        };
+      }
       
       // Generate action ID
       const actionId = `calendar-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Only generate previews for write operations
-      if (action !== 'create' && action !== 'update' && action !== 'delete') {
-        return {
-          success: true,
-          fallbackMessage: `${action} operation does not require confirmation`
-        };
-      }
       
       let previewData: CalendarPreviewData;
       let riskAssessment: ActionRiskAssessment;
       let title: string;
       let description: string;
       
-      switch (action) {
+      switch (operation) {
         case 'create':
           previewData = await this.generateCreateEventPreview(params);
           riskAssessment = this.assessCalendarRisk(params, previewData);
@@ -159,7 +213,11 @@ Always return structured execution status with event details and confirmation.`;
           break;
           
         default:
-          throw this.createError(`Unsupported action for preview: ${action}`, 'UNSUPPORTED_PREVIEW_ACTION');
+          // This should not happen since we check needsConfirmation above
+          return {
+            success: true,
+            fallbackMessage: `${operation} operation does not require confirmation`
+          };
       }
       
       const preview: ActionPreview = {
@@ -168,18 +226,18 @@ Always return structured execution status with event details and confirmation.`;
         title,
         description,
         riskAssessment,
-        estimatedExecutionTime: this.estimateExecutionTime(action),
-        reversible: action === 'create', // Only creation is somewhat reversible (can be deleted)
+        estimatedExecutionTime: this.estimateExecutionTime(operation),
+        reversible: operation === 'create', // Only creation is somewhat reversible (can be deleted)
         requiresConfirmation: true,
         awaitingConfirmation: true,
         previewData,
-        originalQuery: query || `${action} calendar event`,
+        originalQuery: query || `${operation} calendar event`,
         parameters: params as unknown as Record<string, unknown>
       };
       
       this.logger.info('Calendar preview generated', {
         actionId,
-        action,
+        operation,
         eventTitle: params.summary,
         attendeeCount: previewData.attendeeCount || 0,
         riskLevel: riskAssessment.level,
