@@ -3,6 +3,7 @@ import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult } from '../types/api.types';
 import logger from '../utils/logger';
 import { aiConfigService } from '../config/ai-config';
+import { AGENT_HELPERS } from '../config/agent-config';
 import { setTimeout as sleep } from 'timers/promises';
 
 /**
@@ -65,7 +66,34 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
         userId: context.userId 
       });
       
-      // Generate preview instead of executing
+      // Check if this operation actually needs confirmation
+      const operation = this.detectOperation(params);
+      const needsConfirmation = this.operationRequiresConfirmation(operation);
+      
+      this.logger.info('Operation confirmation check', {
+        operation,
+        needsConfirmation,
+        agentName: this.config.name,
+        sessionId: context.sessionId
+      });
+      
+      // If operation doesn't need confirmation, execute directly
+      if (!needsConfirmation) {
+        this.logger.info('Operation does not require confirmation, executing directly', {
+          operation,
+          reason: this.getOperationConfirmationReason(operation)
+        });
+        return await this.execute(params, context);
+      }
+      
+      // Generate preview for operations that need confirmation
+      if (!this.generatePreview) {
+        throw this.createError(
+          `Agent ${this.config.name} does not support preview generation`,
+          'PREVIEW_NOT_SUPPORTED'
+        );
+      }
+
       const previewResult = await this.generatePreview(params, context);
       
       if (!previewResult.success) {
@@ -108,8 +136,9 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
   /**
    * Generate a detailed action preview for confirmation purposes
    * Must be implemented by agents that require confirmation (requiresConfirmation: true)
+   * Can be left unimplemented for agents that don't need confirmation
    */
-  protected abstract generatePreview(params: TParams, context: ToolExecutionContext): Promise<PreviewGenerationResult>;
+  protected generatePreview?(params: TParams, context: ToolExecutionContext): Promise<PreviewGenerationResult>;
   
   // OPTIONAL OVERRIDES - Can be customized by subclasses
   
@@ -361,6 +390,66 @@ export abstract class BaseAgent<TParams = any, TResult = any> {
     }
     
     throw lastError;
+  }
+
+  // OPERATION DETECTION METHODS
+
+  /**
+   * Detect the operation type from user parameters
+   * Override this method in subclasses for agent-specific operation detection
+   */
+  protected detectOperation(params: TParams): string {
+    // Default implementation - try to extract operation from query parameter
+    if (params && typeof params === 'object' && 'query' in params) {
+      const query = (params as any).query;
+      if (typeof query === 'string') {
+        const configAgentName = this.getConfigAgentName();
+        return AGENT_HELPERS.detectOperation(configAgentName as any, query);
+      }
+    }
+    
+    // Fallback to 'unknown' if no query found
+    return 'unknown';
+  }
+
+  /**
+   * Map agent names from BaseAgent to AGENT_CONFIG names
+   */
+  private getConfigAgentName(): string {
+    const agentNameMapping: Record<string, string> = {
+      'emailAgent': 'email',
+      'contactAgent': 'contact', 
+      'calendarAgent': 'calendar',
+      'contentCreator': 'content',
+      'Tavily': 'search',
+      'Think': 'think'
+    };
+    
+    return agentNameMapping[this.config.name] || this.config.name;
+  }
+
+  /**
+   * Check if the detected operation requires confirmation
+   */
+  protected operationRequiresConfirmation(operation: string): boolean {
+    const configAgentName = this.getConfigAgentName();
+    return AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
+  }
+
+  /**
+   * Get the reason why an operation requires or doesn't require confirmation
+   */
+  protected getOperationConfirmationReason(operation: string): string {
+    const configAgentName = this.getConfigAgentName();
+    return AGENT_HELPERS.getOperationConfirmationReason(configAgentName as any, operation);
+  }
+
+  /**
+   * Check if the detected operation is read-only
+   */
+  protected isReadOnlyOperation(operation: string): boolean {
+    const configAgentName = this.getConfigAgentName();
+    return AGENT_HELPERS.isReadOnlyOperation(configAgentName as any, operation);
   }
 }
 

@@ -363,7 +363,7 @@ export interface ActionRiskAssessment {
   warnings?: string[];
 }
 
-export interface EmailPreviewData {
+export interface EmailPreviewData extends Record<string, unknown> {
   recipients: {
     to: string[];
     cc?: string[];
@@ -378,7 +378,7 @@ export interface EmailPreviewData {
   recipientCount: number;
 }
 
-export interface CalendarPreviewData {
+export interface CalendarPreviewData extends Record<string, unknown> {
   title: string;
   startTime: string;
   endTime: string;

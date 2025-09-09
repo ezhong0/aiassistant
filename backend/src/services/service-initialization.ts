@@ -9,6 +9,8 @@ import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
+import { ConfirmationService } from './confirmation.service';
+import { ResponseFormatterService } from './response-formatter.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -119,6 +121,7 @@ const registerCoreServices = async (): Promise<void> => {
     });
 
     // 7. ToolExecutorService - Now depends on tokenStorageService instead of sessionService
+    // Note: confirmationService depends on toolExecutorService, so we can't add it as a dependency here
     const toolExecutorService = new ToolExecutorService();
     serviceManager.registerService('toolExecutorService', toolExecutorService, {
       dependencies: ['tokenStorageService'],
@@ -159,6 +162,20 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
+    // 12. ResponseFormatterService - No dependencies
+    const responseFormatterService = new ResponseFormatterService();
+    serviceManager.registerService('responseFormatterService', responseFormatterService, {
+      priority: 50,
+      autoStart: true
+    });
+
+    // 13. ConfirmationService - Depends on databaseService and toolExecutorService
+    const confirmationService = new ConfirmationService();
+    serviceManager.registerService('confirmationService', confirmationService, {
+      dependencies: ['databaseService', 'toolExecutorService'],
+      priority: 55,
+      autoStart: true
+    });
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

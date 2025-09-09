@@ -2,6 +2,15 @@ import { ToolCall, ToolResult, ToolExecutionContext } from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG } from '../config/app-config';
 import { AgentFactory } from '../framework/agent-factory';
 import { BaseService } from './base-service';
+import { getService } from './service-manager';
+import { ConfirmationService } from './confirmation.service';
+import { 
+  ConfirmationRequest, 
+  ConfirmationFlow, 
+  ConfirmationStatus,
+  ConfirmationFlowResult 
+} from '../types/confirmation.types';
+import { AGENT_HELPERS } from '../config/agent-config';
 import logger from '../utils/logger';
 
 export interface ToolExecutorConfig {
@@ -15,6 +24,7 @@ export interface ExecutionMode {
 
 export class ToolExecutorService extends BaseService {
   private config: ToolExecutorConfig;
+  private confirmationService: ConfirmationService | null = null;
 
   constructor(config: ToolExecutorConfig = {}) {
     super('ToolExecutorService');
@@ -28,7 +38,13 @@ export class ToolExecutorService extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    this.logInfo('ToolExecutorService initialized', { config: this.config });
+    // Get ConfirmationService from service registry (optional dependency)
+    this.confirmationService = getService<ConfirmationService>('confirmationService') || null;
+    
+    this.logInfo('ToolExecutorService initialized', { 
+      config: this.config,
+      hasConfirmationService: !!this.confirmationService
+    });
   }
 
   /**
@@ -61,13 +77,18 @@ export class ToolExecutorService extends BaseService {
       let success = true;
       let error: string | undefined;
 
-      // Determine if this tool needs confirmation
-      const needsConfirmation = this.toolNeedsConfirmation(toolCall.name);
+      // Determine if this tool needs confirmation using operation-aware logic
+      const needsConfirmation = this.toolNeedsConfirmation(toolCall.name, toolCall);
       
       this.logInfo(`Tool ${toolCall.name} confirmation check`, { 
         needsConfirmation, 
         isPreviewMode: mode.preview,
-        willExecutePreview: mode.preview && needsConfirmation 
+        willExecutePreview: mode.preview && needsConfirmation,
+        toolCall: {
+          name: toolCall.name,
+          hasQuery: !!toolCall.parameters.query,
+          hasAction: !!toolCall.parameters.action
+        }
       });
       
       if (mode.preview && needsConfirmation) {
@@ -213,19 +234,53 @@ export class ToolExecutorService extends BaseService {
   }
 
   /**
-   * Check if a tool needs confirmation
+   * Check if a tool needs confirmation using operation-aware logic
+   * ALWAYS evaluates operation-specific rules for comprehensive confirmation logic
    */
-  private toolNeedsConfirmation(toolName: string): boolean {
+  private toolNeedsConfirmation(toolName: string, toolCall?: ToolCall): boolean {
     try {
-      const needsConfirmation = AgentFactory.toolNeedsConfirmation(toolName);
-      this.logInfo(`AgentFactory confirmation check for ${toolName}`, { 
-        needsConfirmation,
-        factoryStats: AgentFactory.getStats()
+      // Always check for operation-specific logic first
+      if (toolCall && toolCall.parameters) {
+        const operation = this.detectOperationFromToolCall(toolName, toolCall);
+        const operationNeedsConfirmation = AgentFactory.toolNeedsConfirmationForOperation(toolName, operation);
+        
+        this.logInfo(`Operation-aware confirmation check for ${toolName}`, { 
+          operation,
+          operationNeedsConfirmation,
+          reason: AGENT_HELPERS.getOperationConfirmationReason(toolName as any, operation),
+          parameters: Object.keys(toolCall.parameters)
+        });
+        
+        return operationNeedsConfirmation;
+      }
+      
+      // Fall back to agent-level requirement if no operation detection possible
+      const agentNeedsConfirmation = AgentFactory.toolNeedsConfirmation(toolName);
+      this.logInfo(`Using agent-level confirmation requirement for ${toolName}`, { 
+        agentNeedsConfirmation,
+        reason: 'No operation detection available - using agent default'
       });
-      return needsConfirmation;
+      return agentNeedsConfirmation;
+      
     } catch (error) {
       this.logWarn(`Could not determine confirmation requirement for ${toolName}`, { error });
-      return false; // Default to no confirmation required
+      // Default to agent-level requirement on error
+      return AgentFactory.toolNeedsConfirmation(toolName);
+    }
+  }
+
+  /**
+   * Detect operation type from tool call parameters using centralized logic
+   */
+  private detectOperationFromToolCall(toolName: string, toolCall: ToolCall): string {
+    try {
+      return AgentFactory.detectOperationFromParameters(toolName, toolCall.parameters);
+    } catch (error) {
+      this.logWarn(`Failed to detect operation from tool call`, { 
+        toolName, 
+        error: error instanceof Error ? error.message : error 
+      });
+      return 'unknown';
     }
   }
 
@@ -266,6 +321,187 @@ export class ToolExecutorService extends BaseService {
       averageExecutionTime,
       totalExecutionTime
     };
+  }
+
+  /**
+   * Execute a tool with confirmation flow support
+   * This method determines if confirmation is needed and handles the flow appropriately
+   */
+  async executeWithConfirmation(
+    toolCall: ToolCall,
+    context: ToolExecutionContext,
+    accessToken?: string
+  ): Promise<ToolResult | ConfirmationFlowResult> {
+    this.assertReady();
+    
+    try {
+      const startTime = Date.now();
+      
+      // Check if tool needs confirmation using operation-aware logic
+      const needsConfirmation = this.toolNeedsConfirmation(toolCall.name, toolCall);
+      
+      this.logInfo(`Executing tool with confirmation support: ${toolCall.name}`, {
+        toolName: toolCall.name,
+        needsConfirmation,
+        sessionId: context.sessionId,
+        hasConfirmationService: !!this.confirmationService,
+        operation: this.detectOperationFromToolCall(toolCall.name, toolCall),
+        reason: AGENT_HELPERS.getOperationConfirmationReason(toolCall.name as any, this.detectOperationFromToolCall(toolCall.name, toolCall))
+      });
+
+      if (needsConfirmation && this.confirmationService) {
+        // Create confirmation flow
+        const confirmationRequest: ConfirmationRequest = {
+          sessionId: context.sessionId,
+          userId: context.userId,
+          toolCall,
+          context: {
+            slackContext: context.slackContext,
+            conversationHistory: [], // Could be populated from session
+            userPreferences: {} // Could be populated from user settings
+          }
+        };
+
+        const confirmationFlow = await this.confirmationService.createConfirmation(confirmationRequest);
+        
+        const executionTime = Date.now() - startTime;
+        
+        this.logInfo(`Confirmation flow created for ${toolCall.name}`, {
+          confirmationId: confirmationFlow.confirmationId,
+          sessionId: context.sessionId,
+          executionTime
+        });
+
+        return {
+          success: true,
+          confirmationFlow,
+          requiresManualFormat: false
+        } as ConfirmationFlowResult;
+      } else {
+        // Execute normally without confirmation
+        return await this.executeTool(toolCall, context, accessToken, { preview: false });
+      }
+    } catch (error) {
+      const executionTime = Date.now() - Date.now(); // Will be near 0 for errors
+      this.logError(`Tool execution with confirmation failed: ${toolCall.name}`, error, {
+        toolName: toolCall.name,
+        sessionId: context.sessionId,
+        executionTime
+      });
+
+      // Return as ConfirmationFlowResult with error
+      return {
+        success: false,
+        error: error as any,
+        requiresManualFormat: true
+      } as ConfirmationFlowResult;
+    }
+  }
+
+  /**
+   * Execute a confirmed action by confirmation ID
+   */
+  async executeConfirmedAction(confirmationId: string): Promise<ToolResult> {
+    this.assertReady();
+    
+    if (!this.confirmationService) {
+      throw new Error('ConfirmationService is required to execute confirmed actions');
+    }
+
+    try {
+      this.logInfo(`Executing confirmed action: ${confirmationId}`);
+      
+      const result = await this.confirmationService.executeConfirmedAction(confirmationId);
+      
+      this.logInfo(`Confirmed action executed: ${confirmationId}`, {
+        success: result.success,
+        toolName: result.toolName,
+        executionTime: result.executionTime
+      });
+      
+      return result;
+    } catch (error) {
+      this.logError(`Failed to execute confirmed action: ${confirmationId}`, error);
+      
+      return {
+        toolName: 'unknown',
+        result: null,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        executionTime: 0
+      };
+    }
+  }
+
+  /**
+   * Get pending confirmations for a session
+   */
+  async getPendingConfirmations(sessionId: string): Promise<ConfirmationFlow[]> {
+    this.assertReady();
+    
+    if (!this.confirmationService) {
+      this.logWarn('ConfirmationService not available, returning empty confirmations');
+      return [];
+    }
+
+    try {
+      return await this.confirmationService.getPendingConfirmations(sessionId);
+    } catch (error) {
+      this.logError('Failed to get pending confirmations', error, { sessionId });
+      return [];
+    }
+  }
+
+  /**
+   * Check if a confirmation exists and is still valid
+   */
+  async isValidConfirmation(confirmationId: string): Promise<boolean> {
+    this.assertReady();
+    
+    if (!this.confirmationService) {
+      return false;
+    }
+
+    try {
+      const confirmation = await this.confirmationService.getConfirmation(confirmationId);
+      return confirmation !== null && confirmation.status === ConfirmationStatus.PENDING;
+    } catch (error) {
+      this.logError('Error checking confirmation validity', error, { confirmationId });
+      return false;
+    }
+  }
+
+  /**
+   * Respond to a confirmation (used by Slack integration)
+   */
+  async respondToConfirmation(
+    confirmationId: string,
+    confirmed: boolean,
+    userContext?: {
+      slackUserId?: string;
+      responseChannel?: string;
+      responseThreadTs?: string;
+    }
+  ): Promise<ConfirmationFlow | null> {
+    this.assertReady();
+    
+    if (!this.confirmationService) {
+      throw new Error('ConfirmationService is required to respond to confirmations');
+    }
+
+    try {
+      const response = {
+        confirmationId,
+        confirmed,
+        respondedAt: new Date(),
+        userContext
+      };
+
+      return await this.confirmationService.respondToConfirmation(confirmationId, response);
+    } catch (error) {
+      this.logError('Failed to respond to confirmation', error, { confirmationId, confirmed });
+      return null;
+    }
   }
 
   /**
