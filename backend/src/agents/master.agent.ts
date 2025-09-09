@@ -14,7 +14,6 @@ export interface MasterAgentResponse {
 }
 
 export class MasterAgent {
-  // sessionService removed - agents are now stateless
   private useOpenAI: boolean = false;
   private systemPrompt: string;
 

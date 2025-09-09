@@ -46,7 +46,7 @@ export interface EmailAgentRequest {
 /**
  * AI-Enhanced EmailAgent that uses AI planning as the primary execution method
  * 
- * This demonstrates how to transform a traditional BaseAgent into an AIAgent:
+ * This demonstrates how to transform a traditional agent into an AIAgent:
  * 1. Extends AIAgentWithPreview instead of BaseAgent
  * 2. Registers email-specific tools for AI planning
  * 3. Implements AI-driven workflow orchestration

@@ -259,13 +259,6 @@ export class ThreadManager {
       // Update each message in the thread
       for (const _message of thread.messages) {
         // Note: markAsRead/markAsUnread methods not implemented in GmailService
-        // if (updateRequest.markAsRead !== undefined) {
-        //   if (updateRequest.markAsRead) {
-        //     await gmailService.markAsRead(accessToken, message.id);
-        //   } else {
-        //     await gmailService.markAsUnread(accessToken, message.id);
-        //   }
-        // }
 
         // Note: Gmail API doesn't have a direct way to add/remove labels to threads
         // This would require individual message updates or using the threads.modify endpoint

@@ -26,7 +26,7 @@ import {
   ConfirmActionRequest, 
   ConfirmActionResponse,
   SessionDataResponse,
-  SessionDeleteResponse,
+  
   EmailSendRequest,
   EmailOperationResponse
 } from '../types/api.types';
@@ -132,11 +132,10 @@ router.post('/text-command',
 
     const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
     
-              // Note: Session management removed - tokens are now stored per user
     // For now, we'll work with client-provided context only
     const sessionContext = null;
     
-    logger.info('Using client context only (session management removed)', {
+    logger.info('Using client context only', {
       sessionId: finalSessionId,
       clientPendingActions: context?.pendingActions?.length || 0,
       clientPendingActionsData: context?.pendingActions
@@ -407,97 +406,6 @@ router.post('/confirm-action',
   }
 );
 
-/**
- * GET /assistant/session/:id
- * Retrieve session information and conversation history
- */
-router.get('/session/:id',
-  authenticateToken,
-  userRateLimit(
-    RATE_LIMITS.assistant.session.maxRequests, 
-    RATE_LIMITS.assistant.session.windowMs
-  ),
-  validate({ params: sessionIdSchema }),
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id: sessionId } = req.validatedParams as z.infer<typeof sessionIdSchema>;
-      const user = req.user!;
-
-      logger.info('Retrieving session', { 
-        sessionId, 
-        userId: user.userId 
-      });
-
-              try {
-          // Session functionality removed - return not found
-          const session = null;
-        
-        // Sessions no longer exist - return not found
-        return res.status(404).json({
-          success: false,
-          type: 'error',
-          error: 'SESSION_NOT_FOUND',
-          message: 'Sessions are no longer supported. Use stateless requests instead.'
-        });
-
-      } catch (error) {
-        // Session expired error handling removed
-        throw error;
-      }
-
-    } catch (error) {
-      logger.error('Session retrieval error:', error);
-      return res.status(500).json({
-        success: false,
-        type: 'error',
-        error: 'SESSION_RETRIEVAL_ERROR',
-        message: 'Failed to retrieve session information'
-      });
-    }
-  }
-);
-
-/**
- * DELETE /assistant/session/:id
- * Delete a session and clear its conversation history
- */
-router.delete('/session/:id',
-  authenticateToken,
-  userRateLimit(
-    RATE_LIMITS.assistant.sessionDelete.maxRequests, 
-    RATE_LIMITS.assistant.sessionDelete.windowMs
-  ),
-  validate({ params: sessionIdSchema }),
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { id: sessionId } = req.validatedParams as z.infer<typeof sessionIdSchema>;
-      const user = req.user!;
-
-      logger.info('Deleting session', { 
-        sessionId, 
-        userId: user.userId 
-      });
-
-              // Session functionality removed
-        // Sessions no longer exist - return not found
-        return res.status(404).json({
-          success: false,
-          type: 'error',
-          error: 'SESSION_NOT_FOUND',
-          message: 'Sessions are no longer supported. Use stateless requests instead.'
-        });
-
-    } catch (error) {
-      logger.error('Session deletion error:', error);
-      return res.status(500).json({
-        success: false,
-        type: 'error',
-        error: 'SESSION_DELETION_ERROR',
-        message: 'Failed to delete session'
-      });
-    }
-  }
-);
 
 /**
  * POST /assistant/email/send

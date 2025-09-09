@@ -29,7 +29,7 @@ import crypto from 'crypto';
  * ConfirmationService - Manages confirmation workflows for user-facing actions
  * 
  * This service serves as the backbone for all user-facing actions that require confirmation.
- * It integrates with existing BaseAgent framework, service registry patterns, and Slack interface
+ * It integrates with existing AIAgent framework, service registry patterns, and Slack interface
  * while following established error handling and dependency injection patterns.
  */
 export class ConfirmationService extends BaseService implements IConfirmationService {

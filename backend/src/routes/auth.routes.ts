@@ -643,33 +643,6 @@ router.get('/init', authRateLimit, (req: Request, res: Response) => {
   }
 });
 
-/**
- * GET /auth/google/callback
- * Temporary redirect route to handle incorrect OAuth callbacks
- * This should be removed once the main OAuth URL generation fix is deployed
- */
-router.get('/google/callback', (req: Request, res: Response) => {
-  try {
-    logger.warn('Incorrect OAuth callback route accessed, redirecting to correct endpoint', {
-      originalUrl: req.url,
-      query: req.query,
-      userAgent: req.get('User-Agent')
-    });
-    
-    // Redirect to the correct callback endpoint with all query parameters
-    const queryString = new URLSearchParams(req.query as any).toString();
-    const redirectUrl = `/auth/callback?${queryString}`;
-    
-    logger.info('Redirecting OAuth callback to correct endpoint', { redirectUrl });
-    return res.redirect(redirectUrl);
-  } catch (error) {
-    logger.error('Error in temporary OAuth callback redirect', { error });
-    return res.status(500).json({ 
-      error: 'OAuth callback redirect failed',
-      message: 'Please contact support'
-    });
-  }
-});
 
 /**
  * GET /auth/callback
