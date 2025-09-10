@@ -60,6 +60,120 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     });
   }
 
+  /**
+   * Generate OpenAI function calling schema for this agent
+   */
+  static getOpenAIFunctionSchema(): any {
+    return {
+      name: 'manage_calendar',
+      description: 'Create, update, delete, and manage calendar events and scheduling. Supports natural language event creation and conflict detection.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The calendar request in natural language (e.g., "Schedule a meeting with John tomorrow at 2pm", "Create event for team standup")'
+          },
+          action: {
+            type: 'string',
+            description: 'The calendar action to perform',
+            enum: ['create', 'list', 'update', 'delete', 'check_availability', 'find_slots'],
+            nullable: true
+          },
+          summary: {
+            type: 'string',
+            description: 'Event title or summary',
+            nullable: true
+          },
+          description: {
+            type: 'string',
+            description: 'Event description',
+            nullable: true
+          },
+          start: {
+            type: 'string',
+            description: 'Event start time in ISO format',
+            nullable: true
+          },
+          end: {
+            type: 'string',
+            description: 'Event end time in ISO format',
+            nullable: true
+          },
+          attendees: {
+            type: 'array',
+            description: 'List of attendee email addresses',
+            items: { type: 'string' },
+            nullable: true
+          },
+          location: {
+            type: 'string',
+            description: 'Event location',
+            nullable: true
+          },
+          eventId: {
+            type: 'string',
+            description: 'Event ID for updates/deletes',
+            nullable: true
+          },
+          timeMin: {
+            type: 'string',
+            description: 'Start time for listing events',
+            nullable: true
+          },
+          timeMax: {
+            type: 'string',
+            description: 'End time for listing events',
+            nullable: true
+          },
+          duration: {
+            type: 'number',
+            description: 'Duration in minutes for finding available slots',
+            nullable: true
+          },
+          calendarId: {
+            type: 'string',
+            description: 'Calendar ID (defaults to primary)',
+            nullable: true
+          }
+        },
+        required: ['query']
+      }
+    };
+  }
+
+  /**
+   * Get agent capabilities for OpenAI function calling
+   */
+  static getCapabilities(): string[] {
+    return [
+      'Create calendar events with natural language',
+      'Update existing calendar events',
+      'Delete calendar events',
+      'List upcoming events',
+      'Check availability for time slots',
+      'Find available meeting slots',
+      'Handle multiple attendees',
+      'Detect scheduling conflicts',
+      'Support recurring events',
+      'Manage event locations and descriptions'
+    ];
+  }
+
+  /**
+   * Get agent limitations for OpenAI function calling
+   */
+  static getLimitations(): string[] {
+    return [
+      'Requires Google Calendar API access token',
+      'Limited to Google Calendar accounts',
+      'Cannot access calendars from other providers',
+      'Event creation requires valid time information',
+      'Attendee management depends on calendar permissions',
+      'Cannot modify events created by others without permission'
+    ];
+  }
+
   private readonly systemPrompt = `# Calendar Agent
 You are a specialized calendar agent that handles all calendar and scheduling operations.
 
@@ -78,86 +192,101 @@ You receive structured requests for calendar operations and execute them using G
 Always return structured execution status with event details and confirmation.`;
 
   /**
-   * Core calendar processing logic with AI planning support
+   * Execute calendar-specific tools during AI planning
    */
-  protected async processQuery(parameters: CalendarAgentRequest, context: ToolExecutionContext): Promise<CalendarAgentResponse> {
-    // Try AI planning first if enabled and suitable
-    if (this.aiConfig.enableAIPlanning && this.canUseAIPlanning(parameters)) {
-      try {
-        this.logger.info('Attempting AI-driven calendar execution', {
-          agent: this.config.name,
-          sessionId: context.sessionId
-        });
+  protected async executeCustomTool(toolName: string, parameters: any, context: ToolExecutionContext): Promise<any> {
+    this.logger.debug(`Executing calendar tool: ${toolName}`, {
+      toolName,
+      parametersKeys: Object.keys(parameters),
+      sessionId: context.sessionId
+    });
 
-        const aiResult = await this.executeWithAIPlanning(parameters, context);
-        
-        this.logger.info('AI-driven calendar execution completed', {
-          agent: this.config.name,
-          sessionId: context.sessionId
-        });
-        
-        return aiResult;
+    // Handle calendar-specific tools
+    switch (toolName.toLowerCase()) {
+      case 'calendaragent':
+      case 'manage_calendar':
+      case 'calendar_create':
+      case 'create_event':
+        // Execute calendar operations directly using AI planning
+        try {
+          const calendarParams = {
+            ...parameters,
+            accessToken: parameters.accessToken
+          } as CalendarAgentRequest;
+          
+          // Execute the calendar operation using AI planning
+          const result = await this.executeWithAIPlanning(calendarParams, context);
+          this.logger.info('Calendar tool executed successfully in AI plan', {
+            toolName,
+            success: result.success,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: true,
+            data: result
+          };
+        } catch (error) {
+          this.logger.error('Calendar tool execution failed in AI plan', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Calendar tool execution failed'
+          };
+        }
 
-      } catch (error) {
-        this.logAIPlanningFallback(error as Error, 'planning_failed', context);
-
-        // Fall back to manual implementation
-        return this.executeManually(parameters, context);
-      }
+      default:
+        // Call parent implementation for unknown tools
+        return super.executeCustomTool(toolName, parameters, context);
     }
-
-    // Use manual implementation
-    const reason = this.aiConfig.enableAIPlanning ? 'AI planning not suitable for this query' : 'AI planning disabled';
-    this.logAIPlanningFallback(
-      new Error(reason), 
-      this.aiConfig.enableAIPlanning ? 'unsuitable_query' : 'service_unavailable', 
-      context
-    );
-
-    return this.executeManually(parameters, context);
   }
 
   /**
-   * Manual execution fallback - traditional calendar logic
+   * Enhanced parameter validation for calendar operations
    */
-  protected async executeManually(parameters: CalendarAgentRequest, context: ToolExecutionContext): Promise<CalendarAgentResponse> {
-    try {
-      this.logger.info('Calendar agent execution', { 
-        action: parameters.action,
-        sessionId: context.sessionId
-      });
+  protected validateParams(params: CalendarAgentRequest): void {
+    super.validateParams(params);
+    
+    if (!params.accessToken || typeof params.accessToken !== 'string') {
+      throw this.createError('Access token is required for calendar operations', 'MISSING_ACCESS_TOKEN');
+    }
+    
+    if (params.action === 'create' && (!params.summary || !params.start || !params.end)) {
+      throw this.createError('Summary, start time, and end time are required to create an event', 'MISSING_REQUIRED_FIELDS');
+    }
+  }
 
-      // Get calendar service from service registry
-      const calendarService = getService<CalendarService>('calendarService');
-      if (!calendarService) {
-        throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
-      }
-
-      // Route to appropriate action
-      switch (parameters.action) {
-        case 'create':
-          return await this.createEvent(parameters, calendarService);
-        case 'list':
-          return await this.listEvents(parameters, calendarService);
-        case 'update':
-          return await this.updateEvent(parameters, calendarService);
-        case 'delete':
-          return await this.deleteEvent(parameters, calendarService);
-        case 'check_availability':
-          return await this.checkAvailability(parameters, calendarService);
-        case 'find_slots':
-          return await this.findAvailableSlots(parameters, calendarService);
-        default:
-          throw this.createError(`Unknown calendar action: ${parameters.action}`, 'INVALID_ACTION');
-      }
-
-    } catch (error) {
-      this.logger.error('Calendar agent execution failed:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Calendar operation failed',
-        error: error instanceof Error ? error.message : 'CALENDAR_ERROR'
-      };
+  /**
+   * Create user-friendly error messages for calendar operations
+   */
+  protected createUserFriendlyErrorMessage(error: Error, params: CalendarAgentRequest): string {
+    const errorCode = (error as any).code;
+    
+    switch (errorCode) {
+      case 'MISSING_ACCESS_TOKEN':
+        return 'I need access to your Google Calendar to manage events. Please check your Google authentication settings.';
+      
+      case 'MISSING_REQUIRED_FIELDS':
+        return 'I need more information to create this calendar event. Please provide the event title, start time, and end time.';
+      
+      case 'MISSING_EVENT_ID':
+        return 'I need the event ID to update or delete this calendar event. Please specify which event you want to modify.';
+      
+      case 'MISSING_TIME_RANGE':
+        return 'I need start and end times to check availability. Please specify the time range you want to check.';
+      
+      case 'SERVICE_UNAVAILABLE':
+        return 'Google Calendar service is temporarily unavailable. Please try again in a few moments.';
+      
+      case 'INVALID_ACTION':
+        return 'I don\'t understand this calendar action. Please try creating, updating, deleting, or listing events.';
+      
+      default:
+        return super.createUserFriendlyErrorMessage(error, params);
     }
   }
 

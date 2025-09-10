@@ -40,107 +40,310 @@ export interface EmailAgentRequest extends EmailAgentParams {
   }>;
 }
 
-/**
- * Enhanced EmailAgent using AIAgent framework
- * Handles all email operations via Gmail API with AI planning and manual fallbacks
- */
-export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
+  /**
+   * Enhanced EmailAgent using AIAgent framework
+   * Handles all email operations via Gmail API with AI planning and manual fallbacks
+   */
+  export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
 
-  constructor() {
-    super({
+    constructor() {
+      super({
+        name: 'emailAgent',
+        description: 'Handles email operations via Gmail API',
+        enabled: true,
+        timeout: 30000,
+        retryCount: 3,
+        aiPlanning: {
+          enableAIPlanning: true, // Enable AI planning by default
+          maxPlanningSteps: 5,
+          planningTimeout: 20000,
+          cachePlans: true,
+          planningTemperature: 0.1,
+          planningMaxTokens: 1500
+        }
+      });
+    }
+
+    /**
+     * Generate OpenAI function calling schema for this agent
+     */
+    static getOpenAIFunctionSchema(): any {
+      return {
+        name: 'manage_emails',
+        description: 'Comprehensive email management using Gmail API. Send emails, search through inbox, list emails, reply to messages, and manage email communications. Use this for ALL email-related operations including checking inbox, finding emails, sending messages, and viewing email content.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The email request in natural language. Examples: "Send an email to John about the meeting", "What emails do I have from Sarah?", "Show me emails about project updates", "List my unread emails", "Find emails with attachments", "What emails do I have todo?"'
+            },
+            operation: {
+              type: 'string',
+              description: 'The type of email operation to perform',
+              enum: ['send', 'search', 'list', 'reply', 'get', 'draft'],
+              nullable: true
+            },
+            recipients: {
+              type: 'array',
+              description: 'Email addresses of recipients',
+              items: { type: 'string' },
+              nullable: true
+            },
+            subject: {
+              type: 'string',
+              description: 'Email subject line',
+              nullable: true
+            },
+            body: {
+              type: 'string',
+              description: 'Email body content',
+              nullable: true
+            },
+            cc: {
+              type: 'array',
+              description: 'CC recipients',
+              items: { type: 'string' },
+              nullable: true
+            },
+            bcc: {
+              type: 'array',
+              description: 'BCC recipients',
+              items: { type: 'string' },
+              nullable: true
+            },
+            threadId: {
+              type: 'string',
+              description: 'Thread ID for replies',
+              nullable: true
+            },
+            messageId: {
+              type: 'string',
+              description: 'Message ID for replies',
+              nullable: true
+            },
+            contacts: {
+              type: 'array',
+              description: 'Contact information from contact agent',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  email: { type: 'string' },
+                  phone: { type: 'string', nullable: true }
+                }
+              },
+              nullable: true
+            }
+          },
+          required: ['query']
+        }
+      };
+    }
+
+    /**
+     * Get agent capabilities for OpenAI function calling
+     */
+    static getCapabilities(): string[] {
+      return [
+        'Send new emails with natural language composition',
+        'Reply to existing email threads',
+        'Search and retrieve emails',
+        'Create email drafts',
+        'Extract email content from natural language',
+        'Integrate with contact information',
+        'Handle multiple recipients (TO, CC, BCC)',
+        'Support email threading and conversations'
+      ];
+    }
+
+    /**
+     * Get agent limitations for OpenAI function calling
+     */
+    static getLimitations(): string[] {
+      return [
+        'Requires Gmail API access token',
+        'Cannot send emails without recipient information',
+        'Email content must comply with Gmail policies',
+        'Limited to Gmail accounts only',
+        'Cannot access emails from other email providers'
+      ];
+    }
+
+  /**
+   * Register email-specific tools for AI planning
+   */
+  protected registerDefaultTools(): void {
+    // Call parent to register base tools like 'think'
+    super.registerDefaultTools();
+
+    // Register email-specific tools
+    this.registerTool({
+      name: 'send_email',
+      description: 'Send an email to one or more recipients with subject and body',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { 
+            type: 'string', 
+            description: 'Natural language email request (e.g., "Send email to john@example.com about meeting")' 
+          },
+          recipients: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Email addresses of recipients'
+          },
+          subject: {
+            type: 'string',
+            description: 'Email subject line'
+          },
+          body: {
+            type: 'string', 
+            description: 'Email body content'
+          },
+          cc: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'CC recipients (optional)'
+          },
+          bcc: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'BCC recipients (optional)'
+          }
+        },
+        required: ['query']
+      },
+      capabilities: ['compose_email', 'send_message', 'recipient_handling'],
+      requiresConfirmation: false, // We handle confirmation at tool level
+      estimatedExecutionTime: 5000
+    });
+
+    this.registerTool({
       name: 'emailAgent',
-      description: 'Handles email operations via Gmail API',
-      enabled: true,
-      timeout: 30000,
-      retryCount: 3,
-      aiPlanning: {
-        enableAIPlanning: true, // Enable AI planning by default
-        maxPlanningSteps: 5,
-        planningTimeout: 20000,
-        cachePlans: true,
-        planningTemperature: 0.1,
-        planningMaxTokens: 1500
-      }
+      description: 'General email operations agent for sending, searching, and managing emails',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { 
+            type: 'string', 
+            description: 'Natural language email operation request' 
+          },
+          action: {
+            type: 'string',
+            enum: ['send', 'search', 'reply', 'draft'],
+            description: 'Specific email action to perform'
+          }
+        },
+        required: ['query']
+      },
+      capabilities: ['send_email', 'search_email', 'reply_email', 'draft_email'],
+      requiresConfirmation: false,
+      estimatedExecutionTime: 4000
+    });
+
+    this.registerTool({
+      name: 'search_emails',
+      description: 'Search for emails in Gmail by sender, subject, content, or date',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { 
+            type: 'string', 
+            description: 'Search query or natural language search request' 
+          },
+          maxResults: {
+            type: 'number',
+            description: 'Maximum number of results to return (default: 10)'
+          }
+        },
+        required: ['query']
+      },
+      capabilities: ['search_gmail', 'filter_emails'],
+      requiresConfirmation: false,
+      estimatedExecutionTime: 3000
+    });
+
+    this.logger.debug('Email-specific tools registered for AI planning', {
+      registeredTools: Array.from(this.toolRegistry.keys()),
+      agent: this.config.name
     });
   }
 
   /**
-   * Get OpenAI service from the service registry
+   * Execute email-specific tools during AI planning
    */
-  private getOpenAIService(): OpenAIService | null {
-    try {
-      const openaiService = getService('openaiService') as OpenAIService | null;
-      return openaiService || null;
-    } catch (error) {
-      this.logger.warn('Failed to get OpenAI service from registry', { error });
-      return null;
-    }
-  }
-  
-  /**
-   * Core email processing logic with AI planning support
-   */
-  protected async processQuery(params: EmailAgentRequest, context: ToolExecutionContext): Promise<EmailResult> {
-    // Try AI planning first if enabled and suitable
-    if (this.aiConfig.enableAIPlanning && this.canUseAIPlanning(params)) {
-      try {
-        this.logger.info('Attempting AI-driven email execution', {
-          agent: this.config.name,
-          sessionId: context.sessionId
-        });
+  protected async executeCustomTool(toolName: string, parameters: any, context: ToolExecutionContext): Promise<any> {
+    this.logger.debug(`Executing email tool: ${toolName}`, {
+      toolName,
+      parametersKeys: Object.keys(parameters),
+      sessionId: context.sessionId
+    });
 
-        const aiResult = await this.executeWithAIPlanning(params, context);
-        
-        this.logger.info('AI-driven email execution completed', {
-          agent: this.config.name,
-          sessionId: context.sessionId
-        });
-        
-        return aiResult;
+    // Handle email-specific tools
+    switch (toolName.toLowerCase()) {
+      case 'emailagent':
+      case 'send_email':
+      case 'email_send':
+      case 'search_emails':
+        // Execute email operations directly using AI planning
+        try {
+          const emailParams = {
+            ...parameters,
+            accessToken: parameters.accessToken
+          } as EmailAgentRequest;
+          
+          // Execute the email operation using AI planning
+          const result = await this.executeWithAIPlanning(emailParams, context);
+          this.logger.info('Email tool executed successfully in AI plan', {
+            toolName,
+            action: result.action,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: true,
+            data: result
+          };
+        } catch (error) {
+          this.logger.error('Email tool execution failed in AI plan', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Email tool execution failed'
+          };
+        }
 
-      } catch (error) {
-        this.logAIPlanningFallback(error as Error, 'planning_failed', context);
+      case 'think':
+        // Handle thinking/analysis steps
+        return {
+          success: true,
+          analysis: 'Email operation analyzed',
+          reasoning: parameters.query || 'Email planning step'
+        };
 
-        // Fall back to manual implementation
-        return this.executeManually(params, context);
-      }
-    }
-
-    // Use manual implementation
-    const reason = this.aiConfig.enableAIPlanning ? 'AI planning not suitable for this query' : 'AI planning disabled';
-    this.logAIPlanningFallback(
-      new Error(reason), 
-      this.aiConfig.enableAIPlanning ? 'unsuitable_query' : 'service_unavailable', 
-      context
-    );
-
-    return this.executeManually(params, context);
-  }
-
-  /**
-   * Manual execution fallback - traditional email logic
-   */
-  protected async executeManually(params: EmailAgentRequest, _context: ToolExecutionContext): Promise<EmailResult> {
-    const { query } = params;
-    
-    // Determine action type from query
-    const action = this.determineAction(query);
-    
-    switch (action.type) {
-      case 'SEND_EMAIL':
-        return await this.handleSendEmail(params, action.params);
-      case 'REPLY_EMAIL':
-        return await this.handleReplyEmail(params, action.params);
-      case 'SEARCH_EMAILS':
-        return await this.handleSearchEmails(params, action.params);
-      case 'CREATE_DRAFT':
-        return await this.handleCreateDraft(params, action.params);
-      case 'GET_EMAIL':
-        return await this.handleGetEmail(params, action.params);
-      case 'GET_THREAD':
-        return await this.handleGetThread(params, action.params);
       default:
-        throw this.createError(`Unknown email action: ${action.type}`, 'UNKNOWN_ACTION');
+        // Call parent implementation for unknown tools
+        return super.executeCustomTool(toolName, parameters, context);
+    }
+  }
+
+  /**
+   * Enhanced parameter validation
+   */
+  protected validateParams(params: EmailAgentRequest): void {
+    super.validateParams(params);
+    
+    if (!params.accessToken || typeof params.accessToken !== 'string') {
+      throw this.createError('Access token is required for email operations', 'MISSING_ACCESS_TOKEN');
+    }
+    
+    if (params.accessToken.length > EMAIL_CONSTANTS.MAX_LOG_BODY_LENGTH) {
+      throw this.createError('Access token appears to be invalid', 'INVALID_ACCESS_TOKEN');
     }
   }
 
@@ -154,18 +357,58 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
     params: EmailAgentRequest,
     _context: ToolExecutionContext
   ): EmailResult {
+    this.logger.debug('Building final result from AI planning', {
+      successfulResultsCount: successfulResults.length,
+      failedResultsCount: failedResults.length,
+      planId: summary?.planId,
+      sessionId: _context.sessionId
+    });
+
     // For email operations, we typically want the first successful result
     if (successfulResults.length > 0) {
-      return successfulResults[0] as EmailResult;
+      const firstResult = successfulResults[0];
+      
+      // If the result has email-specific data, use it directly
+      if (firstResult && typeof firstResult === 'object' && 'action' in firstResult) {
+        this.logger.info('Using successful AI planning result', {
+          action: firstResult.action,
+          hasMessageId: !!firstResult.messageId,
+          sessionId: _context.sessionId
+        });
+        return firstResult as EmailResult;
+      }
+      
+      // If it's a nested result from executeCustomTool
+      if (firstResult && firstResult.data && typeof firstResult.data === 'object' && 'action' in firstResult.data) {
+        this.logger.info('Using nested successful AI planning result', {
+          action: firstResult.data.action,
+          hasMessageId: !!firstResult.data.messageId,
+          sessionId: _context.sessionId
+        });
+        return firstResult.data as EmailResult;
+      }
+      
+      // Fallback - try to extract meaningful data
+      return firstResult as EmailResult;
     }
 
-    // If no successful results, create a summary result
+    // If no successful results, create an error result (not placeholder data)
+    this.logger.warn('No successful results from AI planning, creating error result', {
+      failedCount: failedResults.length,
+      planId: summary?.planId,
+      sessionId: _context.sessionId
+    });
+    
     return {
-      action: 'search', // Default action
-      count: successfulResults.length,
-      messageId: summary.planId,
-      threadId: summary.planId
-    };
+      action: 'send', // Use the intended action based on params
+      count: 0,
+      messageId: undefined,
+      threadId: undefined,
+      // Add error information
+      error: failedResults.length > 0 ? 
+        `Plan execution failed: ${failedResults[0]?.error || 'Unknown error'}` : 
+        'No results from AI planning execution'
+    } as EmailResult;
   }
   
   /**
@@ -180,6 +423,36 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
     
     if (params.accessToken.length > EMAIL_CONSTANTS.MAX_LOG_BODY_LENGTH) {
       throw this.createError('Access token appears to be invalid', 'INVALID_ACCESS_TOKEN');
+    }
+  }
+
+  /**
+   * Create user-friendly error messages for email operations
+   */
+  protected createUserFriendlyErrorMessage(error: Error, params: EmailAgentRequest): string {
+    const errorCode = (error as any).code;
+    
+    switch (errorCode) {
+      case 'MISSING_ACCESS_TOKEN':
+        return 'I need access to your Gmail account to send emails. Please check your Google authentication settings.';
+      
+      case 'INVALID_ACCESS_TOKEN':
+        return 'Your Gmail access has expired. Please re-authenticate with Google to continue.';
+      
+      case 'INVALID_EMAIL_REQUEST':
+        return 'I need more information to send this email. Please provide the recipient, subject, and message content.';
+      
+      case 'INVALID_REPLY_REQUEST':
+        return 'I need the email thread information to reply. Please specify which email you want to reply to.';
+      
+      case 'SERVICE_UNAVAILABLE':
+        return 'Gmail service is temporarily unavailable. Please try again in a few moments.';
+      
+      case 'TIMEOUT':
+        return 'Email operation is taking longer than expected. Please try again with a simpler request.';
+      
+      default:
+        return super.createUserFriendlyErrorMessage(error, params);
     }
   }
   

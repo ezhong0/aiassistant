@@ -58,6 +58,7 @@ export class AgentFactory {
   static registerToolMetadata(metadata: ToolMetadata): void {
     this.toolMetadata.set(metadata.name, metadata);
     logger.info(`Tool metadata registered: ${metadata.name}`, {
+      keywords: metadata.keywords,
       requiresConfirmation: metadata.requiresConfirmation,
       isCritical: metadata.isCritical
     });
@@ -166,7 +167,7 @@ export class AgentFactory {
     context: ToolExecutionContext,
     accessToken?: string
   ): Promise<ToolResult> {
-    const agent = this.getAgentByToolName(name);
+    const agent = this.getAgent(name);
     
     if (!agent) {
       const errorResult: ToolResult = {
@@ -177,12 +178,13 @@ export class AgentFactory {
         executionTime: 0
       };
       
-      // Log error for missing agent
-      logger.error('Agent Not Found', {
+      // Log fallback warning for missing agent
+      logger.warn('🚨 CRITICAL FALLBACK - Agent Not Found', {
         agentName: name,
         availableAgents: this.getEnabledAgentNames(),
-        errorType: 'AGENT_NOT_FOUND',
+        fallbackType: 'Agent Availability Fallback',
         reason: `Agent "${name}" not found or disabled`,
+        severity: 'CRITICAL',
         timestamp: new Date().toISOString()
       });
       
@@ -212,13 +214,14 @@ export class AgentFactory {
         executionTime: 0
       };
       
-      // Log error for execution failure
-      logger.error('Agent Execution Failed', {
+      // Log fallback warning for execution failure
+      logger.warn('⚠️ HIGH PRIORITY FALLBACK - Agent Execution Failed', {
         agentName: name,
         error: error instanceof Error ? error.message : error,
         sessionId: context.sessionId,
-        errorType: 'AGENT_EXECUTION_FAILED',
+        fallbackType: 'Agent Execution Fallback',
         reason: `Agent "${name}" execution failed with error`,
+        severity: 'HIGH',
         timestamp: new Date().toISOString()
       });
       
@@ -313,6 +316,39 @@ export class AgentFactory {
     return metadata;
   }
 
+  /**
+   * Find tools that match the given input using keywords
+   */
+  static findMatchingTools(input: string): ToolMetadata[] {
+    const lowerInput = input.toLowerCase();
+    const matches: { tool: ToolMetadata; score: number }[] = [];
+
+    for (const tool of this.toolMetadata.values()) {
+      let score = 0;
+      
+      // Check keyword matches
+      for (const keyword of tool.keywords) {
+        if (lowerInput.includes(keyword.toLowerCase())) {
+          score += 1;
+          // Exact word match gets higher score
+          const words = lowerInput.split(/\s+/);
+          if (words.includes(keyword.toLowerCase())) {
+            score += 1;
+          }
+        }
+      }
+
+      if (score > 0) {
+        matches.push({ tool, score });
+      }
+    }
+
+    // Sort by score (highest first) and return tools
+    return matches
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3) // Limit to top 3 matches
+      .map(match => match.tool);
+  }
 
   /**
    * Generate system prompts for all registered agents
@@ -450,6 +486,7 @@ export class AgentFactory {
           },
           required: ['query']
         },
+        keywords: AGENT_CONFIG.think.keywords,
         requiresConfirmation: AGENT_CONFIG.think.requiresConfirmation,
         isCritical: AGENT_CONFIG.think.isCritical
       });
@@ -486,6 +523,7 @@ export class AgentFactory {
           },
           required: ['query']
         },
+        keywords: AGENT_CONFIG.email.keywords,
         requiresConfirmation: AGENT_CONFIG.email.requiresConfirmation,
         isCritical: AGENT_CONFIG.email.isCritical
       });
@@ -509,6 +547,7 @@ export class AgentFactory {
           },
           required: ['query']
         },
+        keywords: AGENT_CONFIG.contact.keywords,
         requiresConfirmation: AGENT_CONFIG.contact.requiresConfirmation,
         isCritical: AGENT_CONFIG.contact.isCritical
       });
@@ -552,6 +591,7 @@ export class AgentFactory {
           },
           required: ['query']
         },
+        keywords: AGENT_CONFIG.calendar.keywords,
         requiresConfirmation: AGENT_CONFIG.calendar.requiresConfirmation,
         isCritical: AGENT_CONFIG.calendar.isCritical
       });
@@ -590,6 +630,7 @@ export class AgentFactory {
           },
           required: ['query']
         },
+        keywords: AGENT_CONFIG.content.keywords,
         requiresConfirmation: AGENT_CONFIG.content.requiresConfirmation,
         isCritical: AGENT_CONFIG.content.isCritical
       });
@@ -623,6 +664,7 @@ export class AgentFactory {
           },
           required: ['query']
         },
+        keywords: AGENT_CONFIG.search.keywords,
         requiresConfirmation: AGENT_CONFIG.search.requiresConfirmation,
         isCritical: AGENT_CONFIG.search.isCritical
       });
@@ -715,7 +757,7 @@ export class AgentFactory {
    * Get agent configuration
    */
   static getAgentConfig(name: string): AgentConfig | undefined {
-    const agent = this.getAgentByToolName(name);
+    const agent = this.getAgent(name);
     if (agent) {
       return agent.getConfig();
     }
