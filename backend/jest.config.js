@@ -19,7 +19,6 @@ module.exports = {
     '/node_modules/',
     '/dist/',
     '/tests/ai-behavior/',
-    '/tests/integration/',
     'tests/test-.*\\.ts$',
     '\\.broken\\.'
   ],
