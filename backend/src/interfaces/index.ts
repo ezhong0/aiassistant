@@ -42,14 +42,12 @@ export const initializeInterfaces = async (
       };
 
       interfaces.slackInterface = new SlackInterface(slackConfig, serviceManager);
-      logger.info('Slack interface initialized successfully');
+      logger.debug('Slack interface initialized');
     } else {
-      logger.warn('Slack interface not initialized - missing configuration');
+      logger.info('Slack interface not configured');
     }
 
-    logger.info('All interfaces initialized successfully', {
-      slackInterface: !!interfaces.slackInterface
-    });
+    logger.info('All interfaces initialized successfully');
 
     return interfaces;
   } catch (error) {
@@ -67,7 +65,7 @@ export const startInterfaces = async (interfaces: InterfaceManager): Promise<voi
       await interfaces.slackInterface.start();
     }
     
-    logger.info('All interfaces started successfully');
+    logger.debug('All interfaces started');
   } catch (error) {
     logger.error('Failed to start interfaces:', error);
     throw error;

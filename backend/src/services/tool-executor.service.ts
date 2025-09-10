@@ -68,10 +68,10 @@ export class ToolExecutorService extends BaseService {
     const startTime = Date.now();
     
     try {
-      this.logInfo(`Executing tool: ${toolCall.name}`, { 
-        toolName: toolCall.name, 
-        sessionId: context.sessionId 
-      });
+        this.logInfo(`Executing tool: ${toolCall.name}`, { 
+          toolName: toolCall.name, 
+          sessionId: context.sessionId 
+          });
 
       let result: unknown;
       let success = true;
@@ -94,7 +94,7 @@ export class ToolExecutorService extends BaseService {
       if (mode.preview) {
         // In preview mode - check if tool needs confirmation and handle accordingly
         if (needsConfirmation) {
-          this.logInfo(`Tool ${toolCall.name} requires confirmation, executing in preview mode`);
+            this.logInfo(`Tool ${toolCall.name} requires confirmation, executing in preview mode`);
           const agent = AgentFactory.getAgentByToolName(toolCall.name);
           
           if (agent && typeof (agent as any).executePreview === 'function') {
@@ -125,7 +125,7 @@ export class ToolExecutorService extends BaseService {
           }
         } else {
           // Tool doesn't need confirmation but we're in preview mode - execute normally but mark as not needing confirmation
-          this.logInfo(`Tool ${toolCall.name} doesn't require confirmation, executing normally in preview mode`);
+            this.logInfo(`Tool ${toolCall.name} doesn't require confirmation, executing normally in preview mode`);
           result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context, accessToken);
           
           // Add preview mode flag to indicate this was a preview execution
@@ -157,11 +157,12 @@ export class ToolExecutorService extends BaseService {
         executionTime
       };
 
-      this.logInfo(`Tool execution completed: ${toolCall.name}`, { 
-        success, 
-        executionTime,
-        hasError: !!error 
-      });
+        this.logInfo(`Tool execution completed: ${toolCall.name}`, { 
+          toolName: toolCall.name,
+            success, 
+          executionTime,
+          hasError: !!error 
+          });
 
       return toolResult;
 

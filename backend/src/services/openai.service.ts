@@ -18,6 +18,8 @@ export class OpenAIService extends BaseService {
   private client: OpenAI;
   private model: string;
   private apiKey: string;
+  private activeRequests: number = 0;
+  private readonly maxConcurrentRequests: number = 3;
 
   constructor(config: OpenAIConfig) {
     super('OpenAIService');
@@ -87,6 +89,13 @@ export class OpenAIService extends BaseService {
   ): Promise<FunctionCallResponse> {
     this.assertReady();
     
+    // Check concurrent request limit
+    if (this.activeRequests >= this.maxConcurrentRequests) {
+      throw new Error(`Too many concurrent OpenAI requests (${this.activeRequests}/${this.maxConcurrentRequests}). Please try again in a moment.`);
+    }
+    
+    this.activeRequests++;
+    
     try {
       this.logDebug('Generating tool calls', { 
         userInputLength: userInput.length,
@@ -103,7 +112,7 @@ export class OpenAIService extends BaseService {
         tools: this.getToolDefinitions(),
         tool_choice: 'auto',
         temperature: 0.1,
-        max_tokens: 1000
+        max_tokens: 500 // Reduced to prevent memory issues
       });
 
       const assistantMessage = response.choices[0]?.message;
@@ -130,9 +139,19 @@ export class OpenAIService extends BaseService {
         }
       }
 
+      // Memory monitoring
+      const responseSize = JSON.stringify(response).length;
+      if (responseSize > 50000) { // 50KB warning threshold
+        this.logWarn('Large OpenAI response detected', { 
+          responseSizeBytes: responseSize,
+          sessionId 
+        });
+      }
+
       this.logInfo('Tool calls generated successfully', { 
         toolCallCount: toolCalls.length,
         toolNames: toolCalls.map(tc => tc.name),
+        responseSizeBytes: responseSize,
         sessionId 
       });
 
@@ -142,6 +161,8 @@ export class OpenAIService extends BaseService {
       };
     } catch (error) {
       this.handleError(error, 'generateToolCalls');
+    } finally {
+      this.activeRequests--;
     }
   }
 
@@ -158,6 +179,13 @@ export class OpenAIService extends BaseService {
   ): Promise<string> {
     this.assertReady();
     
+    // Check concurrent request limit
+    if (this.activeRequests >= this.maxConcurrentRequests) {
+      throw new Error(`Too many concurrent OpenAI requests (${this.activeRequests}/${this.maxConcurrentRequests}). Please try again in a moment.`);
+    }
+    
+    this.activeRequests++;
+    
     try {
       this.logDebug('Generating text response', { 
         userInputLength: userInput.length,
@@ -172,7 +200,7 @@ export class OpenAIService extends BaseService {
           { role: 'user', content: userInput }
         ],
         temperature: options.temperature || 0.7,
-        max_tokens: options.maxTokens || 500
+        max_tokens: Math.min(options.maxTokens || 500, 800) // Hard limit to prevent memory issues
       });
 
       const content = response.choices[0]?.message?.content;
@@ -180,13 +208,25 @@ export class OpenAIService extends BaseService {
         throw new Error('No content in OpenAI response');
       }
 
+      // Memory monitoring
+      const responseSize = JSON.stringify(response).length;
+      if (responseSize > 50000) { // 50KB warning threshold
+        this.logWarn('Large OpenAI text response detected', { 
+          responseSizeBytes: responseSize,
+          contentLength: content.length
+        });
+      }
+
       this.logDebug('Text response generated successfully', { 
-        responseLength: content.length 
+        responseLength: content.length,
+        responseSizeBytes: responseSize
       });
 
       return content;
     } catch (error) {
       this.handleError(error, 'generateText');
+    } finally {
+      this.activeRequests--;
     }
   }
 
@@ -203,6 +243,13 @@ export class OpenAIService extends BaseService {
     } = {}
   ): Promise<T> {
     this.assertReady();
+    
+    // Check concurrent request limit
+    if (this.activeRequests >= this.maxConcurrentRequests) {
+      throw new Error(`Too many concurrent OpenAI requests (${this.activeRequests}/${this.maxConcurrentRequests}). Please try again in a moment.`);
+    }
+    
+    this.activeRequests++;
     
     try {
       this.logDebug('Generating structured data', { 
@@ -227,7 +274,7 @@ export class OpenAIService extends BaseService {
         }],
         tool_choice: { type: 'function', function: { name: 'extract_data' } },
         temperature: options.temperature || 0.1,
-        max_tokens: options.maxTokens || 1000
+        max_tokens: Math.min(options.maxTokens || 1000, 800) // Hard limit to prevent memory issues
       });
 
       const toolCall = response.choices[0]?.message?.tool_calls?.[0];
@@ -244,6 +291,8 @@ export class OpenAIService extends BaseService {
       return extractedData as T;
     } catch (error) {
       this.handleError(error, 'generateStructuredData');
+    } finally {
+      this.activeRequests--;
     }
   }
 
@@ -324,7 +373,7 @@ export class OpenAIService extends BaseService {
         model: this.model,
         messages: messages as any,
         temperature: 0.7,
-        max_tokens: maxTokens || 500
+        max_tokens: Math.min(maxTokens || 500, 800) // Hard limit to prevent memory issues
       });
 
       const content = response.choices[0]?.message?.content;

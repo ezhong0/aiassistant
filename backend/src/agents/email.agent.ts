@@ -280,23 +280,23 @@ export interface EmailAgentRequest extends EmailAgentParams {
       sessionId: context.sessionId
     });
 
-    // Handle email-specific tools
+    // Handle email-specific tools by calling direct handler methods (NO RECURSION)
     switch (toolName.toLowerCase()) {
       case 'emailagent':
-      case 'send_email':
-      case 'email_send':
-      case 'search_emails':
-        // Execute email operations directly using AI planning
+        // Route emailAgent calls to appropriate handler based on action
         try {
           const emailParams = {
             ...parameters,
             accessToken: parameters.accessToken
           } as EmailAgentRequest;
           
-          // Execute the email operation using AI planning
-          const result = await this.executeWithAIPlanning(emailParams, context);
-          this.logger.info('Email tool executed successfully in AI plan', {
+          // Determine action from query
+          const operation = this.detectOperation(emailParams);
+          const result = await this.executeDirectEmailOperation(operation, emailParams, parameters);
+          
+          this.logger.info('EmailAgent tool executed successfully', {
             toolName,
+            operation,
             action: result.action,
             sessionId: context.sessionId
           });
@@ -306,7 +306,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
             data: result
           };
         } catch (error) {
-          this.logger.error('Email tool execution failed in AI plan', {
+          this.logger.error('EmailAgent tool execution failed', {
             toolName,
             error: error instanceof Error ? error.message : error,
             sessionId: context.sessionId
@@ -314,7 +314,74 @@ export interface EmailAgentRequest extends EmailAgentParams {
           
           return {
             success: false,
-            error: error instanceof Error ? error.message : 'Email tool execution failed'
+            error: error instanceof Error ? error.message : 'EmailAgent execution failed'
+          };
+        }
+      
+      case 'send_email':
+      case 'email_send':
+        // Handle send email directly
+        try {
+          const emailParams = {
+            ...parameters,
+            accessToken: parameters.accessToken
+          } as EmailAgentRequest;
+          
+          const result = await this.handleSendEmail(emailParams, parameters);
+          this.logger.info('Send email tool executed successfully', {
+            toolName,
+            action: result.action,
+            recipient: result.recipient,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: true,
+            data: result
+          };
+        } catch (error) {
+          this.logger.error('Send email tool execution failed', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Send email failed'
+          };
+        }
+        
+      case 'search_emails':
+        // Handle search emails directly
+        try {
+          const emailParams = {
+            ...parameters,
+            accessToken: parameters.accessToken
+          } as EmailAgentRequest;
+          
+          const result = await this.handleSearchEmails(emailParams, parameters);
+          this.logger.info('Search emails tool executed successfully', {
+            toolName,
+            action: result.action,
+            count: result.count,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: true,
+            data: result
+          };
+        } catch (error) {
+          this.logger.error('Search emails tool execution failed', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+          
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Search emails failed'
           };
         }
 
@@ -329,6 +396,43 @@ export interface EmailAgentRequest extends EmailAgentParams {
       default:
         // Call parent implementation for unknown tools
         return super.executeCustomTool(toolName, parameters, context);
+    }
+  }
+
+  /**
+   * Execute email operation directly based on detected operation (prevents recursion)
+   */
+  private async executeDirectEmailOperation(operation: string, params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+    this.logger.debug('Executing direct email operation', {
+      operation,
+      hasAccessToken: !!params.accessToken,
+      sessionId: actionParams.sessionId
+    });
+
+    switch (operation) {
+      case 'send':
+      case 'compose':
+      case 'write':
+        return await this.handleSendEmail(params, actionParams);
+        
+      case 'reply':
+        return await this.handleReplyEmail(params, actionParams);
+        
+      case 'search':
+      case 'find':
+      case 'get':
+        return await this.handleSearchEmails(params, actionParams);
+        
+      case 'draft':
+        return await this.handleCreateDraft(params, actionParams);
+        
+      default:
+        // Default to send for ambiguous cases
+        this.logger.debug('Ambiguous operation, defaulting to send', { 
+          operation, 
+          query: params.query?.substring(0, 100) 
+        });
+        return await this.handleSendEmail(params, actionParams);
     }
   }
 

@@ -27,7 +27,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
   }
 
   try {
-    logger.info('Registering and initializing core services...');
+    logger.debug('Registering core services...');
 
     // Register core services with dependencies
     await registerCoreServices();
@@ -35,7 +35,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
     // Initialize all services in dependency order
     await serviceManager.initializeAllServices();
 
-    logger.info('All core services registered and initialized successfully');
+    logger.info('All services initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize core services:', error);
     throw error;
@@ -87,11 +87,9 @@ const registerCoreServices = async (): Promise<void> => {
           priority: 6,
           autoStart: true
         });
-        logger.debug('CacheService registered', { hasRedisConfig, nodeEnv: ENVIRONMENT.nodeEnv });
+        // CacheService registered
       } else {
-        logger.warn('CacheService skipped - no Redis configuration found for production environment');
-        logger.info('Available Redis environment variables for Railway:', 
-          Object.keys(process.env).filter(key => key.toLowerCase().includes('redis')));
+        logger.warn('CacheService skipped - no Redis configuration found');
       }
     } else {
       logger.info('CacheService disabled via DISABLE_REDIS environment variable');
@@ -180,9 +178,8 @@ const registerCoreServices = async (): Promise<void> => {
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
 
-    logger.info('Core services registered successfully', {
-      serviceCount: serviceManager.getServiceCount(),
-      serviceNames: serviceManager.getRegisteredServices()
+    logger.debug('Core services registered', {
+      serviceCount: serviceManager.getServiceCount()
     });
 
   } catch (error) {

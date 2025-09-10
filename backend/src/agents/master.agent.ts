@@ -17,6 +17,7 @@ export class MasterAgent {
   private useOpenAI: boolean = false;
   private systemPrompt: string;
   private agentSchemas: Map<string, any> = new Map();
+  private lastMemoryCheck: number = Date.now();
 
   constructor(config?: MasterAgentConfig) {
     // Agents are now stateless - no session management needed
@@ -61,6 +62,8 @@ export class MasterAgent {
       });
     } catch (error) {
       logger.error('Failed to initialize agent schemas:', error);
+      // Clear schemas on error to prevent memory leaks from partial initialization
+      this.agentSchemas.clear();
     }
   }
 
@@ -121,7 +124,10 @@ export class MasterAgent {
    */
   async processUserInput(userInput: string, sessionId: string, _userId?: string): Promise<MasterAgentResponse> {
     try {
-      logger.info(`MasterAgent processing input: "${userInput}" for session: ${sessionId}`);
+        logger.info(`MasterAgent processing input: "${userInput}" for session: ${sessionId}`);
+      
+      // Check memory usage periodically
+      this.checkMemoryUsage();
       
       // AI-first execution - no fallback routing
       const openaiService = this.getOpenAIService();
@@ -145,7 +151,7 @@ export class MasterAgent {
       // Validate tool calls against available agents
       const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput);
 
-      logger.info(`MasterAgent determined ${validatedToolCalls.length} tool calls:`, validatedToolCalls.map(tc => tc.name));
+        logger.info(`MasterAgent determined ${validatedToolCalls.length} tool calls:`, validatedToolCalls.map(tc => tc.name));
       
       return {
         message,
@@ -204,7 +210,7 @@ export class MasterAgent {
       // Check if agent exists and is enabled using tool name mapping
       const agent = AgentFactory.getAgentByToolName(toolCall.name);
       if (!agent) {
-        logger.warn(`Tool call for disabled/missing agent: ${toolCall.name}`);
+          logger.warn(`Tool call for disabled/missing agent: ${toolCall.name}`);
         continue;
       }
 
@@ -351,5 +357,59 @@ You are an intelligent personal assistant that uses AI planning to understand us
    */
   getSystemPrompt(): string {
     return this.systemPrompt;
+  }
+
+  /**
+   * Monitor memory usage and trigger cleanup if needed
+   */
+  private checkMemoryUsage(): void {
+    const now = Date.now();
+    // Check memory every 30 seconds
+    if (now - this.lastMemoryCheck < 30000) {
+      return;
+    }
+
+    this.lastMemoryCheck = now;
+    const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+    
+    logger.debug('Memory usage check', {
+      heapUsed: `${heapUsedMB}MB`,
+      heapTotal: `${heapTotalMB}MB`,
+      external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
+      rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`
+    });
+
+    // If heap usage exceeds 400MB, trigger garbage collection and cleanup
+    if (heapUsedMB > 400) {
+      logger.warn('High memory usage detected, triggering cleanup', {
+        heapUsed: `${heapUsedMB}MB`,
+        heapTotal: `${heapTotalMB}MB`
+      });
+      
+      // Clear agent schemas to free memory
+      if (this.agentSchemas.size > 0) {
+        const schemasSize = this.agentSchemas.size;
+        this.agentSchemas.clear();
+        // Reinitialize immediately to maintain functionality
+        this.initializeAgentSchemas();
+        logger.debug('Agent schemas cleared and reinitialized', { previousSize: schemasSize });
+      }
+      
+      // Force garbage collection if available
+      if (global.gc) {
+        global.gc();
+        logger.debug('Forced garbage collection completed');
+      }
+    }
+  }
+
+  /**
+   * Cleanup resources and memory
+   */
+  public cleanup(): void {
+    this.agentSchemas.clear();
+    logger.debug('MasterAgent cleanup completed');
   }
 }

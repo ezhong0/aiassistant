@@ -35,11 +35,7 @@ export class SlackInterface {
     // Initialize Slack client for direct API calls
     this.client = new WebClient(config.botToken);
 
-    logger.info('SlackInterface initialized with manual routing (no Bolt framework)', {
-      development: config.development,
-      hasTokenStorage: !!this.tokenStorageService,
-      hasTokenManager: !!this.tokenManager
-    });
+    logger.debug('SlackInterface initialized with manual routing');
   }
 
   /**
@@ -48,7 +44,7 @@ export class SlackInterface {
    */
   public async start(): Promise<void> {
     try {
-      logger.info('Slack interface started successfully (manual routing only)');
+      logger.debug('Slack interface started (manual routing)');
     } catch (error) {
       logger.error('Failed to start Slack interface:', error);
       throw error;
@@ -61,7 +57,7 @@ export class SlackInterface {
    */
   public async stop(): Promise<void> {
     try {
-      logger.info('Slack interface stopped successfully');
+      logger.debug('Slack interface stopped');
     } catch (error) {
       logger.error('Failed to stop Slack interface:', error);
       throw error;
@@ -78,12 +74,7 @@ export class SlackInterface {
       
       // Check if we've already processed this event
       if (this.processedEvents.has(eventId)) {
-        logger.info('Duplicate event detected, skipping processing', {
-          eventId,
-          eventType: event.type,
-          userId: event.user,
-          channelId: event.channel
-        });
+        logger.debug('Duplicate event detected, skipping');
         return;
       }
       
@@ -97,7 +88,7 @@ export class SlackInterface {
         eventsToRemove.forEach(id => this.processedEvents.delete(id));
       }
       
-      logger.info('Handling Slack event directly', {
+      logger.debug('Processing Slack event', {
         eventId,
         eventType: event.type,
         userId: event.user,

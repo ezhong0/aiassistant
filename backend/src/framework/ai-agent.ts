@@ -91,7 +91,10 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   protected aiConfig: AIPlanningConfig;
   protected openaiService: OpenAIService | undefined;
   protected toolRegistry: Map<string, AITool> = new Map();
-  protected planCache: Map<string, AIPlan> = new Map();
+  protected planCache: Map<string, { plan: AIPlan; timestamp: number; accessCount: number }> = new Map();
+  protected readonly maxCacheSize: number = 50; // Reduced from 100
+  protected readonly cacheExpiryMs: number = 10 * 60 * 1000; // Reduced to 10 minutes
+  private cacheCleanupInterval?: NodeJS.Timeout;
   
   constructor(config: AgentConfig & { aiPlanning?: AIPlanningConfig }) {
     this.config = config;
@@ -112,6 +115,9 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     
     // Register default tools
     this.registerDefaultTools();
+    
+    // Start periodic cache cleanup
+    this.startCacheCleanup();
   }
 
   // ============================================================================
@@ -151,7 +157,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     operation: string,
     reason: 'unavailable' | 'timeout' | 'error'
   ): void {
-    this.logger.error('Service Error', {
+    this.logger.error(`Service Error: ${serviceName} ${operation} failed (${reason})`, {
       serviceName,
       operation,
       reason,
@@ -209,10 +215,10 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     try {
       this.openaiService = getService<OpenAIService>('openaiService');
       if (!this.openaiService) {
-        this.logServiceError('OpenAI', 'initialization', 'unavailable');
+        this.logger.debug('OpenAI service not available during agent initialization - will retry when needed');
       }
     } catch (error) {
-      this.logServiceError('OpenAI', 'initialization', 'error');
+      this.logger.debug('Failed to initialize OpenAI service during agent creation - will retry when needed', error);
     }
   }
 
@@ -365,11 +371,11 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected async processQuery(params: TParams, context: ToolExecutionContext): Promise<TResult> {
     try {
-      this.logger.info('Executing with AI planning', {
-        agent: this.config.name,
-        sessionId: context.sessionId,
-        aiPlanningEnabled: this.aiConfig.enableAIPlanning
-      });
+        this.logger.debug('Executing with AI planning', {
+            agent: this.config.name,
+            sessionId: context.sessionId,
+          aiPlanningEnabled: this.aiConfig.enableAIPlanning
+          });
       
       return await this.executeWithAIPlanning(params, context);
       
@@ -438,14 +444,11 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
     const plan = planningResult.plan;
     
-    this.logger.info('AI execution plan generated', {
-      agent: this.config.name,
-      planId: plan.id,
-      stepCount: plan.steps.length,
-      confidence: plan.confidence,
-      requiresConfirmation: plan.requiresConfirmation,
-      sessionId: context.sessionId
-    });
+      this.logger.debug('AI execution plan generated', {
+          agent: this.config.name,
+          planId: plan.id,
+        stepCount: plan.steps.length
+        });
 
     // Step 2: Execute plan steps with enhanced error handling
     const executionResults = await this.executePlan(plan, params, context);
@@ -476,13 +479,24 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       // Check cache first
       const cacheKey = this.generateCacheKey(params);
       if (this.aiConfig.cachePlans && this.planCache.has(cacheKey)) {
-        const cachedPlan = this.planCache.get(cacheKey)!;
-        this.logger.debug('Using cached AI plan', {
-          agent: this.config.name,
-          planId: cachedPlan.id,
-          sessionId: context.sessionId
-        });
-        return { success: true, plan: cachedPlan, executionTime: Date.now() - startTime };
+        const cacheEntry = this.planCache.get(cacheKey)!;
+        
+        // Check if cache entry is still valid
+        if (Date.now() - cacheEntry.timestamp < this.cacheExpiryMs) {
+          // Update access info for LRU
+          cacheEntry.accessCount++;
+          this.planCache.set(cacheKey, { ...cacheEntry, timestamp: Date.now() });
+          
+          this.logger.debug('Using cached AI plan', {
+              agent: this.config.name,
+              planId: cacheEntry.plan.id,
+            sessionId: context.sessionId
+            });
+          return { success: true, plan: cacheEntry.plan, executionTime: Date.now() - startTime };
+        } else {
+          // Remove expired entry
+          this.planCache.delete(cacheKey);
+        }
       }
 
       // Generate new plan
@@ -505,9 +519,22 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       // Validate and enhance the plan
       const validatedPlan = this.validateAndEnhancePlan(response, params, context);
 
-      // Cache the plan if enabled
-      if (this.aiConfig.cachePlans) {
-        this.planCache.set(cacheKey, validatedPlan);
+      // Cache the plan if enabled and cache is not under memory pressure
+      if (this.aiConfig.cachePlans && this.planCache.size < this.maxCacheSize * 0.9) {
+        this.evictExpiredCacheEntries();
+        this.ensureCacheSize();
+        
+        this.planCache.set(cacheKey, {
+          plan: validatedPlan,
+          timestamp: Date.now(),
+          accessCount: 1
+        });
+      } else if (this.aiConfig.cachePlans) {
+        this.logger.debug('Skipping cache due to memory pressure', {
+          agent: this.config.name,
+          currentCacheSize: this.planCache.size,
+          maxSize: this.maxCacheSize
+        });
       }
 
       return {
@@ -539,12 +566,10 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     const results = new Map<string, any>();
     const executedSteps = new Set<string>();
 
-    this.logger.info('Starting AI plan execution', {
-      agent: this.config.name,
-      planId: plan.id,
-      stepCount: plan.steps.length,
-      sessionId: context.sessionId
-    });
+      this.logger.debug('Starting AI plan execution', {
+          agent: this.config.name,
+        planId: plan.id
+        });
 
     // Execute steps respecting dependencies
     const remainingSteps = [...plan.steps];
@@ -565,22 +590,22 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
         if (canExecute) {
           try {
-            this.logger.debug(`Executing plan step: ${step.id}`, {
-              agent: this.config.name,
-              tool: step.tool,
-              sessionId: context.sessionId
-            });
+              this.logger.debug(`Executing plan step: ${step.id}`, {
+                  agent: this.config.name,
+                  tool: step.tool,
+                  sessionId: context.sessionId
+                });
 
             const stepResult = await this.executeToolStep(step, results, params, context);
             results.set(step.id, stepResult);
             executedSteps.add(step.id);
             remainingSteps.splice(i, 1);
 
-            this.logger.debug(`Plan step completed: ${step.id}`, {
-              agent: this.config.name,
-              success: stepResult?.success !== false,
-              sessionId: context.sessionId
-            });
+              this.logger.debug(`Plan step completed: ${step.id}`, {
+                  agent: this.config.name,
+                  success: stepResult?.success !== false,
+                  sessionId: context.sessionId
+                });
 
           } catch (error) {
             this.logger.error(`Plan step failed: ${step.id}`, {
@@ -622,12 +647,12 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       );
     }
 
-    this.logger.info('AI plan execution completed', {
-      agent: this.config.name,
-      planId: plan.id,
-      executedSteps: executedSteps.size,
-      sessionId: context.sessionId
-    });
+      this.logger.debug('AI plan execution completed', {
+          agent: this.config.name,
+          planId: plan.id,
+          executedSteps: executedSteps.size,
+        sessionId: context.sessionId
+        });
 
     return results;
   }
@@ -714,12 +739,12 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       results: Object.fromEntries(executionResults)
     };
 
-    this.logger.info('AI plan results synthesized', {
-      agent: this.config.name,
-      planId: plan.id,
-      successRate: `${successfulResults.length}/${plan.steps.length}`,
-      sessionId: context.sessionId
-    });
+      this.logger.debug('AI plan results synthesized', {
+          agent: this.config.name,
+          planId: plan.id,
+          successRate: `${successfulResults.length}/${plan.steps.length}`,
+        sessionId: context.sessionId
+        });
 
     // Override this method in subclasses for custom result synthesis
     return this.buildFinalResult(summary, successfulResults, failedResults, params, context);
@@ -943,19 +968,26 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected async withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
     const timeout = timeoutMs || this.getTimeout();
+    let timeoutHandle: NodeJS.Timeout | undefined;
     
-    return Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          this.logTimeoutError('agent execution', timeout);
-          reject(this.createError(
-            `Agent execution timed out after ${timeout}ms`,
-            'TIMEOUT'
-          ));
-        }, timeout);
-      })
-    ]);
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        this.logTimeoutError('agent execution', timeout);
+        reject(this.createError(
+          `Agent execution timed out after ${timeout}ms`,
+          'TIMEOUT'
+        ));
+      }, timeout);
+    });
+    
+    try {
+      const result = await Promise.race([promise, timeoutPromise]);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      return result;
+    } catch (error) {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      throw error;
+    }
   }
 
   /**
@@ -1351,7 +1383,7 @@ Please provide a detailed execution plan that accomplishes this request efficien
    */
   updateAIConfig(updates: Partial<AIPlanningConfig>): void {
     this.aiConfig = { ...this.aiConfig, ...updates };
-    this.logger.info('AI planning configuration updated', {
+    this.logger.debug('AI planning configuration updated', {
       agent: this.config.name,
       updates
     });
@@ -1369,9 +1401,55 @@ Please provide a detailed execution plan that accomplishes this request efficien
    */
   clearPlanCache(): void {
     this.planCache.clear();
-    this.logger.info('AI plan cache cleared', {
+    this.logger.debug('AI plan cache cleared', {
       agent: this.config.name
     });
+  }
+
+  /**
+   * Start periodic cache cleanup
+   */
+  private startCacheCleanup(): void {
+    // Clean cache every 2 minutes for better memory management
+    this.cacheCleanupInterval = setInterval(() => {
+      try {
+        const sizeBefore = this.planCache.size;
+        this.evictExpiredCacheEntries();
+        this.ensureCacheSize(); // Also enforce size limits during cleanup
+        const sizeAfter = this.planCache.size;
+        
+        if (sizeBefore > sizeAfter) {
+          this.logger.debug('Periodic cache cleanup completed', {
+            agent: this.config.name,
+            removedEntries: sizeBefore - sizeAfter,
+            currentSize: sizeAfter
+          });
+        }
+      } catch (error) {
+        this.logger.error('Cache cleanup failed', {
+          agent: this.config.name,
+          error: error instanceof Error ? error.message : error
+        });
+      }
+    }, 2 * 60 * 1000); // Reduced to 2 minutes
+  }
+
+  /**
+   * Stop periodic cache cleanup
+   */
+  private stopCacheCleanup(): void {
+    if (this.cacheCleanupInterval) {
+      clearInterval(this.cacheCleanupInterval);
+      this.cacheCleanupInterval = undefined;
+    }
+  }
+
+  /**
+   * Cleanup resources on agent destruction
+   */
+  destroy(): void {
+    this.stopCacheCleanup();
+    this.clearPlanCache();
   }
 
   /**
@@ -1382,6 +1460,41 @@ Please provide a detailed execution plan that accomplishes this request efficien
       size: this.planCache.size,
       keys: Array.from(this.planCache.keys())
     };
+  }
+
+  /**
+   * Evict expired cache entries
+   */
+  private evictExpiredCacheEntries(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.planCache.entries()) {
+      if (now - entry.timestamp > this.cacheExpiryMs) {
+        this.planCache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Ensure cache doesn't exceed maximum size using LRU eviction
+   */
+  private ensureCacheSize(): void {
+    if (this.planCache.size >= this.maxCacheSize) {
+      // Find least recently used entries
+      const entries = Array.from(this.planCache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp);
+      
+      // Remove oldest entries until we're under the limit
+      const toRemove = entries.slice(0, this.planCache.size - this.maxCacheSize + 1);
+      for (const [key] of toRemove) {
+        this.planCache.delete(key);
+      }
+
+      this.logger.debug('Cache size limit enforced', {
+        agent: this.config.name,
+        removedEntries: toRemove.length,
+        newSize: this.planCache.size
+      });
+    }
   }
 }
 
