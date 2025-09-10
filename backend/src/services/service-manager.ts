@@ -181,14 +181,14 @@ export class ServiceManager {
 
     // Calculate initialization order based on dependencies
     this.calculateInitializationOrder();
-    logger.debug('Initialization order:', this.initializationOrder);
+    // Initialization order calculated
 
     // Initialize services in order
     for (const serviceName of this.initializationOrder) {
-      logger.debug(`Starting initialization of service: ${serviceName}`);
+      // Starting initialization of service
       try {
         await this.initializeService(serviceName);
-        logger.debug(`Completed initialization of service: ${serviceName}`);
+        // Service initialization complete
       } catch (error) {
         // In development, allow database service to fail gracefully
         if (serviceName === 'databaseService' && process.env.NODE_ENV === 'development') {
@@ -223,7 +223,7 @@ export class ServiceManager {
     }
 
     if (registration.service.state === ServiceState.INITIALIZING && registration.service.isReady()) {
-      logger.debug(`Service ${name} already initializing and ready`);
+      // Service already ready
       return;
     }
 
@@ -260,7 +260,7 @@ export class ServiceManager {
         throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
       }
       
-      logger.debug(`Service initialized successfully: ${name}`);
+      // Service initialization complete
     } catch (error) {
       logger.error(`Failed to initialize service ${name}:`, error);
       throw error;

@@ -32,11 +32,9 @@ export class AgentFactory {
     // Auto-register agent's tools using dynamic discovery
     this.autoRegisterTools(name, agent);
     
-    logger.info(`Framework agent registered: ${name}`, {
-      config: agent.getConfig(),
+    logger.debug(`Framework agent registered: ${name}`, {
       enabled: agent.isEnabled(),
-      aiPlanningEnabled: agent.getAIConfig().enableAIPlanning,
-      registeredTools: this.getToolsForAgent(name)
+      toolCount: this.getToolsForAgent(name).length
     });
   }
   
@@ -61,10 +59,7 @@ export class AgentFactory {
    */
   static registerToolMetadata(metadata: ToolMetadata): void {
     this.toolMetadata.set(metadata.name, metadata);
-    logger.info(`Tool metadata registered: ${metadata.name}`, {
-      requiresConfirmation: metadata.requiresConfirmation,
-      isCritical: metadata.isCritical
-    });
+    logger.debug(`Tool metadata registered: ${metadata.name}`);
   }
   
   /**
@@ -129,9 +124,7 @@ export class AgentFactory {
         const schema = agentClass.getOpenAIFunctionSchema();
         if (schema?.name) {
           this.toolToAgentMap.set(schema.name, agentName);
-          logger.debug(`Auto-registered tool: ${schema.name} → ${agentName}`, {
-            source: 'getOpenAIFunctionSchema'
-          });
+          // Auto-registered via getOpenAIFunctionSchema
         }
       }
       
@@ -141,9 +134,7 @@ export class AgentFactory {
         if (Array.isArray(toolNames)) {
           toolNames.forEach((toolName: string) => {
             this.toolToAgentMap.set(toolName, agentName);
-            logger.debug(`Auto-registered tool: ${toolName} → ${agentName}`, {
-              source: 'getToolNames'
-            });
+            // Auto-registered via getToolNames
           });
         }
       }
@@ -177,9 +168,7 @@ export class AgentFactory {
         // Only register if not already registered by other methods
         if (!this.toolToAgentMap.has(toolName)) {
           this.toolToAgentMap.set(toolName, agentName);
-          logger.debug(`Auto-registered conventional tool: ${toolName} → ${agentName}`, {
-            source: 'convention'
-          });
+          // Auto-registered via convention
         }
       });
     }
@@ -277,10 +266,7 @@ export class AgentFactory {
     }
     
     try {
-      logger.info(`Executing agent: ${name}`, {
-        sessionId: context.sessionId,
-        userId: context.userId
-      });
+        logger.debug(`Executing agent: ${name}`);
       
       // Add access token to parameters if provided
       const executionParameters = accessToken 
@@ -502,7 +488,7 @@ export class AgentFactory {
     }
     
     try {
-      logger.info('Initializing AgentFactory with core agents and metadata...');
+      logger.debug('Initializing AgentFactory...');
       
       // Register core agents
       this.registerAgentClass('emailAgent', EmailAgent);
@@ -717,7 +703,11 @@ export class AgentFactory {
       this.initialized = true;
       
       const stats = this.getStats();
-      logger.info('AgentFactory initialized successfully', stats);
+      logger.info('AgentFactory initialized successfully', {
+        totalAgents: stats.totalAgents,
+        enabledAgents: stats.enabledAgents,
+        totalTools: stats.totalTools
+      });
       
     } catch (error) {
       logger.error('Failed to initialize AgentFactory:', error);
@@ -733,7 +723,7 @@ export class AgentFactory {
     this.toolMetadata.clear();
     this.toolToAgentMap.clear();
     this.initialized = false;
-    logger.info('AgentFactory reset');
+    logger.debug('AgentFactory reset');
   }
   
   /**

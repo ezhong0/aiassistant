@@ -38,14 +38,10 @@ let globalInterfaces: InterfaceManager | null = null;
 const initializeApplication = async (): Promise<void> => {
   try {
     // Initialize all core services (includes service registration and initialization)
-    logger.info('Initializing application services...');
     await initializeAllCoreServices();
-    logger.info('Application services initialized successfully');
 
     // Initialize AgentFactory after services
-    logger.info('Initializing AgentFactory...');
     initializeAgentFactory();
-    logger.info('AgentFactory initialized successfully');
 
     logger.info('Application initialization completed successfully');
   } catch (error) {
@@ -99,9 +95,9 @@ const setupSlackInterface = async () => {
       // Only initialize the SlackInterface service without mounting Bolt routes
       // The manual /slack/events endpoint handles all Slack events directly
       await startInterfaces(globalInterfaces);
-      logger.info('Slack interface initialized successfully (manual routing only)');
+      logger.debug('Slack interface initialized (manual routing)');
     } else {
-      logger.warn('Slack interface not available - running without Slack integration');
+      logger.info('Slack interface not available');
     }
   } catch (error) {
     logger.error('Error setting up Slack interface:', error);
@@ -152,10 +148,7 @@ const startServer = async (): Promise<void> => {
     const server = app.listen(port, () => {
       logger.info('Server started successfully', {
         port,
-        environment: configService.nodeEnv,
-        nodeVersion: process.version,
-        pid: process.pid,
-        timestamp: new Date().toISOString()
+        environment: configService.nodeEnv
       });
     });
 
