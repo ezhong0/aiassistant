@@ -127,6 +127,15 @@ export interface ThinkParams {
   previousActions?: ToolCall[];
 }
 
+export interface SlackAgentParams {
+  query: string;
+  channelId?: string;
+  threadTs?: string;
+  limit?: number;
+  includeReactions?: boolean;
+  includeAttachments?: boolean;
+}
+
 // Tool execution pipeline types
 export interface ToolPipeline {
   sessionId: string;
@@ -178,7 +187,8 @@ export const TOOL_NAMES = {
   CALENDAR_AGENT: 'calendarAgent',
   CONTACT_AGENT: 'contactAgent',
   CONTENT_CREATOR: 'contentCreator',
-  TAVILY: 'Tavily'
+  TAVILY: 'Tavily',
+  SLACK_AGENT: 'slackAgent'
 } as const;
 
 export type ToolName = typeof TOOL_NAMES[keyof typeof TOOL_NAMES];
