@@ -32,6 +32,7 @@ export class SlackInterfaceService extends BaseService {
   private client: WebClient;
   private config: SlackConfig;
   private processedEvents = new Set<string>(); // Track processed events to prevent duplicates
+  private botUserId: string | null = null; // Cache bot user ID to prevent infinite loops
   
   // Injected service dependencies
   private tokenManager: TokenManager | null = null;
@@ -83,6 +84,9 @@ export class SlackInterfaceService extends BaseService {
     try {
       // Clear processed events cache
       this.processedEvents.clear();
+      
+      // Reset bot user ID cache
+      this.botUserId = null;
       
       // Reset service references
       this.tokenManager = null;
@@ -201,8 +205,67 @@ export class SlackInterfaceService extends BaseService {
         teamId
       });
 
+      // Skip bot messages to prevent infinite loops
+      if (event.bot_id || event.subtype === 'bot_message') {
+        this.logDebug('Bot message detected, skipping to prevent infinite loop', {
+          eventId,
+          botId: event.bot_id,
+          subtype: event.subtype
+        });
+        return;
+      }
+
+      // Skip messages from the bot user itself
+      if (this.botUserId && event.user === this.botUserId) {
+        this.logDebug('Message from bot user detected, skipping to prevent infinite loop', {
+          eventId,
+          botUserId: this.botUserId,
+          eventUserId: event.user
+        });
+        return;
+      }
+
+      // Initialize bot user ID if not cached
+      if (!this.botUserId) {
+        try {
+          const authTest = await this.client.auth.test();
+          this.botUserId = authTest.user_id as string;
+          this.logDebug('Bot user ID cached', { botUserId: this.botUserId });
+          
+          // Double-check with cached value
+          if (event.user === this.botUserId) {
+            this.logDebug('Message from bot user detected (cached check), skipping to prevent infinite loop', {
+              eventId,
+              botUserId: this.botUserId,
+              eventUserId: event.user
+            });
+            return;
+          }
+        } catch (error) {
+          this.logWarn('Could not verify bot user ID, continuing with processing', { error });
+        }
+      }
+
       // Extract Slack context from event
       const slackContext = await this.extractSlackContext(event, teamId);
+      
+      // Enforce DM-only mode - reject channel-based interactions
+      if (!slackContext.isDirectMessage) {
+        this.logWarn('Channel interaction rejected - DM-only mode enforced', {
+          eventId,
+          eventType: event.type,
+          userId: event.user,
+          channelId: event.channel,
+          channelType: event.channel_type
+        });
+        
+        // Send a polite message explaining DM-only policy
+        await this.sendMessage(slackContext.channelId, {
+          text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance.",
+          thread_ts: slackContext.threadTs
+        });
+        return;
+      }
       
       // Determine event type
       const eventType = this.determineEventType(event);

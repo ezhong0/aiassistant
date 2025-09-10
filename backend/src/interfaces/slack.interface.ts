@@ -23,6 +23,7 @@ export class SlackInterface {
   private tokenManager: TokenManager | null = null;
   private processedEvents = new Set<string>(); // Track processed events to prevent duplicates
   private pendingActions = new Map<string, any>(); // Store pending actions awaiting confirmation
+  private botUserId: string | null = null; // Cache bot user ID to prevent infinite loops
 
   constructor(config: SlackConfig, serviceManager: ServiceManager) {
     this.config = config;
@@ -95,6 +96,47 @@ export class SlackInterface {
         channelId: event.channel
       });
 
+      // Skip bot messages to prevent infinite loops
+      if (event.bot_id || event.subtype === 'bot_message') {
+        logger.debug('Bot message detected, skipping to prevent infinite loop', {
+          eventId,
+          botId: event.bot_id,
+          subtype: event.subtype
+        });
+        return;
+      }
+
+      // Skip messages from the bot user itself
+      if (this.botUserId && event.user === this.botUserId) {
+        logger.debug('Message from bot user detected, skipping to prevent infinite loop', {
+          eventId,
+          botUserId: this.botUserId,
+          eventUserId: event.user
+        });
+        return;
+      }
+
+      // Initialize bot user ID if not cached
+      if (!this.botUserId) {
+        try {
+          const authTest = await this.client.auth.test();
+          this.botUserId = authTest.user_id as string;
+          logger.debug('Bot user ID cached', { botUserId: this.botUserId });
+          
+          // Double-check with cached value
+          if (event.user === this.botUserId) {
+            logger.debug('Message from bot user detected (cached check), skipping to prevent infinite loop', {
+              eventId,
+              botUserId: this.botUserId,
+              eventUserId: event.user
+            });
+            return;
+          }
+        } catch (error) {
+          logger.warn('Could not verify bot user ID, continuing with processing', { error });
+        }
+      }
+
       // Create Slack context from event
       const slackContext: SlackContext = {
         userId: event.user,
@@ -103,6 +145,25 @@ export class SlackInterface {
         threadTs: event.ts,
         isDirectMessage: event.channel_type === 'im'
       };
+
+      // Enforce DM-only mode - reject channel-based interactions
+      if (!slackContext.isDirectMessage) {
+        logger.warn('Channel interaction rejected - DM-only mode enforced', {
+          eventId,
+          eventType: event.type,
+          userId: event.user,
+          channelId: event.channel,
+          channelType: event.channel_type
+        });
+        
+        // Send a polite message explaining DM-only policy
+        await this.client.chat.postMessage({
+          channel: slackContext.channelId,
+          text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance.",
+          thread_ts: slackContext.threadTs
+        });
+        return;
+      }
 
       // Determine event type
       let eventType: SlackEventType;
@@ -272,7 +333,7 @@ export class SlackInterface {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "• *Send me a message* with what you'd like to do\n• *Use commands* like 'check my email' or 'schedule a meeting'\n• *Type 'help'* anytime for more information"
+            text: "• *Send me a direct message* with what you'd like to do\n• *Use commands* like 'check my email' or 'schedule a meeting'\n• *Type 'help'* anytime for more information\n\n🔒 *Privacy Protected:* All conversations happen through direct messages to keep your data secure."
           }
         },
         {
@@ -414,7 +475,7 @@ export class SlackInterface {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "*Ways to interact with me:*\n• Direct message me\n• Mention me in channels (@AI Assistant)\n• Use `/assistant` followed by any request"
+            text: "*Ways to interact with me:*\n• Send me a direct message\n• Use `/assistant` followed by any request\n\n🔒 *Privacy-First Design:* All interactions happen through direct messages to protect your privacy."
           }
         },
         {

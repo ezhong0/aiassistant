@@ -1,265 +1,366 @@
-# Multi-Agent AI Architecture Plan
+# 🎯 AI Assistant Platform: DM-Only Bot Transition Plan
 
-## Overview
-Transform your existing multi-agent system into intelligent AI-driven assistants that use AI planning for complex operations while maintaining agent specialization. Each agent (EmailAgent, ContactAgent, CalendarAgent) becomes an AI-powered specialist that can orchestrate multi-step workflows within their domain.
+## 📋 **Strategic Overview**
 
-## Strategic Principles
-- **Multi-Agent Specialization**: Each agent handles its domain (email, contacts, calendar) with specialized AI planning
-- **Agent-Centric Architecture**: Agents are the primary tools, not separate tool systems
-- **AI Planning Integration**: Add AI planning to existing agents while keeping their specialized logic
-- **Service Reuse**: Leverage existing BaseAgent framework, AgentFactory, and service registry
-- **Clean Enhancement**: Enhance existing agents rather than replacing them
+This plan implements a **DM-only Slack bot** with **draft-based confirmations** and a dedicated **Slack Agent** for message reading and context management. The design prioritizes privacy, user experience, and architectural consistency.
 
 ---
 
-## Phase 1: AI Foundation ✅ COMPLETED
+## 🚀 **Phase 1: DM-Only Transition**
 
-### Prompt 1.1: Create AIAgent Base Class ✅ COMPLETED
+### **Prompt 1.1: Slack Scope Migration**
 
-**Status**: Successfully implemented `AIAgent` and `AIAgentWithPreview` classes that extend `BaseAgent` with AI planning capabilities.
+**Architecture Context:** Based on our existing Slack integration in `backend/src/interfaces/slack.interface.ts` and `backend/src/services/slack-interface.service.ts`, we need to transition from channel-based to DM-only permissions while maintaining all existing functionality.
 
-**What Was Built**:
-- `AIAgent<TParams, TResult>` abstract class extending BaseAgent patterns
-- AI planning framework with step-by-step execution
-- `AIAgentWithPreview` for agents requiring confirmation flows
-- Integration with existing OpenAI service and AgentFactory
-- Example transformation: `AIEmailAgent` demonstrating AI planning
-
----
-
-### Prompt 1.1.5: Replace BaseAgent with AIAgent (Architectural Foundation)
-
-**Architecture Context:** Currently you have both `BaseAgent` and `AIAgent` classes, where `AIAgent` extends `BaseAgent`. Since nothing is shipped yet and you're building an AI-first architecture, replace `BaseAgent` with `AIAgent` as the single base class for all agents to create a cleaner, more maintainable architecture.
-
-**Goal:** Replace `BaseAgent` with `AIAgent` as the single base class for all agents, making AI planning the default behavior while maintaining manual fallbacks for simple cases.
+**Goal:** Update Slack app configuration and OAuth flow to support DM-only access while preserving current bot capabilities.
 
 **Constraints:**
-- Replace `BaseAgent` with `AIAgent` as the single base class
-- Merge all `BaseAgent` functionality into `AIAgent`
-- Make AI planning optional but default (can be disabled for simple agents)
-- Maintain all existing patterns: error handling, logging, validation, preview generation
-- Preserve all existing agent functionality during migration
-- Update all existing agents to extend `AIAgent` instead of `BaseAgent`
-- Update `AgentFactory` and related systems to use `AIAgent`
+- Maintain existing SlackInterface and SlackInterfaceService patterns
+- Preserve all current event handling logic
+- Update OAuth scopes to DM-only permissions
+- Ensure backward compatibility during transition
+- Follow our established error handling patterns
 
 **Integration Points:**
-- `BaseAgent` in `backend/src/framework/base-agent.ts` (to be replaced)
-- `AIAgent` in `backend/src/framework/ai-agent.ts` (to be enhanced)
-- All existing agents: `EmailAgent`, `ContactAgent`, `CalendarAgent`, `MasterAgent`
-- `AgentFactory` in `backend/src/framework/agent-factory.ts`
-- Agent initialization in `backend/src/config/agent-factory-init.ts`
+- Slack app configuration in Slack Developer Console
+- OAuth flow in `backend/src/routes/slack.routes.ts`
+- Event handling in `backend/src/interfaces/slack.interface.ts`
+- Service initialization in `backend/src/services/service-initialization.ts`
 
 **Testing Requirements:**
-- Migration tests ensuring all existing functionality works
-- AI planning default behavior tests
-- Manual fallback tests for simple agents
-- Agent factory and registration tests
-- Performance tests maintaining 2-second requirement
-- Regression tests for all existing agent capabilities
+- OAuth flow tests for DM-only permissions
+- Event handling tests for DM vs channel events
+- Integration tests for DM functionality
+- Error handling tests for permission failures
 
 **Format:** Provide:
-1. Enhanced `AIAgent` class merging all `BaseAgent` functionality
-2. Migration strategy for existing agents
-3. Updated `AgentFactory` and initialization code
-4. Agent configuration for AI planning enable/disable
-5. Cleanup of deprecated `BaseAgent` references
+1. Updated Slack app configuration with DM-only scopes
+2. Modified OAuth flow for DM permissions
+3. Updated event handling logic for DM-only mode
+4. Migration strategy for existing channel-based users
+5. Comprehensive test updates
 
-**Example:** 
-- Before: `class EmailAgent extends BaseAgent` → Manual execution only
-- After: `class EmailAgent extends AIAgent` → AI planning by default, manual fallback available
-- Configuration: `new EmailAgent({ aiPlanning: { enableAIPlanning: false } })` for simple cases
+**Example:** Follow the existing OAuth pattern in `backend/src/routes/slack.routes.ts` but restrict scopes to `['im:history', 'im:write', 'users:read']` and update event filtering logic.
 
 ---
 
-## Phase 2: Agent Enhancement (Week 2)
+## 🤖 **Phase 2: Slack Agent Implementation**
 
-### Prompt 1.2: Enhance Agents with OpenAI Function Calling
+### **Prompt 1.2: Slack Agent Creation**
 
-**Architecture Context:** Your existing agents (EmailAgent, ContactAgent, CalendarAgent) already call services directly and have specialized logic. Enhance them with OpenAI function calling metadata so they can be discovered and orchestrated by AI systems while maintaining their domain expertise.
+**Architecture Context:** Following our multi-agent architecture in `docs/AGENTS.md`, we need to create a specialized SlackAgent that handles Slack-specific operations including message reading, draft management, and confirmation handling. This agent should integrate with our existing AgentFactory pattern.
 
-**Goal:** Add OpenAI function calling schemas to existing agents and enhance the MasterAgent to intelligently orchestrate multiple specialized agents using AI planning.
-
-**Constraints:**
-- Keep existing multi-agent architecture intact
-- Add OpenAI metadata to existing agents without changing their core logic
-- Enhance MasterAgent with AI planning for multi-agent orchestration
-- Maintain agent-specific confirmation flows and error handling
-- Use existing AgentFactory and service registry patterns
-
-**Integration Points:**
-- Existing agents in `backend/src/agents/` (EmailAgent, ContactAgent, CalendarAgent)
-- MasterAgent in `backend/src/agents/master.agent.ts`
-- AgentFactory in `backend/src/framework/agent-factory.ts`
-- OpenAI service in `backend/src/services/openai.service.ts`
-- ToolExecutorService in `backend/src/services/tool-executor.service.ts`
-
-**Testing Requirements:**
-- Agent OpenAI schema generation tests
-- Multi-agent orchestration tests
-- MasterAgent AI planning validation
-- Agent discovery and routing tests
-- Performance tests maintaining 2-second requirement
-
-**Format:** Provide enhancements to:
-1. Add OpenAI function schemas to existing agents
-2. Enhance MasterAgent with AI planning for multi-agent orchestration
-3. Agent discovery and metadata generation
-4. Multi-agent workflow execution
-5. Agent-specific tool metadata
-
-**Example:** 
-- EmailAgent gets OpenAI schema: `{"name": "send_email", "description": "Send email via Gmail", "parameters": {...}}`
-- ContactAgent gets schema: `{"name": "search_contacts", "description": "Search Google Contacts", "parameters": {...}}`
-- MasterAgent uses AI to decide: "Send email to john@example.com" → calls EmailAgent with proper parameters
-
----
-
-### Prompt 1.3: Enhance OpenAI Service for Multi-Agent Planning
-
-**Architecture Context:** Your existing OpenAI service handles function calling for MasterAgent. Enhance it with multi-agent orchestration capabilities to support intelligent agent selection, parameter extraction, and result synthesis across multiple specialized agents.
-
-**Goal:** Add multi-agent orchestration methods to OpenAI service to support intelligent agent routing, parameter extraction, and result synthesis for complex multi-step operations.
+**Goal:** Implement SlackAgent extending AIAgent that can read Slack message history, manage drafts, and handle confirmations through natural language processing.
 
 **Constraints:**
-- Extend existing OpenAI service without breaking current functionality
-- Support multi-agent orchestration and parameter extraction
-- Maintain existing function calling capabilities
-- Use existing agent metadata and discovery patterns
-- Follow service registry patterns for dependency injection
+- Extend AIAgent<SlackAgentParams, SlackAgentResult> following our established pattern
+- Implement proper error handling using our BaseAgent error patterns
+- Use structured logging format (logger.error with context)
+- Follow our service registry dependency injection patterns
+- Integrate with existing SlackInterface service
 
 **Integration Points:**
-- OpenAI service in `backend/src/services/openai.service.ts`
-- AgentFactory for agent discovery and metadata
-- MasterAgent for orchestration coordination
-- Existing agent schemas and parameter validation
+- AgentFactory registration in `backend/src/config/agent-factory-init.ts`
+- MasterAgent routing logic for Slack-specific queries
+- SlackInterface service for API calls
+- Tool metadata registration for OpenAI function calling
 
 **Testing Requirements:**
-- Multi-agent orchestration tests
-- Parameter extraction and validation tests
-- Agent selection and routing tests
-- Result synthesis and formatting tests
-- Performance tests for complex workflows
-
-**Format:** Provide enhancements to:
-1. Multi-agent orchestration methods
-2. Intelligent agent selection and routing
-3. Parameter extraction and validation
-4. Result synthesis across multiple agents
-5. Workflow planning and execution
-
-**Example:** 
-- User: "Send email to john@example.com about the meeting and add him to my contacts"
-- AI Planning: 1) ContactAgent.searchContacts("john@example.com") 2) ContactAgent.createContact() 3) EmailAgent.sendEmail()
-- Orchestration: Execute steps in parallel where possible, synthesize results
-
----
-
-
-## Phase 3: Advanced Multi-Agent Features (Week 3)
-
-### Prompt 1.4: Agent Communication and Context Sharing
-
-**Architecture Context:** Enhance agents to share context and results with each other during multi-agent workflows. For example, ContactAgent finding a contact should pass that information to EmailAgent for sending emails.
-
-**Goal:** Add agent-to-agent communication and context sharing capabilities while maintaining agent independence and specialized logic.
-
-**Constraints:**
-- Maintain agent independence and specialized logic
-- Add context sharing without tight coupling
-- Use existing ToolExecutionContext for context passing
-- Support both synchronous and asynchronous agent communication
-- Maintain existing error handling and logging patterns
-
-**Integration Points:**
-- ToolExecutionContext for context sharing
-- AgentFactory for agent discovery and communication
-- Existing agent result interfaces
-- MasterAgent for coordination
-
-**Testing Requirements:**
-- Agent communication tests
-- Context sharing validation
-- Multi-agent workflow tests
-- Error propagation tests
-- Performance tests for agent coordination
+- Unit tests following `docs/TESTING.md` patterns
+- Agent behavior tests for message reading
+- Error handling tests for Slack API failures
+- Performance tests within 2-second requirement
+- Mock Slack API responses for testing
 
 **Format:** Provide:
-1. Agent communication framework
-2. Context sharing mechanisms
-3. Result passing between agents
-4. Coordination patterns
-5. Example multi-agent workflows
+1. Complete SlackAgent class extending AIAgent
+2. TypeScript interfaces for SlackAgentParams and SlackAgentResult
+3. Message reading and parsing methods
+4. Draft detection and confirmation handling logic
+5. Registration code for AgentFactory
+6. Comprehensive unit tests
 
----
+**Example:** Follow the ContactAgent pattern in `backend/src/agents/contact.agent.ts` but adapt for Slack message operations instead of Google Contacts API calls.
 
-### Prompt 1.5: Advanced Agent Capabilities
+### **Prompt 1.3: Slack Message Reading Service**
 
-**Architecture Context:** Enhance agents with advanced capabilities like learning from user feedback, adaptive behavior, and intelligent error recovery while maintaining their specialized domain expertise.
+**Architecture Context:** Building on our service layer architecture in `docs/SERVICES.md`, create a dedicated service for reading Slack message history that follows our BaseService pattern and integrates with the Slack Web API.
 
-**Goal:** Add learning, adaptation, and intelligent error recovery to agents while keeping them focused on their specialized domains.
+**Goal:** Implement SlackMessageReaderService that can safely read recent Slack messages with proper error handling, rate limiting, and privacy controls.
 
 **Constraints:**
-- Maintain agent specialization and domain expertise
-- Add learning without changing core agent logic
-- Use existing service patterns for data persistence
-- Support both online and offline learning
-- Maintain existing error handling patterns
+- Extend BaseService following our IService interface
+- Implement proper error handling with Slack-specific error types
+- Use our established logging patterns
+- Follow dependency injection through ServiceManager
+- Include rate limiting and API quota management
+- Implement message filtering for sensitive content
 
 **Integration Points:**
-- Existing agent base classes and patterns
-- Service registry for data persistence
-- User feedback mechanisms
-- Error handling and logging systems
+- Service registration in `backend/src/services/service-initialization.ts`
+- SlackInterface service for WebClient access
+- CacheService for message caching (optional)
+- DatabaseService for audit logging (optional)
 
 **Testing Requirements:**
-- Learning and adaptation tests
-- Error recovery validation
-- User feedback integration tests
-- Performance impact tests
-- Regression tests for existing functionality
+- Service lifecycle tests following our patterns
+- Slack API integration tests with mocks
+- Rate limiting and error handling tests
+- Privacy and security validation tests
+- Performance tests for message reading operations
 
 **Format:** Provide:
-1. Agent learning framework
-2. Adaptive behavior mechanisms
-3. Intelligent error recovery
-4. User feedback integration
-5. Performance monitoring
+1. Complete SlackMessageReaderService class
+2. Message filtering and privacy controls
+3. Rate limiting and quota management
+4. Error handling with proper Slack error types
+5. Service registration and dependency setup
+6. Comprehensive test suite
+
+**Example:** Follow the GmailService pattern in `backend/src/services/gmail.service.ts` but adapt for Slack API calls instead of Gmail API operations.
 
 ---
 
-## Implementation Strategy
+## 📝 **Phase 3: Draft-Based Confirmation System**
 
-### Week 1: Foundation ✅ COMPLETED
-- [x] AIAgent base class with AI planning
-- [x] AIAgentWithPreview for confirmation flows
-- [x] Example AIEmailAgent implementation
+### **Prompt 1.4: Draft Generation Framework**
 
-### Week 2: Agent Enhancement
-- [ ] Add OpenAI schemas to existing agents
-- [ ] Enhance MasterAgent with multi-agent orchestration
-- [ ] Multi-agent workflow execution
-- [ ] Agent discovery and routing
+**Architecture Context:** Based on our existing confirmation system in `backend/src/services/confirmation.service.ts`, implement a new draft-based approach that generates previews in chat and handles confirmations through message reading rather than persistent storage.
 
-### Week 3: Advanced Features
-- [ ] Agent communication and context sharing
-- [ ] Advanced agent capabilities
-- [ ] Learning and adaptation
-- [ ] Performance optimization
+**Goal:** Create a DraftService that generates email, calendar, and contact drafts, sends them to users in Slack, and handles confirmations by reading the user's response messages.
 
-## Key Architectural Principles
+**Constraints:**
+- Replace current confirmation table approach with message-based confirmations
+- Maintain compatibility with existing EmailAgent, CalendarAgent, and ContactAgent
+- Follow our established error handling patterns
+- Use our structured logging format
+- Implement proper draft formatting for Slack messages
+- Include modification support for draft changes
 
-1. **Agent Specialization**: Each agent remains focused on its domain (email, contacts, calendar)
-2. **AI Enhancement**: Add AI planning to existing agents without replacing their specialized logic
-3. **Multi-Agent Orchestration**: MasterAgent coordinates multiple specialized agents
-4. **Service Integration**: Agents continue to call services directly through service registry
-5. **Clean Enhancement**: Build on existing architecture rather than replacing it
+**Integration Points:**
+- Integration with existing agents for draft generation
+- SlackInterface service for sending draft messages
+- SlackMessageReaderService for reading confirmations
+- ToolExecutorService for executing confirmed actions
+- OpenAI service for draft modification processing
 
-## Success Metrics
+**Testing Requirements:**
+- Draft generation tests for all agent types
+- Confirmation parsing tests with various user inputs
+- Modification handling tests
+- Integration tests with existing agents
+- Error handling tests for failed confirmations
 
-- **Functionality**: All existing agent capabilities preserved and enhanced
-- **Performance**: Multi-agent workflows complete within 2-second requirement
-- **Intelligence**: AI planning improves user experience for complex operations
-- **Maintainability**: Clean separation of concerns between agents and services
-- **Scalability**: Easy to add new specialized agents following established patterns
+**Format:** Provide:
+1. Complete DraftService class with draft generation methods
+2. Draft formatting utilities for Slack messages
+3. Confirmation parsing and handling logic
+4. Modification support for user changes
+5. Integration with existing agents
+6. Comprehensive test suite
 
-This plan aligns with your multi-agent vision where each agent is a specialized tool with its own domain expertise, enhanced with AI planning capabilities for intelligent orchestration.
+**Example:** Follow the ConfirmationService pattern in `backend/src/services/confirmation.service.ts` but replace database storage with message-based confirmations and add draft generation capabilities.
+
+### **Prompt 1.5: Natural Language Confirmation Processing**
+
+**Architecture Context:** Building on our OpenAI integration in `backend/src/services/openai.service.ts`, implement natural language processing for confirmation responses that can handle various user inputs like "send it", "make it friendlier", "change the time to 3pm", etc.
+
+**Goal:** Create ConfirmationProcessor that uses AI to understand user confirmation intent and extract modification requests from natural language responses.
+
+**Constraints:**
+- Use our existing OpenAI service patterns
+- Implement proper error handling for AI processing failures
+- Follow our structured logging format
+- Include fallback handling for unclear responses
+- Support multiple confirmation types (send, cancel, modify)
+- Maintain conversation context for modifications
+
+**Integration Points:**
+- OpenAI service for natural language processing
+- DraftService for draft modifications
+- SlackMessageReaderService for context reading
+- Existing agents for executing modified actions
+- Error handling integration with our patterns
+
+**Testing Requirements:**
+- Natural language processing tests with various inputs
+- Confirmation intent recognition tests
+- Modification extraction tests
+- Error handling tests for AI failures
+- Integration tests with draft system
+
+**Format:** Provide:
+1. Complete ConfirmationProcessor class
+2. Natural language processing methods
+3. Intent recognition and extraction logic
+4. Modification handling and context management
+5. Error handling and fallback mechanisms
+6. Comprehensive test suite with various user inputs
+
+**Example:** Follow the OpenAI service patterns in `backend/src/services/openai.service.ts` but focus on confirmation processing and modification extraction rather than general text generation.
+
+---
+
+## 🔄 **Phase 4: Integration and Testing**
+
+### **Prompt 1.6: Master Agent Integration**
+
+**Architecture Context:** Based on our MasterAgent implementation in `backend/src/agents/master.agent.ts`, integrate the new SlackAgent and draft-based confirmation system into the existing routing and orchestration logic.
+
+**Goal:** Update MasterAgent to route Slack-specific queries to SlackAgent and integrate draft-based confirmations into the tool execution workflow.
+
+**Constraints:**
+- Maintain existing MasterAgent routing patterns
+- Integrate SlackAgent into existing agent discovery
+- Preserve existing tool execution workflows
+- Follow our established error handling patterns
+- Maintain backward compatibility with existing agents
+- Update OpenAI function calling schemas
+
+**Integration Points:**
+- AgentFactory for SlackAgent registration
+- ToolExecutorService for draft-based confirmations
+- Existing agent routing logic
+- OpenAI function calling integration
+- Error handling and logging patterns
+
+**Testing Requirements:**
+- MasterAgent routing tests for Slack queries
+- Integration tests with draft confirmation flow
+- Tool execution tests with new confirmation system
+- Error handling tests for integration failures
+- Performance tests for complete workflow
+
+**Format:** Provide:
+1. Updated MasterAgent routing logic
+2. SlackAgent integration code
+3. Draft confirmation workflow integration
+4. Updated OpenAI function schemas
+5. Comprehensive integration tests
+6. Migration strategy from old confirmation system
+
+**Example:** Follow the existing MasterAgent patterns in `backend/src/agents/master.agent.ts` but add Slack-specific routing and integrate the new draft-based confirmation system.
+
+### **Prompt 1.7: End-to-End Testing Framework**
+
+**Architecture Context:** Building on our testing infrastructure in `backend/tests/`, create comprehensive end-to-end tests for the complete DM-only bot workflow including draft generation, confirmation handling, and action execution.
+
+**Goal:** Implement comprehensive test suite that validates the complete user journey from initial request through draft generation, confirmation, and execution.
+
+**Constraints:**
+- Follow our established testing patterns in `docs/TESTING.md`
+- Use our existing test utilities and mocking strategies
+- Include performance tests within 2-second requirement
+- Test error handling and edge cases
+- Validate privacy and security controls
+- Include load testing for concurrent users
+
+**Integration Points:**
+- Existing test infrastructure and utilities
+- Mock Slack API responses
+- Mock OpenAI API responses
+- Database testing with test fixtures
+- Service integration testing
+
+**Testing Requirements:**
+- Complete user journey tests
+- Draft generation and formatting tests
+- Confirmation processing tests
+- Error handling and edge case tests
+- Performance and load tests
+- Privacy and security validation tests
+
+**Format:** Provide:
+1. Complete end-to-end test suite
+2. Mock implementations for external APIs
+3. Test fixtures and data setup
+4. Performance and load testing
+5. Error scenario testing
+6. Privacy and security validation tests
+
+**Example:** Follow the integration test patterns in `backend/tests/integration/` but create comprehensive tests for the complete DM-only bot workflow.
+
+---
+
+## 📊 **Phase 5: Performance and Optimization**
+
+### **Prompt 1.8: Performance Optimization**
+
+**Architecture Context:** Based on our performance requirements and existing optimization patterns, optimize the DM-only bot for response time, memory usage, and API efficiency.
+
+**Goal:** Implement performance optimizations including message caching, intelligent context selection, and efficient API usage while maintaining the 2-second response requirement.
+
+**Constraints:**
+- Maintain 2-second response time requirement
+- Follow our established caching patterns in CacheService
+- Implement proper memory management
+- Use our structured logging for performance monitoring
+- Include performance metrics and monitoring
+- Optimize OpenAI token usage
+
+**Integration Points:**
+- CacheService for message caching
+- Existing performance monitoring
+- Database optimization patterns
+- Service performance patterns
+- Error handling for performance issues
+
+**Testing Requirements:**
+- Performance benchmark tests
+- Memory usage tests
+- API efficiency tests
+- Load testing with concurrent users
+- Performance regression tests
+- Monitoring and alerting tests
+
+**Format:** Provide:
+1. Performance optimization implementations
+2. Caching strategies for message history
+3. Memory management improvements
+4. API efficiency optimizations
+5. Performance monitoring and metrics
+6. Comprehensive performance test suite
+
+**Example:** Follow the performance patterns in existing services but optimize specifically for the DM-only bot workflow and message processing requirements.
+
+---
+
+## 🎯 **Success Criteria**
+
+### **Functional Requirements**
+- [ ] DM-only Slack bot with proper OAuth scopes
+- [ ] SlackAgent integrated with AgentFactory
+- [ ] Message reading capability with privacy controls
+- [ ] Draft generation for email, calendar, and contacts
+- [ ] Natural language confirmation processing
+- [ ] Modification support for draft changes
+- [ ] Complete integration with existing agents
+
+### **Non-Functional Requirements**
+- [ ] 2-second response time maintained
+- [ ] Memory usage optimized for message processing
+- [ ] Privacy controls implemented and tested
+- [ ] Error handling follows established patterns
+- [ ] Comprehensive test coverage (>80%)
+- [ ] Performance monitoring implemented
+- [ ] Documentation updated
+
+### **Architectural Compliance**
+- [ ] Follows BaseAgent and AIAgent patterns
+- [ ] Integrates with ServiceManager dependency injection
+- [ ] Uses established error handling and logging
+- [ ] Maintains separation of concerns
+- [ ] Follows testing patterns and requirements
+- [ ] Preserves existing agent functionality
+
+---
+
+## 🚀 **Implementation Timeline**
+
+**Week 1:** DM-Only Transition (Prompts 1.1)
+**Week 2:** Slack Agent Implementation (Prompts 1.2, 1.3)
+**Week 3:** Draft-Based Confirmations (Prompts 1.4, 1.5)
+**Week 4:** Integration and Testing (Prompts 1.6, 1.7)
+**Week 5:** Performance Optimization (Prompt 1.8)
+
+This plan ensures a systematic, architecture-compliant transition to a DM-only bot with enhanced user experience through draft-based confirmations and intelligent message processing.
