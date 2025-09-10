@@ -12,6 +12,7 @@ import { CacheService } from './cache.service';
 import { ConfirmationService } from './confirmation.service';
 import { SlackMigrationService } from './slack-migration.service';
 import { ResponseFormatterService } from './response-formatter.service';
+import { SlackMessageReaderService } from './slack-message-reader.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -190,6 +191,21 @@ const registerCoreServices = async (): Promise<void> => {
       });
     } else {
       logger.debug('SlackMigrationService skipped - Slack not configured');
+    }
+
+    // 15. SlackMessageReaderService - Dedicated service for reading Slack message history
+    // Only register if Slack is configured
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackMessageReaderService = new SlackMessageReaderService(
+        ENVIRONMENT.slack.botToken
+      );
+      serviceManager.registerService('slackMessageReaderService', slackMessageReaderService, {
+        dependencies: ['cacheService'], // Optional dependency
+        priority: 65,
+        autoStart: true
+      });
+    } else {
+      logger.debug('SlackMessageReaderService skipped - Slack not configured');
     }
 
     // Note: Slack is now an interface layer, not a service

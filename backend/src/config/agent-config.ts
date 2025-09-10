@@ -45,6 +45,13 @@ export const AGENT_CAPABILITIES = {
     description: 'Search the web for information using Tavily API',
     capabilities: ['web_search', 'find_information', 'lookup_facts', 'research'],
     useCases: ['search web', 'find information', 'lookup facts', 'research topics']
+  },
+  
+  /** Slack agent - message reading and management */
+  slack: {
+    description: 'Read Slack message history, manage drafts, and handle confirmations',
+    capabilities: ['read_messages', 'detect_drafts', 'manage_confirmations', 'thread_management'],
+    useCases: ['read conversation history', 'check for drafts', 'manage confirmations', 'analyze threads']
   }
 };
 
@@ -121,6 +128,17 @@ export const AGENT_CONFIG = {
     requiresConfirmation: false,
     isCritical: false,
     requiresAuth: false,
+    hasExternalEffects: false,
+    isReadOnly: true
+  },
+  
+  slack: {
+    description: AGENT_CAPABILITIES.slack.description,
+    capabilities: AGENT_CAPABILITIES.slack.capabilities,
+    useCases: AGENT_CAPABILITIES.slack.useCases,
+    requiresConfirmation: false,
+    isCritical: false,
+    requiresAuth: true,
     hasExternalEffects: false,
     isReadOnly: true
   }

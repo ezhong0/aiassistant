@@ -7,6 +7,7 @@ import { ThinkAgent } from '../agents/think.agent';
 import { CalendarAgent } from '../agents/calendar.agent';
 import { ContentCreatorAgent } from '../agents/content-creator.agent';
 import { TavilyAgent } from '../agents/tavily.agent';
+import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import logger from '../utils/logger';
 
@@ -497,6 +498,7 @@ export class AgentFactory {
       this.registerAgentClass('calendarAgent', CalendarAgent);
       this.registerAgentClass('contentCreator', ContentCreatorAgent);
       this.registerAgentClass('Tavily', TavilyAgent);
+      this.registerAgentClass('slackAgent', SlackAgent);
       
       // Register tool metadata for all agents
       this.registerToolMetadata({
@@ -698,6 +700,54 @@ export class AgentFactory {
         },
         requiresConfirmation: AGENT_CONFIG.search.requiresConfirmation,
         isCritical: AGENT_CONFIG.search.isCritical
+      });
+
+      this.registerToolMetadata({
+        name: 'slackAgent',
+        description: 'Read Slack message history, detect drafts, and manage confirmation workflows',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The Slack operation request in natural language'
+            },
+            operation: {
+              type: 'string',
+              description: 'The type of operation to perform',
+              enum: ['read_messages', 'read_thread', 'detect_drafts', 'manage_drafts', 'confirmation_handling'],
+              nullable: true
+            },
+            channelId: {
+              type: 'string',
+              description: 'Specific channel ID to read messages from',
+              nullable: true
+            },
+            threadTs: {
+              type: 'string',
+              description: 'Specific thread timestamp to read messages from',
+              nullable: true
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum number of messages to retrieve',
+              nullable: true
+            },
+            includeReactions: {
+              type: 'boolean',
+              description: 'Whether to include message reactions',
+              nullable: true
+            },
+            includeAttachments: {
+              type: 'boolean',
+              description: 'Whether to include message attachments',
+              nullable: true
+            }
+          },
+          required: ['query']
+        },
+        requiresConfirmation: false, // Read-only operations don't require confirmation
+        isCritical: false
       });
       
       this.initialized = true;
