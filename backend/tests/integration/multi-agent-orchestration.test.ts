@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { MasterAgent } from '../../src/agents/master.agent';
 import { AgentFactory } from '../../src/framework/agent-factory';
-import { MultiAgentWorkflowService } from '../../src/services/multi-agent-workflow.service';
 import { ToolExecutionContext } from '../../src/types/tools';
 
 // Mock OpenAI service
@@ -22,7 +21,6 @@ jest.mock('../../src/services/service-manager', () => ({
 
 describe('Multi-Agent Orchestration', () => {
   let masterAgent: MasterAgent;
-  let workflowService: MultiAgentWorkflowService;
   let mockContext: ToolExecutionContext;
 
   beforeEach(() => {
@@ -32,7 +30,6 @@ describe('Multi-Agent Orchestration', () => {
 
     // Create MasterAgent with mocked OpenAI service
     masterAgent = new MasterAgent({ openaiApiKey: 'test-key' });
-    workflowService = new MultiAgentWorkflowService();
 
     // Mock context
     mockContext = {

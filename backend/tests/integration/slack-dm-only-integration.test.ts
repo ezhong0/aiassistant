@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { SlackInterface } from '../../src/interfaces/slack.interface';
 import { SlackInterfaceService } from '../../src/services/slack-interface.service';
-import { SlackMigrationService } from '../../src/services/slack-migration.service';
 import { ServiceManager } from '../../src/services/service-manager';
 import { WebClient } from '@slack/web-api';
 import logger from '../../src/utils/logger';
@@ -22,7 +21,6 @@ describe('Slack DM-Only Functionality Tests', () => {
   let mockWebClient: jest.Mocked<WebClient>;
   let slackInterface: SlackInterface;
   let slackInterfaceService: SlackInterfaceService;
-  let slackMigrationService: SlackMigrationService;
   let serviceManager: ServiceManager;
 
   const mockSlackConfig = {
@@ -74,7 +72,6 @@ describe('Slack DM-Only Functionality Tests', () => {
     // Initialize services
     slackInterface = new SlackInterface(mockSlackConfig, serviceManager);
     slackInterfaceService = new SlackInterfaceService(mockSlackConfig);
-    slackMigrationService = new SlackMigrationService(mockSlackConfig.botToken, 'graceful');
   });
 
   afterEach(() => {

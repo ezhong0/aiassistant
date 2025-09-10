@@ -10,7 +10,6 @@ import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { ConfirmationService } from './confirmation.service';
-import { SlackMigrationService } from './slack-migration.service';
 import { ResponseFormatterService } from './response-formatter.service';
 import { SlackMessageReaderService } from './slack-message-reader.service';
 import { ConfigService } from '../config/config.service';
@@ -177,23 +176,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 14. SlackMigrationService - Handles migration from channel-based to DM-only mode
-    // Only register if Slack is configured
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const migrationMode = process.env.SLACK_MIGRATION_MODE as 'graceful' | 'immediate' | 'disabled' || 'disabled';
-      const slackMigrationService = new SlackMigrationService(
-        ENVIRONMENT.slack.botToken,
-        migrationMode
-      );
-      serviceManager.registerService('slackMigrationService', slackMigrationService, {
-        priority: 60,
-        autoStart: true
-      });
-    } else {
-      logger.debug('SlackMigrationService skipped - Slack not configured');
-    }
-
-    // 15. SlackMessageReaderService - Dedicated service for reading Slack message history
+    // 14. SlackMessageReaderService - Dedicated service for reading Slack message history
     // Only register if Slack is configured
     if (ENV_VALIDATION.isSlackConfigured()) {
       const slackMessageReaderService = new SlackMessageReaderService(
