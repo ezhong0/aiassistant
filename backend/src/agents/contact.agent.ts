@@ -253,21 +253,6 @@ export interface ContactAgentRequest extends ContactAgentParams {
   }
   
   /**
-   * Enhanced parameter validation for contact operations
-   */
-  protected validateParams(params: ContactAgentRequest): void {
-    super.validateParams(params);
-    
-    if (!params.accessToken || typeof params.accessToken !== 'string') {
-      throw this.createError('Access token is required for contact operations', 'MISSING_ACCESS_TOKEN');
-    }
-    
-    if (params.query && params.query.length > CONTACT_CONSTANTS.MAX_NAME_LENGTH * 2) {
-      throw this.createError('Query is too long for contact search', 'QUERY_TOO_LONG');
-    }
-  }
-  
-  /**
    * Pre-execution hook - validate Google Contacts access
    */
   protected async beforeExecution(params: ContactAgentRequest, context: ToolExecutionContext): Promise<void> {
