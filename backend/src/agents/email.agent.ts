@@ -410,22 +410,6 @@ export interface EmailAgentRequest extends EmailAgentParams {
         'No results from AI planning execution'
     } as EmailResult;
   }
-  
-  /**
-   * Enhanced parameter validation
-   */
-  protected validateParams(params: EmailAgentRequest): void {
-    super.validateParams(params);
-    
-    if (!params.accessToken || typeof params.accessToken !== 'string') {
-      throw this.createError('Access token is required for email operations', 'MISSING_ACCESS_TOKEN');
-    }
-    
-    if (params.accessToken.length > EMAIL_CONSTANTS.MAX_LOG_BODY_LENGTH) {
-      throw this.createError('Access token appears to be invalid', 'INVALID_ACCESS_TOKEN');
-    }
-  }
-
   /**
    * Create user-friendly error messages for email operations
    */

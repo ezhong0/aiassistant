@@ -20,7 +20,7 @@ export class AgentFactory {
   private static initialized = false;
   
   /**
-   * Register a single agent instance
+   * Register a single agent instance with automatic tool discovery
    */
   static registerAgent(name: string, agent: AIAgent): void {
     if (this.agents.has(name)) {
@@ -29,10 +29,14 @@ export class AgentFactory {
     
     this.agents.set(name, agent);
     
+    // Auto-register agent's tools using dynamic discovery
+    this.autoRegisterTools(name, agent);
+    
     logger.info(`Framework agent registered: ${name}`, {
       config: agent.getConfig(),
       enabled: agent.isEnabled(),
-      aiPlanningEnabled: agent.getAIConfig().enableAIPlanning
+      aiPlanningEnabled: agent.getAIConfig().enableAIPlanning,
+      registeredTools: this.getToolsForAgent(name)
     });
   }
   
@@ -86,23 +90,18 @@ export class AgentFactory {
   }
 
   /**
-   * Get agent by tool name (maps OpenAI function names to agent names)
+   * Dynamic tool-to-agent mapping registry
+   */
+  private static toolToAgentMap = new Map<string, string>();
+
+  /**
+   * Get agent by tool name using dynamic discovery
    */
   static getAgentByToolName(toolName: string): AIAgent | undefined {
-    // Map tool names to agent names
-    const toolToAgentMap: Record<string, string> = {
-      'send_email': 'emailAgent',
-      'search_contacts': 'contactAgent', 
-      'manage_calendar': 'calendarAgent',
-      'Think': 'Think',
-      'create_content': 'contentCreator',
-      'search_web': 'Tavily'
-    };
-
-    const agentName = toolToAgentMap[toolName];
+    const agentName = this.toolToAgentMap.get(toolName);
     if (!agentName) {
       logger.warn(`No agent mapping found for tool: ${toolName}`, {
-        availableTools: Object.keys(toolToAgentMap),
+        availableTools: Array.from(this.toolToAgentMap.keys()),
         availableAgents: Array.from(this.agents.keys())
       });
       return undefined;
@@ -116,6 +115,94 @@ export class AgentFactory {
    */
   static getToolMetadata(name: string): ToolMetadata | undefined {
     return this.toolMetadata.get(name);
+  }
+
+  /**
+   * Auto-register tools for an agent using dynamic discovery
+   */
+  private static autoRegisterTools(agentName: string, agent: AIAgent): void {
+    const agentClass = agent.constructor as any;
+    
+    try {
+      // Strategy 1: Check for getOpenAIFunctionSchema static method
+      if (typeof agentClass.getOpenAIFunctionSchema === 'function') {
+        const schema = agentClass.getOpenAIFunctionSchema();
+        if (schema?.name) {
+          this.toolToAgentMap.set(schema.name, agentName);
+          logger.debug(`Auto-registered tool: ${schema.name} → ${agentName}`, {
+            source: 'getOpenAIFunctionSchema'
+          });
+        }
+      }
+      
+      // Strategy 2: Check for getToolNames static method (if agents implement it)
+      if (typeof agentClass.getToolNames === 'function') {
+        const toolNames = agentClass.getToolNames();
+        if (Array.isArray(toolNames)) {
+          toolNames.forEach((toolName: string) => {
+            this.toolToAgentMap.set(toolName, agentName);
+            logger.debug(`Auto-registered tool: ${toolName} → ${agentName}`, {
+              source: 'getToolNames'
+            });
+          });
+        }
+      }
+      
+      // Strategy 3: Convention-based registration for common patterns
+      this.registerConventionalTools(agentName, agentClass);
+      
+    } catch (error) {
+      logger.warn(`Failed to auto-register tools for agent: ${agentName}`, {
+        error: error instanceof Error ? error.message : error
+      });
+    }
+  }
+
+  /**
+   * Register tools based on naming conventions
+   */
+  private static registerConventionalTools(agentName: string, agentClass: any): void {
+    const conventionalMappings: Record<string, string[]> = {
+      'emailAgent': ['manage_emails', 'send_email', 'search_emails', 'emailAgent'],
+      'contactAgent': ['search_contacts', 'contactAgent'],
+      'calendarAgent': ['manage_calendar', 'calendarAgent'], 
+      'Think': ['Think'],
+      'contentCreator': ['create_content', 'contentCreator'],
+      'Tavily': ['search_web', 'Tavily']
+    };
+    
+    const toolNames = conventionalMappings[agentName];
+    if (toolNames) {
+      toolNames.forEach(toolName => {
+        // Only register if not already registered by other methods
+        if (!this.toolToAgentMap.has(toolName)) {
+          this.toolToAgentMap.set(toolName, agentName);
+          logger.debug(`Auto-registered conventional tool: ${toolName} → ${agentName}`, {
+            source: 'convention'
+          });
+        }
+      });
+    }
+  }
+
+  /**
+   * Get all tools registered for a specific agent
+   */
+  static getToolsForAgent(agentName: string): string[] {
+    const tools: string[] = [];
+    for (const [toolName, mappedAgentName] of this.toolToAgentMap) {
+      if (mappedAgentName === agentName) {
+        tools.push(toolName);
+      }
+    }
+    return tools;
+  }
+
+  /**
+   * Get all registered tool mappings
+   */
+  static getAllToolMappings(): Record<string, string> {
+    return Object.fromEntries(this.toolToAgentMap);
   }
 
   /**
@@ -644,6 +731,7 @@ export class AgentFactory {
   static reset(): void {
     this.agents.clear();
     this.toolMetadata.clear();
+    this.toolToAgentMap.clear();
     this.initialized = false;
     logger.info('AgentFactory reset');
   }
@@ -661,6 +749,8 @@ export class AgentFactory {
     criticalTools: number;
     confirmationTools: number;
     toolNames: string[];
+    toolMappings: Record<string, string>;
+    registeredToolCount: number;
   } {
     const allAgents = this.getAllAgents();
     const enabledAgents = this.getEnabledAgents();
@@ -675,7 +765,9 @@ export class AgentFactory {
       totalTools: tools.length,
       criticalTools: tools.filter(t => t.isCritical).length,
       confirmationTools: tools.filter(t => t.requiresConfirmation).length,
-      toolNames: tools.map(t => t.name)
+      toolNames: tools.map(t => t.name),
+      toolMappings: this.getAllToolMappings(),
+      registeredToolCount: this.toolToAgentMap.size
     };
   }
   

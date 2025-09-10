@@ -176,6 +176,33 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   }
 
   /**
+   * Log AI planning fallback with detailed context
+   */
+  protected logAIPlanningFallback(
+    error: Error,
+    fallbackReason: 'service_unavailable' | 'planning_failed' | 'timeout' | 'unsuitable_query',
+    context: ToolExecutionContext
+  ): void {
+    const fallbackType = 'AI Planning → Manual Execution';
+    const timestamp = new Date().toISOString();
+    
+    this.logger.warn('AI Planning Fallback', {
+      agent: this.config.name,
+      fallbackType,
+      fallbackReason,
+      error: error.message,
+      sessionId: context.sessionId,
+      userId: context.userId,
+      timestamp,
+      aiConfig: {
+        enableAIPlanning: this.aiConfig.enableAIPlanning,
+        maxPlanningSteps: this.aiConfig.maxPlanningSteps,
+        planningTimeout: this.aiConfig.planningTimeout
+      }
+    });
+  }
+
+  /**
    * Initialize AI services for planning
    */
   private initializeAIServices(): void {
@@ -1037,6 +1064,14 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   }
 
   // UTILITY METHODS - Can be overridden for customization
+
+  /**
+   * Check if AI planning can be used for the given parameters
+   */
+  protected canUseAIPlanning(_params: TParams): boolean {
+    // Override this method to add custom logic for when to use AI planning
+    return (this.aiConfig.enableAIPlanning ?? false) && !!this.openaiService;
+  }
 
   /**
    * Check if AI planning is enabled for this agent
