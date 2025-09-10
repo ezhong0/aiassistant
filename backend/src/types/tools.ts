@@ -106,21 +106,6 @@ export interface ContactAgentParams {
   phone?: string;
 }
 
-export interface ContentCreatorParams {
-  query: string;
-  topic?: string;
-  tone?: string;
-  length?: string;
-  format?: 'blog' | 'article' | 'social' | 'email';
-}
-
-export interface TavilyParams {
-  query: string;
-  maxResults?: number;
-  includeAnswer?: boolean;
-  searchDepth?: 'basic' | 'advanced';
-}
-
 export interface ThinkParams {
   query: string;
   context?: string;
@@ -186,8 +171,6 @@ export const TOOL_NAMES = {
   EMAIL_AGENT: 'emailAgent',
   CALENDAR_AGENT: 'calendarAgent',
   CONTACT_AGENT: 'contactAgent',
-  CONTENT_CREATOR: 'contentCreator',
-  TAVILY: 'Tavily',
   SLACK_AGENT: 'slackAgent'
 } as const;
 

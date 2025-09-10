@@ -410,10 +410,8 @@ export class ResponseFormatterService extends BaseService {
         return '📅';
       case 'contact':
         return '👤';
-      case 'content':
-        return '📝';
-      case 'search':
-        return '🔍';
+      case 'slack':
+        return '💬';
       default:
         return '⚙️';
     }

@@ -234,8 +234,7 @@ export class MasterAgent {
       'search_contacts': 'contactAgent', 
       'manage_calendar': 'calendarAgent',
       'Think': 'Think',
-      'create_content': 'contentCreator',
-      'search_web': 'Tavily'
+      'slack_operations': 'slackAgent'
     };
 
     const agentName = toolToAgentMap[toolName];

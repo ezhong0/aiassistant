@@ -5,8 +5,6 @@ import { EmailAgent } from '../agents/email.agent';
 import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
 import { CalendarAgent } from '../agents/calendar.agent';
-import { ContentCreatorAgent } from '../agents/content-creator.agent';
-import { TavilyAgent } from '../agents/tavily.agent';
 import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import logger from '../utils/logger';
@@ -159,8 +157,7 @@ export class AgentFactory {
       'contactAgent': ['search_contacts', 'contactAgent'],
       'calendarAgent': ['manage_calendar', 'calendarAgent'], 
       'Think': ['Think'],
-      'contentCreator': ['create_content', 'contentCreator'],
-      'Tavily': ['search_web', 'Tavily']
+      'slackAgent': ['slack_operations', 'slackAgent']
     };
     
     const toolNames = conventionalMappings[agentName];
@@ -430,9 +427,8 @@ export class AgentFactory {
       'emailAgent': 'email',
       'contactAgent': 'contact', 
       'calendarAgent': 'calendar',
-      'contentCreator': 'content',
-      'Tavily': 'search',
-      'Think': 'think'
+      'Think': 'think',
+      'slackAgent': 'slack'
     };
     
     const configAgentName = toolNameMapping[toolName] || toolName;
@@ -451,9 +447,8 @@ export class AgentFactory {
       'emailAgent': 'email',
       'contactAgent': 'contact', 
       'calendarAgent': 'calendar',
-      'contentCreator': 'content',
-      'Tavily': 'search',
-      'Think': 'think'
+      'Think': 'think',
+      'slackAgent': 'slack'
     };
     
     const configAgentName = toolNameMapping[toolName] || toolName;
@@ -496,8 +491,6 @@ export class AgentFactory {
       this.registerAgentClass('contactAgent', ContactAgent);
       this.registerAgentClass('Think', ThinkAgent);
       this.registerAgentClass('calendarAgent', CalendarAgent);
-      this.registerAgentClass('contentCreator', ContentCreatorAgent);
-      this.registerAgentClass('Tavily', TavilyAgent);
       this.registerAgentClass('slackAgent', SlackAgent);
       
       // Register tool metadata for all agents
@@ -629,77 +622,6 @@ export class AgentFactory {
         },
         requiresConfirmation: AGENT_CONFIG.calendar.requiresConfirmation,
         isCritical: AGENT_CONFIG.calendar.isCritical
-      });
-
-      this.registerToolMetadata({
-        name: 'contentCreator',
-        description: 'Create blog posts, articles, and other written content',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'The content creation request in natural language'
-            },
-            topic: {
-              type: 'string',
-              description: 'The main topic or subject',
-              nullable: true
-            },
-            tone: {
-              type: 'string',
-              description: 'The desired tone (professional, casual, etc.)',
-              nullable: true
-            },
-            length: {
-              type: 'string',
-              description: 'Desired length (short, medium, long)',
-              nullable: true
-            },
-            format: {
-              type: 'string',
-              description: 'Content format',
-              enum: ['blog', 'article', 'social', 'email'],
-              nullable: true
-            }
-          },
-          required: ['query']
-        },
-        requiresConfirmation: AGENT_CONFIG.content.requiresConfirmation,
-        isCritical: AGENT_CONFIG.content.isCritical
-      });
-
-      this.registerToolMetadata({
-        name: 'Tavily',
-        description: 'Search the web for information using Tavily API',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'The search query'
-            },
-            maxResults: {
-              type: 'number',
-              description: 'Maximum number of results to return',
-              nullable: true
-            },
-            includeAnswer: {
-              type: 'boolean',
-              description: 'Whether to include AI-generated answer',
-              nullable: true
-            },
-            searchDepth: {
-              type: 'string',
-              description: 'Search depth level',
-              enum: ['basic', 'advanced'],
-              nullable: true
-            }
-          },
-          required: ['query']
-        },
-        requiresConfirmation: AGENT_CONFIG.search.requiresConfirmation,
-        isCritical: AGENT_CONFIG.search.isCritical
       });
 
       this.registerToolMetadata({

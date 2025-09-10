@@ -535,12 +535,10 @@ export class ConfirmationService extends BaseService implements IConfirmationSer
         return 'calendar';
       case 'contactAgent':
         return 'contact';
-      case 'contentCreator':
-        return 'content';
-      case 'Tavily':
-        return 'search';
+      case 'slackAgent':
+        return 'slack';
       default:
-        return 'search'; // Default fallback
+        return 'contact'; // Default fallback
     }
   }
 
@@ -552,10 +550,8 @@ export class ConfirmationService extends BaseService implements IConfirmationSer
         return 'Calendar Operation';
       case 'contactAgent':
         return 'Contact Operation';
-      case 'contentCreator':
-        return 'Content Creation';
-      case 'Tavily':
-        return 'Web Search';
+      case 'slackAgent':
+        return 'Slack Operation';
       default:
         return `${toolCall.name} Operation`;
     }

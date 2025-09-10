@@ -181,12 +181,6 @@ export const AGENT_AI_CONFIGS: Record<string, AgentAIConfig> = {
     retries: 2,
     enabled: true,
     fallback_strategy: 'retry'
-  },
-  tavilyAgent: {
-    timeout: 15000,
-    retries: 2,
-    enabled: true,
-    fallback_strategy: 'retry'
   }
 };
 
