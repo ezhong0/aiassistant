@@ -180,7 +180,7 @@ const registerCoreServices = async (): Promise<void> => {
     // 14. SlackMigrationService - Handles migration from channel-based to DM-only mode
     // Only register if Slack is configured
     if (ENV_VALIDATION.isSlackConfigured()) {
-      const migrationMode = process.env.SLACK_MIGRATION_MODE as 'graceful' | 'immediate' | 'disabled' || 'graceful';
+      const migrationMode = process.env.SLACK_MIGRATION_MODE as 'graceful' | 'immediate' | 'disabled' || 'disabled';
       const slackMigrationService = new SlackMigrationService(
         ENVIRONMENT.slack.botToken,
         migrationMode
