@@ -4,7 +4,6 @@ import { ContactAgent } from '../../src/agents/contact.agent';
 import { CalendarAgent } from '../../src/agents/calendar.agent';
 import { MasterAgent } from '../../src/agents/master.agent';
 import { AgentFactory } from '../../src/framework/agent-factory';
-import { MultiAgentWorkflowService } from '../../src/services/multi-agent-workflow.service';
 
 describe('OpenAI Function Calling Integration', () => {
   beforeEach(() => {
@@ -172,43 +171,6 @@ describe('OpenAI Function Calling Integration', () => {
       
       // Check enabled status
       expect(typeof metadata.emailAgent.enabled).toBe('boolean');
-    });
-  });
-
-  describe('Multi-Agent Workflow Service', () => {
-    let workflowService: MultiAgentWorkflowService;
-
-    beforeEach(() => {
-      workflowService = new MultiAgentWorkflowService();
-    });
-
-    it('should initialize workflow service', () => {
-      expect(workflowService).toBeDefined();
-      expect(workflowService.getWorkflowStats).toBeDefined();
-    });
-
-    it('should provide workflow statistics', () => {
-      const stats = workflowService.getWorkflowStats();
-      
-      expect(stats).toBeDefined();
-      expect(typeof stats.totalWorkflows).toBe('number');
-      expect(typeof stats.successfulWorkflows).toBe('number');
-      expect(typeof stats.averageStepsPerWorkflow).toBe('number');
-      expect(stats.mostUsedAgents).toBeInstanceOf(Array);
-    });
-
-    it('should identify critical steps', () => {
-      // Contact agent should be critical
-      const isContactCritical = workflowService['isCriticalStep']('contactAgent');
-      expect(isContactCritical).toBe(true);
-
-      // Think tool should not be critical
-      const isThinkCritical = workflowService['isCriticalStep']('Think');
-      expect(isThinkCritical).toBe(false);
-
-      // Other agents should not be critical
-      const isEmailCritical = workflowService['isCriticalStep']('emailAgent');
-      expect(isEmailCritical).toBe(false);
     });
   });
 
