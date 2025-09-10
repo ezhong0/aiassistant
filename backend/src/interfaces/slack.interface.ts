@@ -1976,9 +1976,7 @@ export class SlackInterface {
       'emailAgent': '📧 Email',
       'contactAgent': '👤 Contacts',
       'calendarAgent': '📅 Calendar',
-      'Think': '🤔 Analysis',
-      'tavilyAgent': '🔍 Search',
-      'contentCreatorAgent': '✍️ Content'
+      'Think': '🤔 Analysis'
     };
     
     return displayNames[toolName] || `🔧 ${toolName}`;

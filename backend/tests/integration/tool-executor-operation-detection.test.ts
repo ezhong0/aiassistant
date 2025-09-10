@@ -123,8 +123,8 @@ describe('ToolExecutorService Operation-Aware Confirmation', () => {
       });
 
       const toolCall: ToolCall = {
-        name: 'Tavily',
-        parameters: { query: 'search for information about AI' }
+        name: 'slackAgent',
+        parameters: { query: 'read my slack messages' }
       };
 
       const result = await toolExecutor.executeTool(toolCall, mockContext, undefined, { preview: true });

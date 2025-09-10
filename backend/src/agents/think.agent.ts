@@ -93,8 +93,8 @@ Analysis: ❌ Incorrect - Missing contactAgent call to resolve "John" to actual 
 
 ### Suboptimal Pattern
 User: "What's the weather today?"
-Tools: [contentCreator, Think]
-Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appropriate for current information
+Tools: [Think]
+Analysis: ✅ Optimal - Think tool used appropriately for analysis
 `;
 
   /**
@@ -250,11 +250,8 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
       case 'calendarAgent':
         return this.analyzeCalendarAgentUsage(query, parameters);
       
-      case 'contentCreator':
-        return this.analyzeContentCreatorUsage(query, parameters);
-      
-      case 'Tavily':
-        return this.analyzeTavilyUsage(query, parameters);
+      case 'slackAgent':
+        return this.analyzeSlackAgentUsage(query, parameters);
       
       default:
         return {
@@ -352,67 +349,30 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
   }
 
   /**
-   * Analyze ContentCreator usage
+   * Analyze SlackAgent usage
    */
-  private analyzeContentCreatorUsage(query: string, _parameters: any): {
+  private analyzeSlackAgentUsage(query: string, _parameters: any): {
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
   } {
-    const isContentRelated = query.includes('blog') || query.includes('write') || 
-                            query.includes('create') && query.includes('post') ||
-                            query.includes('article') || query.includes('content');
+    const slackKeywords = ['slack', 'message', 'dm', 'channel', 'thread', 'conversation'];
+    const hasSlackContext = slackKeywords.some(keyword => 
+      query.toLowerCase().includes(keyword)
+    );
 
-    if (isContentRelated) {
+    if (hasSlackContext) {
       return {
-        toolName: 'contentCreator',
+        toolName: 'slackAgent',
         appropriateness: 'correct',
-        reason: 'Correctly used for content creation requests'
-      };
-    }
-
-    // Check if this might be better served by search
-    if (query.includes('what') || query.includes('how') || query.includes('when')) {
-      return {
-        toolName: 'contentCreator',
-        appropriateness: 'suboptimal',
-        reason: 'ContentCreator used for informational query - Tavily search might be more appropriate'
+        reason: 'SlackAgent used appropriately for Slack-related operations'
       };
     }
 
     return {
-      toolName: 'contentCreator',
+      toolName: 'slackAgent',
       appropriateness: 'incorrect',
-      reason: 'ContentCreator used for non-content creation query'
-    };
-  }
-
-  /**
-   * Analyze Tavily search usage
-   */
-  private analyzeTavilyUsage(query: string, _parameters: any): {
-    toolName: string;
-    appropriateness: 'correct' | 'incorrect' | 'suboptimal';
-    reason: string;
-  } {
-    const isSearchRelated = query.includes('search') || query.includes('find') || 
-                           query.includes('look up') || query.includes('what is') ||
-                           query.includes('what are') || query.includes('how') ||
-                           query.includes('when') || query.includes('where') ||
-                           query.includes('current') || query.includes('latest');
-
-    if (isSearchRelated) {
-      return {
-        toolName: 'Tavily',
-        appropriateness: 'correct',
-        reason: 'Correctly used for information search and research queries'
-      };
-    }
-
-    return {
-      toolName: 'Tavily',
-      appropriateness: 'suboptimal',
-      reason: 'Tavily used but query may not require web search'
+      reason: 'SlackAgent used but query does not appear to be Slack-related'
     };
   }
 
@@ -559,12 +519,8 @@ Analysis: ⚠️ Suboptimal - contentCreator works but Tavily would be more appr
       suggestions.push('Consider using contactAgent for contact lookup');
     }
 
-    if (lowerQuery.includes('blog') || lowerQuery.includes('write') || lowerQuery.includes('create')) {
-      suggestions.push('Consider using contentCreator for content creation');
-    }
-
-    if (lowerQuery.includes('search') || lowerQuery.includes('what') || lowerQuery.includes('how')) {
-      suggestions.push('Consider using Tavily for web search and information gathering');
+    if (lowerQuery.includes('slack') || lowerQuery.includes('message') || lowerQuery.includes('dm')) {
+      suggestions.push('Consider using slackAgent for Slack message operations');
     }
 
     return suggestions;

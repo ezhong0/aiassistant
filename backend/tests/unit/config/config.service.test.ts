@@ -38,10 +38,10 @@ describe('ConfigService', () => {
       }
     });
 
-    it('should have Tavily API key (if configured)', () => {
-      if (configService.tavilyApiKey) {
-        expect(typeof configService.tavilyApiKey).toBe('string');
-        expect(configService.tavilyApiKey.length).toBeGreaterThan(0);
+    it('should have Slack configuration (if configured)', () => {
+      if (configService.slackBotToken) {
+        expect(typeof configService.slackBotToken).toBe('string');
+        expect(configService.slackBotToken.length).toBeGreaterThan(0);
       }
     });
   });

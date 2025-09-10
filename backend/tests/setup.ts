@@ -16,7 +16,6 @@ process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only-must-be-at-least-
 
 // Mock API keys for tests that might need them
 process.env.OPENAI_API_KEY = 'test-openai-key';
-process.env.TAVILY_API_KEY = 'test-tavily-key';
 
 // Import service initialization for tests (disabled by default to prevent Redis/DB connection issues)
 let serviceInitialized = false;

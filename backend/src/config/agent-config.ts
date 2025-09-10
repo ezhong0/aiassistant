@@ -33,20 +33,6 @@ export const AGENT_CAPABILITIES = {
     useCases: ['schedule meetings', 'create events', 'check availability', 'manage calendar']
   },
   
-  /** Content creator - writing and content generation */
-  content: {
-    description: 'Create blog posts, articles, and other written content',
-    capabilities: ['write_content', 'create_articles', 'generate_text', 'content_creation'],
-    useCases: ['write blog posts', 'create articles', 'generate content', 'write text']
-  },
-  
-  /** Tavily agent - web search */
-  search: {
-    description: 'Search the web for information using Tavily API',
-    capabilities: ['web_search', 'find_information', 'lookup_facts', 'research'],
-    useCases: ['search web', 'find information', 'lookup facts', 'research topics']
-  },
-  
   /** Slack agent - message reading and management */
   slack: {
     description: 'Read Slack message history, manage drafts, and handle confirmations',
@@ -110,28 +96,6 @@ export const AGENT_CONFIG = {
     isReadOnly: false
   },
   
-  content: {
-    description: AGENT_CAPABILITIES.content.description,
-    capabilities: AGENT_CAPABILITIES.content.capabilities,
-    useCases: AGENT_CAPABILITIES.content.useCases,
-    requiresConfirmation: false,
-    isCritical: false,
-    requiresAuth: false,
-    hasExternalEffects: false,
-    isReadOnly: false
-  },
-  
-  search: {
-    description: AGENT_CAPABILITIES.search.description,
-    capabilities: AGENT_CAPABILITIES.search.capabilities,
-    useCases: AGENT_CAPABILITIES.search.useCases,
-    requiresConfirmation: false,
-    isCritical: false,
-    requiresAuth: false,
-    hasExternalEffects: false,
-    isReadOnly: true
-  },
-  
   slack: {
     description: AGENT_CAPABILITIES.slack.description,
     capabilities: AGENT_CAPABILITIES.slack.capabilities,
@@ -179,20 +143,6 @@ export const AGENT_OPERATIONS = {
     create: 'create',
     /** Update existing contact (requires additional permissions) */
     update: 'update'
-  },
-  
-  content: {
-    /** Content format options */
-    formats: ['blog', 'article', 'social', 'email'] as const,
-    /** Content length options */
-    lengths: ['short', 'medium', 'long'] as const,
-    /** Content tone options */
-    tones: ['professional', 'casual', 'friendly', 'formal'] as const
-  },
-  
-  search: {
-    /** Search depth options for Tavily */
-    depths: ['basic', 'advanced']
   }
 };
 

@@ -388,7 +388,7 @@ export interface CalendarPreviewData extends Record<string, unknown> {
 
 export interface ActionPreview {
   actionId: string;
-  actionType: 'email' | 'calendar' | 'contact' | 'content' | 'search';
+  actionType: 'email' | 'calendar' | 'contact' | 'slack';
   title: string;
   description: string;
   riskAssessment: ActionRiskAssessment;
