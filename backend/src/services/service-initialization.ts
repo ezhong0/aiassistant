@@ -10,6 +10,7 @@ import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { ConfirmationService } from './confirmation.service';
+import { SlackMigrationService } from './slack-migration.service';
 import { ResponseFormatterService } from './response-formatter.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
@@ -174,6 +175,22 @@ const registerCoreServices = async (): Promise<void> => {
       priority: 55,
       autoStart: true
     });
+
+    // 14. SlackMigrationService - Handles migration from channel-based to DM-only mode
+    // Only register if Slack is configured
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const migrationMode = process.env.SLACK_MIGRATION_MODE as 'graceful' | 'immediate' | 'disabled' || 'graceful';
+      const slackMigrationService = new SlackMigrationService(
+        ENVIRONMENT.slack.botToken,
+        migrationMode
+      );
+      serviceManager.registerService('slackMigrationService', slackMigrationService, {
+        priority: 60,
+        autoStart: true
+      });
+    } else {
+      logger.debug('SlackMigrationService skipped - Slack not configured');
+    }
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

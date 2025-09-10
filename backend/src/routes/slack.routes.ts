@@ -41,7 +41,11 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
             <h1>🎉 Installation Successful!</h1>
             <p>AI Assistant has been successfully installed to your Slack workspace.</p>
-            <p>You can now use the <code>/assistant</code> command or mention <code>@AI Assistant</code> in any channel.</p>
+            <p>To get started, send a direct message to <code>@AI Assistant</code> or use the <code>/assistant</code> command.</p>
+            <div style="background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 400px;">
+              <strong>🔒 Privacy Protected:</strong><br>
+              All interactions happen through direct messages to keep your conversations private and secure.
+            </div>
             <p>You can close this tab and return to Slack.</p>
           </body>
         </html>
@@ -67,15 +71,13 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         return;
       }
 
+      // DM-only scopes for enhanced privacy and security
       const scopes = [
-        'app_mentions:read',
-        'chat:write',
-        'commands',
-        'im:history',
-        'im:read',
-        'im:write',
-        'users:read',
-        'channels:read'
+        'im:history',    // Read direct message history
+        'im:write',      // Send messages in direct messages
+        'users:read',    // Read user information
+        'chat:write',    // Send messages (required for DM responses)
+        'commands'       // Handle slash commands
       ].join(',');
 
       const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
@@ -85,13 +87,17 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           <head><title>Install AI Assistant</title></head>
           <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
             <h1>🤖 AI Assistant for Slack</h1>
-            <p>Install AI Assistant to your Slack workspace to get help with:</p>
+            <p>Install AI Assistant to your Slack workspace for private, secure assistance with:</p>
             <ul style="text-align: left; max-width: 400px; margin: 20px auto;">
               <li>📧 Email management</li>
               <li>📅 Calendar scheduling</li>
               <li>👤 Contact lookup</li>
               <li>🤖 Intelligent task assistance</li>
             </ul>
+            <div style="background: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 400px;">
+              <strong>🔒 Privacy-First Design:</strong><br>
+              AI Assistant works exclusively through direct messages to protect your privacy and keep conversations secure.
+            </div>
             <a href="${slackAuthUrl}" style="display: inline-block; background: #4A154B; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px;">
               Add to Slack
             </a>
