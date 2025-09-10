@@ -45,13 +45,7 @@ class TestAIAgent extends AIAgent<TestParams, TestResult> {
     });
   }
 
-  protected async executeManually(params: TestParams, context: ToolExecutionContext): Promise<TestResult> {
-    return {
-      success: true,
-      data: 'manual_execution',
-      aiPlanExecuted: false
-    };
-  }
+  // Removed executeManually - now using AI-first execution only
 
   protected buildFinalResult(
     summary: any,
@@ -81,8 +75,8 @@ class TestAIAgent extends AIAgent<TestParams, TestResult> {
     return this.executeCustomTool(toolName, parameters, context);
   }
 
-  public testCanUseAIPlanning(params: TestParams): boolean {
-    return this.canUseAIPlanning(params);
+  public testIsAIPlanningEnabled(): boolean {
+    return this.isAIPlanningEnabled();
   }
 
   public testValidateAndEnhancePlan(plan: AIPlan, params: TestParams, context: ToolExecutionContext) {
@@ -104,12 +98,7 @@ class TestAIAgentWithPreview extends AIAgentWithPreview<TestParams, TestResult> 
     });
   }
 
-  protected async executeManually(params: TestParams, context: ToolExecutionContext): Promise<TestResult> {
-    return {
-      success: true,
-      data: 'manual_execution_with_preview'
-    };
-  }
+  // Removed executeManually - now using AI-first execution only
 
   protected buildFinalResult(summary: any, successfulResults: any[], failedResults: any[]): TestResult {
     return {
@@ -190,12 +179,12 @@ describe('AIAgent Framework', () => {
       expect(config.cachePlans).toBe(true); // Should keep defaults for unspecified values
     });
 
-    it('should disable AI planning when OpenAI service is not available', () => {
+    it('should handle OpenAI service unavailability gracefully', () => {
       mockGetService.mockReturnValue(undefined);
       const agent = new TestAIAgent();
       
       const config = agent.getAIConfig();
-      expect(config.enableAIPlanning).toBe(false);
+      expect(config.enableAIPlanning).toBe(true); // AI planning is always enabled, errors handled at execution time
     });
 
     it('should register default tools', () => {
@@ -297,7 +286,6 @@ describe('AIAgent Framework', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('OpenAI error');
-      expect(result.fallbackToManual).toBe(true);
     });
 
     it('should use cached plans when available', async () => {
@@ -508,8 +496,8 @@ describe('AIAgent Framework', () => {
     });
   });
 
-  describe('processQuery Method', () => {
-    it('should use AI planning when enabled and suitable', async () => {
+  describe('AI-First Execution', () => {
+    it('should execute with AI planning successfully', async () => {
       const mockPlan: AIPlan = {
         id: 'test-plan',
         query: 'complex query',
@@ -530,9 +518,6 @@ describe('AIAgent Framework', () => {
       mockOpenAIService.generateStructuredData.mockResolvedValue(mockPlan);
       mockOpenAIService.generateText.mockResolvedValue('AI analysis result');
 
-      // Override canUseAIPlanning to return true
-      jest.spyOn(testAgent, 'testCanUseAIPlanning').mockReturnValue(true);
-
       const result = await testAgent.execute({ query: 'complex query' }, testContext);
 
       expect(result.success).toBe(true);
@@ -540,36 +525,40 @@ describe('AIAgent Framework', () => {
       expect(mockOpenAIService.generateStructuredData).toHaveBeenCalled();
     });
 
-    it('should fall back to manual execution when AI planning fails', async () => {
+    it('should handle AI planning failures with user-friendly errors', async () => {
       mockOpenAIService.generateStructuredData.mockRejectedValue(new Error('Planning failed'));
 
       const result = await testAgent.execute({ query: 'test query' }, testContext);
 
-      expect(result.success).toBe(true);
-      expect(result.result.aiPlanExecuted).toBe(false);
-      expect(result.result.data).toBe('manual_execution');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('I encountered an issue processing your request');
     });
 
-    it('should use manual execution when AI planning is disabled', async () => {
-      testAgent.updateAIConfig({ enableAIPlanning: false });
+    it('should handle OpenAI service unavailability with proper error messages', async () => {
+      mockGetService.mockReturnValue(undefined);
 
       const result = await testAgent.execute({ query: 'test query' }, testContext);
 
-      expect(result.success).toBe(true);
-      expect(result.result.aiPlanExecuted).toBe(false);
-      expect(result.result.data).toBe('manual_execution');
-      expect(mockOpenAIService.generateStructuredData).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('AI service is not available');
     });
 
-    it('should use manual execution when query is not suitable for AI planning', async () => {
-      jest.spyOn(testAgent, 'testCanUseAIPlanning').mockReturnValue(false);
+    it('should handle timeout errors gracefully', async () => {
+      mockOpenAIService.generateStructuredData.mockRejectedValue(new Error('Request timed out'));
 
-      const result = await testAgent.execute({ query: 'simple query' }, testContext);
+      const result = await testAgent.execute({ query: 'test query' }, testContext);
 
-      expect(result.success).toBe(true);
-      expect(result.result.aiPlanExecuted).toBe(false);
-      expect(result.result.data).toBe('manual_execution');
-      expect(mockOpenAIService.generateStructuredData).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Your request is taking longer than expected');
+    });
+
+    it('should handle authentication errors with helpful messages', async () => {
+      mockOpenAIService.generateStructuredData.mockRejectedValue(new Error('Unauthorized: invalid token'));
+
+      const result = await testAgent.execute({ query: 'test query' }, testContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Authentication failed');
     });
   });
 

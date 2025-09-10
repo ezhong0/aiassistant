@@ -35,9 +35,6 @@ export interface ToolMetadata {
     required: string[];
   };
   
-  /** Keywords for rule-based routing */
-  keywords: string[];
-  
   /** Whether this tool needs confirmation */
   requiresConfirmation: boolean;
   

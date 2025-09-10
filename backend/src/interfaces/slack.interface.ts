@@ -909,71 +909,14 @@ export class SlackInterface {
           return this.createConfirmationResponse(previewResults, sessionId, request.message, request.context.channelId);
         }
 
-        // Step 3: No confirmation needed, execute tools normally
-        for (const toolCall of masterResponse.toolCalls) {
-          try {
-            logger.debug(`Executing tool: ${toolCall.name}`, { 
-              parameters: Object.keys(toolCall.parameters || {}),
-              hasAccessToken: !!accessToken
-            });
-
-            // Check if this tool requires OAuth and we don't have a token
-            if (this.toolRequiresOAuth(toolCall.name) && !accessToken) {
-              logger.warn(`Tool ${toolCall.name} requires OAuth but no access token available`, { sessionId });
-              
-              // Add failed result to collection
-              toolResults.push({
-                toolName: toolCall.name,
-                success: false,
-                error: 'OAuth authentication required. Please authenticate with Gmail first.',
-                result: null,
-                executionTime: 0
-              });
-              
-              continue; // Skip execution and move to next tool
-            }
-
-            const executionContext = {
-              ...baseExecutionContext,
-              previousResults: toolResults // Pass previous results for context
-            };
-
-            const result = await (toolExecutorService as any).executeTool(
-              toolCall,
-              executionContext,
-              accessToken,
-              { preview: false } // Execute normally
-            );
-
-            // Collect results for response formatting
-            if (result) {
-              toolResults.push(result);
-              
-              if (result.success) {
-                logger.debug(`Tool ${toolCall.name} executed successfully`, {
-                  executionTime: result.executionTime
-                });
-              } else {
-                logger.warn(`Tool ${toolCall.name} execution failed`, { 
-                  error: result.error,
-                  executionTime: result.executionTime
-                });
-              }
-            }
-            
-          } catch (error: any) {
-            logger.error(`Error executing tool ${toolCall.name}:`, error);
-            
-            // Add failed result to collection
-            toolResults.push({
-              toolName: toolCall.name,
-              success: false,
-              error: error?.message || 'Unknown execution error',
-              result: null,
-              executionTime: 0
-            });
-          }
-        }
+        // Step 3: No confirmation needed, use preview results as final results
+        // (No need to execute again - preview mode already executed the tools)
+        logger.info('No confirmation needed, using preview results as final results', {
+          previewResultsCount: previewResults.length,
+          toolNames: previewResults.map(r => r.toolName)
+        });
+        
+        toolResults.push(...previewResults);
       }
 
       // 7. Enhance master response with tool execution results

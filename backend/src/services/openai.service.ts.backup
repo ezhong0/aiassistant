@@ -17,12 +17,10 @@ export interface FunctionCallResponse {
 export class OpenAIService extends BaseService {
   private client: OpenAI;
   private model: string;
-  private apiKey: string;
 
   constructor(config: OpenAIConfig) {
     super('OpenAIService');
     
-    this.apiKey = config.apiKey;
     this.client = new OpenAI({
       apiKey: config.apiKey,
     });
@@ -44,30 +42,6 @@ export class OpenAIService extends BaseService {
   protected async onInitialize(): Promise<void> {
     // OpenAI client is already initialized in constructor
     this.logInfo('OpenAI service initialized successfully');
-  }
-
-  /**
-   * Override isReady to include API key validation
-   */
-  public isReady(): boolean {
-    const baseReady = super.isReady();
-    const hasValidApiKey = this.hasValidApiKey();
-    
-    if (baseReady && !hasValidApiKey) {
-      this.logWarn('OpenAI service base ready but API key is invalid');
-    }
-    
-    return baseReady && hasValidApiKey;
-  }
-
-  /**
-   * Check if the API key is valid (not dummy or empty)
-   */
-  private hasValidApiKey(): boolean {
-    return !!(this.apiKey && 
-             this.apiKey.length > 10 && 
-             this.apiKey !== 'dummy-key' &&
-             this.apiKey.startsWith('sk-'));
   }
 
   /**
@@ -231,17 +205,17 @@ export class OpenAIService extends BaseService {
       });
 
       const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-      if (!toolCall) {
-        throw new Error('No tool call in OpenAI response');
+      if (!(toolCall as any)?.function?.arguments) {
+        throw new Error('No structured data in OpenAI response');
       }
 
-      const extractedData = JSON.parse((toolCall as any).function?.arguments || '{}');
+      const data = JSON.parse((toolCall as any).function.arguments);
       
       this.logDebug('Structured data generated successfully', { 
-        dataKeys: Object.keys(extractedData)
+        dataKeys: Object.keys(data) 
       });
 
-      return extractedData as T;
+      return data as T;
     } catch (error) {
       this.handleError(error, 'generateStructuredData');
     }
@@ -249,38 +223,58 @@ export class OpenAIService extends BaseService {
 
   /**
    * Get tool definitions for OpenAI function calling
-   * Uses enhanced agent schemas from AgentFactory
    */
   private getToolDefinitions(): any[] {
     try {
-      // Import AgentFactory dynamically to avoid circular imports
-      const { AgentFactory } = require('../framework/agent-factory');
-      
-      // Use enhanced OpenAI functions from AgentFactory
-      const enhancedFunctions = AgentFactory.generateEnhancedOpenAIFunctions();
-      
-      // Convert to OpenAI tool format
-      const tools = enhancedFunctions.map((func: any) => ({
-        type: 'function',
-        function: {
-          name: func.name,
-          description: func.description,
-          parameters: func.parameters
+      // This would typically come from AgentFactory
+      // For now, return a basic set of tools
+      return [
+        {
+          type: 'function',
+          function: {
+            name: 'emailAgent',
+            description: 'Send emails using Gmail API',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'User request for email action (e.g., "send email to john@example.com asking if they want to have dinner")' }
+              },
+              required: ['query']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'contactAgent',
+            description: 'Search and manage contacts',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Search query for contacts' },
+                operation: { type: 'string', enum: ['search', 'create', 'update'], description: 'Operation to perform' }
+              },
+              required: ['query']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'Think',
+            description: 'Analyze and verify tool usage decisions',
+            parameters: {
+              type: 'object',
+              properties: {
+                query: { type: 'string', description: 'Analysis query or verification request' }
+              },
+              required: ['query']
+            }
+          }
         }
-      }));
-      
-      this.logDebug('Generated enhanced tool definitions', {
-        toolCount: tools.length,
-        toolNames: tools.map((t: any) => t.function.name)
-      });
-      
-      return tools;
+      ];
     } catch (error) {
-      this.logError('Failed to get enhanced tool definitions from AgentFactory', error);
-      
-      // Return empty array if AgentFactory is not available
-      // This ensures the system fails gracefully rather than using outdated hardcoded definitions
-      this.logWarn('No tool definitions available - AgentFactory not initialized');
+      this.logWarn('Failed to get tool definitions', { error });
       return [];
     }
   }
@@ -323,8 +317,8 @@ export class OpenAIService extends BaseService {
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: messages as any,
-        temperature: 0.7,
-        max_tokens: maxTokens || 500
+        max_tokens: maxTokens || 500,
+        temperature: 0.7
       });
 
       const content = response.choices[0]?.message?.content;
@@ -343,41 +337,49 @@ export class OpenAIService extends BaseService {
   }
 
   /**
-   * Handle errors consistently
-   */
-  protected handleError(error: any, operation: string): never {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    this.logError(`OpenAI ${operation} failed`, error, { operation });
-    throw new Error(`OpenAI ${operation} failed: ${errorMessage}`);
-  }
-
-  /**
-   * Get service configuration
-   */
-  getConfig(): OpenAIConfig {
-    return {
-      apiKey: '***', // Don't expose API key
-      model: this.model
-    };
-  }
-
-  /**
-   * Test OpenAI connection
+   * Test OpenAI API connectivity
    */
   async testConnection(): Promise<boolean> {
     this.assertReady();
     
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [{ role: 'user', content: 'Hello' }],
-        max_tokens: 10
+      this.logDebug('Testing OpenAI API connection');
+      
+      const response = await this.client.models.list();
+      const isConnected = response.data && response.data.length > 0;
+      
+      this.logInfo('OpenAI API connection test completed', { 
+        connected: isConnected,
+        availableModels: response.data?.length || 0 
       });
       
-      return !!response.choices[0]?.message?.content;
+      return isConnected;
     } catch (error) {
-      this.logError('OpenAI connection test failed', error);
+      this.logError('OpenAI API connection test failed', error);
       return false;
     }
   }
+
+  /**
+   * Get service health status
+   */
+  getHealth(): { healthy: boolean; details?: any } {
+    try {
+      const healthy = this.isReady() && !!this.client;
+      const details = {
+        client: !!this.client,
+        model: this.model,
+        apiKeyConfigured: !!this.client.apiKey
+      };
+
+      return { healthy, details };
+    } catch (error) {
+      return { 
+        healthy: false, 
+        details: { error: error instanceof Error ? error.message : 'Unknown error' }
+      };
+    }
+  }
 }
+
+// Export the class for registration with ServiceManager
