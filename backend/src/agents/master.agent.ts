@@ -645,13 +645,28 @@ IMPORTANT: For email actions, always include the full body content in the propos
         originalToolCalls: actionToolCalls
       };
       
-      // Force confirmation for email and calendar actions that have external effects
+      // Use operation-aware confirmation logic instead of blanket forcing
       if (result.actionType === 'email' || result.actionType === 'calendar') {
-        result.requiresConfirmation = true;
-        logger.info('Forcing confirmation for external action', {
-          actionType: result.actionType,
-          originalRequiresConfirmation: response.requiresConfirmation
-        });
+        // Detect operation from the user input
+        const { AGENT_HELPERS } = require('../config/agent-config');
+        const operation = AGENT_HELPERS.detectOperation(result.actionType, userInput);
+        const operationRequiresConfirmation = AGENT_HELPERS.operationRequiresConfirmation(result.actionType, operation);
+        
+        // Only force confirmation if the operation actually requires it
+        if (operationRequiresConfirmation) {
+          result.requiresConfirmation = true;
+          logger.info('Forcing confirmation for external action', {
+            actionType: result.actionType,
+            detectedOperation: operation,
+            originalRequiresConfirmation: response.requiresConfirmation
+          });
+        } else {
+          logger.info('Read-only operation detected, no confirmation needed', {
+            actionType: result.actionType,
+            detectedOperation: operation,
+            originalRequiresConfirmation: response.requiresConfirmation
+          });
+        }
       }
       
       logger.info('Proposal generated successfully', {
