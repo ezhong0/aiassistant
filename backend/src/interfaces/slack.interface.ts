@@ -1,9 +1,10 @@
 import { WebClient } from '@slack/web-api';
-import { ServiceManager } from '../services/service-manager';
+import { ServiceManager, getService } from '../services/service-manager';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../types/slack.types';
 import { ToolExecutionContext, ToolResult } from '../types/tools';
 import { TokenStorageService } from '../services/token-storage.service';
 import { TokenManager } from '../services/token-manager';
+import { AIClassificationService } from '../services/ai-classification.service';
 import logger from '../utils/logger';
 
 export interface SlackConfig {
@@ -263,22 +264,28 @@ export class SlackInterface {
   /**
    * Parse slash command text with parameter extraction
    */
-  private parseSlashCommandText(text: string): { 
+  private async parseSlashCommandText(text: string): Promise<{ 
     message: string; 
     isHelpRequest: boolean; 
     parameters: Record<string, string> 
-  } {
+  }> {
     if (!text) {
       return { message: '', isHelpRequest: true, parameters: {} };
     }
 
     const trimmedText = text.trim().toLowerCase();
     
-    // Check for help requests
-    const helpKeywords = ['help', '?', 'usage', 'commands', 'guide'];
-    const isHelpRequest = helpKeywords.some(keyword => 
-      trimmedText === keyword || trimmedText.startsWith(keyword + ' ')
-    );
+    // Check for help requests using AI
+    let isHelpRequest = false;
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (aiClassificationService) {
+        isHelpRequest = await aiClassificationService.detectHelpRequest(text);
+      }
+    } catch (error) {
+      logger.warn('Failed to detect help request with AI:', error);
+      // Continue without AI detection
+    }
 
     // Simple parameter extraction (can be enhanced further)
     const parameters: Record<string, string> = {};
@@ -632,11 +639,18 @@ export class SlackInterface {
 
 
 
-      // Early detection of email-related requests for better OAuth experience
-      const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
-      const isEmailRelated = emailKeywords.some(keyword => 
-        message.toLowerCase().includes(keyword.toLowerCase())
-      );
+      // Early detection of email-related requests for better OAuth experience using AI
+      let isEmailRelated = false;
+      try {
+        const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+        if (aiClassificationService) {
+          const oauthRequirement = await aiClassificationService.detectOAuthRequirement(message);
+          isEmailRelated = oauthRequirement === 'email_send' || oauthRequirement === 'email_read';
+        }
+      } catch (error) {
+        logger.warn('Failed to detect email-related request with AI:', error);
+        // Continue without AI detection
+      }
 
       if (isEmailRelated) {
         const hasOAuth = await this.hasOAuthTokens(context);
@@ -854,7 +868,8 @@ export class SlackInterface {
       const masterResponse = await masterAgent.processUserInput(
         request.message,
         sessionId,
-        request.context.userId
+        request.context.userId,
+        request.context  // Pass slackContext for context detection
       );
 
       logger.debug('MasterAgent response received', {
@@ -971,9 +986,39 @@ export class SlackInterface {
         toolResults.push(...previewResults);
       }
 
-      // 7. Enhance master response with tool execution results
+      // 7. Process tool results through LLM to generate natural language response
+      let naturalLanguageResponse = masterResponse.message;
+      if (toolResults.length > 0 && masterAgent) {
+        try {
+          logger.info('Processing tool results through LLM for natural language response', {
+            toolResultsCount: toolResults.length,
+            successfulTools: toolResults.filter(tr => tr.success).length,
+            userMessage: request.message.substring(0, 100)
+          });
+          
+          naturalLanguageResponse = await masterAgent.processToolResultsWithLLM(
+            request.message,
+            toolResults,
+            sessionId
+          );
+          
+          logger.info('Natural language response generated successfully', {
+            responseLength: naturalLanguageResponse.length,
+            originalMessageLength: masterResponse.message?.length || 0
+          });
+        } catch (error) {
+          logger.error('Failed to process tool results with LLM, using fallback', { 
+            error: error instanceof Error ? error.message : error,
+            toolResultsCount: toolResults.length
+          });
+          // Keep the original message as fallback
+        }
+      }
+
+      // 8. Enhance master response with tool execution results and natural language response
       const enhancedMasterResponse = {
         ...masterResponse,
+        message: naturalLanguageResponse, // Use LLM-processed natural language response
         toolResults: toolResults,
         executionMetadata: {
           totalExecutionTime: Date.now() - startTime,
@@ -983,7 +1028,7 @@ export class SlackInterface {
         }
       };
 
-      // 8. Format response for Slack with comprehensive context
+      // 9. Format response for Slack with comprehensive context
       const slackResponse = await this.formatAgentResponseForSlack(
         enhancedMasterResponse, 
         request.context
@@ -1076,30 +1121,9 @@ export class SlackInterface {
         }
       });
 
-      // 4. Process and format tool execution results
+      // 4. Handle failed tool results only (for OAuth guidance)
       if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
-        const successfulResults = masterResponse.toolResults.filter((tr: any) => tr.success);
         const failedResults = masterResponse.toolResults.filter((tr: any) => !tr.success);
-
-        // Add successful results
-        if (successfulResults.length > 0) {
-          blocks.push({ type: 'divider' });
-          
-          for (const toolResult of successfulResults) {
-            if (toolResult.result) {
-              const resultText = this.formatToolResultForSlack(toolResult);
-              if (resultText) {
-                blocks.push({
-                  type: 'section',
-                  text: {
-                    type: 'mrkdwn',
-                    text: `*${this.getToolDisplayName(toolResult.toolName)}*\n${resultText}`
-                  }
-                });
-              }
-            }
-          }
-        }
 
         // Handle failed results with OAuth guidance
         if (failedResults.length > 0) {
@@ -1155,18 +1179,6 @@ export class SlackInterface {
           }
         }
 
-        // Add execution summary if multiple tools were used
-        if (masterResponse.executionMetadata && masterResponse.toolResults.length > 1) {
-          const metadata = masterResponse.executionMetadata;
-          blocks.push({
-            type: 'context',
-            elements: [{
-              type: 'mrkdwn',
-              text: `✅ ${metadata.successfulTools}/${metadata.toolsExecuted} tools executed successfully` +
-                    (metadata.totalExecutionTime ? ` • ${metadata.totalExecutionTime}ms` : '')
-            }]
-          });
-        }
 
         // Log failed results for debugging (don't show to user)
         if (failedResults.length > 0) {
@@ -1665,12 +1677,21 @@ export class SlackInterface {
       return null; // No pending action, continue with normal processing
     }
 
-    const message = request.message.toLowerCase().trim();
-    const confirmationWords = ['yes', 'y', 'confirm', 'ok', 'okay', 'proceed', 'go ahead', 'do it'];
-    const rejectionWords = ['no', 'n', 'cancel', 'abort', 'stop', 'nevermind', 'never mind'];
+    const message = request.message.trim();
+    let isConfirmation = false;
+    let isRejection = false;
 
-    const isConfirmation = confirmationWords.includes(message);
-    const isRejection = rejectionWords.includes(message);
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (aiClassificationService) {
+        const classification = await aiClassificationService.classifyConfirmationResponse(message);
+        isConfirmation = classification === 'confirm';
+        isRejection = classification === 'reject';
+      }
+    } catch (error) {
+      logger.warn('Failed to classify confirmation response with AI:', error);
+      // Continue without AI detection
+    }
 
     if (!isConfirmation && !isRejection) {
       return null; // Not a confirmation response, continue with normal processing

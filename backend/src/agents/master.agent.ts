@@ -358,9 +358,7 @@ export class MasterAgent {
     try {
       const openaiService = this.getOpenAIService();
       if (!openaiService) {
-        // Fallback to simple email address check
-        const hasEmailAddress = /@/.test(userInput);
-        return { needed: !hasEmailAddress, names: [] };
+        throw new Error('OpenAI service is not available. AI contact lookup detection is required for this operation.');
       }
 
       const response = await openaiService.generateText(
@@ -382,10 +380,8 @@ export class MasterAgent {
         names: Array.isArray(result.names) ? result.names : []
       };
     } catch (error) {
-      logger.warn('Failed to extract contact names, using fallback', { error, userInput });
-      // Fallback to simple email address check
-      const hasEmailAddress = /@/.test(userInput);
-      return { needed: !hasEmailAddress, names: [] };
+      logger.error('Failed to extract contact names:', error);
+      throw new Error('AI contact lookup detection failed. Please check your OpenAI configuration.');
     }
   }
 
@@ -396,12 +392,7 @@ export class MasterAgent {
     try {
       const openaiService = this.getOpenAIService();
       if (!openaiService || !slackContext) {
-        return {
-          needsContext: false,
-          contextType: 'none',
-          confidence: 1.0,
-          reasoning: 'No OpenAI service or Slack context available'
-        };
+        throw new Error('OpenAI service or Slack context is not available. AI context detection is required for this operation.');
       }
 
       const contextDetectionPrompt = `Analyze this user request to determine if context from recent Slack messages would be helpful:
@@ -848,6 +839,55 @@ You are an intelligent personal assistant that uses AI planning to understand us
         global.gc();
         logger.debug('Forced garbage collection completed');
       }
+    }
+  }
+
+  /**
+   * Process tool results through LLM to generate natural language responses
+   */
+  async processToolResultsWithLLM(
+    userInput: string, 
+    toolResults: ToolResult[], 
+    sessionId: string
+  ): Promise<string> {
+    const openaiService = this.getOpenAIService();
+    if (!openaiService) {
+      throw new Error('OpenAI service is not available. AI natural language processing is required for this operation.');
+    }
+
+    try {
+      const toolResultsSummary = toolResults.map(tr => ({
+        toolName: tr.toolName,
+        success: tr.success,
+        result: tr.result,
+        error: tr.error
+      }));
+
+      const prompt = `Based on the user's request and the tool execution results, provide a natural, conversational response.
+
+User Request: "${userInput}"
+
+Tool Results:
+${JSON.stringify(toolResultsSummary, null, 2)}
+
+Provide a natural language response that:
+1. Directly answers the user's question
+2. Uses conversational tone
+3. Includes relevant details from the tool results
+4. Doesn't mention technical details like tool names or execution times
+
+Response:`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'Generate natural language responses from tool execution results',
+        { temperature: 0.7, maxTokens: 500 }
+      );
+
+      return response.trim();
+    } catch (error) {
+      logger.error('Error processing tool results with LLM:', error);
+      throw new Error('AI natural language processing failed. Please check your OpenAI configuration.');
     }
   }
 

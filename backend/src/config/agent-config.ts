@@ -237,12 +237,7 @@ export const AGENT_HELPERS = {
     // Get OpenAI service for classification
     const openaiService = getService<OpenAIService>('openaiService');
     if (!openaiService || !openaiService.isReady()) {
-      // Fallback to simple classification if OpenAI not available
-      // Still no string matching - just basic intent detection
-      if (query.toLowerCase().includes('?')) {
-        return 'read'; // Questions are usually read operations
-      }
-      return 'unknown';
+      throw new Error('OpenAI service is not available. AI operation detection is required for this operation.');
     }
 
     try {
@@ -302,8 +297,7 @@ Return only the operation name.`;
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        console.warn('AI Classification Service not available');
-        return true; // Default to valid if service unavailable
+        throw new Error('AI Classification Service is not available. AI operation validation is required for this operation.');
       }
       return await aiClassificationService.validateOperation(operation, agentName);
     } catch (error) {
@@ -330,8 +324,7 @@ Return only the operation name.`;
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        console.warn('AI Classification Service not available');
-        return true; // Default to requiring confirmation if service unavailable
+        throw new Error('AI Classification Service is not available. AI confirmation detection is required for this operation.');
       }
       
       const detectedOperation = await aiClassificationService.detectOperation(operation, agentName);
@@ -360,8 +353,7 @@ Return only the operation name.`;
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        // Fallback to basic logic if AI service unavailable
-        return 'Operation requires confirmation for safety';
+        throw new Error('AI Classification Service is not available. AI confirmation reason detection is required for this operation.');
       }
 
       const requiresConfirmation = await aiClassificationService.operationRequiresConfirmation(operation, agentName);

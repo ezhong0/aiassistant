@@ -6,6 +6,7 @@ import { SlackInterfaceService } from '../services/slack-interface.service';
 import { SlackMessageReaderService } from '../services/slack-message-reader.service';
 import { SlackContext, SlackMessageEvent, SlackResponse } from '../types/slack.types';
 import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError } from '../types/slack-message-reader.types';
+import { AIClassificationService } from '../services/ai-classification.service';
 import { SLACK_CONSTANTS } from '../config/constants';
 
 /**
@@ -527,29 +528,43 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
   }
   
   /**
-   * Determine operation type from query
+   * Determine operation type from query using AI instead of string matching
    */
-  private determineOperation(query: string): 'read_messages' | 'read_thread' | 'detect_drafts' | 'manage_drafts' | 'confirmation_handling' {
-    const lowerQuery = query.toLowerCase();
+  private async determineOperation(query: string): Promise<'read_messages' | 'read_thread' | 'detect_drafts' | 'manage_drafts' | 'confirmation_handling'> {
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        throw new Error('AI Classification Service is not available. AI Slack operation detection is required for this operation.');
+      }
 
-    if (lowerQuery.includes('thread') || lowerQuery.includes('conversation')) {
-      return 'read_thread';
+      const operation = await aiClassificationService.detectOperation(query, 'slackAgent');
+      
+      // Convert AI result to expected format
+      switch (operation) {
+        case 'read':
+          if (query.toLowerCase().includes('thread') || query.toLowerCase().includes('conversation')) {
+            return 'read_thread';
+          } else {
+            return 'read_messages';
+          }
+        case 'write':
+          if (query.toLowerCase().includes('draft') || query.toLowerCase().includes('pending')) {
+            return 'detect_drafts';
+          } else if (query.toLowerCase().includes('manage') || query.toLowerCase().includes('update')) {
+            return 'manage_drafts';
+          } else {
+            return 'manage_drafts';
+          }
+        case 'search':
+          return 'read_messages';
+        default:
+          // Default to reading messages for unknown operations
+          return 'read_messages';
+      }
+    } catch (error) {
+      this.logger.error('Failed to determine Slack operation with AI:', error);
+      throw new Error('AI Slack operation detection failed. Please check your OpenAI configuration.');
     }
-
-    if (lowerQuery.includes('draft') || lowerQuery.includes('pending')) {
-      return 'detect_drafts';
-    }
-
-    if (lowerQuery.includes('confirm') || lowerQuery.includes('approve')) {
-      return 'confirmation_handling';
-    }
-
-    if (lowerQuery.includes('manage') || lowerQuery.includes('update')) {
-      return 'manage_drafts';
-    }
-
-    // Default to reading messages
-    return 'read_messages';
   }
   
   /**

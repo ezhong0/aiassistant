@@ -44,8 +44,7 @@ export class AIClassificationService extends BaseService {
    */
   async classifyConfirmationResponse(text: string): Promise<'confirm' | 'reject' | 'unknown'> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning unknown');
-      return 'unknown';
+      throw new Error('OpenAI service is not available. AI classification is required for this operation.');
     }
 
     try {
@@ -83,8 +82,7 @@ export class AIClassificationService extends BaseService {
    */
   async detectOperation(query: string, agentName: string): Promise<string> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning unknown');
-      return 'unknown';
+      throw new Error('OpenAI service is not available. AI operation detection is required for this operation.');
     }
 
     try {
@@ -132,8 +130,7 @@ export class AIClassificationService extends BaseService {
     };
   }> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning null action');
-      return { action: null, parameters: {} };
+      throw new Error('OpenAI service is not available. AI entity extraction is required for this operation.');
     }
 
     try {
@@ -176,8 +173,7 @@ export class AIClassificationService extends BaseService {
    */
   async classifyEmailPriority(content: string): Promise<'urgent' | 'normal' | 'low'> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning normal priority');
-      return 'normal';
+      throw new Error('OpenAI service is not available. AI email priority classification is required for this operation.');
     }
 
     try {
@@ -213,8 +209,7 @@ export class AIClassificationService extends BaseService {
    */
   async detectContactOperation(query: string): Promise<'add' | 'update' | 'search' | 'unknown'> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning unknown');
-      return 'unknown';
+      throw new Error('OpenAI service is not available. AI contact operation detection is required for this operation.');
     }
 
     try {
@@ -253,8 +248,7 @@ export class AIClassificationService extends BaseService {
     reason: string;
   }> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning suboptimal');
-      return { appropriateness: 'suboptimal', reason: 'AI service unavailable' };
+      throw new Error('OpenAI service is not available. AI tool appropriateness analysis is required for this operation.');
     }
 
     try {
@@ -290,8 +284,7 @@ export class AIClassificationService extends BaseService {
    */
   async validateOperation(operation: string, agentName: string): Promise<boolean> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning false');
-      return false;
+      throw new Error('OpenAI service is not available. AI operation validation is required for this operation.');
     }
 
     try {
@@ -322,8 +315,7 @@ export class AIClassificationService extends BaseService {
    */
   async operationRequiresConfirmation(operation: string, agentName: string): Promise<boolean> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning true for confirmation requirement');
-      return true;
+      throw new Error('OpenAI service is not available. AI confirmation detection is required for this operation.');
     }
     try {
       const response = await this.openaiService.generateText(
@@ -354,8 +346,7 @@ export class AIClassificationService extends BaseService {
    */
   async detectOAuthRequirement(message: string): Promise<'email_send' | 'email_read' | 'calendar_create' | 'calendar_read' | 'contact_access' | 'none'> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning none for OAuth detection');
-      return 'none';
+      throw new Error('OpenAI service is not available. AI OAuth requirement detection is required for this operation.');
     }
     try {
       const response = await this.openaiService.generateText(
@@ -390,13 +381,39 @@ export class AIClassificationService extends BaseService {
   }
 
   /**
-   * Extract contact names using AI instead of regex patterns
-   * Replaces: needsContactLookup() and extractContactName() string matching
+   * Detect if a message is a help request using AI
+   * Replaces hardcoded help keyword arrays
    */
+  async detectHelpRequest(message: string): Promise<boolean> {
+    if (!this.openaiService) {
+      throw new Error('OpenAI service is not available. AI help request detection is required for this operation.');
+    }
+
+    try {
+      const response = await this.openaiService.generateText(
+        `Determine if this message is a help request: "${message}"
+        
+        A help request is when someone is asking for:
+        - Instructions on how to use something
+        - Information about available commands
+        - Guidance on what they can do
+        - General assistance or support
+        
+        Return exactly: yes or no`,
+        'Detect help requests from user messages',
+        { temperature: 0, maxTokens: 10 }
+      );
+
+      const result = response.toLowerCase().trim();
+      return result === 'yes';
+    } catch (error) {
+      logger.error('Failed to detect help request with AI:', error);
+      throw new Error('AI help request detection failed. Please check your OpenAI configuration.');
+    }
+  }
   async extractContactNames(userInput: string): Promise<{needed: boolean, names: string[]}> {
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available, returning no contact lookup needed');
-      return { needed: false, names: [] };
+      throw new Error('OpenAI service is not available. AI contact name extraction is required for this operation.');
     }
 
     try {
