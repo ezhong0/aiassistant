@@ -425,10 +425,14 @@ export class AgentFactory {
     // Map AgentFactory tool names to AGENT_CONFIG names
     const toolNameMapping: Record<string, string> = {
       'emailAgent': 'email',
-      'contactAgent': 'contact', 
+      'manage_emails': 'email',
+      'contactAgent': 'contact',
+      'search_contacts': 'contact',
       'calendarAgent': 'calendar',
+      'manage_calendar': 'calendar',
       'Think': 'think',
-      'slackAgent': 'slack'
+      'slackAgent': 'slack',
+      'read_slack_messages': 'slack'
     };
     
     const configAgentName = toolNameMapping[toolName] || toolName;
@@ -445,10 +449,14 @@ export class AgentFactory {
     // Map AgentFactory tool names to AGENT_CONFIG names
     const toolNameMapping: Record<string, string> = {
       'emailAgent': 'email',
-      'contactAgent': 'contact', 
+      'manage_emails': 'email',
+      'contactAgent': 'contact',
+      'search_contacts': 'contact',
       'calendarAgent': 'calendar',
+      'manage_calendar': 'calendar',
       'Think': 'think',
-      'slackAgent': 'slack'
+      'slackAgent': 'slack',
+      'read_slack_messages': 'slack'
     };
     
     const configAgentName = toolNameMapping[toolName] || toolName;

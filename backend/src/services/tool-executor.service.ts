@@ -3,13 +3,6 @@ import { TIMEOUTS, EXECUTION_CONFIG } from '../config/app-config';
 import { AgentFactory } from '../framework/agent-factory';
 import { BaseService } from './base-service';
 import { getService } from './service-manager';
-import { ConfirmationService } from './confirmation.service';
-import { 
-  ConfirmationRequest, 
-  ConfirmationFlow, 
-  ConfirmationStatus,
-  ConfirmationFlowResult 
-} from '../types/confirmation.types';
 import { AGENT_HELPERS } from '../config/agent-config';
 import logger from '../utils/logger';
 
@@ -24,7 +17,6 @@ export interface ExecutionMode {
 
 export class ToolExecutorService extends BaseService {
   private config: ToolExecutorConfig;
-  private confirmationService: ConfirmationService | null = null;
 
   constructor(config: ToolExecutorConfig = {}) {
     super('ToolExecutorService');
@@ -38,12 +30,8 @@ export class ToolExecutorService extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    // Get ConfirmationService from service registry (optional dependency)
-    this.confirmationService = getService<ConfirmationService>('confirmationService') || null;
-    
     this.logInfo('ToolExecutorService initialized', { 
-      config: this.config,
-      hasConfirmationService: !!this.confirmationService
+      config: this.config
     });
   }
 
@@ -286,7 +274,13 @@ export class ToolExecutorService extends BaseService {
    */
   private detectOperationFromToolCall(toolName: string, toolCall: ToolCall): string {
     try {
-      return AgentFactory.detectOperationFromParameters(toolName, toolCall.parameters);
+      const operation = AgentFactory.detectOperationFromParameters(toolName, toolCall.parameters);
+      this.logInfo(`Operation detection for ${toolName}`, {
+        toolName,
+        detectedOperation: operation,
+        parameters: toolCall.parameters
+      });
+      return operation;
     } catch (error) {
       this.logWarn(`Failed to detect operation from tool call`, { 
         toolName, 
@@ -335,186 +329,6 @@ export class ToolExecutorService extends BaseService {
     };
   }
 
-  /**
-   * Execute a tool with confirmation flow support
-   * This method determines if confirmation is needed and handles the flow appropriately
-   */
-  async executeWithConfirmation(
-    toolCall: ToolCall,
-    context: ToolExecutionContext,
-    accessToken?: string
-  ): Promise<ToolResult | ConfirmationFlowResult> {
-    this.assertReady();
-    
-    try {
-      const startTime = Date.now();
-      
-      // Check if tool needs confirmation using operation-aware logic
-      const needsConfirmation = this.toolNeedsConfirmation(toolCall.name, toolCall);
-      
-      this.logInfo(`Executing tool with confirmation support: ${toolCall.name}`, {
-        toolName: toolCall.name,
-        needsConfirmation,
-        sessionId: context.sessionId,
-        hasConfirmationService: !!this.confirmationService,
-        operation: this.detectOperationFromToolCall(toolCall.name, toolCall),
-        reason: AGENT_HELPERS.getOperationConfirmationReason(toolCall.name as any, this.detectOperationFromToolCall(toolCall.name, toolCall))
-      });
-
-      if (needsConfirmation && this.confirmationService) {
-        // Create confirmation flow
-        const confirmationRequest: ConfirmationRequest = {
-          sessionId: context.sessionId,
-          userId: context.userId,
-          toolCall,
-          context: {
-            slackContext: context.slackContext,
-            conversationHistory: [], // Could be populated from session
-            userPreferences: {} // Could be populated from user settings
-          }
-        };
-
-        const confirmationFlow = await this.confirmationService.createConfirmation(confirmationRequest);
-        
-        const executionTime = Date.now() - startTime;
-        
-        this.logInfo(`Confirmation flow created for ${toolCall.name}`, {
-          confirmationId: confirmationFlow.confirmationId,
-          sessionId: context.sessionId,
-          executionTime
-        });
-
-        return {
-          success: true,
-          confirmationFlow,
-          requiresManualFormat: false
-        } as ConfirmationFlowResult;
-      } else {
-        // Execute normally without confirmation
-        return await this.executeTool(toolCall, context, accessToken, { preview: false });
-      }
-    } catch (error) {
-      const executionTime = Date.now() - Date.now(); // Will be near 0 for errors
-      this.logError(`Tool execution with confirmation failed: ${toolCall.name}`, error, {
-        toolName: toolCall.name,
-        sessionId: context.sessionId,
-        executionTime
-      });
-
-      // Return as ConfirmationFlowResult with error
-      return {
-        success: false,
-        error: error as any,
-        requiresManualFormat: true
-      } as ConfirmationFlowResult;
-    }
-  }
-
-  /**
-   * Execute a confirmed action by confirmation ID
-   */
-  async executeConfirmedAction(confirmationId: string): Promise<ToolResult> {
-    this.assertReady();
-    
-    if (!this.confirmationService) {
-      throw new Error('ConfirmationService is required to execute confirmed actions');
-    }
-
-    try {
-      this.logInfo(`Executing confirmed action: ${confirmationId}`);
-      
-      const result = await this.confirmationService.executeConfirmedAction(confirmationId);
-      
-      this.logInfo(`Confirmed action executed: ${confirmationId}`, {
-        success: result.success,
-        toolName: result.toolName,
-        executionTime: result.executionTime
-      });
-      
-      return result;
-    } catch (error) {
-      this.logError(`Failed to execute confirmed action: ${confirmationId}`, error);
-      
-      return {
-        toolName: 'unknown',
-        result: null,
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        executionTime: 0
-      };
-    }
-  }
-
-  /**
-   * Get pending confirmations for a session
-   */
-  async getPendingConfirmations(sessionId: string): Promise<ConfirmationFlow[]> {
-    this.assertReady();
-    
-    if (!this.confirmationService) {
-      this.logWarn('ConfirmationService not available, returning empty confirmations');
-      return [];
-    }
-
-    try {
-      return await this.confirmationService.getPendingConfirmations(sessionId);
-    } catch (error) {
-      this.logError('Failed to get pending confirmations', error, { sessionId });
-      return [];
-    }
-  }
-
-  /**
-   * Check if a confirmation exists and is still valid
-   */
-  async isValidConfirmation(confirmationId: string): Promise<boolean> {
-    this.assertReady();
-    
-    if (!this.confirmationService) {
-      return false;
-    }
-
-    try {
-      const confirmation = await this.confirmationService.getConfirmation(confirmationId);
-      return confirmation !== null && confirmation.status === ConfirmationStatus.PENDING;
-    } catch (error) {
-      this.logError('Error checking confirmation validity', error, { confirmationId });
-      return false;
-    }
-  }
-
-  /**
-   * Respond to a confirmation (used by Slack integration)
-   */
-  async respondToConfirmation(
-    confirmationId: string,
-    confirmed: boolean,
-    userContext?: {
-      slackUserId?: string;
-      responseChannel?: string;
-      responseThreadTs?: string;
-    }
-  ): Promise<ConfirmationFlow | null> {
-    this.assertReady();
-    
-    if (!this.confirmationService) {
-      throw new Error('ConfirmationService is required to respond to confirmations');
-    }
-
-    try {
-      const response = {
-        confirmationId,
-        confirmed,
-        respondedAt: new Date(),
-        userContext
-      };
-
-      return await this.confirmationService.respondToConfirmation(confirmationId, response);
-    } catch (error) {
-      this.logError('Failed to respond to confirmation', error, { confirmationId, confirmed });
-      return null;
-    }
-  }
 
   /**
    * Get service configuration
@@ -533,5 +347,4 @@ export class ToolExecutorService extends BaseService {
     this.logInfo('ToolExecutorService configuration updated', { newConfig: this.config });
   }
 }
-
 // Export the class for registration with ServiceManager

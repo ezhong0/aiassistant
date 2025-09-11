@@ -595,9 +595,25 @@ export interface EmailAgentRequest extends EmailAgentParams {
     const { query } = params;
     const lowerQuery = query.toLowerCase();
 
-    // Check for specific email operations
-    if (lowerQuery.includes('send') && (lowerQuery.includes('email') || lowerQuery.includes('message'))) {
-      return 'send';
+    this.logger.debug('Detecting email operation', {
+      query,
+      lowerQuery,
+      includes_send: lowerQuery.includes('send'),
+      includes_email: lowerQuery.includes('email'),
+      includes_message: lowerQuery.includes('message')
+    });
+
+    // Check for specific email operations - improved detection
+    if (lowerQuery.includes('send')) {
+      // If "send" is mentioned, it's almost always a send operation
+      // Check for email context or explicit recipients
+      if (lowerQuery.includes('email') || 
+          lowerQuery.includes('message') || 
+          lowerQuery.includes('@') ||
+          lowerQuery.includes('to ')) {
+        this.logger.info('Detected send operation', { query });
+        return 'send';
+      }
     }
     
     if (lowerQuery.includes('reply') || lowerQuery.includes('respond')) {
@@ -620,7 +636,14 @@ export interface EmailAgentRequest extends EmailAgentParams {
       return 'get';
     }
     
+    // Better default: if it contains an email address, it's likely a send
+    if (lowerQuery.includes('@') && lowerQuery.includes('.com')) {
+      this.logger.info('Detected send operation based on email address', { query });
+      return 'send';
+    }
+    
     // Default to search for read operations
+    this.logger.debug('Defaulting to search operation', { query });
     return 'search';
   }
 
