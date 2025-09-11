@@ -112,14 +112,10 @@ export class ToolExecutorService extends BaseService {
             };
           }
         } else {
-          // Tool doesn't need confirmation but we're in preview mode - execute normally but mark as not needing confirmation
-            this.logInfo(`Tool ${toolCall.name} doesn't require confirmation, executing normally in preview mode`);
+          // Tool doesn't need confirmation - execute directly without preview mode
+          this.logInfo(`Tool ${toolCall.name} doesn't require confirmation, executing directly`);
           result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context, accessToken);
-          
-          // Add preview mode flag to indicate this was a preview execution
-          if (result && typeof result === 'object') {
-            (result as any).wasPreviewExecution = true;
-          }
+          // Don't add wasPreviewExecution flag for non-confirmation tools
         }
       } else {
         // Execute the tool using AgentFactory normally (not preview mode)

@@ -5,6 +5,7 @@ import { getService } from '../services/service-manager';
 import { GmailService } from '../services/gmail.service';
 import { ThreadManager } from '../utils/thread-manager';
 import { OpenAIService } from '../services/openai.service';
+import { AIClassificationService } from '../services/ai-classification.service';
 import { 
   SendEmailRequest, 
   SearchEmailsRequest, 
@@ -616,7 +617,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
       }
       
       // Determine action type from query for preview generation
-      const action = this.determineAction(query);
+      const action = await this.determineAction(query);
       
       // Generate action ID
       const actionId = `email-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -632,7 +633,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
         case 'SEND_EMAIL':
           emailRequest = await this.buildSendEmailRequest(params, action.params);
           previewData = await this.generateEmailPreviewData(emailRequest, params);
-          riskAssessment = this.assessEmailRisk(emailRequest, previewData);
+          riskAssessment = await this.assessEmailRisk(emailRequest, previewData);
           title = `Send Email: ${emailRequest.subject}`;
           description = `Send email to ${this.formatRecipients(emailRequest)} with subject "${emailRequest.subject}"`;
           break;
@@ -648,7 +649,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
             bcc: []
           };
           previewData = await this.generateEmailPreviewData(emailRequest, params);
-          riskAssessment = this.assessEmailRisk(emailRequest, previewData);
+          riskAssessment = await this.assessEmailRisk(emailRequest, previewData);
           title = `Reply to Email`;
           description = `Reply to email thread with message`;
           break;
@@ -735,7 +736,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
   /**
    * Assess risk level for email operation
    */
-  private assessEmailRisk(emailRequest: SendEmailRequest, previewData: EmailPreviewData): ActionRiskAssessment {
+  private async assessEmailRisk(emailRequest: SendEmailRequest, previewData: EmailPreviewData): Promise<ActionRiskAssessment> {
     const factors: string[] = [];
     const warnings: string[] = [];
     let level: 'low' | 'medium' | 'high' = 'low';
@@ -763,17 +764,21 @@ export interface EmailAgentRequest extends EmailAgentParams {
       if (level === 'low') level = 'medium';
     }
     
-    // Check for sensitive keywords
-    const sensitiveKeywords = ['confidential', 'secret', 'password', 'urgent', 'immediate', 'deadline'];
-    const bodyLower = emailRequest.body.toLowerCase();
-    const subjectLower = emailRequest.subject.toLowerCase();
-    
-    for (const keyword of sensitiveKeywords) {
-      if (bodyLower.includes(keyword) || subjectLower.includes(keyword)) {
-        factors.push('Contains sensitive keywords');
-        if (level === 'low') level = 'medium';
-        break;
+    // Check for sensitive content using AI
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (aiClassificationService) {
+        const emailContent = `${emailRequest.subject || ''} ${emailRequest.body || ''}`;
+        const priority = await aiClassificationService.classifyEmailPriority(emailContent);
+        
+        if (priority === 'urgent') {
+          factors.push('Contains sensitive keywords');
+          if (level === 'low') level = 'medium';
+        }
       }
+    } catch (error) {
+      this.logger.warn('Failed to classify email priority for risk assessment:', error);
+      // Continue without AI classification
     }
     
     // If no risk factors, ensure we have at least basic factors
@@ -1069,64 +1074,70 @@ export interface EmailAgentRequest extends EmailAgentParams {
   }
 
   /**
-   * Determine the action type from user query
+   * Determine the action type from user query using AI instead of string matching
    */
-  private determineAction(query: string): { type: string; params: any } {
-    const lowerQuery = query.toLowerCase();
+  private async determineAction(query: string): Promise<{ type: string; params: any }> {
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        throw new Error('AI Classification Service is not available. AI email operation detection is required for this operation.');
+      }
 
-    // Send email patterns
-    if (lowerQuery.includes('send') && (lowerQuery.includes('email') || lowerQuery.includes('message'))) {
-      return {
-        type: 'SEND_EMAIL',
-        params: this.extractSendEmailParams(query)
-      };
+      const operation = await aiClassificationService.detectOperation(query, 'emailAgent');
+      
+      // Convert AI result to expected format
+      switch (operation) {
+        case 'write':
+          // Determine if it's send, reply, or draft based on context
+          if (query.toLowerCase().includes('reply') || query.toLowerCase().includes('respond')) {
+            return {
+              type: 'REPLY_EMAIL',
+              params: this.extractReplyParams(query)
+            };
+          } else if (query.toLowerCase().includes('draft')) {
+            return {
+              type: 'CREATE_DRAFT',
+              params: this.extractSendEmailParams(query)
+            };
+          } else {
+            return {
+              type: 'SEND_EMAIL',
+              params: this.extractSendEmailParams(query)
+            };
+          }
+        case 'read':
+          if (query.toLowerCase().includes('thread') || query.toLowerCase().includes('conversation')) {
+            return {
+              type: 'GET_THREAD',
+              params: this.extractGetThreadParams(query)
+            };
+          } else if (query.toLowerCase().includes('get email') || query.toLowerCase().includes('show email')) {
+            return {
+              type: 'GET_EMAIL',
+              params: this.extractGetEmailParams(query)
+            };
+          } else {
+            return {
+              type: 'SEARCH_EMAILS',
+              params: this.extractSearchParams(query)
+            };
+          }
+        case 'search':
+          return {
+            type: 'SEARCH_EMAILS',
+            params: this.extractSearchParams(query)
+          };
+        default:
+          // Default to search for unknown operations
+          return {
+            type: 'SEARCH_EMAILS',
+            params: { query: query }
+          };
+      }
+    } catch (error) {
+      this.logger.error('Failed to determine email action with AI:', error);
+      throw new Error('AI email operation detection failed. Please check your OpenAI configuration.');
     }
-
-    // Reply patterns
-    if (lowerQuery.includes('reply') || lowerQuery.includes('respond')) {
-      return {
-        type: 'REPLY_EMAIL',
-        params: this.extractReplyParams(query)
-      };
-    }
-
-    // Search patterns
-    if (lowerQuery.includes('search') || lowerQuery.includes('find') || lowerQuery.includes('look for')) {
-      return {
-        type: 'SEARCH_EMAILS',
-        params: this.extractSearchParams(query)
-      };
-    }
-
-    // Draft patterns
-    if (lowerQuery.includes('draft') || (lowerQuery.includes('create') && lowerQuery.includes('email'))) {
-      return {
-        type: 'CREATE_DRAFT',
-        params: this.extractSendEmailParams(query)
-      };
-    }
-
-    // Get specific email
-    if (lowerQuery.includes('get email') || lowerQuery.includes('show email')) {
-      return {
-        type: 'GET_EMAIL',
-        params: this.extractGetEmailParams(query)
-      };
-    }
-
-    // Get thread/conversation
-    if (lowerQuery.includes('thread') || lowerQuery.includes('conversation')) {
-      return {
-        type: 'GET_THREAD',
-        params: this.extractGetThreadParams(query)
-      };
-    }
-
-    // Default to search if no specific action detected
-    return {
-      type: 'SEARCH_EMAILS',
-      params: { query: query }
-    };
   }
 
   /**

@@ -575,8 +575,7 @@ const isConfirmationResponse = async (command: string): Promise<boolean> => {
   try {
     const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
     if (!aiClassificationService) {
-      logger.warn('AI Classification Service not available for confirmation response');
-      return false;
+      throw new Error('AI Classification Service is not available. AI confirmation detection is required for this operation.');
     }
     const classification = await aiClassificationService.classifyConfirmationResponse(command);
     return classification === 'confirm' || classification === 'reject';
@@ -599,13 +598,7 @@ const handleActionConfirmation = async (
   try {
     const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
     if (!aiClassificationService) {
-      logger.warn('AI Classification Service not available for action confirmation');
-      return res.status(500).json({
-        success: false,
-        type: 'error',
-        message: 'AI service unavailable',
-        data: { sessionId }
-      });
+      throw new Error('AI Classification Service is not available. AI action confirmation is required for this operation.');
     }
     const classification = await aiClassificationService.classifyConfirmationResponse(command);
     const confirmed = classification === 'confirm';
@@ -662,18 +655,25 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
   prompt: string;
   action: any;
 } | null> => {
-  // Check for potentially destructive or sensitive operations
-  const sensitiveOperations = toolCalls.filter(tc => {
-    if (tc.name === 'emailAgent') {
-      const query = tc.parameters.query.toLowerCase();
-      return query.includes('send') || query.includes('reply') || query.includes('forward');
+  // Check for potentially destructive or sensitive operations using AI
+  const sensitiveOperations = [];
+  for (const tc of toolCalls) {
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (aiClassificationService) {
+        const requiresConfirmation = await aiClassificationService.operationRequiresConfirmation(
+          tc.parameters.query, 
+          tc.name
+        );
+        if (requiresConfirmation) {
+          sensitiveOperations.push(tc);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to check operation sensitivity with AI:', error);
+      // Continue without AI detection
     }
-    if (tc.name === 'calendarAgent') {
-      const query = tc.parameters.query.toLowerCase();
-      return query.includes('schedule') || query.includes('create') || query.includes('delete');
-    }
-    return false;
-  });
+  }
 
   if (sensitiveOperations.length > 0) {
     const operation = sensitiveOperations[0];

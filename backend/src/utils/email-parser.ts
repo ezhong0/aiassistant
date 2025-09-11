@@ -241,7 +241,7 @@ export class EmailParser {
       // Use AI to classify priority based on subject and content
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        return 'normal'; // Default fallback
+        throw new Error('AI Classification Service is not available. AI email priority classification is required for this operation.');
       }
       const priority = await aiClassificationService.classifyEmailPriority(
         `${message.subject || ''} ${message.snippet || ''}`
@@ -258,7 +258,7 @@ export class EmailParser {
       }
     } catch (error) {
       logger.error('Failed to classify email priority with AI:', error);
-      return 'normal'; // Default fallback
+      throw new Error('AI email priority classification failed. Please check your OpenAI configuration.');
     }
   }
 

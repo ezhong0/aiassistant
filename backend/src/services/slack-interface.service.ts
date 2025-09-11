@@ -534,7 +534,7 @@ export class SlackInterfaceService extends BaseService {
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        return null; // Return null if AI service is unavailable
+        throw new Error('AI Classification Service is not available. AI proposal parsing is required for this operation.');
       }
       const result = await aiClassificationService.extractEntities(proposalText);
       
@@ -765,8 +765,7 @@ export class SlackInterfaceService extends BaseService {
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        // Fallback to basic detection if AI service unavailable
-        return false;
+        throw new Error('AI Classification Service is not available. AI OAuth detection is required for this operation.');
       }
 
       const oauthRequirement = await aiClassificationService.detectOAuthRequirement(message);
@@ -936,6 +935,19 @@ export class SlackInterfaceService extends BaseService {
         }
       }
 
+      // Process tool results through Master Agent LLM for natural language response
+      if (toolResults.length > 0) {
+        const naturalLanguageResponse = await this.processToolResultsWithMasterAgent(
+          request.message,
+          toolResults,
+          sessionId,
+          masterAgent // Pass the existing Master Agent instance
+        );
+        
+        // Update master response with natural language
+        masterResponse.message = naturalLanguageResponse;
+      }
+
       // Format response for Slack
       const slackResponse = await this.formatAgentResponse(
         { ...masterResponse, toolResults },
@@ -997,6 +1009,30 @@ export class SlackInterfaceService extends BaseService {
           errorContext
         }
       };
+    }
+  }
+
+  /**
+   * Process tool results through Master Agent LLM for natural language responses
+   */
+  private async processToolResultsWithMasterAgent(
+    userInput: string,
+    toolResults: ToolResult[],
+    sessionId: string,
+    masterAgent: any // Pass the existing Master Agent instance
+  ): Promise<string> {
+    try {
+      // Process tool results through the existing Master Agent LLM
+      const naturalLanguageResponse = await masterAgent.processToolResultsWithLLM(
+        userInput,
+        toolResults,
+        sessionId
+      );
+
+      return naturalLanguageResponse;
+    } catch (error) {
+      this.logError('Error processing tool results with Master Agent', error);
+      return 'I processed your request successfully.';
     }
   }
 
@@ -1130,7 +1166,11 @@ export class SlackInterfaceService extends BaseService {
       const successfulResults = masterResponse.toolResults.filter((tr: any) => tr.success);
       const failedResults = masterResponse.toolResults.filter((tr: any) => !tr.success);
 
-      if (successfulResults.length > 0) {
+      // Only generate success message if we don't already have a natural language response from Master Agent LLM
+      if (successfulResults.length > 0 && 
+          (masterResponse.message === 'I processed your request successfully.' || 
+           !masterResponse.message || 
+           masterResponse.message.trim() === '')) {
         // Generate natural success message based on what was accomplished
         responseText = this.generateSuccessMessage(successfulResults, masterResponse);
       }

@@ -367,7 +367,7 @@ export interface ContactAgentRequest extends ContactAgentParams {
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        return 'search'; // Default fallback
+        throw new Error('AI Classification Service is not available. AI operation detection is required for this operation.');
       }
       const operation = await aiClassificationService.detectContactOperation(query);
       
@@ -383,8 +383,8 @@ export interface ContactAgentRequest extends ContactAgentParams {
           return 'search'; // Default fallback
       }
     } catch (error) {
-      // Fallback to search if AI fails
-      return 'search';
+      this.logger.error('Failed to determine contact operation:', error);
+      throw new Error('AI contact operation detection failed. Please check your OpenAI configuration.');
     }
   }
   
@@ -399,10 +399,7 @@ export interface ContactAgentRequest extends ContactAgentParams {
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
-        return {
-          searchTerm: query,
-          maxResults: 10 // Default limit
-        };
+        throw new Error('AI Classification Service is not available. AI search parameter extraction is required for this operation.');
       }
       
       // Use AI to extract contact names and determine if limit is specified
@@ -424,11 +421,8 @@ export interface ContactAgentRequest extends ContactAgentParams {
         maxResults
       };
     } catch (error) {
-      // Fallback to original query if AI fails
-      return {
-        searchTerm: query,
-        maxResults: undefined
-      };
+      this.logger.error('Failed to extract search parameters:', error);
+      throw new Error('AI search parameter extraction failed. Please check your OpenAI configuration.');
     }
   }
   
