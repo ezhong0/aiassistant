@@ -186,6 +186,15 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
+    // 10.5. ToolRoutingService - AI-powered tool selection
+    const { ToolRoutingService } = await import('./tool-routing.service');
+    const toolRoutingService = new ToolRoutingService();
+    serviceManager.registerService('toolRoutingService', toolRoutingService, {
+      dependencies: ['openaiService', 'aiClassificationService'],
+      priority: 18, // After AI classification service
+      autoStart: true
+    });
+
     // 11. SlackMessageReaderService - Dedicated service for reading Slack message history
     // Only register if Slack is configured
     if (ENV_VALIDATION.isSlackConfigured()) {

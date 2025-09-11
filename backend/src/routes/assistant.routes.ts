@@ -14,6 +14,7 @@ import { validate, sanitizeString } from '../middleware/validation.middleware';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
+import { ToolRoutingService } from '../services/tool-routing.service';
 import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
@@ -679,20 +680,54 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
     const operation = sensitiveOperations[0];
     const actionId = `confirm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    let message = '';
-    let prompt = '';
-    
-    if (operation.name === 'emailAgent') {
-      message = 'I\'m about to send an email. Would you like me to proceed?';
-      prompt = 'Reply with "yes" to send the email or "no" to cancel.';
-    } else if (operation.name === 'calendarAgent') {
-      message = 'I\'m about to create a calendar event. Would you like me to proceed?';
-      prompt = 'Reply with "yes" to create the event or "no" to cancel.';
+    // Use AI-powered confirmation message generation instead of hardcoded messages
+    try {
+      const { ToolRoutingService } = await import('../services/tool-routing.service');
+      const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+      
+      if (toolRoutingService) {
+        const userQuery = operation.parameters?.query || `Execute ${operation.name} operation`;
+        const confirmationMessage = await toolRoutingService.generateConfirmationMessage(
+          operation.name,
+          userQuery,
+          operation.parameters
+        );
+        
+        return {
+          message: confirmationMessage.message,
+          prompt: confirmationMessage.prompt,
+          action: {
+            actionId,
+            type: operation.name,
+            parameters: operation.parameters,
+            awaitingConfirmation: true
+          }
+        };
+      }
+    } catch (error) {
+      logger.warn('AI confirmation generation failed, using fallback', { error });
     }
 
+    // Fallback to basic confirmation messages if AI generation fails
+    const fallbackMessages: Record<string, { message: string; prompt: string }> = {
+      'emailAgent': {
+        message: 'I\'m about to send an email. Would you like me to proceed?',
+        prompt: 'Reply with "yes" to send the email or "no" to cancel.'
+      },
+      'calendarAgent': {
+        message: 'I\'m about to create a calendar event. Would you like me to proceed?',
+        prompt: 'Reply with "yes" to create the event or "no" to cancel.'
+      }
+    };
+
+    const fallback = fallbackMessages[operation.name] || {
+      message: `I'm about to execute a ${operation.name} operation. Would you like me to proceed?`,
+      prompt: 'Reply with "yes" to continue or "no" to cancel.'
+    };
+
     return {
-      message,
-      prompt,
+      message: fallback.message,
+      prompt: fallback.prompt,
       action: {
         actionId,
         type: operation.name,
@@ -737,23 +772,47 @@ const executeConfirmedAction = async (
       timestamp: new Date()
     };
 
-    // Create tool call based on action type
+    // Use AI-powered tool selection instead of hardcoded action type mapping
     let toolCall: any;
-    if (actionType === 'email') {
-      toolCall = {
-        name: 'emailAgent',
-        parameters: { query }
+    try {
+      const { ToolRoutingService } = await import('../services/tool-routing.service');
+      const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+      
+      if (toolRoutingService) {
+        const routingDecision = await toolRoutingService.selectAgentForTask(query, executionContext);
+        toolCall = routingDecision.toolCall;
+        
+        logger.info('AI tool routing completed', {
+          selectedAgent: routingDecision.selectedAgent,
+          confidence: routingDecision.confidence,
+          reasoning: routingDecision.reasoning.substring(0, 100)
+        });
+      } else {
+        throw new Error('ToolRoutingService not available');
+      }
+    } catch (error) {
+      logger.warn('AI tool routing failed, using fallback mapping', { error });
+      
+      // Fallback to simple action type mapping
+      const actionTypeMapping: Record<string, string> = {
+        'email': 'emailAgent',
+        'calendar': 'calendarAgent',
+        'contact': 'contactAgent',
+        'slack': 'slackAgent'
       };
-    } else if (actionType === 'calendar') {
+      
+      const agentName = actionTypeMapping[actionType];
+      if (!agentName) {
+        return {
+          success: false,
+          message: `Unknown action type: ${actionType}`,
+          data: { actionId, actionType }
+        };
+      }
+      
       toolCall = {
-        name: 'calendarAgent', 
+        name: agentName,
         parameters: { query }
-      };
-    } else {
-      return {
-        success: false,
-        message: `Unknown action type: ${actionType}`,
-        data: { actionId, actionType }
       };
     }
 
@@ -955,6 +1014,27 @@ const generateDynamicConfirmationMessage = async (toolCalls: any[], toolResults:
 
 const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
   try {
+    const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+    const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
+    
+    if (toolRoutingService && mainAction) {
+      const confirmationResult = await toolRoutingService.generateConfirmationMessage(
+        mainAction.name,
+        userCommand,
+        mainAction.parameters || {}
+      );
+      return confirmationResult.prompt;
+    } else {
+      return generateFallbackDynamicConfirmationPrompt(toolCalls, toolResults, userCommand);
+    }
+  } catch (error) {
+    logger.error('Failed to generate dynamic confirmation prompt with AI routing service', { error });
+    return generateFallbackDynamicConfirmationPrompt(toolCalls, toolResults, userCommand);
+  }
+};
+
+const generateFallbackDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
+  try {
     const openaiService = masterAgent?.getOpenAIService();
     if (openaiService) {
       const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
@@ -977,7 +1057,7 @@ const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: 
     logger.error('Failed to generate dynamic confirmation prompt', { error });
   }
   
-  // Fallback
+  // Final fallback to static messages
   const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
   if (mainAction?.name === 'emailAgent') {
     return 'Reply with "yes" to send the email or "no" to cancel.';
@@ -987,7 +1067,32 @@ const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: 
   return 'Reply with "yes" to proceed or "no" to cancel.';
 }
 
-const generateConfirmationPrompt = (toolCalls: any[], toolResults: any[]): string => {
+const generateConfirmationPrompt = async (toolCalls: any[], toolResults: any[]): Promise<string> => {
+  try {
+    const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+    const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
+    
+    if (!mainAction) {
+      return 'Would you like me to proceed with this action?';
+    }
+
+    if (toolRoutingService) {
+      const confirmationResult = await toolRoutingService.generateConfirmationMessage(
+        mainAction.name,
+        `Execute ${mainAction.name} with provided parameters`,
+        mainAction.parameters || {}
+      );
+      return confirmationResult.message;
+    } else {
+      return generateFallbackConfirmationPrompt(toolCalls, toolResults);
+    }
+  } catch (error) {
+    logger.warn('Failed to generate AI confirmation prompt:', error);
+    return generateFallbackConfirmationPrompt(toolCalls, toolResults);
+  }
+};
+
+const generateFallbackConfirmationPrompt = (toolCalls: any[], toolResults: any[]): string => {
   const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
   if (!mainAction) {
     return 'Would you like me to proceed with this action?';
