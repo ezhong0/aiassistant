@@ -1,0 +1,566 @@
+import { BaseService } from './base-service';
+import { getService } from './service-manager';
+import { OpenAIService } from './openai.service';
+import { AgentFactory } from '../framework/agent-factory';
+import { ToolCall, ToolExecutionContext } from '../types/tools';
+import logger from '../utils/logger';
+
+/**
+ * Agent Capability Metadata
+ */
+export interface AgentCapability {
+  agentName: string;
+  capabilities: string[];
+  description: string;
+  specialties: string[];
+  limitations: string[];
+  requiresConfirmation: boolean;
+  estimatedExecutionTime: number;
+}
+
+/**
+ * Tool Routing Decision
+ */
+export interface ToolRoutingDecision {
+  selectedAgent: string;
+  toolCall: ToolCall;
+  confidence: number;
+  reasoning: string;
+  requiresConfirmation: boolean;
+  confirmationMessage?: string;
+  parameters: any;
+}
+
+/**
+ * Confirmation Message Generation Result
+ */
+export interface ConfirmationMessage {
+  message: string;
+  prompt: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  contextualDetails: string[];
+}
+
+/**
+ * AI-Powered Tool Routing Service
+ * 
+ * Replaces hardcoded if/else chains with intelligent agent selection
+ * and dynamic response generation based on user intent and agent capabilities.
+ */
+export class ToolRoutingService extends BaseService {
+  private openaiService: OpenAIService | null = null;
+  private agentCapabilities = new Map<string, AgentCapability>();
+
+  constructor() {
+    super('toolRoutingService');
+  }
+
+  protected async onInitialize(): Promise<void> {
+    try {
+      const service = getService<OpenAIService>('openaiService');
+      this.openaiService = service || null;
+      
+      // Initialize agent capabilities
+      await this.initializeAgentCapabilities();
+      
+      logger.info('ToolRoutingService initialized successfully', {
+        hasOpenAI: !!this.openaiService,
+        registeredAgents: this.agentCapabilities.size
+      });
+    } catch (error) {
+      logger.error('Failed to initialize ToolRoutingService:', error);
+      throw error;
+    }
+  }
+
+  protected async onDestroy(): Promise<void> {
+    this.openaiService = null;
+    this.agentCapabilities.clear();
+    logger.info('ToolRoutingService shutdown complete');
+  }
+
+  /**
+   * Initialize agent capabilities from AgentFactory
+   */
+  private async initializeAgentCapabilities(): Promise<void> {
+    const agentNames = AgentFactory.getEnabledAgentNames();
+    
+    for (const agentName of agentNames) {
+      try {
+        const agent = AgentFactory.getAgent(agentName);
+        if (agent) {
+          // Get capabilities from agent's static methods
+          const capabilities = this.extractAgentCapabilities(agentName, agent);
+          this.agentCapabilities.set(agentName, capabilities);
+          
+          logger.debug(`Registered capabilities for agent: ${agentName}`, {
+            capabilities: capabilities.capabilities,
+            specialties: capabilities.specialties
+          });
+        }
+      } catch (error) {
+        logger.warn(`Failed to extract capabilities for agent ${agentName}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Extract agent capabilities using dynamic discovery
+   */
+  private extractAgentCapabilities(agentName: string, agent: any): AgentCapability {
+    // Try to get capabilities from agent's static methods
+    const AgentClass = agent.constructor;
+    
+    let capabilities: string[] = [];
+    let description = '';
+    let specialties: string[] = [];
+    let limitations: string[] = [];
+    
+    try {
+      if (typeof AgentClass.getCapabilities === 'function') {
+        capabilities = AgentClass.getCapabilities();
+      }
+      if (typeof AgentClass.getDescription === 'function') {
+        description = AgentClass.getDescription();
+      } else if (agent.config?.description) {
+        description = agent.config.description;
+      }
+      if (typeof AgentClass.getSpecialties === 'function') {
+        specialties = AgentClass.getSpecialties();
+      }
+      if (typeof AgentClass.getLimitations === 'function') {
+        limitations = AgentClass.getLimitations();
+      }
+    } catch (error) {
+      logger.debug(`Could not extract all capabilities for ${agentName}, using defaults:`, error);
+    }
+
+    // Fallback capabilities based on agent name
+    if (capabilities.length === 0) {
+      capabilities = this.getDefaultCapabilities(agentName);
+    }
+
+    return {
+      agentName,
+      capabilities,
+      description: description || `${agentName} agent for specialized operations`,
+      specialties: specialties.length > 0 ? specialties : capabilities,
+      limitations,
+      requiresConfirmation: this.agentRequiresConfirmation(agentName),
+      estimatedExecutionTime: 5000
+    };
+  }
+
+  /**
+   * Get default capabilities based on agent name (fallback)
+   */
+  private getDefaultCapabilities(agentName: string): string[] {
+    const defaultCapabilities: Record<string, string[]> = {
+      'emailAgent': ['email_send', 'email_read', 'email_search', 'email_draft'],
+      'calendarAgent': ['calendar_create', 'calendar_read', 'calendar_update', 'calendar_delete'],
+      'contactAgent': ['contact_search', 'contact_create', 'contact_update'],
+      'slackAgent': ['slack_read', 'slack_thread', 'slack_drafts', 'slack_analysis'],
+      'thinkAgent': ['reasoning', 'analysis', 'planning']
+    };
+
+    return defaultCapabilities[agentName] || ['general_operations'];
+  }
+
+  /**
+   * Determine if agent requires confirmation (fallback logic)
+   */
+  private agentRequiresConfirmation(agentName: string): boolean {
+    const confirmationRequired = ['emailAgent', 'calendarAgent'];
+    return confirmationRequired.includes(agentName);
+  }
+
+  /**
+   * AI-powered agent selection based on user intent and capabilities
+   */
+  async selectAgentForTask(
+    userQuery: string, 
+    context: ToolExecutionContext,
+    availableAgents?: string[]
+  ): Promise<ToolRoutingDecision> {
+    if (!this.openaiService) {
+      throw new Error('OpenAI service not available for intelligent tool routing');
+    }
+
+    try {
+      // Get available agents and their capabilities
+      const agents = availableAgents || Array.from(this.agentCapabilities.keys());
+      const capabilitiesContext = this.buildCapabilitiesContext(agents);
+
+      // AI-powered agent selection
+      const selectionPrompt = `Select the best agent to handle this user request based on agent capabilities.
+
+User Request: "${userQuery}"
+
+Available Agents and Their Capabilities:
+${capabilitiesContext}
+
+Analyze the user's intent and select the most appropriate agent. Consider:
+1. Which agent's capabilities best match the user's request
+2. The specificity of the request (email vs calendar vs contact operations)
+3. The complexity of the task
+4. Whether the operation requires external actions
+
+Return JSON with:
+{
+  "selectedAgent": "agentName",
+  "confidence": 0.95,
+  "reasoning": "explanation of why this agent was selected",
+  "requiresConfirmation": boolean,
+  "suggestedParameters": {
+    "query": "refined query for the agent",
+    "operation": "specific operation if applicable"
+  }
+}`;
+
+      const response = await this.openaiService.generateStructuredData<{
+        selectedAgent: string;
+        confidence: number;
+        reasoning: string;
+        requiresConfirmation: boolean;
+        suggestedParameters: any;
+      }>(
+        userQuery,
+        selectionPrompt,
+        {
+          type: 'object',
+          properties: {
+            selectedAgent: { type: 'string' },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+            reasoning: { type: 'string' },
+            requiresConfirmation: { type: 'boolean' },
+            suggestedParameters: { type: 'object' }
+          },
+          required: ['selectedAgent', 'confidence', 'reasoning', 'requiresConfirmation']
+        },
+        { temperature: 0.2, maxTokens: 500 }
+      );
+
+      // Validate selected agent exists
+      if (!this.agentCapabilities.has(response.selectedAgent)) {
+        logger.warn('AI selected unknown agent, falling back to default', {
+          selectedAgent: response.selectedAgent,
+          availableAgents: agents
+        });
+        response.selectedAgent = this.selectFallbackAgent(userQuery);
+      }
+
+      // Create tool call
+      const toolCall: ToolCall = {
+        name: response.selectedAgent,
+        parameters: {
+          query: userQuery,
+          ...response.suggestedParameters
+        }
+      };
+
+      // Generate confirmation message if needed
+      let confirmationMessage: string | undefined;
+      if (response.requiresConfirmation) {
+        const confirmation = await this.generateConfirmationMessage(response.selectedAgent, userQuery, toolCall.parameters);
+        confirmationMessage = confirmation.message;
+      }
+
+      const decision: ToolRoutingDecision = {
+        selectedAgent: response.selectedAgent,
+        toolCall,
+        confidence: response.confidence,
+        reasoning: response.reasoning,
+        requiresConfirmation: response.requiresConfirmation,
+        confirmationMessage,
+        parameters: toolCall.parameters
+      };
+
+      logger.info('AI agent selection completed', {
+        userQuery: userQuery.substring(0, 100),
+        selectedAgent: decision.selectedAgent,
+        confidence: decision.confidence,
+        requiresConfirmation: decision.requiresConfirmation
+      });
+
+      return decision;
+
+    } catch (error) {
+      logger.error('AI agent selection failed, using fallback', error);
+      
+      // Fallback to simple agent selection
+      const fallbackAgent = this.selectFallbackAgent(userQuery);
+      return {
+        selectedAgent: fallbackAgent,
+        toolCall: { name: fallbackAgent, parameters: { query: userQuery } },
+        confidence: 0.5,
+        reasoning: 'Fallback selection due to AI routing failure',
+        requiresConfirmation: this.agentRequiresConfirmation(fallbackAgent),
+        parameters: { query: userQuery }
+      };
+    }
+  }
+
+  /**
+   * Generate AI-powered confirmation messages
+   */
+  async generateConfirmationMessage(
+    agentName: string,
+    userQuery: string,
+    parameters: any
+  ): Promise<ConfirmationMessage> {
+    if (!this.openaiService) {
+      return this.getFallbackConfirmationMessage(agentName);
+    }
+
+    try {
+      const agentCapability = this.agentCapabilities.get(agentName);
+      const capabilities = agentCapability?.capabilities.join(', ') || 'operations';
+
+      const confirmationPrompt = `Generate a contextual confirmation message for this operation.
+
+Agent: ${agentName}
+Agent Capabilities: ${capabilities}
+User Request: "${userQuery}"
+Parameters: ${JSON.stringify(parameters, null, 2)}
+
+Create a confirmation message that:
+1. Clearly states what action will be taken
+2. Includes relevant details from the parameters
+3. Highlights any important implications or risks
+4. Uses a conversational, professional tone
+
+Return JSON with:
+{
+  "message": "detailed confirmation message",
+  "prompt": "instruction for user response",
+  "riskLevel": "low|medium|high",
+  "contextualDetails": ["key detail 1", "key detail 2"]
+}`;
+
+      const response = await this.openaiService.generateStructuredData<ConfirmationMessage>(
+        userQuery,
+        confirmationPrompt,
+        {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            prompt: { type: 'string' },
+            riskLevel: { type: 'string', enum: ['low', 'medium', 'high'] },
+            contextualDetails: { type: 'array', items: { type: 'string' } }
+          },
+          required: ['message', 'prompt', 'riskLevel']
+        },
+        { temperature: 0.3, maxTokens: 400 }
+      );
+
+      logger.debug('AI confirmation message generated', {
+        agentName,
+        riskLevel: response.riskLevel,
+        hasDetails: response.contextualDetails?.length > 0
+      });
+
+      return response;
+
+    } catch (error) {
+      logger.error('AI confirmation generation failed, using fallback', error);
+      return this.getFallbackConfirmationMessage(agentName);
+    }
+  }
+
+  /**
+   * Build capabilities context for AI agent selection
+   */
+  private buildCapabilitiesContext(agentNames: string[]): string {
+    return agentNames.map(agentName => {
+      const capability = this.agentCapabilities.get(agentName);
+      if (!capability) return `${agentName}: No capabilities defined`;
+
+      return `${agentName}:
+  - Capabilities: ${capability.capabilities.join(', ')}
+  - Description: ${capability.description}
+  - Specialties: ${capability.specialties.join(', ')}
+  - Requires Confirmation: ${capability.requiresConfirmation}`;
+    }).join('\n\n');
+  }
+
+  /**
+   * Fallback agent selection using simple heuristics
+   */
+  private selectFallbackAgent(userQuery: string): string {
+    const query = userQuery.toLowerCase();
+    
+    if (query.includes('email') || query.includes('send') || query.includes('message')) {
+      return 'emailAgent';
+    } else if (query.includes('calendar') || query.includes('meeting') || query.includes('schedule')) {
+      return 'calendarAgent';
+    } else if (query.includes('contact') || query.includes('person') || query.includes('phone')) {
+      return 'contactAgent';
+    } else if (query.includes('slack') || query.includes('thread') || query.includes('draft')) {
+      return 'slackAgent';
+    } else {
+      return 'thinkAgent'; // Default thinking agent
+    }
+  }
+
+  /**
+   * Fallback confirmation message generation
+   */
+  private getFallbackConfirmationMessage(agentName: string): ConfirmationMessage {
+    const messages: Record<string, ConfirmationMessage> = {
+      'emailAgent': {
+        message: 'I\'m about to send an email. Would you like me to proceed?',
+        prompt: 'Reply with "yes" to send the email or "no" to cancel.',
+        riskLevel: 'medium',
+        contextualDetails: ['Email will be sent to external recipients']
+      },
+      'calendarAgent': {
+        message: 'I\'m about to create a calendar event. Would you like me to proceed?',
+        prompt: 'Reply with "yes" to create the event or "no" to cancel.',
+        riskLevel: 'low',
+        contextualDetails: ['Calendar event will be created']
+      }
+    };
+
+    return messages[agentName] || {
+      message: `I'm about to execute a ${agentName} operation. Would you like me to proceed?`,
+      prompt: 'Reply with "yes" to continue or "no" to cancel.',
+      riskLevel: 'medium',
+      contextualDetails: [`${agentName} operation will be executed`]
+    };
+  }
+
+  /**
+   * Get registered agent capabilities (for debugging)
+   */
+  getAgentCapabilities(): Map<string, AgentCapability> {
+    return new Map(this.agentCapabilities);
+  }
+
+  /**
+   * Register custom agent capability (for testing or custom agents)
+   */
+  registerCustomCapability(capability: AgentCapability): void {
+    this.agentCapabilities.set(capability.agentName, capability);
+    logger.debug('Custom agent capability registered', { agentName: capability.agentName });
+  }
+
+  /**
+   * Format preview details dynamically based on action type and data
+   * Replaces hardcoded formatting with AI-generated descriptions
+   */
+  async formatPreviewDetails(actionType: string, previewData: any): Promise<string> {
+    try {
+      if (!this.openaiService) {
+        return this.getFallbackPreviewFormat(actionType, previewData);
+      }
+
+      const formatPrompt = `You are formatting preview details for a ${actionType} action in a Slack interface.
+
+Action Type: ${actionType}
+Preview Data: ${JSON.stringify(previewData, null, 2)}
+
+Create a well-formatted, user-friendly preview section that:
+1. Uses appropriate emojis for the action type
+2. Shows key details in a bulleted list format
+3. Highlights important information like recipients, dates, external domains
+4. Uses Slack markdown formatting (**bold**, _italic_)
+5. Is concise but informative
+
+Format as:
+**📧 Action Details:** (use appropriate emoji for action type)
+• **Key Field:** Value
+• **Another Field:** Value
+
+Focus on the most important details that a user would want to review before confirming the action.`;
+
+      const formattedDetails = await this.openaiService.generateText(
+        JSON.stringify(previewData),
+        formatPrompt,
+        { temperature: 0.1, maxTokens: 300 }
+      );
+
+      return formattedDetails || this.getFallbackPreviewFormat(actionType, previewData);
+
+    } catch (error) {
+      logger.warn('Failed to generate AI preview formatting:', error);
+      return this.getFallbackPreviewFormat(actionType, previewData);
+    }
+  }
+
+  /**
+   * Fallback preview formatting when AI is unavailable
+   */
+  private getFallbackPreviewFormat(actionType: string, previewData: any): string {
+    const emoji = this.getActionEmoji(actionType);
+    let details = `${emoji} **${actionType.charAt(0).toUpperCase() + actionType.slice(1)} Details:**\n`;
+
+    try {
+      // Handle common action types with fallback formatting
+      if (actionType === 'email' && previewData) {
+        if (previewData.recipients?.to) {
+          details += `• **To:** ${previewData.recipients.to.join(', ')}\n`;
+        }
+        if (previewData.recipients?.cc?.length > 0) {
+          details += `• **CC:** ${previewData.recipients.cc.join(', ')}\n`;
+        }
+        if (previewData.subject) {
+          details += `• **Subject:** ${previewData.subject}\n`;
+        }
+        if (previewData.recipientCount) {
+          details += `• **Recipients:** ${previewData.recipientCount}\n`;
+        }
+        if (previewData.externalDomains?.length > 0) {
+          details += `• **External Domains:** ${previewData.externalDomains.join(', ')}\n`;
+        }
+      } else if (actionType === 'calendar' && previewData) {
+        if (previewData.title) {
+          details += `• **Title:** ${previewData.title}\n`;
+        }
+        if (previewData.startTime) {
+          details += `• **Start:** ${new Date(previewData.startTime).toLocaleString()}\n`;
+        }
+        if (previewData.duration) {
+          details += `• **Duration:** ${previewData.duration}\n`;
+        }
+        if (previewData.attendees?.length > 0) {
+          details += `• **Attendees:** ${previewData.attendees.join(', ')}\n`;
+        }
+        if (previewData.location) {
+          details += `• **Location:** ${previewData.location}\n`;
+        }
+        if (previewData.conflicts?.length > 0) {
+          details += `⚠️ **Conflicts:** ${previewData.conflicts.length} detected\n`;
+        }
+      } else {
+        // Generic fallback for unknown action types
+        details += `• **Type:** ${actionType}\n`;
+        if (typeof previewData === 'object' && previewData !== null) {
+          const keyCount = Object.keys(previewData).length;
+          details += `• **Parameters:** ${keyCount} configuration items\n`;
+        }
+      }
+    } catch (error) {
+      logger.warn('Error in fallback preview formatting:', error);
+      details += `• **Action:** ${actionType}\n• **Status:** Preview available\n`;
+    }
+
+    return details;
+  }
+
+  /**
+   * Get appropriate emoji for action type
+   */
+  private getActionEmoji(actionType: string): string {
+    const emojis: Record<string, string> = {
+      'email': '📧',
+      'calendar': '📅',
+      'contact': '👤',
+      'search': '🔍',
+      'task': '✅',
+      'note': '📝',
+      'file': '📄'
+    };
+    
+    return emojis[actionType.toLowerCase()] || '🔧';
+  }
+}

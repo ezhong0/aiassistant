@@ -441,4 +441,61 @@ export class AIClassificationService extends BaseService {
       return { needed: false, names: [] };
     }
   }
+
+  /**
+   * Classify Slack intent using AI instead of crude string matching
+   * Replaces: includes('thread'), includes('draft'), includes('manage') patterns
+   */
+  async classifySlackIntent(query: string): Promise<'read_messages' | 'read_thread' | 'send_message' | 'detect_drafts' | 'manage_drafts' | 'search_messages'> {
+    if (!this.openaiService) {
+      throw new Error('OpenAI service is not available. AI Slack intent classification is required for this operation.');
+    }
+
+    try {
+      const response = await this.openaiService.generateText(
+        `Classify the user's Slack intent from their query: "${query}"
+
+Available Slack operations:
+- read_messages: Reading recent messages, checking inbox, viewing messages
+- read_thread: Reading specific conversation threads, following discussions
+- send_message: Sending new messages, posting to channels
+- detect_drafts: Finding pending/unsent drafts
+- manage_drafts: Managing, updating, or organizing drafts
+- search_messages: Searching through message history
+
+Examples:
+- "Show me recent messages" → read_messages
+- "Check the conversation with John" → read_thread
+- "Send message to the team" → send_message
+- "Find my unsent drafts" → detect_drafts
+- "Update my draft message" → manage_drafts
+- "Search for messages about project X" → search_messages
+
+Return exactly one of: read_messages, read_thread, send_message, detect_drafts, manage_drafts, search_messages`,
+        'Classify Slack user intent from natural language queries',
+        { temperature: 0.2, maxTokens: 50 }
+      );
+
+      const result = response.toLowerCase().trim();
+      
+      // Validate the response is one of our expected intents
+      const validIntents = ['read_messages', 'read_thread', 'send_message', 'detect_drafts', 'manage_drafts', 'search_messages'];
+      if (validIntents.includes(result)) {
+        logger.debug('Slack intent classified successfully', { 
+          query: query.substring(0, 100), 
+          intent: result 
+        });
+        return result as any;
+      } else {
+        logger.warn('AI returned unexpected Slack intent, defaulting to read_messages', { 
+          query: query.substring(0, 100), 
+          aiResponse: result 
+        });
+        return 'read_messages';
+      }
+    } catch (error) {
+      logger.error('Failed to classify Slack intent with AI:', error);
+      throw new Error('AI Slack intent classification failed. Please check your OpenAI configuration.');
+    }
+  }
 }

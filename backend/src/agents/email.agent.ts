@@ -159,6 +159,27 @@ export interface EmailAgentRequest extends EmailAgentParams {
     }
 
     /**
+     * Get agent specialties for capability-based routing
+     */
+    static getSpecialties(): string[] {
+      return [
+        'Email composition and sending',
+        'Email thread management',
+        'Intelligent email search and filtering',
+        'Draft creation and management',
+        'Email priority classification',
+        'Multi-recipient handling'
+      ];
+    }
+
+    /**
+     * Get agent description for AI routing
+     */
+    static getDescription(): string {
+      return 'Specialized agent for Gmail operations including sending emails, searching messages, managing drafts, and intelligent email processing with AI-powered content analysis.';
+    }
+
+    /**
      * Get agent limitations for OpenAI function calling
      */
     static getLimitations(): string[] {
@@ -263,6 +284,108 @@ export interface EmailAgentRequest extends EmailAgentParams {
       capabilities: ['search_gmail', 'filter_emails'],
       requiresConfirmation: false,
       estimatedExecutionTime: 3000
+    });
+
+    // AI-driven email data fetching tools
+    this.registerTool({
+      name: 'get_email_overview',
+      description: 'Get basic metadata for recent emails (subjects, senders, dates, snippets) for efficient analysis',
+      parameters: {
+        type: 'object',
+        properties: {
+          maxResults: {
+            type: 'number',
+            description: 'Maximum number of emails to retrieve (default: 20, max: 50)',
+            minimum: 1,
+            maximum: 50
+          },
+          query: {
+            type: 'string',
+            description: 'Gmail search query (default: "in:inbox") - e.g., "is:unread", "from:sender@email.com"'
+          },
+          includeSpamTrash: {
+            type: 'boolean',
+            description: 'Whether to include spam and trash emails (default: false)'
+          }
+        }
+      },
+      capabilities: ['efficient_metadata_fetching', 'email_overview', 'quick_analysis'],
+      requiresConfirmation: false,
+      estimatedExecutionTime: 2000,
+      examples: [
+        'Get overview of 10 most recent emails',
+        'Get overview of unread emails',
+        'Get overview of emails from specific sender'
+      ]
+    });
+
+    this.registerTool({
+      name: 'get_full_email_content',
+      description: 'Get complete email content including body, attachments, and headers for specific email IDs',
+      parameters: {
+        type: 'object',
+        properties: {
+          emailIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of email message IDs to fetch full content for',
+            minItems: 1,
+            maxItems: 5
+          }
+        },
+        required: ['emailIds']
+      },
+      capabilities: ['full_content_retrieval', 'email_body_access', 'attachment_metadata'],
+      requiresConfirmation: false,
+      estimatedExecutionTime: 3000,
+      examples: [
+        'Get full content for specific email IDs',
+        'Retrieve complete email body and attachments',
+        'Access detailed email headers and metadata'
+      ]
+    });
+
+    this.registerTool({
+      name: 'analyze_email_relevance',
+      description: 'Use AI to analyze which emails from an overview are relevant to a user query and need full content',
+      parameters: {
+        type: 'object',
+        properties: {
+          userQuery: {
+            type: 'string',
+            description: 'The original user query/request'
+          },
+          emailOverview: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                subject: { type: 'string' },
+                from: { type: 'string' },
+                date: { type: 'string' },
+                snippet: { type: 'string' }
+              }
+            },
+            description: 'Array of email overview objects to analyze'
+          },
+          maxRelevant: {
+            type: 'number',
+            description: 'Maximum number of relevant emails to select (default: 3)',
+            minimum: 1,
+            maximum: 10
+          }
+        },
+        required: ['userQuery', 'emailOverview']
+      },
+      capabilities: ['ai_relevance_analysis', 'smart_filtering', 'content_prioritization'],
+      requiresConfirmation: false,
+      estimatedExecutionTime: 1500,
+      examples: [
+        'Analyze which emails are relevant to "latest meeting notes"',
+        'Determine most important emails for summarization',
+        'Filter emails based on user intent and context'
+      ]
     });
 
     this.logger.debug('Email-specific tools registered for AI planning', {
@@ -383,6 +506,191 @@ export interface EmailAgentRequest extends EmailAgentParams {
           return {
             success: false,
             error: error instanceof Error ? error.message : 'Search emails failed'
+          };
+        }
+
+      case 'get_email_overview':
+        // Handle email overview fetching
+        try {
+          const gmailService = getService<GmailService>('gmailService');
+          if (!gmailService) {
+            throw new Error('Gmail service not available');
+          }
+
+          const overview = await gmailService.getEmailOverview(parameters.accessToken, {
+            maxResults: parameters.maxResults || 20,
+            query: parameters.query || 'in:inbox',
+            includeSpamTrash: parameters.includeSpamTrash || false
+          });
+
+          this.logger.info('Email overview fetched successfully', {
+            toolName,
+            emailCount: overview.length,
+            sessionId: context.sessionId
+          });
+
+          return {
+            success: true,
+            data: overview
+          };
+        } catch (error) {
+          this.logger.error('Get email overview failed', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to get email overview'
+          };
+        }
+
+      case 'get_full_email_content':
+        // Handle full email content fetching
+        try {
+          const gmailService = getService<GmailService>('gmailService');
+          if (!gmailService) {
+            throw new Error('Gmail service not available');
+          }
+
+          const emailIds = parameters.emailIds || [];
+          if (!Array.isArray(emailIds) || emailIds.length === 0) {
+            throw new Error('Email IDs are required');
+          }
+
+          const fullEmails = await Promise.all(
+            emailIds.slice(0, 5).map(async (emailId: string) => {
+              try {
+                return await gmailService.getFullMessage(parameters.accessToken, emailId);
+              } catch (error) {
+                this.logger.warn('Failed to get full content for email', { emailId, error });
+                return null;
+              }
+            })
+          );
+
+          const validEmails = fullEmails.filter(email => email !== null);
+
+          this.logger.info('Full email content fetched successfully', {
+            toolName,
+            requestedCount: emailIds.length,
+            retrievedCount: validEmails.length,
+            sessionId: context.sessionId
+          });
+
+          return {
+            success: true,
+            data: validEmails
+          };
+        } catch (error) {
+          this.logger.error('Get full email content failed', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to get full email content'
+          };
+        }
+
+      case 'analyze_email_relevance':
+        // Handle AI-driven email relevance analysis
+        try {
+          const openaiService = this.getOpenAIService();
+          if (!openaiService) {
+            throw new Error('OpenAI service not available for relevance analysis');
+          }
+
+          const userQuery = parameters.userQuery || '';
+          const emailOverview = parameters.emailOverview || [];
+          const maxRelevant = parameters.maxRelevant || 3;
+
+          if (!Array.isArray(emailOverview) || emailOverview.length === 0) {
+            return {
+              success: true,
+              data: {
+                relevantEmails: [],
+                reasoning: 'No emails provided for analysis'
+              }
+            };
+          }
+
+          // Create AI prompt for relevance analysis
+          const analysisPrompt = `Analyze which emails are most relevant to the user's query and should have their full content retrieved.
+
+User Query: "${userQuery}"
+
+Available Emails:
+${emailOverview.map((email: any, index: number) => 
+  `${index + 1}. ID: ${email.id}
+     Subject: ${email.subject}
+     From: ${email.from}
+     Date: ${email.date}
+     Snippet: ${email.snippet}`
+).join('\n\n')}
+
+Select the ${maxRelevant} most relevant emails that would help answer the user's query. Consider:
+- Recency for "latest" requests
+- Subject matter relevance
+- Sender importance
+- Content hints from snippets
+
+Return JSON with:
+{
+  "relevantEmailIds": ["id1", "id2", ...],
+  "reasoning": "explanation of selection criteria and why these emails are relevant"
+}`;
+
+          const response = await openaiService.generateStructuredData<{
+            relevantEmailIds: string[];
+            reasoning: string;
+          }>(
+            userQuery,
+            analysisPrompt,
+            {
+              type: 'object',
+              properties: {
+                relevantEmailIds: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  maxItems: maxRelevant
+                },
+                reasoning: { type: 'string' }
+              },
+              required: ['relevantEmailIds', 'reasoning']
+            },
+            { temperature: 0.3, maxTokens: 500 }
+          );
+
+          this.logger.info('Email relevance analysis completed', {
+            toolName,
+            userQuery,
+            totalEmails: emailOverview.length,
+            selectedEmails: response.relevantEmailIds.length,
+            sessionId: context.sessionId
+          });
+
+          return {
+            success: true,
+            data: {
+              relevantEmailIds: response.relevantEmailIds,
+              reasoning: response.reasoning,
+              totalAnalyzed: emailOverview.length
+            }
+          };
+        } catch (error) {
+          this.logger.error('Email relevance analysis failed', {
+            toolName,
+            error: error instanceof Error ? error.message : error,
+            sessionId: context.sessionId
+          });
+
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to analyze email relevance'
           };
         }
 
@@ -983,7 +1291,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
 
     this.logger.info('Email search completed', { 
       query: searchRequest.query, 
-      count: searchResult.length 
+      count: searchResult.length
     });
 
     return {

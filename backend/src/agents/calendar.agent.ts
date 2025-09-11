@@ -161,6 +161,27 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
   }
 
   /**
+   * Get agent specialties for capability-based routing
+   */
+  static getSpecialties(): string[] {
+    return [
+      'Calendar event management',
+      'Meeting scheduling and coordination',
+      'Availability checking and conflict resolution',
+      'Multi-attendee event coordination',
+      'Recurring event management',
+      'Time zone handling and conversion'
+    ];
+  }
+
+  /**
+   * Get agent description for AI routing
+   */
+  static getDescription(): string {
+    return 'Specialized agent for Google Calendar operations including event creation, scheduling, availability checking, and meeting management with intelligent conflict detection.';
+  }
+
+  /**
    * Get agent limitations for OpenAI function calling
    */
   static getLimitations(): string[] {

@@ -313,6 +313,285 @@ export class GmailService extends BaseService {
   }
 
   /**
+   * Get email overview (basic metadata) for efficient data gathering
+   */
+  async getEmailOverview(
+    accessToken: string,
+    options: {
+      maxResults?: number;
+      query?: string;
+      includeSpamTrash?: boolean;
+    } = {}
+  ): Promise<Array<{
+    id: string;
+    threadId: string;
+    subject: string;
+    from: string;
+    to?: string[];
+    date: Date;
+    snippet: string;
+    labels: string[];
+    isUnread: boolean;
+    hasAttachments: boolean;
+  }>> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Getting email overview', { 
+        maxResults: options.maxResults || 20,
+        query: options.query || 'in:inbox' 
+      });
+
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
+      // Search for messages
+      const response = await this.gmailService.users.messages.list({
+        userId: 'me',
+        q: options.query || 'in:inbox',
+        maxResults: options.maxResults || 20,
+        includeSpamTrash: options.includeSpamTrash || false,
+        auth: auth
+      });
+
+      if (!response.data.messages || response.data.messages.length === 0) {
+        this.logDebug('No messages found for overview');
+        return [];
+      }
+
+      // Get basic details for each message (batch request for efficiency)
+      const overviewPromises = response.data.messages.slice(0, options.maxResults || 20).map(async (msg: any) => {
+        try {
+          const messageResponse = await this.gmailService.users.messages.get({
+            userId: 'me',
+            id: msg.id!,
+            format: 'metadata', // Only get metadata, not full content
+            metadataHeaders: ['Subject', 'From', 'To', 'Date'],
+            auth: auth
+          });
+
+          const message = messageResponse.data;
+          const headers = message.payload?.headers || [];
+          const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+          
+          const subject = getHeader('Subject');
+          const from = getHeader('From');
+          const to = getHeader('To').split(',').map((t: string) => t.trim()).filter((t: string) => t);
+          const dateStr = getHeader('Date');
+
+          return {
+            id: message.id!,
+            threadId: message.threadId!,
+            subject,
+            from,
+            to: to.length > 0 ? to : undefined,
+            date: dateStr ? new Date(dateStr) : new Date(),
+            snippet: message.snippet || '',
+            labels: message.labelIds || [],
+            isUnread: (message.labelIds || []).includes('UNREAD'),
+            hasAttachments: (message.payload?.parts || []).some((part: any) => part.filename && part.filename.length > 0)
+          };
+        } catch (error) {
+          this.logWarn('Failed to get overview for message', { messageId: msg.id, error });
+          return null;
+        }
+      });
+
+      const overviewResults = await Promise.all(overviewPromises);
+      const validResults = overviewResults.filter(result => result !== null);
+
+      this.logInfo('Email overview retrieved successfully', { 
+        requestedCount: response.data.messages.length,
+        retrievedCount: validResults.length,
+        query: options.query || 'in:inbox'
+      });
+
+      return validResults;
+
+    } catch (error) {
+      this.handleError(error, 'getEmailOverview');
+    }
+  }
+
+  /**
+   * Get full message details including content
+   */
+  async getFullMessage(
+    accessToken: string,
+    messageId: string
+  ): Promise<{
+    id: string;
+    threadId: string;
+    subject: string;
+    from: string;
+    to: string[];
+    cc?: string[];
+    bcc?: string[];
+    date: Date;
+    body: {
+      text?: string;
+      html?: string;
+    };
+    snippet: string;
+    labels: string[];
+    attachments?: Array<{
+      filename: string;
+      mimeType: string;
+      size: number;
+      attachmentId: string;
+    }>;
+  }> {
+    this.assertReady();
+    
+    try {
+      this.logDebug('Getting full message details', { messageId });
+
+      // Create OAuth2 client with access token
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: accessToken
+      });
+
+      const response = await this.gmailService.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: 'full', // Get full message including body
+        auth: auth
+      });
+
+      const message = response.data;
+      if (!message) {
+        throw new GmailServiceError('Message not found', 'MESSAGE_NOT_FOUND');
+      }
+
+      // Extract headers
+      const headers = message.payload?.headers || [];
+      const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+      
+      const subject = getHeader('Subject');
+      const from = getHeader('From');
+      const to = getHeader('To').split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      const cc = getHeader('Cc').split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      const bcc = getHeader('Bcc').split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      const dateStr = getHeader('Date');
+
+      // Extract body content
+      const body = this.extractMessageBody(message.payload);
+
+      // Extract attachments
+      const attachments = this.extractAttachments(message.payload);
+
+      const fullMessage = {
+        id: message.id!,
+        threadId: message.threadId!,
+        subject,
+        from,
+        to,
+        cc: cc.length > 0 ? cc : undefined,
+        bcc: bcc.length > 0 ? bcc : undefined,
+        date: dateStr ? new Date(dateStr) : new Date(),
+        body,
+        snippet: message.snippet || '',
+        labels: message.labelIds || [],
+        attachments: attachments.length > 0 ? attachments : undefined
+      };
+
+      this.logInfo('Full message retrieved successfully', { 
+        messageId, 
+        subject: subject.substring(0, 50),
+        hasTextBody: !!body.text,
+        hasHtmlBody: !!body.html,
+        attachmentCount: attachments.length
+      });
+
+      return fullMessage;
+
+    } catch (error) {
+      this.handleError(error, 'getFullMessage');
+    }
+  }
+
+  /**
+   * Extract message body from Gmail payload
+   */
+  private extractMessageBody(payload: any): { text?: string; html?: string } {
+    if (!payload) return {};
+
+    const body = { text: undefined as string | undefined, html: undefined as string | undefined };
+
+    // Handle single part message
+    if (payload.body?.data) {
+      const content = Buffer.from(payload.body.data, 'base64').toString('utf-8');
+      if (payload.mimeType === 'text/plain') {
+        body.text = content;
+      } else if (payload.mimeType === 'text/html') {
+        body.html = content;
+      }
+      return body;
+    }
+
+    // Handle multipart message
+    if (payload.parts) {
+      for (const part of payload.parts) {
+        if (part.mimeType === 'text/plain' && part.body?.data) {
+          body.text = Buffer.from(part.body.data, 'base64').toString('utf-8');
+        } else if (part.mimeType === 'text/html' && part.body?.data) {
+          body.html = Buffer.from(part.body.data, 'base64').toString('utf-8');
+        }
+        // Recursively check nested parts
+        else if (part.parts) {
+          const nestedBody = this.extractMessageBody(part);
+          if (nestedBody.text) body.text = nestedBody.text;
+          if (nestedBody.html) body.html = nestedBody.html;
+        }
+      }
+    }
+
+    return body;
+  }
+
+  /**
+   * Extract attachments from Gmail payload
+   */
+  private extractAttachments(payload: any): Array<{
+    filename: string;
+    mimeType: string;
+    size: number;
+    attachmentId: string;
+  }> {
+    const attachments: Array<{
+      filename: string;
+      mimeType: string;
+      size: number;
+      attachmentId: string;
+    }> = [];
+
+    if (!payload) return attachments;
+
+    // Check current level for attachments
+    if (payload.body?.attachmentId && payload.filename) {
+      attachments.push({
+        filename: payload.filename,
+        mimeType: payload.mimeType || 'application/octet-stream',
+        size: payload.body.size || 0,
+        attachmentId: payload.body.attachmentId
+      });
+    }
+
+    // Recursively check parts
+    if (payload.parts) {
+      for (const part of payload.parts) {
+        attachments.push(...this.extractAttachments(part));
+      }
+    }
+
+    return attachments;
+  }
+
+  /**
    * Get email attachments
    */
   async getAttachment(

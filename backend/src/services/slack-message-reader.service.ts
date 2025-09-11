@@ -181,6 +181,16 @@ export class SlackMessageReaderService extends BaseService {
         await this.cacheMessages(cacheKey, messages);
       }
 
+      // Ensure messages is an array before filtering
+      if (!Array.isArray(messages)) {
+        this.logWarn('Messages is not an array, forcing empty array', { 
+          messagesType: typeof messages,
+          messagesValue: messages,
+          channelId 
+        });
+        messages = [];
+      }
+
       // Apply filtering
       const filteredMessages = this.applyMessageFilter(messages, filter);
 

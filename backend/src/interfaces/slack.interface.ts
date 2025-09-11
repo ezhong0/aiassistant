@@ -5,6 +5,7 @@ import { ToolExecutionContext, ToolResult } from '../types/tools';
 import { TokenStorageService } from '../services/token-storage.service';
 import { TokenManager } from '../services/token-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
+import { ToolRoutingService } from '../services/tool-routing.service';
 import logger from '../utils/logger';
 
 export interface SlackConfig {
@@ -973,7 +974,7 @@ export class SlackInterface {
 
         if (needsConfirmation) {
           // Return confirmation request to Slack
-          return this.createConfirmationResponse(previewResults, sessionId, request.message, request.context.channelId);
+          return await this.createConfirmationResponse(previewResults, sessionId, request.message, request.context.channelId);
         }
 
         // Step 3: No confirmation needed, use preview results as final results
@@ -1565,7 +1566,7 @@ export class SlackInterface {
   /**
    * Create confirmation response for Slack with action preview
    */
-  private createConfirmationResponse(previewResults: any[], sessionId: string, userMessage: string, channel: string): SlackAgentResponse {
+  private async createConfirmationResponse(previewResults: any[], sessionId: string, userMessage: string, channel: string): Promise<SlackAgentResponse> {
     // Extract the main preview data
     const mainPreview = previewResults.find(r => 
       r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result && r.result.preview
@@ -1602,35 +1603,28 @@ export class SlackInterface {
       });
     }
 
-    // Add specific preview data based on action type
-    if (preview.actionType === 'email' && preview.previewData) {
-      const emailData = preview.previewData as any;
-      previewText += `\n📧 **Email Details:**\n`;
-      previewText += `• **To:** ${emailData.recipients.to.join(', ')}\n`;
-      if (emailData.recipients.cc?.length > 0) {
-        previewText += `• **CC:** ${emailData.recipients.cc.join(', ')}\n`;
+    // Add specific preview data using dynamic formatting
+    try {
+      const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+      if (toolRoutingService && preview.previewData) {
+        const formattedDetails = await toolRoutingService.formatPreviewDetails(
+          preview.actionType,
+          preview.previewData
+        );
+        previewText += `\n${formattedDetails}\n`;
+      } else {
+        // Fallback to basic preview info if service unavailable
+        previewText += `\n🔧 **Action Details:**\n`;
+        previewText += `• **Type:** ${preview.actionType}\n`;
+        if (preview.previewData) {
+          previewText += `• **Parameters:** Available\n`;
+        }
       }
-      previewText += `• **Subject:** ${emailData.subject}\n`;
-      previewText += `• **Content:** ${emailData.contentSummary}\n`;
-      previewText += `• **Recipients:** ${emailData.recipientCount}\n`;
-      if (emailData.externalDomains?.length > 0) {
-        previewText += `• **External Domains:** ${emailData.externalDomains.join(', ')}\n`;
-      }
-    } else if (preview.actionType === 'calendar' && preview.previewData) {
-      const calendarData = preview.previewData as any;
-      previewText += `\n📅 **Calendar Details:**\n`;
-      previewText += `• **Title:** ${calendarData.title}\n`;
-      previewText += `• **Start:** ${new Date(calendarData.startTime).toLocaleString()}\n`;
-      previewText += `• **Duration:** ${calendarData.duration}\n`;
-      if (calendarData.attendees?.length > 0) {
-        previewText += `• **Attendees:** ${calendarData.attendees.join(', ')}\n`;
-      }
-      if (calendarData.location) {
-        previewText += `• **Location:** ${calendarData.location}\n`;
-      }
-      if (calendarData.conflicts?.length > 0) {
-        previewText += `⚠️ **Conflicts:** ${calendarData.conflicts.length} detected\n`;
-      }
+    } catch (error) {
+      logger.warn('Failed to format preview details dynamically:', error);
+      // Fallback to basic preview info
+      previewText += `\n🔧 **Action Details:**\n`;
+      previewText += `• **Type:** ${preview.actionType}\n`;
     }
 
     previewText += `\n**Estimated Execution Time:** ${preview.estimatedExecutionTime}\n`;

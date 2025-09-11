@@ -114,6 +114,27 @@ export interface ContactAgentRequest extends ContactAgentParams {
     }
 
     /**
+     * Get agent specialties for capability-based routing
+     */
+    static getSpecialties(): string[] {
+      return [
+        'Contact information retrieval',
+        'People search and discovery',
+        'Email history contact extraction',
+        'Fuzzy name matching',
+        'Contact confidence scoring',
+        'Ambiguous query resolution'
+      ];
+    }
+
+    /**
+     * Get agent description for AI routing
+     */
+    static getDescription(): string {
+      return 'Specialized agent for contact search and retrieval from Google Contacts and email history, providing accurate contact information for communication operations.';
+    }
+
+    /**
      * Get agent limitations for OpenAI function calling
      */
     static getLimitations(): string[] {
