@@ -12,11 +12,11 @@ import {
 } from '../types/api-response.types';
 import { validate, sanitizeString } from '../middleware/validation.middleware';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
-import { CONFIRMATION_WORDS } from '../config/agent-config';
+import { getService } from '../services/service-manager';
+import { AIClassificationService } from '../services/ai-classification.service';
 import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
-import { getService } from '../services/service-manager';
 import { ToolExecutorService } from '../services/tool-executor.service';
 import { TokenStorageService } from '../services/token-storage.service';
 import { ToolExecutionContext } from '../types/tools';
@@ -164,7 +164,6 @@ router.post('/text-command',
       hasPendingActions: !!(mergedContext?.pendingActions),
       pendingActionsCount: mergedContext?.pendingActions?.length || 0,
       pendingActionsDetails: mergedContext?.pendingActions,
-      isConfirmationResponse: isConfirmationResponse(command),
       command: command
     });
     
@@ -172,7 +171,8 @@ router.post('/text-command',
       const pendingAction = mergedContext.pendingActions.find(action => action.awaitingConfirmation);
       logger.info('Found pending action for confirmation', { pendingAction, command });
       
-      if (pendingAction && isConfirmationResponse(command)) {
+      const isConfirmation = await isConfirmationResponse(command);
+      if (pendingAction && isConfirmation) {
         logger.info('Processing confirmation response', { actionId: pendingAction.actionId });
         return await handleActionConfirmation(req, res, pendingAction, command, finalSessionId);
       }
@@ -569,12 +569,21 @@ router.get('/status', authenticateToken, (req: AuthenticatedRequest, res: Respon
 // Helper functions for text-command endpoint
 
 /**
- * Check if command is a confirmation response (yes/no/confirm/cancel)
+ * Check if command is a confirmation response using AI classification
  */
-const isConfirmationResponse = (command: string): boolean => {
-  const lowerCommand = command.toLowerCase().trim();
-  return CONFIRMATION_WORDS.confirm.includes(lowerCommand as any) || 
-         CONFIRMATION_WORDS.reject.includes(lowerCommand as any);
+const isConfirmationResponse = async (command: string): Promise<boolean> => {
+  try {
+    const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+    if (!aiClassificationService) {
+      logger.warn('AI Classification Service not available for confirmation response');
+      return false;
+    }
+    const classification = await aiClassificationService.classifyConfirmationResponse(command);
+    return classification === 'confirm' || classification === 'reject';
+  } catch (error) {
+    logger.error('Failed to classify confirmation response:', error);
+    return false;
+  }
 }
 
 /**
@@ -587,10 +596,21 @@ const handleActionConfirmation = async (
   command: string,
   sessionId: string
 ): Promise<Response> => {
-  const lowerCommand = command.toLowerCase().trim();
-  const confirmed = CONFIRMATION_WORDS.confirm.includes(lowerCommand as any);
+  try {
+    const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+    if (!aiClassificationService) {
+      logger.warn('AI Classification Service not available for action confirmation');
+      return res.status(500).json({
+        success: false,
+        type: 'error',
+        message: 'AI service unavailable',
+        data: { sessionId }
+      });
+    }
+    const classification = await aiClassificationService.classifyConfirmationResponse(command);
+    const confirmed = classification === 'confirm';
 
-  if (!confirmed) {
+    if (!confirmed) {
     return res.json({
       success: true,
       type: 'response',
@@ -623,6 +643,15 @@ const handleActionConfirmation = async (
       sessionId
     }
   });
+  } catch (error) {
+    logger.error('Failed to handle action confirmation:', error);
+    return res.status(500).json({
+      success: false,
+      type: 'error',
+      message: 'Failed to process confirmation',
+      data: { sessionId }
+    });
+  }
 }
 
 /**

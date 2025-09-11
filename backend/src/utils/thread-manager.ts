@@ -40,8 +40,10 @@ export class ThreadManager {
         throw new Error('Gmail service not available');
       }
       const thread = await gmailService.getEmailThread(accessToken, threadId);
-      const parsedMessages = thread.messages.map((message: any) => 
-        EmailParser.parseGmailMessage(message)
+      const parsedMessages = await Promise.all(
+        thread.messages.map((message: any) => 
+          EmailParser.parseGmailMessage(message)
+        )
       );
 
       const summary = this.createThreadSummary(thread, parsedMessages);
@@ -530,7 +532,9 @@ export class ThreadSearch {
       const threadSummaries: ThreadSummary[] = [];
       
       for (const [threadId, messages] of threadMap) {
-        const parsedMessages = messages.map(msg => EmailParser.parseGmailMessage(msg));
+        const parsedMessages = await Promise.all(
+          messages.map(msg => EmailParser.parseGmailMessage(msg))
+        );
         const thread: GmailThread = {
           id: threadId,
           historyId: messages[0]?.historyId || '',

@@ -11,6 +11,7 @@ import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { SlackMessageReaderService } from './slack-message-reader.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
+import { AIClassificationService } from './ai-classification.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -177,7 +178,15 @@ const registerCoreServices = async (): Promise<void> => {
     });
 
 
-    // 13. SlackMessageReaderService - Dedicated service for reading Slack message history
+    // 10. AIClassificationService - Depends on OpenAI service
+    const aiClassificationService = new AIClassificationService();
+    serviceManager.registerService('aiClassificationService', aiClassificationService, {
+      dependencies: ['openaiService'],
+      priority: 17, // Just after circuit breaker
+      autoStart: true
+    });
+
+    // 11. SlackMessageReaderService - Dedicated service for reading Slack message history
     // Only register if Slack is configured
     if (ENV_VALIDATION.isSlackConfigured()) {
       const slackMessageReaderService = new SlackMessageReaderService(

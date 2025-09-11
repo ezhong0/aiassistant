@@ -295,8 +295,8 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       });
       
       // Check if this operation actually needs confirmation
-      const operation = this.detectOperation(params);
-      const needsConfirmation = this.operationRequiresConfirmation(operation);
+      const operation = await this.detectOperation(params);
+      const needsConfirmation = await this.operationRequiresConfirmation(operation);
       
       this.logger.info('Operation confirmation check', {
         operation,
@@ -309,7 +309,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       if (!needsConfirmation) {
         this.logger.info('Operation does not require confirmation, executing directly', {
           operation,
-          reason: this.getOperationConfirmationReason(operation)
+          reason: await this.getOperationConfirmationReason(operation)
         });
         return await this.execute(params, context);
       }
@@ -1038,16 +1038,16 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   // OPERATION DETECTION METHODS
 
   /**
-   * Detect the operation type from user parameters
+   * Detect the operation type from user parameters using AI classification
    * Override this method in subclasses for agent-specific operation detection
    */
-  protected detectOperation(params: TParams): string {
+  protected async detectOperation(params: TParams): Promise<string> {
     // Default implementation - try to extract operation from query parameter
     if (params && typeof params === 'object' && 'query' in params) {
       const query = (params as any).query;
       if (typeof query === 'string') {
         const configAgentName = this.getConfigAgentName();
-        return AGENT_HELPERS.detectOperation(configAgentName as any, query);
+        return await AGENT_HELPERS.detectOperation(configAgentName as any, query);
       }
     }
     
@@ -1072,19 +1072,19 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   }
 
   /**
-   * Check if the detected operation requires confirmation
+   * Check if the detected operation requires confirmation using AI
    */
-  protected operationRequiresConfirmation(operation: string): boolean {
+  protected async operationRequiresConfirmation(operation: string): Promise<boolean> {
     const configAgentName = this.getConfigAgentName();
-    return AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
+    return await AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
   }
 
   /**
    * Get the reason why an operation requires or doesn't require confirmation
    */
-  protected getOperationConfirmationReason(operation: string): string {
+  protected async getOperationConfirmationReason(operation: string): Promise<string> {
     const configAgentName = this.getConfigAgentName();
-    return AGENT_HELPERS.getOperationConfirmationReason(configAgentName as any, operation);
+    return await AGENT_HELPERS.getOperationConfirmationReason(configAgentName as any, operation);
   }
 
   /**

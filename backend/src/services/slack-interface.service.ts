@@ -3,6 +3,7 @@ import { BaseService } from './base-service';
 import { ServiceManager } from './service-manager';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
+import { OpenAIService } from './openai.service';
 import { 
   SlackContext, 
   SlackEventType, 
@@ -11,7 +12,8 @@ import {
   SlackResponse 
 } from '../types/slack.types';
 import { ToolCall, ToolExecutionContext, ToolResult } from '../types/tools';
-import { serviceManager } from './service-manager';
+import { serviceManager, getService } from './service-manager';
+import { AIClassificationService } from './ai-classification.service';
 import logger from '../utils/logger';
 
 export interface SlackConfig {
@@ -288,21 +290,16 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Check if a message is a confirmation response
+   * Check if a message is a confirmation response using AI classification
    */
   private async isConfirmationResponse(message: string, context: SlackContext): Promise<boolean> {
-    const confirmationPatterns = [
-      /^(yes|y|yeah|yep|sure|ok|okay|go ahead|send it|do it|execute|confirm|approved)$/i,
-      /^(no|n|nope|cancel|stop|abort|reject|denied)$/i,
-      /^(yes,?\s*(send|go|do|execute|confirm|approve))$/i,
-      /^(no,?\s*(don't|do not|stop|cancel|abort))$/i
-    ];
-
-    const isConfirmation = confirmationPatterns.some(pattern => pattern.test(message.trim()));
+    const classification = await this.classifyConfirmationResponse(message);
+    const isConfirmation = classification !== 'unknown';
     
     if (isConfirmation) {
       this.logInfo('Confirmation response detected', {
         message: message.substring(0, 50),
+        classification,
         userId: context.userId,
         channelId: context.channelId
       });
@@ -316,7 +313,7 @@ export class SlackInterfaceService extends BaseService {
    */
   private async handleConfirmationResponse(message: string, context: SlackContext): Promise<void> {
     try {
-      const isConfirmed = this.parseConfirmationResponse(message);
+      const isConfirmed = await this.parseConfirmationResponse(message);
       
       if (!this.slackMessageReaderService) {
         await this.sendMessage(context.channelId, {
@@ -382,29 +379,51 @@ export class SlackInterfaceService extends BaseService {
   /**
    * Parse confirmation response to determine if it's a positive or negative confirmation
    */
-  private parseConfirmationResponse(message: string): boolean {
-    const positivePatterns = [
-      /^(yes|y|yeah|yep|sure|ok|okay|go ahead|send it|do it|execute|confirm|approved)$/i,
-      /^(yes,?\s*(send|go|do|execute|confirm|approve))$/i
-    ];
-
-    const negativePatterns = [
-      /^(no|n|nope|cancel|stop|abort|reject|denied)$/i,
-      /^(no,?\s*(don't|do not|stop|cancel|abort))$/i
-    ];
-
-    const normalizedMessage = message.trim().toLowerCase();
+  private async parseConfirmationResponse(message: string): Promise<boolean> {
+    const classification = await this.classifyConfirmationResponse(message);
     
-    if (positivePatterns.some(pattern => pattern.test(normalizedMessage))) {
+    if (classification === 'confirm') {
       return true;
     }
     
-    if (negativePatterns.some(pattern => pattern.test(normalizedMessage))) {
+    if (classification === 'reject') {
       return false;
     }
 
-    // Default to positive for ambiguous responses
+    // Default to positive for ambiguous/unknown responses
     return true;
+  }
+
+  /**
+   * AI-powered confirmation response classification
+   */
+  private async classifyConfirmationResponse(text: string): Promise<'confirm' | 'reject' | 'unknown'> {
+    try {
+      const openaiService = serviceManager.getService('openaiService') as OpenAIService;
+
+      const response = await openaiService.generateText(
+        `Classify this response to a confirmation request: "${text}"
+        
+        Return exactly one word: confirm, reject, or unknown
+        
+        Examples:
+        - "yes" → confirm
+        - "go for it" → confirm  
+        - "not now" → reject
+        - "weather is nice" → unknown`,
+        'Classify confirmation responses. Return only: confirm, reject, or unknown',
+        { temperature: 0, maxTokens: 5 }
+      );
+
+      const result = response.trim().toLowerCase();
+      if (['confirm', 'reject', 'unknown'].includes(result)) {
+        return result as 'confirm' | 'reject' | 'unknown';
+      }
+      return 'unknown';
+    } catch (error) {
+      this.logWarn('Failed to classify confirmation response, defaulting to unknown', { error, text });
+      return 'unknown';
+    }
   }
 
   /**
@@ -455,7 +474,7 @@ export class SlackInterfaceService extends BaseService {
   private async executeProposalAction(proposal: any, context: SlackContext): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
       // Parse the proposal text to extract action details
-      const actionDetails = this.parseProposalAction(proposal.text);
+      const actionDetails = await this.parseProposalAction(proposal.text);
       
       if (!actionDetails) {
         return { success: false, error: 'Could not parse action from proposal' };
@@ -508,57 +527,53 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Parse proposal text to extract action details
+   * Parse proposal action using AI instead of regex patterns
+   * Replaces complex regex patterns with AI entity extraction
    */
-  private parseProposalAction(proposalText: string): any | null {
+  private async parseProposalAction(proposalText: string): Promise<any | null> {
     try {
-      // Simple parsing logic - can be enhanced with more sophisticated NLP
-      const text = proposalText.toLowerCase();
-
-      // Email sending patterns
-      if (text.includes('send email') || text.includes('compose email') || text.includes('draft email')) {
-        const emailMatch = text.match(/send email (?:to )?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-        const subjectMatch = text.match(/subject[:\s]+["']?([^"'\n]+)["']?/);
-        const bodyMatch = text.match(/body[:\s]+["']?([^"'\n]+)["']?/);
-
-        return {
-          actionType: 'email',
-          action: 'send',
-          recipient: emailMatch ? emailMatch[1] : null,
-          subject: subjectMatch ? subjectMatch[1] : 'No subject',
-          body: bodyMatch ? bodyMatch[1] : 'No body content'
-        };
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        return null; // Return null if AI service is unavailable
+      }
+      const result = await aiClassificationService.extractEntities(proposalText);
+      
+      if (!result.action) {
+        return null;
       }
 
-      // Calendar event patterns
-      if (text.includes('schedule') || text.includes('calendar') || text.includes('meeting')) {
-        const titleMatch = text.match(/schedule (?:a )?(?:meeting|event)[:\s]+["']?([^"'\n]+)["']?/);
-        const timeMatch = text.match(/at[:\s]+([^"'\n]+)/);
-
-        return {
-          actionType: 'calendar',
-          action: 'create',
-          title: titleMatch ? titleMatch[1] : 'Meeting',
-          time: timeMatch ? timeMatch[1] : null
-        };
+      // Convert AI result to expected format
+      switch (result.action) {
+        case 'email':
+          return {
+            actionType: 'email',
+            action: 'send',
+            recipient: result.parameters.recipient || null,
+            subject: result.parameters.subject || 'No subject',
+            body: result.parameters.body || 'No body content'
+          };
+          
+        case 'calendar':
+          return {
+            actionType: 'calendar',
+            action: 'create',
+            title: result.parameters.title || 'Meeting',
+            time: result.parameters.time || null
+          };
+          
+        case 'contact':
+          return {
+            actionType: 'contact',
+            action: 'create',
+            name: result.parameters.name || 'New Contact',
+            email: result.parameters.email || null
+          };
+          
+        default:
+          return null;
       }
-
-      // Contact creation patterns
-      if (text.includes('add contact') || text.includes('create contact')) {
-        const nameMatch = text.match(/add contact[:\s]+["']?([^"'\n]+)["']?/);
-        const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-
-        return {
-          actionType: 'contact',
-          action: 'create',
-          name: nameMatch ? nameMatch[1] : 'New Contact',
-          email: emailMatch ? emailMatch[1] : null
-        };
-      }
-
-      return null;
     } catch (error) {
-      this.logError('Error parsing proposal action', error);
+      this.logError('Failed to parse proposal action with AI', error);
       return null;
     }
   }
@@ -743,28 +758,38 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Check if request requires OAuth and handle accordingly
+   * Check if request requires OAuth and handle accordingly using AI
+   * Replaces: Hardcoded keyword arrays with AI-driven OAuth detection
    */
   private async checkOAuthRequirement(message: string, context: SlackContext): Promise<boolean> {
-    const emailKeywords = ['email', 'gmail', 'send email', 'compose', 'mail', 'inbox', 'contact', 'contacts'];
-    const isEmailRelated = emailKeywords.some(keyword => 
-      message.toLowerCase().includes(keyword.toLowerCase())
-    );
-
-    if (isEmailRelated && this.tokenManager) {
-      const hasOAuth = await this.tokenManager.hasValidOAuthTokens(context.teamId, context.userId);
-      if (!hasOAuth) {
-        this.logInfo('Email-related request detected but no OAuth tokens found', { 
-          userId: context.userId,
-          message: message.substring(0, 100)
-        });
-        
-        await this.sendOAuthRequiredMessage(context);
-        return true;
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        // Fallback to basic detection if AI service unavailable
+        return false;
       }
-    }
 
-    return false;
+      const oauthRequirement = await aiClassificationService.detectOAuthRequirement(message);
+      
+      if (oauthRequirement !== 'none' && this.tokenManager) {
+        const hasOAuth = await this.tokenManager.hasValidOAuthTokens(context.teamId, context.userId);
+        if (!hasOAuth) {
+          this.logInfo('OAuth required for operation but no tokens found', { 
+            userId: context.userId,
+            oauthRequirement,
+            message: message.substring(0, 100)
+          });
+          
+          await this.sendOAuthRequiredMessage(context);
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      this.logError('Error checking OAuth requirement', error);
+      return false;
+    }
   }
 
   /**

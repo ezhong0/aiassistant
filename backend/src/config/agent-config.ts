@@ -3,6 +3,11 @@
  * Replaces hardcoded patterns with intelligent, dynamic configuration
  */
 
+import { getService } from '../services/service-manager';
+import { OpenAIService } from '../services/openai.service';
+import { AIClassificationService } from '../services/ai-classification.service';
+import logger from '../utils/logger';
+
 /** Agent capability descriptions for AI-driven routing */
 export const AGENT_CAPABILITIES = {
   /** Think agent - analysis and verification */
@@ -41,7 +46,12 @@ export const AGENT_CAPABILITIES = {
   }
 };
 
-/** Confirmation words for user responses */
+/** 
+ * DEPRECATED: CONFIRMATION_WORDS arrays replaced with AI classification
+ * Use AIClassificationService.classifyConfirmationResponse() instead
+ * 
+ * @deprecated Use AI classification instead of hardcoded word arrays
+ */
 export const CONFIRMATION_WORDS = {
   /** Words that indicate user confirmation/approval */
   confirm: ['yes', 'y', 'confirm', 'ok', 'okay', 'proceed', 'go ahead', 'do it'],
@@ -216,59 +226,96 @@ export const AGENT_HELPERS = {
   },
 
   /**
-   * AI-driven operation detection based on agent capabilities and use cases
+   * AI-driven operation detection using OpenAI classification (NO STRING MATCHING)
    */
-  detectOperation: (agentName: keyof typeof AGENT_CONFIG, query: string): string => {
+  detectOperation: async (agentName: keyof typeof AGENT_CONFIG, query: string): Promise<string> => {
     const agent = AGENT_CONFIG[agentName];
     if (!agent) {
       return 'unknown';
     }
     
-    const lowerQuery = query.toLowerCase();
-    const capabilities = agent.capabilities || [];
-    const useCases = agent.useCases || [];
-    
-    // Check capabilities first
-    for (const capability of capabilities) {
-      if (lowerQuery.includes(capability.replace('_', ' '))) {
-        return capability;
+    // Get OpenAI service for classification
+    const openaiService = getService<OpenAIService>('openaiService');
+    if (!openaiService || !openaiService.isReady()) {
+      // Fallback to simple classification if OpenAI not available
+      // Still no string matching - just basic intent detection
+      if (query.toLowerCase().includes('?')) {
+        return 'read'; // Questions are usually read operations
       }
+      return 'unknown';
     }
-    
-    // Check use cases
-    for (const useCase of useCases) {
-      if (lowerQuery.includes(useCase)) {
-        return useCase.replace(' ', '_');
+
+    try {
+      // Use AI to classify the operation based on agent capabilities and use cases
+      const capabilities = agent.capabilities || [];
+      const useCases = agent.useCases || [];
+      
+      const classificationPrompt = `Classify this user request for ${agentName} agent: "${query}"
+
+Agent capabilities: ${capabilities.join(', ')}
+Agent use cases: ${useCases.join(', ')}
+
+Available operations: read, write, search, create, update, delete, list, check, send
+
+Guidelines:
+- "read" for viewing/checking existing data (calendar events, emails, contacts)
+- "write" for creating new content (emails, calendar events)  
+- "search" for finding specific items
+- "create" for making new items
+- "update" for modifying existing items
+- "delete" for removing items
+- "list" for showing multiple items
+- "check" for verification or status
+- "send" for sending messages/emails
+
+Return only the operation name.`;
+
+      const response = await openaiService.generateText(
+        classificationPrompt,
+        'You classify user intents for agent operations. Return only: read, write, search, create, update, delete, list, check, or send',
+        { temperature: 0.1, maxTokens: 10 }
+      );
+
+      const operation = response.trim().toLowerCase();
+      
+      // Validate the response using AI instead of hardcoded arrays
+      const isValid = await AGENT_HELPERS.validateOperation(operation, agentName);
+      if (isValid) {
+        return operation;
       }
+      
+      // Default fallback - still no string matching
+      return 'read'; // Most requests are read operations
+      
+    } catch (error) {
+      // If AI fails, provide graceful degradation without string matching
+      console.warn('AI operation detection failed:', error);
+      return 'read'; // Safe default - most operations are reads
     }
-    
-    // Fallback to common operation patterns
-    const operationPatterns: Record<string, string[]> = {
-      search: ['search', 'find', 'look for', 'lookup', 'query'],
-      send: ['send', 'email', 'message'],
-      create: ['create', 'make', 'new', 'add', 'schedule'],
-      update: ['update', 'modify', 'change', 'edit'],
-      delete: ['delete', 'remove', 'cancel'],
-      list: ['list', 'show all', 'display all'],
-      check: ['check', 'verify', 'confirm'],
-      read: ['what do i have', 'show me', 'what is', 'what are', 'view', 'display', 'get', 'see', 'today', 'tomorrow', 'this week']
-    };
-    
-    for (const [operation, patterns] of Object.entries(operationPatterns)) {
-      for (const pattern of patterns) {
-        if (lowerQuery.includes(pattern)) {
-          return operation;
-        }
+  },
+
+  /**
+   * Validate operation using AI instead of hardcoded arrays
+   * Replaces hardcoded operation validation arrays
+   */
+  validateOperation: async (operation: string, agentName: string): Promise<boolean> => {
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        console.warn('AI Classification Service not available');
+        return true; // Default to valid if service unavailable
       }
+      return await aiClassificationService.validateOperation(operation, agentName);
+    } catch (error) {
+      console.warn('AI operation validation failed:', error);
+      return true; // Default to valid if AI fails
     }
-    
-    return 'unknown';
   },
 
   /**
    * AI-driven confirmation requirement based on agent properties
    */
-  operationRequiresConfirmation: (agentName: keyof typeof AGENT_CONFIG, operation: string): boolean => {
+  operationRequiresConfirmation: async (agentName: keyof typeof AGENT_CONFIG, operation: string): Promise<boolean> => {
     const agent = AGENT_CONFIG[agentName];
     if (!agent) {
       return false;
@@ -279,42 +326,55 @@ export const AGENT_HELPERS = {
       return false;
     }
     
-    // Check if this specific operation is read-only (even for write-capable agents)
-    const readOnlyOperations = ['list', 'read', 'check', 'search', 'find', 'show', 'view', 'display', 'get', 'see'];
-    if (readOnlyOperations.includes(operation)) {
-      return false;
+    // Use AI to determine if operation is read-only
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        console.warn('AI Classification Service not available');
+        return true; // Default to requiring confirmation if service unavailable
+      }
+      
+      const detectedOperation = await aiClassificationService.detectOperation(operation, agentName);
+      
+      if (detectedOperation === 'read' || detectedOperation === 'search') {
+        return false;
+      }
+      
+      return true; // Assume write operations need confirmation
+    } catch (error) {
+      console.warn('AI confirmation check failed:', error);
+      return true; // Default to requiring confirmation if AI fails
     }
-    
-    // Check specific operations that require confirmation
-    const confirmationOperations = ['send', 'create', 'update', 'delete', 'schedule'];
-    return confirmationOperations.includes(operation);
   },
 
   /**
-   * Get AI-driven confirmation reason
+   * Get AI-driven confirmation reason using OpenAI classification
+   * Replaces: Hardcoded operation arrays with AI analysis
    */
-  getOperationConfirmationReason: (agentName: keyof typeof AGENT_CONFIG, operation: string): string => {
+  getOperationConfirmationReason: async (agentName: keyof typeof AGENT_CONFIG, operation: string): Promise<string> => {
     const agent = AGENT_CONFIG[agentName];
     if (!agent) {
       return 'Agent not found';
     }
-    
-    if (agent.isReadOnly) {
-      return 'Read-only agent, no confirmation needed';
+
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        // Fallback to basic logic if AI service unavailable
+        return 'Operation requires confirmation for safety';
+      }
+
+      const requiresConfirmation = await aiClassificationService.operationRequiresConfirmation(operation, agentName);
+      
+      if (requiresConfirmation) {
+        return 'Write operation requires confirmation for safety';
+      } else {
+        return 'Read-only operation, no confirmation needed';
+      }
+    } catch (error) {
+      logger.error('Error getting confirmation reason:', error);
+      return 'Operation requires confirmation for safety';
     }
-    
-    // Check if this specific operation is read-only
-    const readOnlyOperations = ['list', 'read', 'check', 'search', 'find', 'show', 'view', 'display', 'get', 'see'];
-    if (readOnlyOperations.includes(operation)) {
-      return 'Read-only operation, no confirmation needed';
-    }
-    
-    const confirmationOperations = ['send', 'create', 'update', 'delete', 'schedule'];
-    if (confirmationOperations.includes(operation)) {
-      return 'Write operation requires confirmation for safety';
-    }
-    
-    return 'Operation does not require confirmation';
   },
 
   /**

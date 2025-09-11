@@ -65,8 +65,8 @@ export class ToolExecutorService extends BaseService {
       let success = true;
       let error: string | undefined;
 
-      // Determine if this tool needs confirmation using operation-aware logic
-      const needsConfirmation = this.toolNeedsConfirmation(toolCall.name, toolCall);
+      // Determine if this tool needs confirmation using AI-powered operation detection
+      const needsConfirmation = await this.toolNeedsConfirmation(toolCall.name, toolCall);
       
       this.logInfo(`Tool ${toolCall.name} confirmation check`, { 
         needsConfirmation, 
@@ -234,20 +234,20 @@ export class ToolExecutorService extends BaseService {
   }
 
   /**
-   * Check if a tool needs confirmation using operation-aware logic
+   * Check if a tool needs confirmation using AI-powered operation detection
    * ALWAYS evaluates operation-specific rules for comprehensive confirmation logic
    */
-  private toolNeedsConfirmation(toolName: string, toolCall?: ToolCall): boolean {
+  private async toolNeedsConfirmation(toolName: string, toolCall?: ToolCall): Promise<boolean> {
     try {
       // Always check for operation-specific logic first
       if (toolCall && toolCall.parameters) {
-        const operation = this.detectOperationFromToolCall(toolName, toolCall);
+        const operation = await this.detectOperationFromToolCall(toolName, toolCall);
         const operationNeedsConfirmation = AgentFactory.toolNeedsConfirmationForOperation(toolName, operation);
         
-        this.logInfo(`Operation-aware confirmation check for ${toolName}`, { 
+        this.logInfo(`AI operation-aware confirmation check for ${toolName}`, { 
           operation,
           operationNeedsConfirmation,
-          reason: AGENT_HELPERS.getOperationConfirmationReason(toolName as any, operation),
+          reason: await AGENT_HELPERS.getOperationConfirmationReason(toolName as any, operation),
           parameters: Object.keys(toolCall.parameters)
         });
         
@@ -270,12 +270,12 @@ export class ToolExecutorService extends BaseService {
   }
 
   /**
-   * Detect operation type from tool call parameters using centralized logic
+   * Detect operation type from tool call parameters using AI classification
    */
-  private detectOperationFromToolCall(toolName: string, toolCall: ToolCall): string {
+  private async detectOperationFromToolCall(toolName: string, toolCall: ToolCall): Promise<string> {
     try {
-      const operation = AgentFactory.detectOperationFromParameters(toolName, toolCall.parameters);
-      this.logInfo(`Operation detection for ${toolName}`, {
+      const operation = await AgentFactory.detectOperationFromParameters(toolName, toolCall.parameters);
+      this.logInfo(`AI operation detection for ${toolName}`, {
         toolName,
         detectedOperation: operation,
         parameters: toolCall.parameters

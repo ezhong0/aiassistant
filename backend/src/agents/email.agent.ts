@@ -290,8 +290,8 @@ export interface EmailAgentRequest extends EmailAgentParams {
             accessToken: parameters.accessToken
           } as EmailAgentRequest;
           
-          // Determine action from query
-          const operation = this.detectOperation(emailParams);
+          // Determine action from query using AI
+          const operation = await this.detectOperation(emailParams);
           const result = await this.executeDirectEmailOperation(operation, emailParams, parameters);
           
           this.logger.info('EmailAgent tool executed successfully', {
@@ -588,64 +588,8 @@ export interface EmailAgentRequest extends EmailAgentParams {
     };
   }
 
-  /**
-   * Enhanced operation detection for email agent
-   */
-  protected detectOperation(params: EmailAgentRequest): string {
-    const { query } = params;
-    const lowerQuery = query.toLowerCase();
-
-    this.logger.debug('Detecting email operation', {
-      query,
-      lowerQuery,
-      includes_send: lowerQuery.includes('send'),
-      includes_email: lowerQuery.includes('email'),
-      includes_message: lowerQuery.includes('message')
-    });
-
-    // Check for specific email operations - improved detection
-    if (lowerQuery.includes('send')) {
-      // If "send" is mentioned, it's almost always a send operation
-      // Check for email context or explicit recipients
-      if (lowerQuery.includes('email') || 
-          lowerQuery.includes('message') || 
-          lowerQuery.includes('@') ||
-          lowerQuery.includes('to ')) {
-        this.logger.info('Detected send operation', { query });
-        return 'send';
-      }
-    }
-    
-    if (lowerQuery.includes('reply') || lowerQuery.includes('respond')) {
-      return 'reply';
-    }
-    
-    if (lowerQuery.includes('search') || lowerQuery.includes('find') || lowerQuery.includes('look for')) {
-      return 'search';
-    }
-    
-    if (lowerQuery.includes('draft') || (lowerQuery.includes('create') && lowerQuery.includes('email'))) {
-      return 'draft';
-    }
-    
-    if (lowerQuery.includes('get email') || lowerQuery.includes('show email')) {
-      return 'get';
-    }
-    
-    if (lowerQuery.includes('thread') || lowerQuery.includes('conversation')) {
-      return 'get';
-    }
-    
-    // Better default: if it contains an email address, it's likely a send
-    if (lowerQuery.includes('@') && lowerQuery.includes('.com')) {
-      this.logger.info('Detected send operation based on email address', { query });
-      return 'send';
-    }
-    
-    // Default to search for read operations
-    this.logger.debug('Defaulting to search operation', { query });
-    return 'search';
-  }
+  // Operation detection now uses AI-powered base implementation
+  // No more string matching overrides
 
   /**
    * Generate detailed email action preview with risk assessment
@@ -654,8 +598,8 @@ export interface EmailAgentRequest extends EmailAgentParams {
     try {
       const { query } = params;
       
-      // Use enhanced operation detection
-      const operation = this.detectOperation(params);
+      // Use AI-powered operation detection
+      const operation = await this.detectOperation(params);
       
       // Check if this operation actually needs confirmation
       const needsConfirmation = this.operationRequiresConfirmation(operation);
@@ -663,7 +607,7 @@ export interface EmailAgentRequest extends EmailAgentParams {
       if (!needsConfirmation) {
         this.logger.info('Email operation does not require confirmation', {
           operation,
-          reason: this.getOperationConfirmationReason(operation)
+          reason: await this.getOperationConfirmationReason(operation)
         });
         return {
           success: true,
