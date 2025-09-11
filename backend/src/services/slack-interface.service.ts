@@ -37,8 +37,7 @@ export class SlackInterfaceService extends BaseService {
   // Injected service dependencies
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
-  private confirmationService: any | null = null;
-  private responseFormatterService: any | null = null;
+  private slackMessageReaderService: any | null = null;
 
   constructor(config: SlackConfig) {
     super('SlackInterfaceService');
@@ -70,7 +69,8 @@ export class SlackInterfaceService extends BaseService {
 
       this.logInfo('SlackInterface initialized successfully', {
         hasTokenManager: !!this.tokenManager,
-        hasToolExecutor: !!this.toolExecutorService
+        hasToolExecutor: !!this.toolExecutorService,
+        hasSlackMessageReader: !!this.slackMessageReaderService
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -91,8 +91,7 @@ export class SlackInterfaceService extends BaseService {
       // Reset service references
       this.tokenManager = null;
       this.toolExecutorService = null;
-      this.confirmationService = null;
-      this.responseFormatterService = null;
+      this.slackMessageReaderService = null;
 
       this.logInfo('SlackInterface destroyed successfully');
     } catch (error) {
@@ -134,20 +133,12 @@ export class SlackInterfaceService extends BaseService {
       this.logDebug('ToolExecutorService injected successfully');
     }
 
-    // Get ConfirmationService (optional for confirmation workflow)
-    this.confirmationService = serviceManager.getService('confirmationService');
-    if (!this.confirmationService) {
-      this.logWarn('ConfirmationService not available - confirmation workflow will be limited');
+    // Get SlackMessageReaderService (for reading recent messages and parsing proposals)
+    this.slackMessageReaderService = serviceManager.getService('slackMessageReaderService');
+    if (!this.slackMessageReaderService) {
+      this.logWarn('SlackMessageReaderService not available - confirmation detection will be limited');
     } else {
-      this.logDebug('ConfirmationService injected successfully');
-    }
-
-    // Get ResponseFormatterService (optional for consistent formatting)
-    this.responseFormatterService = serviceManager.getService('responseFormatterService');
-    if (!this.responseFormatterService) {
-      this.logWarn('ResponseFormatterService not available - will use fallback formatting');
-    } else {
-      this.logDebug('ResponseFormatterService injected successfully');
+      this.logDebug('SlackMessageReaderService injected successfully');
     }
 
   }
@@ -297,6 +288,328 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
+   * Check if a message is a confirmation response
+   */
+  private async isConfirmationResponse(message: string, context: SlackContext): Promise<boolean> {
+    const confirmationPatterns = [
+      /^(yes|y|yeah|yep|sure|ok|okay|go ahead|send it|do it|execute|confirm|approved)$/i,
+      /^(no|n|nope|cancel|stop|abort|reject|denied)$/i,
+      /^(yes,?\s*(send|go|do|execute|confirm|approve))$/i,
+      /^(no,?\s*(don't|do not|stop|cancel|abort))$/i
+    ];
+
+    const isConfirmation = confirmationPatterns.some(pattern => pattern.test(message.trim()));
+    
+    if (isConfirmation) {
+      this.logInfo('Confirmation response detected', {
+        message: message.substring(0, 50),
+        userId: context.userId,
+        channelId: context.channelId
+      });
+    }
+
+    return isConfirmation;
+  }
+
+  /**
+   * Handle confirmation response by reading recent messages and executing actions
+   */
+  private async handleConfirmationResponse(message: string, context: SlackContext): Promise<void> {
+    try {
+      const isConfirmed = this.parseConfirmationResponse(message);
+      
+      if (!this.slackMessageReaderService) {
+        await this.sendMessage(context.channelId, {
+          text: "I detected a confirmation response, but I can't process it without access to recent messages. Please try again.",
+          thread_ts: context.threadTs
+        });
+        return;
+      }
+
+      // Read recent messages to find proposals
+      const recentMessages = await this.slackMessageReaderService.readRecentMessages(
+        context.channelId,
+        20, // Read last 20 messages
+        { filter: { excludeBotMessages: false } } // Include bot messages to find proposals
+      );
+
+      // Find the most recent proposal
+      const proposal = this.findRecentProposal(recentMessages, context.userId);
+      
+      if (!proposal) {
+        await this.sendMessage(context.channelId, {
+          text: "I couldn't find a recent proposal to confirm. Please make a request first, then confirm it.",
+          thread_ts: context.threadTs
+        });
+        return;
+      }
+
+      if (isConfirmed) {
+        // Parse the proposal and execute the action
+        const actionResult = await this.executeProposalAction(proposal, context);
+        
+        if (actionResult.success) {
+          await this.sendMessage(context.channelId, {
+            text: `✅ ${actionResult.message || 'Action completed successfully!'}`,
+            thread_ts: context.threadTs
+          });
+        } else {
+          await this.sendMessage(context.channelId, {
+            text: `❌ Action failed: ${actionResult.error || 'Unknown error'}`,
+            thread_ts: context.threadTs
+          });
+        }
+      } else {
+        await this.sendMessage(context.channelId, {
+          text: "❌ Action cancelled as requested.",
+          thread_ts: context.threadTs
+        });
+      }
+
+    } catch (error) {
+      this.logError('Error handling confirmation response', error, {
+        message: message.substring(0, 100),
+        userId: context.userId
+      });
+      
+      await this.sendMessage(context.channelId, {
+        text: "I encountered an error processing your confirmation. Please try again.",
+        thread_ts: context.threadTs
+      });
+    }
+  }
+
+  /**
+   * Parse confirmation response to determine if it's a positive or negative confirmation
+   */
+  private parseConfirmationResponse(message: string): boolean {
+    const positivePatterns = [
+      /^(yes|y|yeah|yep|sure|ok|okay|go ahead|send it|do it|execute|confirm|approved)$/i,
+      /^(yes,?\s*(send|go|do|execute|confirm|approve))$/i
+    ];
+
+    const negativePatterns = [
+      /^(no|n|nope|cancel|stop|abort|reject|denied)$/i,
+      /^(no,?\s*(don't|do not|stop|cancel|abort))$/i
+    ];
+
+    const normalizedMessage = message.trim().toLowerCase();
+    
+    if (positivePatterns.some(pattern => pattern.test(normalizedMessage))) {
+      return true;
+    }
+    
+    if (negativePatterns.some(pattern => pattern.test(normalizedMessage))) {
+      return false;
+    }
+
+    // Default to positive for ambiguous responses
+    return true;
+  }
+
+  /**
+   * Find the most recent proposal in message history
+   */
+  private findRecentProposal(messages: any[], userId: string): any | null {
+    // Look for messages that contain proposal indicators
+    const proposalIndicators = [
+      'proposal',
+      'suggest',
+      'recommend',
+      'here\'s what i\'ll do',
+      'i\'ll send',
+      'i\'ll create',
+      'i\'ll schedule',
+      'draft email',
+      'compose email',
+      'send email to',
+      'create calendar event',
+      'schedule meeting'
+    ];
+
+    // Find the most recent message that looks like a proposal
+    for (const message of messages) {
+      if (message.userId === userId) continue; // Skip user messages
+      
+      const messageText = message.text.toLowerCase();
+      const hasProposalIndicator = proposalIndicators.some(indicator => 
+        messageText.includes(indicator)
+      );
+
+      if (hasProposalIndicator) {
+        this.logInfo('Found recent proposal', {
+          messageId: message.id,
+          timestamp: message.timestamp,
+          textPreview: message.text.substring(0, 100)
+        });
+        return message;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Execute action based on parsed proposal
+   */
+  private async executeProposalAction(proposal: any, context: SlackContext): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      // Parse the proposal text to extract action details
+      const actionDetails = this.parseProposalAction(proposal.text);
+      
+      if (!actionDetails) {
+        return { success: false, error: 'Could not parse action from proposal' };
+      }
+
+      // Create a tool call based on the parsed action
+      const toolCall = this.createToolCallFromAction(actionDetails);
+      
+      if (!toolCall) {
+        return { success: false, error: 'Could not create tool call from action' };
+      }
+
+      // Execute the tool call
+      const executionContext = {
+        sessionId: `user:${context.teamId}:${context.userId}`,
+        userId: context.userId,
+        timestamp: new Date(),
+        slackContext: context
+      };
+
+      // Get OAuth tokens if available
+      let accessToken: string | undefined;
+      if (this.tokenManager) {
+        try {
+          accessToken = await this.tokenManager.getValidTokens(
+            context.teamId, 
+            context.userId
+          ) || undefined;
+        } catch (error) {
+          this.logError('Error retrieving OAuth tokens for proposal execution', error);
+        }
+      }
+
+      // Execute the tool call directly (no confirmation needed since user already confirmed)
+      const result = await this.toolExecutorService!.executeTool(toolCall, executionContext, accessToken);
+
+      return {
+        success: result.success,
+        message: result.success ? 'Action completed successfully!' : undefined,
+        error: result.error
+      };
+
+    } catch (error) {
+      this.logError('Error executing proposal action', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  }
+
+  /**
+   * Parse proposal text to extract action details
+   */
+  private parseProposalAction(proposalText: string): any | null {
+    try {
+      // Simple parsing logic - can be enhanced with more sophisticated NLP
+      const text = proposalText.toLowerCase();
+
+      // Email sending patterns
+      if (text.includes('send email') || text.includes('compose email') || text.includes('draft email')) {
+        const emailMatch = text.match(/send email (?:to )?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        const subjectMatch = text.match(/subject[:\s]+["']?([^"'\n]+)["']?/);
+        const bodyMatch = text.match(/body[:\s]+["']?([^"'\n]+)["']?/);
+
+        return {
+          actionType: 'email',
+          action: 'send',
+          recipient: emailMatch ? emailMatch[1] : null,
+          subject: subjectMatch ? subjectMatch[1] : 'No subject',
+          body: bodyMatch ? bodyMatch[1] : 'No body content'
+        };
+      }
+
+      // Calendar event patterns
+      if (text.includes('schedule') || text.includes('calendar') || text.includes('meeting')) {
+        const titleMatch = text.match(/schedule (?:a )?(?:meeting|event)[:\s]+["']?([^"'\n]+)["']?/);
+        const timeMatch = text.match(/at[:\s]+([^"'\n]+)/);
+
+        return {
+          actionType: 'calendar',
+          action: 'create',
+          title: titleMatch ? titleMatch[1] : 'Meeting',
+          time: timeMatch ? timeMatch[1] : null
+        };
+      }
+
+      // Contact creation patterns
+      if (text.includes('add contact') || text.includes('create contact')) {
+        const nameMatch = text.match(/add contact[:\s]+["']?([^"'\n]+)["']?/);
+        const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+
+        return {
+          actionType: 'contact',
+          action: 'create',
+          name: nameMatch ? nameMatch[1] : 'New Contact',
+          email: emailMatch ? emailMatch[1] : null
+        };
+      }
+
+      return null;
+    } catch (error) {
+      this.logError('Error parsing proposal action', error);
+      return null;
+    }
+  }
+
+  /**
+   * Create tool call from parsed action details
+   */
+  private createToolCallFromAction(actionDetails: any): any | null {
+    try {
+      switch (actionDetails.actionType) {
+        case 'email':
+          return {
+            name: 'email_agent',
+            parameters: {
+              action: 'send',
+              recipient: actionDetails.recipient,
+              subject: actionDetails.subject,
+              body: actionDetails.body
+            }
+          };
+
+        case 'calendar':
+          return {
+            name: 'calendar_agent',
+            parameters: {
+              action: 'create',
+              title: actionDetails.title,
+              time: actionDetails.time
+            }
+          };
+
+        case 'contact':
+          return {
+            name: 'contact_agent',
+            parameters: {
+              action: 'create',
+              name: actionDetails.name,
+              email: actionDetails.email
+            }
+          };
+
+        default:
+          return null;
+      }
+    } catch (error) {
+      this.logError('Error creating tool call from action', error);
+      return null;
+    }
+  }
+
+  /**
    * Check if event has already been processed (deduplication)
    */
   private isEventProcessed(eventId: string): boolean {
@@ -399,6 +712,12 @@ export class SlackInterfaceService extends BaseService {
       return;
     }
 
+    // Check if this is a confirmation response
+    if (await this.isConfirmationResponse(message, context)) {
+      await this.handleConfirmationResponse(message, context);
+      return;
+    }
+
     // Check for email-related requests and OAuth requirements
     const requiresOAuth = await this.checkOAuthRequirement(message, context);
     if (requiresOAuth) {
@@ -487,18 +806,53 @@ export class SlackInterfaceService extends BaseService {
         openaiApiKey: process.env.OPENAI_API_KEY || 'dummy-key' 
       });
       
-      // Route to MasterAgent for intent parsing
+      // Route to MasterAgent for intent parsing with Slack context
       const masterResponse = await masterAgent.processUserInput(
         request.message,
         sessionId,
-        request.context.userId
+        request.context.userId,
+        request.context
       );
 
-      // Execute tool calls if present
+      // Check for proposals first - don't execute tools immediately if confirmation needed
+      this.logInfo('Checking for proposals', {
+        hasProposal: !!masterResponse.proposal,
+        proposalRequiresConfirmation: masterResponse.proposal?.requiresConfirmation,
+        proposalText: masterResponse.proposal?.text?.substring(0, 100),
+        sessionId
+      });
+      
+      if (masterResponse.proposal && masterResponse.proposal.requiresConfirmation) {
+        this.logInfo('Proposal requires confirmation, showing proposal to user', {
+          proposalText: masterResponse.proposal.text.substring(0, 100),
+          actionType: masterResponse.proposal.actionType,
+          sessionId
+        });
+        
+        // Return proposal without executing tools
+        const processingTime = Date.now() - startTime;
+        return {
+          success: true,
+          response: await this.formatAgentResponse(masterResponse, request.context),
+          shouldRespond: true,
+          executionMetadata: {
+            processingTime,
+            toolResults: [], // No tools executed yet - waiting for confirmation
+            masterAgentResponse: masterResponse.message,
+            awaitingConfirmation: true
+          } as any
+        };
+      }
+
+      // Execute tool calls if present (only when no confirmation needed)
       const toolResults: ToolResult[] = [];
-      const confirmationFlows: any[] = [];
       
       if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
+        this.logInfo('No confirmation required, executing tools directly', {
+          toolCount: masterResponse.toolCalls.length,
+          sessionId
+        });
+        
         const executionContext: ToolExecutionContext = {
           sessionId,
           userId: request.context.userId,
@@ -508,27 +862,15 @@ export class SlackInterfaceService extends BaseService {
 
         for (const toolCall of masterResponse.toolCalls) {
           try {
-            // Use executeWithConfirmation to handle confirmation flow
-            const result = await this.toolExecutorService!.executeWithConfirmation(
+            // Execute tool directly - no confirmation needed
+            const result = await this.toolExecutorService!.executeTool(
               toolCall,
               executionContext,
-              accessToken
+              accessToken,
+              { preview: false }
             );
             
-            // Check if this is a confirmation flow result
-            if (result && typeof result === 'object' && 'confirmationFlow' in result) {
-              // This tool requires confirmation - result is ConfirmationFlowResult
-              const confirmationResult = result as any; // Type assertion for the union type
-              if (confirmationResult.confirmationFlow) {
-                confirmationFlows.push(confirmationResult.confirmationFlow);
-                this.logInfo(`Tool ${toolCall.name} requires confirmation`, {
-                  confirmationId: confirmationResult.confirmationFlow.confirmationId,
-                  actionType: confirmationResult.confirmationFlow.actionPreview?.actionType,
-                  riskLevel: confirmationResult.confirmationFlow.actionPreview?.riskAssessment?.level,
-                  sessionId
-                });
-              }
-            } else if (result && 'toolName' in result) {
+            if (result && 'toolName' in result) {
               // Regular tool result - result is ToolResult
               const toolResult = result as ToolResult;
               toolResults.push(toolResult);
@@ -552,10 +894,6 @@ export class SlackInterfaceService extends BaseService {
 
             this.logError(`Error executing tool ${toolCall.name}`, error, errorContext);
             
-            // Check if this is a confirmation service error
-            if (error && typeof error === 'object' && 'confirmationId' in error) {
-              this.logError('Confirmation workflow error detected', error, errorContext);
-            }
             
             // Check if this is an OAuth error
             if (error instanceof Error && error.message.includes('OAuth')) {
@@ -575,7 +913,7 @@ export class SlackInterfaceService extends BaseService {
 
       // Format response for Slack
       const slackResponse = await this.formatAgentResponse(
-        { ...masterResponse, toolResults, confirmationFlows },
+        { ...masterResponse, toolResults },
         request.context
       );
       
@@ -588,7 +926,6 @@ export class SlackInterfaceService extends BaseService {
         executionMetadata: {
           processingTime,
           toolResults,
-          confirmationFlows,
           masterAgentResponse: masterResponse.message
         }
       };
@@ -630,7 +967,6 @@ export class SlackInterfaceService extends BaseService {
         executionMetadata: {
           processingTime,
           toolResults: [],
-          confirmationFlows: [],
           error: error instanceof Error ? error.message : 'Unknown error',
           errorType: error instanceof Error ? error.constructor.name : 'UnknownError',
           errorContext
@@ -640,16 +976,16 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Format agent response for Slack
+   * Format agent response for Slack with enhanced proposal support
    */
   private async formatAgentResponse(
     masterResponse: any, 
     slackContext: SlackContext
   ): Promise<SlackResponse> {
     try {
-      // Check if we have confirmation flows to handle
-      if (masterResponse.confirmationFlows && masterResponse.confirmationFlows.length > 0) {
-        return this.formatConfirmationResponse(masterResponse.confirmationFlows, masterResponse, slackContext);
+      // Check if we have a proposal to handle
+      if (masterResponse.proposal && masterResponse.proposal.text) {
+        return this.formatProposalResponse(masterResponse.proposal, masterResponse, slackContext);
       }
       
       return this.createFallbackResponse(masterResponse, slackContext);
@@ -660,140 +996,119 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Format confirmation response using ResponseFormatterService
+   * Format proposal response as natural text with optional confirmation buttons
    */
-  private async formatConfirmationResponse(
-    confirmationFlows: any[], 
-    masterResponse: any, 
+  private async formatProposalResponse(
+    proposal: any,
+    masterResponse: any,
     slackContext: SlackContext
   ): Promise<SlackResponse> {
     try {
-      // For now, handle single confirmation (can be extended for multiple)
-      const confirmationFlow = confirmationFlows[0];
+      // For proposals, we prefer natural text responses over blocks
+      // This aligns with the plan to transform from technical confirmations to conversational proposals
       
-      if (this.responseFormatterService && typeof this.responseFormatterService.formatConfirmationMessage === 'function') {
-        this.logDebug('Using ResponseFormatterService for confirmation formatting', {
-          confirmationId: confirmationFlow.confirmationId
-        });
+      if (proposal.requiresConfirmation) {
+        // Always use simple text for proposals to look more natural and conversational
+        // Slack supports up to 4000 characters in a single message
+        const maxTextLength = 3800; // Leave some buffer
         
-        const formattedMessage = this.responseFormatterService.formatConfirmationMessage(
-          confirmationFlow,
-          { 
-            includeRiskAssessment: true,
-            includeExecutionTime: true,
-            showDetailedPreview: true,
-            useCompactFormat: false 
+        if (proposal.text.length > maxTextLength) {
+          // Split long proposal into multiple blocks
+          const blocks = [];
+          let remainingText = proposal.text;
+          
+          while (remainingText.length > 0) {
+            const chunk = remainingText.substring(0, maxTextLength);
+            remainingText = remainingText.substring(maxTextLength);
+            
+            blocks.push({
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: chunk
+              }
+            });
           }
-        );
-        
-        return formattedMessage;
+          
+          // Add confirmation buttons
+          blocks.push({
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: 'Yes, go ahead',
+                  emoji: true
+                },
+                value: `proposal_confirm_${Date.now()}`,
+                action_id: `proposal_confirm_${Date.now()}`,
+                style: 'primary'
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: 'No, cancel',
+                  emoji: true
+                },
+                value: `proposal_cancel_${Date.now()}`,
+                action_id: `proposal_cancel_${Date.now()}`,
+                style: 'danger'
+              }
+            ]
+          });
+          
+          return {
+            text: proposal.text.substring(0, 1000) + '...', // Fallback text
+            blocks: blocks
+          };
+        } else {
+          // Short proposal - use simple text for natural conversation
+          // Add confirmation instructions in the text itself
+          let proposalWithInstructions = proposal.text;
+          
+          // Add friendly confirmation prompt
+          if (!proposalWithInstructions.includes('Should I') && !proposalWithInstructions.includes('go ahead')) {
+            proposalWithInstructions += '\n\nShould I go ahead? Just reply "yes" or "no".';
+          }
+          
+          return {
+            text: proposalWithInstructions
+          };
+        }
       } else {
-        this.logWarn('ResponseFormatterService not available, using fallback confirmation formatting');
-        return this.createFallbackConfirmationResponse(confirmationFlow, masterResponse);
+        // Simple text response for proposals that don't require confirmation
+        return {
+          text: proposal.text
+        };
       }
     } catch (error) {
-      this.logError('Error formatting confirmation response', error);
-      return this.createFallbackConfirmationResponse(confirmationFlows[0], masterResponse);
+      this.logError('Error formatting proposal response', error);
+      return {
+        text: proposal.text || masterResponse.message || 'I processed your request successfully.'
+      };
     }
   }
 
-  /**
-   * Create fallback confirmation response when ResponseFormatterService is not available
-   */
-  private createFallbackConfirmationResponse(
-    confirmationFlow: any, 
-    masterResponse: any
-  ): SlackResponse {
-    const { actionPreview } = confirmationFlow;
-    const actionIcon = this.getActionIcon(actionPreview.actionType);
-    
-    return {
-      text: `${actionIcon} Action Preview: ${actionPreview.title}`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${actionIcon} **Action Preview**\n*${actionPreview.title}*\n\n${actionPreview.description}`
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🟡 **Risk Level: ${actionPreview.riskAssessment.level.toUpperCase()}**`
-          }
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*Do you want to proceed with this action?*\nClick a button below to confirm or cancel.'
-          }
-        },
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: 'Yes, proceed',
-                emoji: true
-              },
-              value: `confirm_${confirmationFlow.confirmationId}`,
-              action_id: `confirm_${confirmationFlow.confirmationId}`,
-              style: 'primary'
-            },
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: 'No, cancel',
-                emoji: true
-              },
-              value: `reject_${confirmationFlow.confirmationId}`,
-              action_id: `reject_${confirmationFlow.confirmationId}`,
-              style: 'danger'
-            }
-          ]
-        }
-      ]
-    };
-  }
 
   /**
-   * Get action icon based on action type
-   */
-  private getActionIcon(actionType: string): string {
-    switch (actionType) {
-      case 'email':
-        return '📧';
-      case 'calendar':
-        return '📅';
-      case 'contact':
-        return '👤';
-      case 'content':
-        return '📝';
-      case 'search':
-        return '🔍';
-      default:
-        return '⚙️';
-    }
-  }
-
-  /**
-   * Create fallback response when formatter service is not available
+   * Create natural language response without technical details
+   * Shows user-friendly messages instead of tool execution details
    */
   private createFallbackResponse(masterResponse: any, slackContext: SlackContext): SlackResponse {
-    const response: SlackResponse = {
-      text: masterResponse.message || 'I processed your request successfully.'
-    };
+    // Start with master agent's natural message
+    let responseText = masterResponse.message || 'I processed your request successfully.';
 
-    // Add simple formatting for tool results
+    // Replace technical tool details with natural language success messages
     if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
       const successfulResults = masterResponse.toolResults.filter((tr: any) => tr.success);
       const failedResults = masterResponse.toolResults.filter((tr: any) => !tr.success);
+
+      if (successfulResults.length > 0) {
+        // Generate natural success message based on what was accomplished
+        responseText = this.generateSuccessMessage(successfulResults, masterResponse);
+      }
 
       if (failedResults.length > 0) {
         const oauthFailures = failedResults.filter((fr: any) => 
@@ -801,12 +1116,64 @@ export class SlackInterfaceService extends BaseService {
         );
         
         if (oauthFailures.length > 0) {
-          response.text += '\n\n🔐 Some features require Gmail authentication. Please connect your account to use email functionality.';
+          responseText += '\n\n🔐 Some features require Gmail authentication. Please connect your account to use email functionality.';
+        } else {
+          responseText += '\n\n⚠️ I encountered some issues completing your request. Please try again.';
         }
       }
     }
 
-    return response;
+    // Add context information if available
+    if (masterResponse.contextGathered && masterResponse.contextGathered.relevantContext) {
+      responseText += '\n\n📝 I used context from our recent conversation to better understand your request.';
+    }
+
+    return {
+      text: responseText
+    };
+  }
+
+  /**
+   * Generate natural language success message based on tool results
+   */
+  private generateSuccessMessage(successfulResults: any[], masterResponse: any): string {
+    if (successfulResults.length === 0) {
+      return 'I processed your request successfully.';
+    }
+
+    // Check what types of actions were performed
+    const emailResults = successfulResults.filter(r => r.toolName === 'emailAgent');
+    const contactResults = successfulResults.filter(r => r.toolName === 'contactAgent');
+    const calendarResults = successfulResults.filter(r => r.toolName === 'calendarAgent');
+
+    let message = '';
+
+    if (emailResults.length > 0) {
+      const emailResult = emailResults[0];
+      if (emailResult.result && emailResult.result.action === 'send') {
+        message = `✅ Great! I successfully sent your email`;
+        if (emailResult.result.recipient) {
+          message += ` to ${emailResult.result.recipient}`;
+        }
+        if (emailResult.result.subject) {
+          message += ` about "${emailResult.result.subject}"`;
+        }
+        message += '.';
+      } else if (emailResult.result && emailResult.result.action === 'search') {
+        const count = emailResult.result.count || 0;
+        message = `✅ I found ${count} email${count !== 1 ? 's' : ''} matching your search.`;
+      } else {
+        message = '✅ I successfully processed your email request.';
+      }
+    } else if (contactResults.length > 0) {
+      message = '✅ I successfully found the contact information you requested.';
+    } else if (calendarResults.length > 0) {
+      message = '✅ I successfully managed your calendar event.';
+    } else {
+      message = `✅ Great! I successfully completed your request.`;
+    }
+
+    return message;
   }
 
   /**
@@ -1003,11 +1370,12 @@ export class SlackInterfaceService extends BaseService {
         dependencies: {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
-          confirmationService: !!this.confirmationService,
-          responseFormatterService: !!this.responseFormatterService,
+          slackMessageReaderService: !!this.slackMessageReaderService,
         },
         processedEventsCount: this.processedEvents.size
       }
     };
   }
 }
+
+

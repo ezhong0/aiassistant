@@ -9,8 +9,6 @@ import { CalendarService } from './calendar.service';
 import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
-import { ConfirmationService } from './confirmation.service';
-import { ResponseFormatterService } from './response-formatter.service';
 import { SlackMessageReaderService } from './slack-message-reader.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
@@ -161,22 +159,8 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 12. ResponseFormatterService - No dependencies
-    const responseFormatterService = new ResponseFormatterService();
-    serviceManager.registerService('responseFormatterService', responseFormatterService, {
-      priority: 50,
-      autoStart: true
-    });
 
-    // 13. ConfirmationService - Depends on databaseService and toolExecutorService
-    const confirmationService = new ConfirmationService();
-    serviceManager.registerService('confirmationService', confirmationService, {
-      dependencies: ['databaseService', 'toolExecutorService'],
-      priority: 55,
-      autoStart: true
-    });
-
-    // 14. SlackMessageReaderService - Dedicated service for reading Slack message history
+    // 12. SlackMessageReaderService - Dedicated service for reading Slack message history
     // Only register if Slack is configured
     if (ENV_VALIDATION.isSlackConfigured()) {
       const slackMessageReaderService = new SlackMessageReaderService(

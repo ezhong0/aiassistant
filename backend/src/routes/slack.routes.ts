@@ -300,139 +300,16 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           actionType: typeof actionId 
         });
 
-        // Handle confirmation buttons (confirm_<confirmationId> or reject_<confirmationId>)
+        // Handle confirmation buttons (legacy support - now handled by SlackInterface)
         if (actionId && (actionId.startsWith('confirm_') || actionId.startsWith('reject_'))) {
-          logger.info('Processing confirmation button click', { actionId, actionValue });
+          logger.info('Legacy confirmation button click received - redirecting to SlackInterface', { actionId, actionValue });
           
-          // Extract confirmation ID from action ID or value
-          const confirmationId = actionValue?.replace(/^(confirm_|reject_)/, '') || 
-                                actionId.replace(/^(confirm_|reject_)/, '');
-          const confirmed = actionId.startsWith('confirm_') || actionValue?.startsWith('confirm_');
-          
-          if (!confirmationId) {
-            logger.error('No confirmation ID found in action', { actionId, actionValue });
-            res.status(200).json({
-              text: '❌ Error: Could not identify confirmation request.',
-              response_type: 'ephemeral'
-            });
-            return;
-          }
-
-          try {
-            // Get ToolExecutorService from service manager
-            const toolExecutorService = serviceManager.getService('toolExecutorService');
-            if (!toolExecutorService) {
-              logger.error('ToolExecutorService not available');
-              res.status(200).json({
-                text: '❌ Service temporarily unavailable. Please try again.',
-                response_type: 'ephemeral'
-              });
-              return;
-            }
-
-            // Process the confirmation response
-            const userContext = {
-              slackUserId: parsedPayload.user?.id,
-              responseChannel: parsedPayload.channel?.id,
-              responseThreadTs: parsedPayload.message?.thread_ts
-            };
-
-            const updatedConfirmation = await (toolExecutorService as any).respondToConfirmation(
-              confirmationId,
-              confirmed,
-              userContext
-            );
-
-            if (!updatedConfirmation) {
-              logger.warn('Confirmation not found or already processed', { confirmationId });
-              res.status(200).json({
-                text: '⚠️ This confirmation request has expired or already been processed.',
-                response_type: 'ephemeral'
-              });
-              return;
-            }
-
-            // Get ResponseFormatterService for consistent formatting
-            const responseFormatterService = serviceManager.getService('responseFormatterService');
-            
-            if (confirmed) {
-              logger.info('Confirmation approved, executing action', { confirmationId });
-              
-              // Execute the confirmed action
-              const executionResult = await (toolExecutorService as any).executeConfirmedAction(confirmationId);
-              
-              // Format completion message
-              let responseMessage;
-              if (responseFormatterService && typeof (responseFormatterService as any).formatCompletionMessage === 'function') {
-                responseMessage = (responseFormatterService as any).formatCompletionMessage({
-                  ...updatedConfirmation,
-                  executionResult
-                });
-              } else {
-                // Fallback formatting
-                const icon = executionResult.success ? '✅' : '❌';
-                const status = executionResult.success ? 'completed successfully' : 'failed to execute';
-                responseMessage = {
-                  text: `${icon} Action ${status}`,
-                  blocks: [
-                    {
-                      type: 'section',
-                      text: {
-                        type: 'mrkdwn',
-                        text: `${icon} **Action ${status.charAt(0).toUpperCase() + status.slice(1)}**\n${updatedConfirmation.actionPreview.title} ${status}.`
-                      }
-                    }
-                  ]
-                };
-              }
-
-              res.status(200).json({
-                ...responseMessage,
-                response_type: 'in_channel',
-                replace_original: true
-              });
-            } else {
-              logger.info('Confirmation rejected', { confirmationId });
-              
-              // Format cancellation message
-              let responseMessage;
-              if (responseFormatterService && typeof (responseFormatterService as any).formatCancellationMessage === 'function') {
-                responseMessage = (responseFormatterService as any).formatCancellationMessage(updatedConfirmation);
-              } else {
-                // Fallback formatting
-                responseMessage = {
-                  text: '🚫 Action Cancelled',
-                  blocks: [
-                    {
-                      type: 'section',
-                      text: {
-                        type: 'mrkdwn',
-                        text: `🚫 **Action Cancelled**\n${updatedConfirmation.actionPreview.title} was not executed.`
-                      }
-                    }
-                  ]
-                };
-              }
-
-              res.status(200).json({
-                ...responseMessage,
-                response_type: 'in_channel',
-                replace_original: true
-              });
-            }
-
-          } catch (confirmationError) {
-            logger.error('Error processing confirmation', confirmationError, { 
-              confirmationId, 
-              confirmed,
-              userId: parsedPayload.user?.id 
-            });
-            
-            res.status(200).json({
-              text: '❌ An error occurred while processing your confirmation. Please try again.',
-              response_type: 'ephemeral'
-            });
-          }
+          // Legacy confirmation handling is now managed by SlackInterfaceService
+          // through natural language confirmation detection
+          res.status(200).json({
+            text: '⚠️ This confirmation method is no longer supported. Please use natural language responses like "yes" or "no" to confirm actions.',
+            response_type: 'ephemeral'
+          });
           return;
         }
 

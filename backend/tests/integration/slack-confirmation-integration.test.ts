@@ -1,33 +1,23 @@
-import { ServiceManager } from '../../src/services/service-manager';
-import { SlackInterfaceService } from '../../src/services/slack-interface.service';
-import { ToolExecutorService } from '../../src/services/tool-executor.service';
-import { ConfirmationService } from '../../src/services/confirmation.service';
-import { ResponseFormatterService } from '../../src/services/response-formatter.service';
-import { 
-  ConfirmationFlow, 
-  ConfirmationStatus,
-  ConfirmationFlowResult 
-} from '../../src/types/confirmation.types';
-import { ToolCall, ToolExecutionContext } from '../../src/types/tools';
-import { SlackContext, SlackAgentRequest } from '../../src/types/slack.types';
-import logger from '../../src/utils/logger';
-
 /**
- * Integration Tests for Slack-Confirmation Workflow
- * 
- * Tests the complete integration between SlackInterfaceService, ToolExecutorService,
- * ConfirmationService, and ResponseFormatterService following docs/TESTING.md patterns.
+ * Integration tests for Slack-based confirmation system
+ * Tests the enhanced SlackInterface with confirmation detection and proposal parsing
  */
-describe('Slack-Confirmation Integration', () => {
-  let serviceManager: ServiceManager;
-  let slackInterface: SlackInterfaceService;
-  let toolExecutorService: ToolExecutorService;
-  let confirmationService: ConfirmationService;
-  let responseFormatterService: ResponseFormatterService;
 
-  // Mock Slack configuration
+import { SlackInterfaceService } from '../../src/services/slack-interface.service';
+import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
+import { ToolExecutorService } from '../../src/services/tool-executor.service';
+import { TokenManager } from '../../src/services/token-manager';
+import { serviceManager } from '../../src/services/service-manager';
+import { SlackContext } from '../../src/types/slack.types';
+
+describe('Slack Confirmation Integration', () => {
+  let slackInterface: SlackInterfaceService;
+  let mockSlackMessageReader: jest.Mocked<SlackMessageReaderService>;
+  let mockToolExecutor: jest.Mocked<ToolExecutorService>;
+  let mockTokenManager: jest.Mocked<TokenManager>;
+
   const mockSlackConfig = {
-    signingSecret: 'test-signing-secret',
+    signingSecret: 'test-secret',
     botToken: 'xoxb-test-token',
     clientId: 'test-client-id',
     clientSecret: 'test-client-secret',
@@ -36,513 +26,580 @@ describe('Slack-Confirmation Integration', () => {
   };
 
   beforeEach(async () => {
-    // Create fresh service manager for each test
-    serviceManager = ServiceManager.getInstance();
-    
+    // Mock services
+    mockSlackMessageReader = {
+      readRecentMessages: jest.fn(),
+      readMessageHistory: jest.fn(),
+      readThreadMessages: jest.fn(),
+      searchMessages: jest.fn(),
+      getChannelInfo: jest.fn(),
+      initialize: jest.fn().mockResolvedValue(undefined),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      isReady: jest.fn().mockReturnValue(true),
+      getHealth: jest.fn().mockReturnValue({ healthy: true }),
+      name: 'SlackMessageReaderService',
+      state: 'ready' as any
+    } as any;
+
+    mockToolExecutor = {
+      executeTool: jest.fn(),
+      executeTools: jest.fn(),
+      getExecutionStats: jest.fn(),
+      getConfig: jest.fn(),
+      updateConfig: jest.fn(),
+      initialize: jest.fn().mockResolvedValue(undefined),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      isReady: jest.fn().mockReturnValue(true),
+      getHealth: jest.fn().mockReturnValue({ healthy: true }),
+      name: 'ToolExecutorService',
+      state: 'ready' as any
+    } as any;
+
+    mockTokenManager = {
+      hasValidOAuthTokens: jest.fn(),
+      getValidTokens: jest.fn(),
+      initialize: jest.fn().mockResolvedValue(undefined),
+      destroy: jest.fn().mockResolvedValue(undefined),
+      isReady: jest.fn().mockReturnValue(true),
+      getHealth: jest.fn().mockReturnValue({ healthy: true }),
+      name: 'TokenManager',
+      state: 'ready' as any
+    } as any;
+
     // Register mock services
-    await registerMockServices();
-    
-    // Initialize services
-    await serviceManager.initializeAllServices();
-    
-    // Get service instances
-    slackInterface = serviceManager.getService('slackInterfaceService') as SlackInterfaceService;
-    toolExecutorService = serviceManager.getService('toolExecutorService') as ToolExecutorService;
-    confirmationService = serviceManager.getService('confirmationService') as ConfirmationService;
-    responseFormatterService = serviceManager.getService('responseFormatterService') as ResponseFormatterService;
+    serviceManager.registerService('slackMessageReaderService', mockSlackMessageReader);
+    serviceManager.registerService('toolExecutorService', mockToolExecutor);
+    serviceManager.registerService('tokenManager', mockTokenManager);
+
+    // Create SlackInterface
+    slackInterface = new SlackInterfaceService(mockSlackConfig);
+    await slackInterface.initialize();
   });
 
   afterEach(async () => {
-    // Clean up services
-    await serviceManager.shutdown();
-    
-    // Clear any test data
-    await cleanupTestData();
+    await slackInterface.destroy();
+    serviceManager.forceCleanup();
+    jest.clearAllMocks();
   });
 
-  describe('Complete Confirmation Workflow', () => {
-    it('should handle end-to-end confirmation flow for email agent', async () => {
-      // Arrange
-      const sessionId = 'test-session-confirmation-email';
-      const userId = 'test-user-123';
-      const teamId = 'test-team-456';
-      
-      const slackContext: SlackContext = {
-        userId,
-        channelId: 'test-channel-789',
-        teamId,
-        isDirectMessage: false,
-        userName: 'testuser',
-        userEmail: 'testuser@example.com'
-      };
+  describe('Confirmation Detection', () => {
+    it('should detect positive confirmation responses', async () => {
+      const testCases = [
+        'yes',
+        'y',
+        'yeah',
+        'sure',
+        'ok',
+        'okay',
+        'go ahead',
+        'send it',
+        'do it',
+        'execute',
+        'confirm',
+        'approved',
+        'yes, send it',
+        'yes, go ahead'
+      ];
 
-      const agentRequest: SlackAgentRequest = {
-        message: 'Send an email to john@example.com about the quarterly review meeting',
-        context: slackContext,
-        eventType: 'message',
-        metadata: {
-          timestamp: new Date().toISOString(),
-          eventId: 'test-event-email-confirmation'
-        }
-      };
-
-      // Mock MasterAgent to return email tool call
-      const mockMasterResponse = {
-        message: 'I will send an email to John about the quarterly review meeting.',
-        toolCalls: [
-          {
-            name: 'emailAgent',
-            parameters: { 
-              query: 'Send email to john@example.com about quarterly review meeting',
-              to: 'john@example.com',
-              subject: 'Quarterly Review Meeting',
-              body: 'Hi John, I wanted to reach out about our upcoming quarterly review meeting...'
-            }
-          }
-        ]
-      };
-
-      // Mock the agent factory and execution
-      jest.doMock('../../src/config/agent-factory-init', () => ({
-        createMasterAgent: () => ({
-          processUserInput: jest.fn().mockResolvedValue(mockMasterResponse)
-        })
-      }));
-
-      // Act - Route the request through SlackInterface
-      const response = await (slackInterface as any).routeToAgent(agentRequest);
-
-      // Assert
-      expect(response.success).toBe(true);
-      expect(response.shouldRespond).toBe(true);
-      expect(response.executionMetadata.confirmationFlows).toBeDefined();
-      expect(response.executionMetadata.confirmationFlows.length).toBe(1);
-
-      // Verify confirmation flow was created
-      const confirmationFlow = response.executionMetadata.confirmationFlows[0];
-      expect(confirmationFlow.confirmationId).toBeDefined();
-      expect(confirmationFlow.sessionId).toBe(sessionId);
-      expect(confirmationFlow.userId).toBe(userId);
-      expect(confirmationFlow.status).toBe(ConfirmationStatus.PENDING);
-      expect(confirmationFlow.actionPreview.actionType).toBe('email');
-      expect(confirmationFlow.actionPreview.title).toContain('Email');
-
-      // Verify response contains Slack blocks with confirmation buttons
-      expect(response.response.blocks).toBeDefined();
-      const actionBlock = response.response.blocks.find((block: any) => block.type === 'actions');
-      expect(actionBlock).toBeDefined();
-      expect(actionBlock.elements).toHaveLength(2);
-      expect(actionBlock.elements[0].action_id).toContain('confirm_');
-      expect(actionBlock.elements[1].action_id).toContain('reject_');
-    });
-
-    it('should handle confirmation approval and action execution', async () => {
-      // Arrange - First create a confirmation
-      const confirmationId = 'test-confirmation-approval';
-      const sessionId = 'test-session-approval';
-      const userId = 'test-user-approval';
-      
-      const toolCall: ToolCall = {
-        name: 'emailAgent',
-        parameters: {
-          query: 'Test email for confirmation approval',
-          to: 'test@example.com',
-          subject: 'Test Subject'
-        }
-      };
-
-      const executionContext: ToolExecutionContext = {
-        sessionId,
-        userId,
-        timestamp: new Date(),
-        slackContext: {
-          userId,
-          channelId: 'test-channel',
-          teamId: 'test-team',
-          isDirectMessage: false
-        }
-      };
-
-      // Create confirmation through service
-      const confirmationRequest = {
-        sessionId,
-        userId,
-        toolCall,
-        context: { slackContext: executionContext.slackContext }
-      };
-
-      const createdConfirmation = await confirmationService.createConfirmation(confirmationRequest);
-      expect(createdConfirmation.status).toBe(ConfirmationStatus.PENDING);
-
-      // Act - Approve the confirmation
-      const approvalResponse = {
-        confirmationId: createdConfirmation.confirmationId,
-        confirmed: true,
-        respondedAt: new Date(),
-        userContext: {
-          slackUserId: userId,
-          responseChannel: 'test-channel',
-          responseThreadTs: undefined
-        }
-      };
-
-      const updatedConfirmation = await toolExecutorService.respondToConfirmation(
-        createdConfirmation.confirmationId,
-        true,
-        approvalResponse.userContext
-      );
-
-      // Assert confirmation was approved
-      expect(updatedConfirmation).toBeDefined();
-      expect(updatedConfirmation!.status).toBe(ConfirmationStatus.CONFIRMED);
-      expect(updatedConfirmation!.confirmedAt).toBeDefined();
-
-      // Act - Execute the confirmed action
-      const executionResult = await toolExecutorService.executeConfirmedAction(
-        createdConfirmation.confirmationId
-      );
-
-      // Assert execution completed
-      expect(executionResult).toBeDefined();
-      expect(executionResult.toolName).toBe('emailAgent');
-      expect(executionResult.success).toBe(true); // Assuming mock execution succeeds
-      expect(executionResult.executionTime).toBeGreaterThan(0);
-    });
-
-    it('should handle confirmation rejection', async () => {
-      // Arrange
-      const confirmationId = 'test-confirmation-rejection';
-      const sessionId = 'test-session-rejection';
-      const userId = 'test-user-rejection';
-      
-      const toolCall: ToolCall = {
-        name: 'emailAgent',
-        parameters: {
-          query: 'Test email for confirmation rejection',
-          to: 'test@example.com'
-        }
-      };
-
-      const executionContext: ToolExecutionContext = {
-        sessionId,
-        userId,
-        timestamp: new Date(),
-        slackContext: {
-          userId,
-          channelId: 'test-channel',
-          teamId: 'test-team',
-          isDirectMessage: false
-        }
-      };
-
-      const confirmationRequest = {
-        sessionId,
-        userId,
-        toolCall,
-        context: { slackContext: executionContext.slackContext }
-      };
-
-      const createdConfirmation = await confirmationService.createConfirmation(confirmationRequest);
-
-      // Act - Reject the confirmation
-      const updatedConfirmation = await toolExecutorService.respondToConfirmation(
-        createdConfirmation.confirmationId,
-        false,
-        {
-          slackUserId: userId,
-          responseChannel: 'test-channel'
-        }
-      );
-
-      // Assert confirmation was rejected
-      expect(updatedConfirmation).toBeDefined();
-      expect(updatedConfirmation!.status).toBe(ConfirmationStatus.REJECTED);
-      expect(updatedConfirmation!.confirmedAt).toBeDefined();
-
-      // Act - Attempt to execute rejected confirmation (should fail)
-      await expect(
-        toolExecutorService.executeConfirmedAction(createdConfirmation.confirmationId)
-      ).rejects.toThrow();
-    });
-
-    it('should handle expired confirmations gracefully', async () => {
-      // Arrange - Create confirmation with very short expiration
-      const confirmationId = 'test-confirmation-expired';
-      const sessionId = 'test-session-expired';
-      const userId = 'test-user-expired';
-      
-      const toolCall: ToolCall = {
-        name: 'emailAgent',
-        parameters: { query: 'Test email for expiration' }
-      };
-
-      const confirmationRequest = {
-        sessionId,
-        userId,
-        toolCall,
-        context: { slackContext: { userId, channelId: 'test', teamId: 'test', isDirectMessage: false } },
-        expirationMinutes: 0.01 // 0.6 seconds
-      };
-
-      const createdConfirmation = await confirmationService.createConfirmation(confirmationRequest);
-
-      // Wait for expiration
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Act - Try to respond to expired confirmation
-      const result = await toolExecutorService.respondToConfirmation(
-        createdConfirmation.confirmationId,
-        true
-      );
-
-      // Assert confirmation is considered expired/invalid
-      expect(result).toBeNull();
-    });
-
-    it('should format confirmation messages consistently', async () => {
-      // Arrange
-      const mockConfirmationFlow: ConfirmationFlow = {
-        confirmationId: 'test-confirmation-formatting',
-        sessionId: 'test-session-formatting',
-        userId: 'test-user-formatting',
-        actionPreview: {
-          actionId: 'test-action-id',
-          actionType: 'email',
-          title: 'Send Email to John',
-          description: 'Send an email to john@example.com about the quarterly review meeting',
-          riskAssessment: {
-            level: 'medium',
-            factors: ['External recipient', 'Business communication'],
-            warnings: ['Please review recipient and content before sending']
-          },
-          estimatedExecutionTime: '2-3 seconds',
-          reversible: false,
-          requiresConfirmation: true,
-          awaitingConfirmation: true,
-          previewData: {
-            operation: 'emailAgent',
-            to: 'john@example.com',
-            subject: 'Quarterly Review Meeting',
-            contentSummary: 'Meeting invitation and agenda'
-          },
-          originalQuery: 'Send email to john@example.com about quarterly review meeting',
-          parameters: {
-            to: 'john@example.com',
-            subject: 'Quarterly Review Meeting'
-          }
-        },
-        originalToolCall: {
-          name: 'emailAgent',
-          parameters: {
-            query: 'Send email to john@example.com about quarterly review meeting'
-          }
-        },
-        status: ConfirmationStatus.PENDING,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-        slackContext: {
-          userId: 'test-user-formatting',
-          channelId: 'test-channel',
-          teamId: 'test-team',
-          isDirectMessage: false
-        }
-      };
-
-      // Act - Format the confirmation message
-      const formattedMessage = responseFormatterService.formatConfirmationMessage(
-        mockConfirmationFlow,
-        {
-          includeRiskAssessment: true,
-          includeExecutionTime: true,
-          showDetailedPreview: true,
-          useCompactFormat: false
-        }
-      );
-
-      // Assert message structure
-      expect(formattedMessage.text).toBeDefined();
-      expect(formattedMessage.text).toContain('Send Email to John');
-      expect(formattedMessage.blocks).toBeDefined();
-      expect(formattedMessage.blocks.length).toBeGreaterThan(3);
-
-      // Check for required block types
-      const blockTypes = formattedMessage.blocks.map((block: any) => block.type);
-      expect(blockTypes).toContain('section'); // Header
-      expect(blockTypes).toContain('actions'); // Buttons
-
-      // Check for confirmation buttons
-      const actionBlock = formattedMessage.blocks.find((block: any) => block.type === 'actions');
-      expect(actionBlock).toBeDefined();
-      expect(actionBlock.elements).toHaveLength(2);
-      expect(actionBlock.elements[0].action_id).toContain('confirm_');
-      expect(actionBlock.elements[1].action_id).toContain('reject_');
-      expect(actionBlock.elements[0].style).toBe('primary');
-      expect(actionBlock.elements[1].style).toBe('danger');
-    });
-
-    it('should handle service failures gracefully', async () => {
-      // Arrange
-      const sessionId = 'test-session-failure';
-      const agentRequest: SlackAgentRequest = {
-        message: 'Test message that will cause service failure',
-        context: {
-          userId: 'test-user',
-          channelId: 'test-channel',
-          teamId: 'test-team',
-          isDirectMessage: false
-        },
-        eventType: 'message',
-        metadata: {
-          timestamp: new Date().toISOString(),
-          eventId: 'test-event-failure'
-        }
-      };
-
-      // Mock ToolExecutorService to fail
-      const mockExecuteWithConfirmation = jest.fn().mockRejectedValue(
-        new Error('ToolExecutorService temporarily unavailable')
-      );
-      
-      // Replace method temporarily
-      const originalMethod = toolExecutorService.executeWithConfirmation;
-      (toolExecutorService as any).executeWithConfirmation = mockExecuteWithConfirmation;
-
-      try {
-        // Act
-        const response = await (slackInterface as any).routeToAgent(agentRequest);
-
-        // Assert graceful error handling
-        expect(response.success).toBe(true); // SlackInterface should still respond
-        expect(response.shouldRespond).toBe(true);
-        expect(response.response.text).toContain('temporarily unavailable');
-        expect(response.error).toBeDefined();
-        expect(response.executionMetadata.errorType).toBeDefined();
-        expect(response.executionMetadata.errorContext).toBeDefined();
-
-      } finally {
-        // Restore original method
-        (toolExecutorService as any).executeWithConfirmation = originalMethod;
-      }
-    });
-  });
-
-  describe('Error Handling and Edge Cases', () => {
-    it('should handle invalid confirmation IDs', async () => {
-      // Act & Assert
-      const result = await toolExecutorService.respondToConfirmation(
-        'invalid-confirmation-id',
-        true
-      );
-      
-      expect(result).toBeNull();
-    });
-
-    it('should handle malformed tool calls gracefully', async () => {
-      // Arrange
-      const malformedToolCall: any = {
-        // Missing required properties
-        parameters: null
-      };
-
-      const executionContext: ToolExecutionContext = {
-        sessionId: 'test-session-malformed',
-        userId: 'test-user-malformed',
-        timestamp: new Date()
-      };
-
-      // Act & Assert
-      await expect(
-        toolExecutorService.executeWithConfirmation(malformedToolCall, executionContext)
-      ).rejects.toThrow();
-    });
-
-    it('should clean up expired confirmations automatically', async () => {
-      // Arrange - Create multiple confirmations with short expiration
-      const confirmations: ConfirmationFlow[] = [];
-      
-      for (let i = 0; i < 3; i++) {
-        const confirmationRequest = {
-          sessionId: `test-session-cleanup-${i}`,
-          userId: `test-user-cleanup-${i}`,
-          toolCall: {
-            name: 'emailAgent',
-            parameters: { query: `Test cleanup ${i}` }
-          },
-          context: { 
-            slackContext: { 
-              userId: `test-user-cleanup-${i}`, 
-              channelId: 'test', 
-              teamId: 'test', 
-              isDirectMessage: false 
-            } 
-          },
-          expirationMinutes: 0.01 // Very short expiration
+      for (const response of testCases) {
+        const event = {
+          type: 'message',
+          text: response,
+          user: 'U123456',
+          channel: 'D123456',
+          channel_type: 'im',
+          ts: '1234567890.123456'
         };
 
-        const confirmation = await confirmationService.createConfirmation(confirmationRequest);
-        confirmations.push(confirmation);
+        const context: SlackContext = {
+          userId: 'U123456',
+          channelId: 'D123456',
+          teamId: 'T123456',
+          isDirectMessage: true
+        };
+
+        // Mock the confirmation response handling
+        const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+        handleConfirmationResponseSpy.mockResolvedValue(undefined);
+
+        await slackInterface.handleEvent(event, 'T123456');
+
+        expect(handleConfirmationResponseSpy).toHaveBeenCalledWith(response, context);
       }
+    });
 
-      // Wait for expiration
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    it('should detect negative confirmation responses', async () => {
+      const testCases = [
+        'no',
+        'n',
+        'nope',
+        'cancel',
+        'stop',
+        'abort',
+        'reject',
+        'denied',
+        'no, don\'t',
+        'no, do not'
+      ];
 
-      // Act - Trigger cleanup
-      const cleanedCount = await confirmationService.cleanupExpiredConfirmations();
+      for (const response of testCases) {
+        const event = {
+          type: 'message',
+          text: response,
+          user: 'U123456',
+          channel: 'D123456',
+          channel_type: 'im',
+          ts: '1234567890.123456'
+        };
 
-      // Assert
-      expect(cleanedCount).toBeGreaterThanOrEqual(3);
+        const context: SlackContext = {
+          userId: 'U123456',
+          channelId: 'D123456',
+          teamId: 'T123456',
+          isDirectMessage: true
+        };
 
-      // Verify confirmations are no longer accessible
-      for (const confirmation of confirmations) {
-        const retrieved = await confirmationService.getConfirmation(confirmation.confirmationId);
-        expect(retrieved).toBeNull();
+        // Mock the confirmation response handling
+        const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+        handleConfirmationResponseSpy.mockResolvedValue(undefined);
+
+        await slackInterface.handleEvent(event, 'T123456');
+
+        expect(handleConfirmationResponseSpy).toHaveBeenCalledWith(response, context);
+      }
+    });
+
+    it('should not detect non-confirmation messages', async () => {
+      const testCases = [
+        'hello',
+        'how are you',
+        'what can you do',
+        'help me with something',
+        'send an email to john@example.com',
+        'schedule a meeting'
+      ];
+
+      for (const response of testCases) {
+        const event = {
+          type: 'message',
+          text: response,
+          user: 'U123456',
+          channel: 'D123456',
+          channel_type: 'im',
+          ts: '1234567890.123456'
+        };
+
+        // Mock the confirmation response handling
+        const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+        handleConfirmationResponseSpy.mockResolvedValue(undefined);
+
+        await slackInterface.handleEvent(event, 'T123456');
+
+        expect(handleConfirmationResponseSpy).not.toHaveBeenCalled();
       }
     });
   });
 
-  // Helper functions
-  async function registerMockServices(): Promise<void> {
-    // Register SlackInterfaceService
-    const slackInterfaceService = new SlackInterfaceService(mockSlackConfig);
-    serviceManager.registerService('slackInterfaceService', slackInterfaceService, {
-      priority: 100,
-      autoStart: true
+  describe('Proposal Parsing', () => {
+    it('should find recent proposals in message history', async () => {
+      const mockMessages = [
+        {
+          id: '1234567890.123456',
+          channelId: 'D123456',
+          userId: 'B123456', // Bot user
+          text: 'I\'ll send an email to john@example.com with subject "Meeting Reminder" and body "Don\'t forget about our meeting tomorrow."',
+          timestamp: new Date('2023-01-01T10:00:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: 'B123456',
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        },
+        {
+          id: '1234567890.123457',
+          channelId: 'D123456',
+          userId: 'U123456', // User
+          text: 'yes',
+          timestamp: new Date('2023-01-01T10:01:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: undefined,
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        }
+      ];
+
+      mockSlackMessageReader.readRecentMessages.mockResolvedValue(mockMessages);
+
+      const findRecentProposalSpy = jest.spyOn(slackInterface as any, 'findRecentProposal');
+      const proposal = findRecentProposalSpy(mockMessages, 'U123456');
+
+      expect(proposal).toBeTruthy();
+      expect(proposal.text).toContain('send an email');
     });
 
-    // Register ToolExecutorService
-    const toolExecutorService = new ToolExecutorService();
-    serviceManager.registerService('toolExecutorService', toolExecutorService, {
-      priority: 25,
-      autoStart: true
+    it('should parse email proposals correctly', async () => {
+      const proposalText = 'I\'ll send an email to john@example.com with subject "Meeting Reminder" and body "Don\'t forget about our meeting tomorrow."';
+      
+      const parseProposalActionSpy = jest.spyOn(slackInterface as any, 'parseProposalAction');
+      const actionDetails = parseProposalActionSpy(proposalText);
+
+      expect(actionDetails).toEqual({
+        actionType: 'email',
+        action: 'send',
+        recipient: 'john@example.com',
+        subject: 'Meeting Reminder',
+        body: 'Don\'t forget about our meeting tomorrow.'
+      });
     });
 
-    // Register ConfirmationService
-    const confirmationService = new ConfirmationService();
-    serviceManager.registerService('confirmationService', confirmationService, {
-      dependencies: ['toolExecutorService'],
-      priority: 55,
-      autoStart: true
+    it('should parse calendar proposals correctly', async () => {
+      const proposalText = 'I\'ll schedule a meeting "Project Review" at 2:00 PM tomorrow';
+      
+      const parseProposalActionSpy = jest.spyOn(slackInterface as any, 'parseProposalAction');
+      const actionDetails = parseProposalActionSpy(proposalText);
+
+      expect(actionDetails).toEqual({
+        actionType: 'calendar',
+        action: 'create',
+        title: 'Project Review',
+        time: '2:00 PM tomorrow'
+      });
     });
 
-    // Register ResponseFormatterService
-    const responseFormatterService = new ResponseFormatterService();
-    serviceManager.registerService('responseFormatterService', responseFormatterService, {
-      priority: 50,
-      autoStart: true
+    it('should parse contact proposals correctly', async () => {
+      const proposalText = 'I\'ll add contact "John Doe" with email john@example.com';
+      
+      const parseProposalActionSpy = jest.spyOn(slackInterface as any, 'parseProposalAction');
+      const actionDetails = parseProposalActionSpy(proposalText);
+
+      expect(actionDetails).toEqual({
+        actionType: 'contact',
+        action: 'create',
+        name: 'John Doe',
+        email: 'john@example.com'
+      });
+    });
+  });
+
+  describe('Action Execution', () => {
+    it('should execute confirmed email actions', async () => {
+      const mockProposal = {
+        id: '1234567890.123456',
+        text: 'I\'ll send an email to john@example.com with subject "Meeting Reminder" and body "Don\'t forget about our meeting tomorrow."',
+        timestamp: new Date('2023-01-01T10:00:00Z')
+      };
+
+      const mockToolResult = {
+        toolName: 'email_agent',
+        success: true,
+        result: 'Email sent successfully',
+        error: undefined,
+        executionTime: 150
+      };
+
+      mockToolExecutor.executeTool.mockResolvedValue(mockToolResult);
+
+      const executeProposalActionSpy = jest.spyOn(slackInterface as any, 'executeProposalAction');
+      const result = await executeProposalActionSpy(mockProposal, {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockToolExecutor.executeTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'email_agent',
+          parameters: expect.objectContaining({
+            action: 'send',
+            recipient: 'john@example.com',
+            subject: 'Meeting Reminder',
+            body: 'Don\'t forget about our meeting tomorrow.'
+          })
+        }),
+        expect.any(Object),
+        undefined
+      );
     });
 
-    logger.info('Mock services registered for Slack-Confirmation integration tests');
-  }
+    it('should handle execution failures gracefully', async () => {
+      const mockProposal = {
+        id: '1234567890.123456',
+        text: 'I\'ll send an email to john@example.com with subject "Meeting Reminder"',
+        timestamp: new Date('2023-01-01T10:00:00Z')
+      };
 
-  async function cleanupTestData(): Promise<void> {
-    try {
-      // Clean up any test confirmations
-      const stats = await confirmationService.getConfirmationStats();
-      if (stats.total > 0) {
-        await confirmationService.cleanupExpiredConfirmations();
-      }
-    } catch (error) {
-      logger.warn('Error cleaning up test data', error);
-    }
-  }
+      const mockToolResult = {
+        toolName: 'email_agent',
+        success: false,
+        result: null,
+        error: 'OAuth authentication required',
+        executionTime: 50
+      };
+
+      mockToolExecutor.executeTool.mockResolvedValue(mockToolResult);
+
+      const executeProposalActionSpy = jest.spyOn(slackInterface as any, 'executeProposalAction');
+      const result = await executeProposalActionSpy(mockProposal, {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('OAuth authentication required');
+    });
+  });
+
+  describe('End-to-End Confirmation Flow', () => {
+    it('should handle complete confirmation flow from proposal to execution', async () => {
+      // Mock recent messages with a proposal
+      const mockMessages = [
+        {
+          id: '1234567890.123456',
+          channelId: 'D123456',
+          userId: 'B123456', // Bot user
+          text: 'I\'ll send an email to john@example.com with subject "Meeting Reminder" and body "Don\'t forget about our meeting tomorrow."',
+          timestamp: new Date('2023-01-01T10:00:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: 'B123456',
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        },
+        {
+          id: '1234567890.123457',
+          channelId: 'D123456',
+          userId: 'U123456', // User
+          text: 'yes',
+          timestamp: new Date('2023-01-01T10:01:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: undefined,
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        }
+      ];
+
+      mockSlackMessageReader.readRecentMessages.mockResolvedValue(mockMessages);
+
+      const mockToolResult = {
+        toolName: 'email_agent',
+        success: true,
+        result: 'Email sent successfully',
+        error: undefined,
+        executionTime: 150
+      };
+
+      mockToolExecutor.executeTool.mockResolvedValue(mockToolResult);
+
+      // Mock the sendMessage method
+      const sendMessageSpy = jest.spyOn(slackInterface as any, 'sendMessage');
+      sendMessageSpy.mockResolvedValue(undefined);
+
+      // Handle the confirmation response
+      const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+      await handleConfirmationResponseSpy('yes', {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(mockSlackMessageReader.readRecentMessages).toHaveBeenCalledWith(
+        'D123456',
+        20,
+        { filter: { excludeBotMessages: false } }
+      );
+
+      expect(mockToolExecutor.executeTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'email_agent',
+          parameters: expect.objectContaining({
+            action: 'send',
+            recipient: 'john@example.com'
+          })
+        }),
+        expect.any(Object),
+        undefined
+      );
+
+      expect(sendMessageSpy).toHaveBeenCalledWith('D123456', {
+        text: '✅ Action completed successfully!',
+        thread_ts: undefined
+      });
+    });
+
+    it('should handle cancellation responses', async () => {
+      // Mock recent messages with a proposal
+      const mockMessages = [
+        {
+          id: '1234567890.123456',
+          channelId: 'D123456',
+          userId: 'B123456', // Bot user
+          text: 'I\'ll send an email to john@example.com with subject "Meeting Reminder"',
+          timestamp: new Date('2023-01-01T10:00:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: 'B123456',
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        },
+        {
+          id: '1234567890.123457',
+          channelId: 'D123456',
+          userId: 'U123456', // User
+          text: 'no',
+          timestamp: new Date('2023-01-01T10:01:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: undefined,
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        }
+      ];
+
+      mockSlackMessageReader.readRecentMessages.mockResolvedValue(mockMessages);
+
+      // Mock the sendMessage method
+      const sendMessageSpy = jest.spyOn(slackInterface as any, 'sendMessage');
+      sendMessageSpy.mockResolvedValue(undefined);
+
+      // Handle the cancellation response
+      const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+      await handleConfirmationResponseSpy('no', {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(mockToolExecutor.executeTool).not.toHaveBeenCalled();
+      expect(sendMessageSpy).toHaveBeenCalledWith('D123456', {
+        text: '❌ Action cancelled as requested.',
+        thread_ts: undefined
+      });
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle missing SlackMessageReaderService gracefully', async () => {
+      // Remove the mock service
+      serviceManager.unregisterService('slackMessageReaderService');
+      
+      // Reinitialize SlackInterface without SlackMessageReaderService
+      await slackInterface.destroy();
+      slackInterface = new SlackInterfaceService(mockSlackConfig);
+      await slackInterface.initialize();
+
+      // Mock the sendMessage method
+      const sendMessageSpy = jest.spyOn(slackInterface as any, 'sendMessage');
+      sendMessageSpy.mockResolvedValue(undefined);
+
+      // Handle confirmation response without SlackMessageReaderService
+      const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+      await handleConfirmationResponseSpy('yes', {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(sendMessageSpy).toHaveBeenCalledWith('D123456', {
+        text: "I detected a confirmation response, but I can't process it without access to recent messages. Please try again.",
+        thread_ts: undefined
+      });
+    });
+
+    it('should handle missing proposals gracefully', async () => {
+      // Mock empty message history
+      mockSlackMessageReader.readRecentMessages.mockResolvedValue([]);
+
+      // Mock the sendMessage method
+      const sendMessageSpy = jest.spyOn(slackInterface as any, 'sendMessage');
+      sendMessageSpy.mockResolvedValue(undefined);
+
+      // Handle confirmation response with no proposals
+      const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+      await handleConfirmationResponseSpy('yes', {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(sendMessageSpy).toHaveBeenCalledWith('D123456', {
+        text: "I couldn't find a recent proposal to confirm. Please make a request first, then confirm it.",
+        thread_ts: undefined
+      });
+    });
+
+    it('should handle proposal parsing failures gracefully', async () => {
+      const mockMessages = [
+        {
+          id: '1234567890.123456',
+          channelId: 'D123456',
+          userId: 'B123456', // Bot user
+          text: 'I\'ll do something unclear and ambiguous',
+          timestamp: new Date('2023-01-01T10:00:00Z'),
+          threadTs: undefined,
+          isThreadReply: false,
+          subtype: undefined,
+          botId: 'B123456',
+          attachments: [],
+          files: [],
+          reactions: [],
+          edited: undefined,
+          metadata: {}
+        }
+      ];
+
+      mockSlackMessageReader.readRecentMessages.mockResolvedValue(mockMessages);
+
+      // Mock the sendMessage method
+      const sendMessageSpy = jest.spyOn(slackInterface as any, 'sendMessage');
+      sendMessageSpy.mockResolvedValue(undefined);
+
+      // Handle confirmation response with unparseable proposal
+      const handleConfirmationResponseSpy = jest.spyOn(slackInterface as any, 'handleConfirmationResponse');
+      await handleConfirmationResponseSpy('yes', {
+        userId: 'U123456',
+        channelId: 'D123456',
+        teamId: 'T123456',
+        isDirectMessage: true
+      });
+
+      expect(sendMessageSpy).toHaveBeenCalledWith('D123456', {
+        text: '❌ Action failed: Could not parse action from proposal',
+        thread_ts: undefined
+      });
+    });
+  });
 });
