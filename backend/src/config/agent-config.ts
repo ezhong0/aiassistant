@@ -250,7 +250,8 @@ export const AGENT_HELPERS = {
       update: ['update', 'modify', 'change', 'edit'],
       delete: ['delete', 'remove', 'cancel'],
       list: ['list', 'show all', 'display all'],
-      check: ['check', 'verify', 'confirm']
+      check: ['check', 'verify', 'confirm'],
+      read: ['what do i have', 'show me', 'what is', 'what are', 'view', 'display', 'get', 'see', 'today', 'tomorrow', 'this week']
     };
     
     for (const [operation, patterns] of Object.entries(operationPatterns)) {
@@ -278,9 +279,10 @@ export const AGENT_HELPERS = {
       return false;
     }
     
-    // If agent has external effects, confirmation required
-    if (agent.hasExternalEffects) {
-      return true;
+    // Check if this specific operation is read-only (even for write-capable agents)
+    const readOnlyOperations = ['list', 'read', 'check', 'search', 'find', 'show', 'view', 'display', 'get', 'see'];
+    if (readOnlyOperations.includes(operation)) {
+      return false;
     }
     
     // Check specific operations that require confirmation
@@ -298,16 +300,18 @@ export const AGENT_HELPERS = {
     }
     
     if (agent.isReadOnly) {
-      return 'Read-only operation, no confirmation needed';
+      return 'Read-only agent, no confirmation needed';
     }
     
-    if (agent.hasExternalEffects) {
-      return 'Operation modifies external state, confirmation required';
+    // Check if this specific operation is read-only
+    const readOnlyOperations = ['list', 'read', 'check', 'search', 'find', 'show', 'view', 'display', 'get', 'see'];
+    if (readOnlyOperations.includes(operation)) {
+      return 'Read-only operation, no confirmation needed';
     }
     
     const confirmationOperations = ['send', 'create', 'update', 'delete', 'schedule'];
     if (confirmationOperations.includes(operation)) {
-      return 'Operation requires confirmation for safety';
+      return 'Write operation requires confirmation for safety';
     }
     
     return 'Operation does not require confirmation';

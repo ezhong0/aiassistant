@@ -10,6 +10,7 @@ import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { SlackMessageReaderService } from './slack-message-reader.service';
+import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -33,6 +34,9 @@ export const initializeAllCoreServices = async (): Promise<void> => {
 
     // Initialize all services in dependency order
     await serviceManager.initializeAllServices();
+
+    // Connect circuit breaker to OpenAI service after initialization
+    await setupCircuitBreakerConnections();
 
     logger.info('All services initialized successfully');
   } catch (error) {
@@ -126,7 +130,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 8. ContactService - Depends on authService
+    // 10. ContactService - Depends on authService
     const contactService = new ContactService();
     serviceManager.registerService('contactService', contactService, {
       dependencies: ['authService'],
@@ -134,7 +138,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 9. GmailService - Depends on authService
+    // 11. GmailService - Depends on authService
     const gmailService = new GmailService();
     serviceManager.registerService('gmailService', gmailService, {
       dependencies: ['authService'],
@@ -142,7 +146,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 10. CalendarService - Depends on authService
+    // 12. CalendarService - Depends on authService
     const calendarService = new CalendarService();
     serviceManager.registerService('calendarService', calendarService, {
       dependencies: ['authService'],
@@ -150,17 +154,30 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 11. OpenAIService - No external dependencies
+    // 8. OpenAIService - Critical AI service, high priority
     const openaiService = new OpenAIService({
       apiKey: process.env.OPENAI_API_KEY || 'dummy-key'
     });
     serviceManager.registerService('openaiService', openaiService, {
-      priority: 45,
+      priority: 15, // High priority - critical for AI-first architecture
+      autoStart: true
+    });
+
+    // 9. AIServiceCircuitBreaker - Depends on OpenAI service
+    const aiCircuitBreaker = new AIServiceCircuitBreaker({
+      failureThreshold: 5,
+      recoveryTimeout: 60000,
+      successThreshold: 3,
+      timeout: 30000
+    });
+    serviceManager.registerService('aiCircuitBreakerService', aiCircuitBreaker, {
+      dependencies: ['openaiService'],
+      priority: 16, // Just after OpenAI service
       autoStart: true
     });
 
 
-    // 12. SlackMessageReaderService - Dedicated service for reading Slack message history
+    // 13. SlackMessageReaderService - Dedicated service for reading Slack message history
     // Only register if Slack is configured
     if (ENV_VALIDATION.isSlackConfigured()) {
       const slackMessageReaderService = new SlackMessageReaderService(
@@ -184,6 +201,29 @@ const registerCoreServices = async (): Promise<void> => {
 
   } catch (error) {
     logger.error('Failed to register core services:', error);
+    throw error;
+  }
+}
+
+/**
+ * Setup circuit breaker connections after service initialization
+ */
+const setupCircuitBreakerConnections = async (): Promise<void> => {
+  try {
+    const circuitBreaker = serviceManager.getService('aiCircuitBreakerService') as AIServiceCircuitBreaker;
+    const openaiService = serviceManager.getService('openaiService') as OpenAIService;
+
+    if (circuitBreaker && openaiService) {
+      circuitBreaker.setOpenAIService(openaiService);
+      logger.debug('Circuit breaker connected to OpenAI service');
+    } else {
+      logger.warn('Failed to connect circuit breaker to OpenAI service', {
+        hasCircuitBreaker: !!circuitBreaker,
+        hasOpenAIService: !!openaiService
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to setup circuit breaker connections:', error);
     throw error;
   }
 }
