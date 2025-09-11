@@ -415,10 +415,10 @@ export class AgentFactory {
   }
 
   /**
-   * Check if a tool requires confirmation based on operation
+   * Check if a tool requires confirmation based on operation using AI
    * This is the preferred method for determining confirmation needs
    */
-  static toolNeedsConfirmationForOperation(toolName: string, operation: string): boolean {
+  static async toolNeedsConfirmationForOperation(toolName: string, operation: string): Promise<boolean> {
     // Import AGENT_HELPERS dynamically to avoid circular imports
     const { AGENT_HELPERS } = require('../config/agent-config');
     
@@ -436,14 +436,14 @@ export class AgentFactory {
     };
     
     const configAgentName = toolNameMapping[toolName] || toolName;
-    return AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
+    return await AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
   }
 
   /**
-   * Detect operation from tool parameters
+   * Detect operation from tool parameters using AI classification
    * Maps AgentFactory tool names to AGENT_CONFIG names
    */
-  static detectOperationFromParameters(toolName: string, parameters: any): string {
+  static async detectOperationFromParameters(toolName: string, parameters: any): Promise<string> {
     const { AGENT_HELPERS } = require('../config/agent-config');
     
     // Map AgentFactory tool names to AGENT_CONFIG names
@@ -463,7 +463,7 @@ export class AgentFactory {
     const query = parameters.query || parameters.query || '';
     
     if (typeof query === 'string') {
-      return AGENT_HELPERS.detectOperation(configAgentName as any, query);
+      return await AGENT_HELPERS.detectOperation(configAgentName as any, query);
     }
     
     // Check for explicit action parameter (used by calendar agent)

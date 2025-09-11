@@ -6,6 +6,8 @@ import {
   EmailMetadata,
   AttachmentType 
 } from '../types/gmail.types';
+import { getService } from '../services/service-manager';
+import { AIClassificationService } from '../services/ai-classification.service';
 import logger from './logger';
 
 /**
@@ -14,9 +16,9 @@ import logger from './logger';
 export class EmailParser {
   
   /**
-   * Parse a Gmail message into a more structured format
+   * Parse a Gmail message into a more structured format using AI for importance
    */
-  static parseGmailMessage(message: GmailMessage, options: EmailParsingOptions = {}): ParsedEmail {
+  static async parseGmailMessage(message: GmailMessage, options: EmailParsingOptions = {}): Promise<ParsedEmail> {
     const defaultOptions: EmailParsingOptions = {
       extractPlainText: true,
       extractHtml: true,
@@ -38,7 +40,7 @@ export class EmailParser {
         attachments: defaultOptions.parseAttachments ? message.attachments : [],
         isUnread: message.isUnread,
         labels: message.labelIds,
-        importance: this.determineImportance(message)
+        importance: await this.determineImportance(message)
       };
     } catch (error) {
       logger.error('Failed to parse Gmail message', { error, messageId: message.id });
@@ -226,42 +228,51 @@ export class EmailParser {
   }
 
   /**
-   * Determine email importance
+   * Determine email importance using AI instead of keyword arrays
+   * Replaces urgentKeywords and lowPriorityKeywords arrays with AI classification
    */
-  static determineImportance(message: GmailMessage): 'high' | 'normal' | 'low' {
-    // Check labels for importance markers
-    if (message.labelIds.includes('IMPORTANT')) {
-      return 'high';
+  static async determineImportance(message: GmailMessage): Promise<'high' | 'normal' | 'low'> {
+    try {
+      // Check labels for importance markers first (this is still valid)
+      if (message.labelIds.includes('IMPORTANT')) {
+        return 'high';
+      }
+      
+      // Use AI to classify priority based on subject and content
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        return 'normal'; // Default fallback
+      }
+      const priority = await aiClassificationService.classifyEmailPriority(
+        `${message.subject || ''} ${message.snippet || ''}`
+      );
+      
+      // Convert AI result to expected format
+      switch (priority) {
+        case 'urgent':
+          return 'high';
+        case 'low':
+          return 'low';
+        default:
+          return 'normal';
+      }
+    } catch (error) {
+      logger.error('Failed to classify email priority with AI:', error);
+      return 'normal'; // Default fallback
     }
-    
-    // Check subject for urgency keywords
-    const urgentKeywords = ['urgent', 'asap', 'emergency', 'immediate', '!!!'];
-    const subject = message.subject.toLowerCase();
-    
-    if (urgentKeywords.some(keyword => subject.includes(keyword))) {
-      return 'high';
-    }
-    
-    // Check for low priority indicators
-    const lowPriorityKeywords = ['fyi', 'newsletter', 'notification', 'update'];
-    if (lowPriorityKeywords.some(keyword => subject.includes(keyword))) {
-      return 'low';
-    }
-    
-    return 'normal';
   }
 
   /**
-   * Extract metadata from email headers
+   * Extract metadata from email headers using AI for importance
    */
-  static extractMetadata(message: GmailMessage): EmailMetadata {
+  static async extractMetadata(message: GmailMessage): Promise<EmailMetadata> {
     return {
       messageId: message.messageId,
       threadId: message.threadId,
       // These would need to be extracted from the full headers if available
       references: undefined,
       inReplyTo: undefined,
-      importance: this.determineImportance(message),
+      importance: await this.determineImportance(message),
       autoReplied: false,
       listUnsubscribe: undefined,
       deliveredTo: undefined,
@@ -313,12 +324,15 @@ export class EmailParser {
   }
 
   /**
-   * Parse email thread to identify conversation flow
+   * Parse email thread to identify conversation flow using AI for importance
    */
-  static parseThread(messages: GmailMessage[]): ParsedEmail[] {
-    return messages
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map(message => this.parseGmailMessage(message));
+  static async parseThread(messages: GmailMessage[]): Promise<ParsedEmail[]> {
+    const parsedMessages = await Promise.all(
+      messages
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .map(message => this.parseGmailMessage(message))
+    );
+    return parsedMessages;
   }
 
   /**

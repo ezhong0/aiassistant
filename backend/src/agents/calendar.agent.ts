@@ -313,50 +313,6 @@ Always return structured execution status with event details and confirmation.`;
     };
   }
 
-  /**
-   * Enhanced operation detection for calendar agent
-   */
-  protected detectOperation(params: CalendarAgentRequest): string {
-    const { query, action } = params;
-    
-    // If action is explicitly provided, use it
-    if (action) {
-      return action;
-    }
-    
-    // Otherwise, detect from query
-    if (query) {
-      const lowerQuery = query.toLowerCase();
-      
-      // Check for specific calendar operations
-      if (lowerQuery.includes('create') || lowerQuery.includes('schedule') || lowerQuery.includes('book')) {
-        return 'create';
-      }
-      
-      if (lowerQuery.includes('update') || lowerQuery.includes('modify') || lowerQuery.includes('change')) {
-        return 'update';
-      }
-      
-      if (lowerQuery.includes('delete') || lowerQuery.includes('cancel') || lowerQuery.includes('remove')) {
-        return 'delete';
-      }
-      
-      if (lowerQuery.includes('list') || lowerQuery.includes('show') || lowerQuery.includes('display')) {
-        return 'list';
-      }
-      
-      if (lowerQuery.includes('check') || lowerQuery.includes('availability')) {
-        return 'check';
-      }
-      
-      if (lowerQuery.includes('find') || lowerQuery.includes('slot')) {
-        return 'find';
-      }
-    }
-    
-    // Default to list for read operations
-    return 'list';
-  }
 
   /**
    * Generate detailed calendar action preview with conflict detection
@@ -365,8 +321,8 @@ Always return structured execution status with event details and confirmation.`;
     try {
       const { query } = params;
       
-      // Use enhanced operation detection
-      const operation = this.detectOperation(params);
+      // Use AI-powered operation detection from base class
+      const operation = await this.detectOperation(params);
       
       // Check if this operation actually needs confirmation
       const needsConfirmation = this.operationRequiresConfirmation(operation);
@@ -374,7 +330,7 @@ Always return structured execution status with event details and confirmation.`;
       if (!needsConfirmation) {
         this.logger.info('Calendar operation does not require confirmation', {
           operation,
-          reason: this.getOperationConfirmationReason(operation)
+          reason: await this.getOperationConfirmationReason(operation)
         });
         return {
           success: true,

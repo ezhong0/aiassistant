@@ -331,9 +331,13 @@ export class MasterAgent {
     const enhancedParameters = { ...toolCall.parameters };
 
     // For email operations, ensure we have contact context if needed
-    if (toolName === 'send_email' && this.needsContactLookup(userInput)) {
-      // This will be handled by the MasterAgent's orchestration logic
-      enhancedParameters.requiresContactLookup = true;
+    if (toolName === 'send_email') {
+      const contactLookup = await this.needsContactLookup(userInput);
+      if (contactLookup.needed) {
+        // This will be handled by the MasterAgent's orchestration logic
+        enhancedParameters.requiresContactLookup = true;
+        enhancedParameters.contactNames = contactLookup.names;
+      }
     }
 
     // For calendar operations, add conflict detection
@@ -348,16 +352,41 @@ export class MasterAgent {
   }
 
   /**
-   * Check if user input requires contact lookup
+   * Check if user input requires contact lookup using AI entity extraction
    */
-  private needsContactLookup(userInput: string): boolean {
-    const lowerInput = userInput.toLowerCase();
-    
-    // Check for person names (not email addresses)
-    const hasEmailAddress = /@/.test(userInput);
-    const hasPersonName = /\b(?:send|email|message|contact|reach out to)\s+(?:to\s+)?([a-zA-Z\s]+)/i.test(userInput);
-    
-    return hasPersonName && !hasEmailAddress;
+  private async needsContactLookup(userInput: string): Promise<{needed: boolean, names: string[]}> {
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        // Fallback to simple email address check
+        const hasEmailAddress = /@/.test(userInput);
+        return { needed: !hasEmailAddress, names: [] };
+      }
+
+      const response = await openaiService.generateText(
+        `Extract person names that need contact lookup: "${userInput}"
+        
+        Return JSON: {"needed": boolean, "names": ["name1", "name2"]}
+        
+        Examples:
+        - "Send email to John" → {"needed": true, "names": ["John"]}
+        - "Email john@example.com" → {"needed": false, "names": []}
+        - "What's on my calendar?" → {"needed": false, "names": []}`,
+        'Extract contact names from user requests. Always return valid JSON.',
+        { temperature: 0, maxTokens: 100 }
+      );
+
+      const result = JSON.parse(response);
+      return {
+        needed: Boolean(result.needed),
+        names: Array.isArray(result.names) ? result.names : []
+      };
+    } catch (error) {
+      logger.warn('Failed to extract contact names, using fallback', { error, userInput });
+      // Fallback to simple email address check
+      const hasEmailAddress = /@/.test(userInput);
+      return { needed: !hasEmailAddress, names: [] };
+    }
   }
 
   /**
@@ -645,12 +674,12 @@ IMPORTANT: For email actions, always include the full body content in the propos
         originalToolCalls: actionToolCalls
       };
       
-      // Use operation-aware confirmation logic instead of blanket forcing
+      // Use AI-powered operation-aware confirmation logic instead of blanket forcing
       if (result.actionType === 'email' || result.actionType === 'calendar') {
-        // Detect operation from the user input
+        // Detect operation from the user input using AI
         const { AGENT_HELPERS } = require('../config/agent-config');
-        const operation = AGENT_HELPERS.detectOperation(result.actionType, userInput);
-        const operationRequiresConfirmation = AGENT_HELPERS.operationRequiresConfirmation(result.actionType, operation);
+        const operation = await AGENT_HELPERS.detectOperation(result.actionType, userInput);
+        const operationRequiresConfirmation = await AGENT_HELPERS.operationRequiresConfirmation(result.actionType, operation);
         
         // Only force confirmation if the operation actually requires it
         if (operationRequiresConfirmation) {

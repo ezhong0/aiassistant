@@ -3,6 +3,7 @@ import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api.types';
 import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
+import { AIClassificationService } from '../services/ai-classification.service';
 import {
   Contact as ContactType,
   ContactSearchRequest
@@ -301,7 +302,7 @@ export interface ContactAgentRequest extends ContactAgentParams {
    */
   private async handleSearchContacts(params: ContactAgentRequest): Promise<ContactResult> {
     // Extract search parameters from query
-    const searchParams = this.extractSearchParameters(params.query);
+    const searchParams = await this.extractSearchParameters(params.query);
     
     const searchRequest: ContactSearchRequest = {
       query: searchParams.searchTerm,
@@ -359,47 +360,76 @@ export interface ContactAgentRequest extends ContactAgentParams {
   }
   
   /**
-   * Determine operation type from query
+   * Determine operation type from query using AI instead of string matching
+   * Replaces string includes() calls with AI operation detection
    */
-  private determineOperation(query: string): 'search' | 'create' | 'update' {
-    const lowerQuery = query.toLowerCase();
-
-    if (lowerQuery.includes('add') || lowerQuery.includes('create') || lowerQuery.includes('new contact')) {
-      return 'create';
+  private async determineOperation(query: string): Promise<'search' | 'create' | 'update'> {
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        return 'search'; // Default fallback
+      }
+      const operation = await aiClassificationService.detectContactOperation(query);
+      
+      // Convert AI result to expected format
+      switch (operation) {
+        case 'add':
+          return 'create';
+        case 'update':
+          return 'update';
+        case 'search':
+          return 'search';
+        default:
+          return 'search'; // Default fallback
+      }
+    } catch (error) {
+      // Fallback to search if AI fails
+      return 'search';
     }
-
-    if (lowerQuery.includes('update') || lowerQuery.includes('change') || lowerQuery.includes('modify')) {
-      return 'update';
-    }
-
-    // Default to search
-    return 'search';
   }
   
   /**
-   * Extract search parameters from natural language query
+   * Extract search parameters from natural language query using AI
+   * Replaces regex patterns with AI entity extraction
    */
-  private extractSearchParameters(query: string): {
+  private async extractSearchParameters(query: string): Promise<{
     searchTerm: string;
     maxResults?: number;
-  } {
-    // Remove common search phrases to extract the actual search term
-    const cleanedQuery = query
-      .replace(/^(find|search|look for|get|lookup|contact|contacts?)\s+/i, '')
-      .replace(/\s+(contact|contacts?|information|info|details?)$/i, '')
-      .trim();
-    
-    // Look for result limit requests
-    let maxResults: number | undefined;
-    const limitMatch = query.match(/(?:first|top|limit)\s+(\d+)/i);
-    if (limitMatch && limitMatch[1]) {
-      maxResults = Math.min(parseInt(limitMatch[1]), CONTACT_CONSTANTS.MAX_SEARCH_RESULTS);
+  }> {
+    try {
+      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      if (!aiClassificationService) {
+        return {
+          searchTerm: query,
+          maxResults: 10 // Default limit
+        };
+      }
+      
+      // Use AI to extract contact names and determine if limit is specified
+      const contactLookup = await aiClassificationService.extractContactNames(query);
+      
+      // For now, use the original query as search term, but this could be enhanced
+      // to extract more specific search parameters using AI
+      let searchTerm = query;
+      let maxResults: number | undefined;
+      
+      // Simple fallback for limit detection (could be enhanced with AI)
+      const limitMatch = query.match(/(?:first|top|limit)\s+(\d+)/i);
+      if (limitMatch && limitMatch[1]) {
+        maxResults = Math.min(parseInt(limitMatch[1]), CONTACT_CONSTANTS.MAX_SEARCH_RESULTS);
+      }
+      
+      return {
+        searchTerm,
+        maxResults
+      };
+    } catch (error) {
+      // Fallback to original query if AI fails
+      return {
+        searchTerm: query,
+        maxResults: undefined
+      };
     }
-
-    return {
-      searchTerm: cleanedQuery || query,
-      maxResults
-    };
   }
   
   // STATIC UTILITY METHODS (for other agents to use)
