@@ -780,7 +780,16 @@ You are an intelligent personal assistant that uses AI planning to understand us
 
 ## Current Context
 - Current date/time: ${new Date().toISOString()}
-- Session-based processing for user context`;
+- Today is: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+- Current time: ${new Date().toLocaleTimeString('en-US', { hour12: true, timeZoneName: 'short' })}
+- Current timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+- Session-based processing for user context
+
+## Time and Date Guidelines
+- When users ask about "today", "tomorrow", "this week", etc., use the current date/time above as reference
+- For calendar operations, always specify explicit dates and times, not relative terms
+- Default to user's local timezone unless specified otherwise
+- When listing calendar events, show them in chronological order with clear time labels`;
 
     // Get dynamic tool information from AgentFactory
     const toolsSection = AgentFactory.generateSystemPrompts();
