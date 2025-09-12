@@ -58,6 +58,188 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         planningMaxTokens: 2000
       }
     });
+
+    // Register calendar-specific tools for AI planning
+    this.registerCalendarTools();
+  }
+
+  /**
+   * Register calendar-specific tools for AI planning
+   */
+  private registerCalendarTools(): void {
+    // Primary calendar event creation tool
+    this.registerTool({
+      name: 'create_calendar_event',
+      description: 'Create a new calendar event with specified details including attendees and location',
+      parameters: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string', description: 'Event title or summary' },
+          description: { type: 'string', description: 'Event description' },
+          start: { type: 'string', description: 'Event start time in ISO format' },
+          end: { type: 'string', description: 'Event end time in ISO format' },
+          attendees: { type: 'array', items: { type: 'string' }, description: 'List of attendee email addresses' },
+          location: { type: 'string', description: 'Event location' },
+          calendarId: { type: 'string', description: 'Calendar ID (defaults to primary)' }
+        },
+        required: ['summary', 'start', 'end']
+      },
+      capabilities: ['Event creation', 'Attendee management', 'Location setting'],
+      examples: [
+        'Create a meeting with John at 2pm tomorrow',
+        'Schedule team standup for Monday morning'
+      ],
+      estimatedExecutionTime: 5000,
+      requiresConfirmation: true
+    });
+
+    // Calendar event listing tool
+    this.registerTool({
+      name: 'list_calendar_events',
+      description: 'List calendar events within a specified time range',
+      parameters: {
+        type: 'object',
+        properties: {
+          timeMin: { type: 'string', description: 'Start time for listing events (ISO format)' },
+          timeMax: { type: 'string', description: 'End time for listing events (ISO format)' },
+          maxResults: { type: 'number', description: 'Maximum number of events to return' },
+          calendarId: { type: 'string', description: 'Calendar ID (defaults to primary)' }
+        }
+      },
+      capabilities: ['Event listing', 'Time range filtering'],
+      examples: [
+        'Show my events for today',
+        'List next week\'s meetings'
+      ],
+      estimatedExecutionTime: 3000,
+      requiresConfirmation: false
+    });
+
+    // Calendar event update tool
+    this.registerTool({
+      name: 'update_calendar_event',
+      description: 'Update an existing calendar event',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', description: 'Event ID to update' },
+          summary: { type: 'string', description: 'New event title' },
+          description: { type: 'string', description: 'New event description' },
+          start: { type: 'string', description: 'New start time (ISO format)' },
+          end: { type: 'string', description: 'New end time (ISO format)' },
+          attendees: { type: 'array', items: { type: 'string' }, description: 'New attendee list' },
+          location: { type: 'string', description: 'New event location' },
+          calendarId: { type: 'string', description: 'Calendar ID (defaults to primary)' }
+        },
+        required: ['eventId']
+      },
+      capabilities: ['Event modification', 'Attendee updates'],
+      examples: [
+        'Move the 3pm meeting to 4pm',
+        'Add Sarah to the team meeting'
+      ],
+      estimatedExecutionTime: 4000,
+      requiresConfirmation: true
+    });
+
+    // Calendar event deletion tool
+    this.registerTool({
+      name: 'delete_calendar_event',
+      description: 'Delete a calendar event permanently',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', description: 'Event ID to delete' },
+          calendarId: { type: 'string', description: 'Calendar ID (defaults to primary)' }
+        },
+        required: ['eventId']
+      },
+      capabilities: ['Event deletion'],
+      examples: [
+        'Cancel the 2pm meeting',
+        'Delete tomorrow\'s standup'
+      ],
+      estimatedExecutionTime: 2000,
+      requiresConfirmation: true
+    });
+
+    // Availability checking tool
+    this.registerTool({
+      name: 'check_availability',
+      description: 'Check if a user is available during a specific time slot',
+      parameters: {
+        type: 'object',
+        properties: {
+          start: { type: 'string', description: 'Start time to check (ISO format)' },
+          end: { type: 'string', description: 'End time to check (ISO format)' },
+          calendarIds: { type: 'array', items: { type: 'string' }, description: 'Calendar IDs to check (defaults to primary)' }
+        },
+        required: ['start', 'end']
+      },
+      capabilities: ['Availability checking', 'Conflict detection'],
+      examples: [
+        'Am I free Thursday at 2pm?',
+        'Check if I have conflicts next Monday morning'
+      ],
+      estimatedExecutionTime: 3000,
+      requiresConfirmation: false
+    });
+
+    // Available time slot finding tool
+    this.registerTool({
+      name: 'find_time_slots',
+      description: 'Find available time slots for meeting scheduling',
+      parameters: {
+        type: 'object',
+        properties: {
+          startDate: { type: 'string', description: 'Start of search range (ISO format)' },
+          endDate: { type: 'string', description: 'End of search range (ISO format)' },
+          duration: { type: 'number', description: 'Duration in minutes' },
+          calendarIds: { type: 'array', items: { type: 'string' }, description: 'Calendar IDs to consider (defaults to primary)' }
+        },
+        required: ['startDate', 'endDate', 'duration']
+      },
+      capabilities: ['Time slot discovery', 'Meeting scheduling optimization'],
+      examples: [
+        'Find a 1-hour slot next week for team meeting',
+        'When can I schedule a 30-minute call this week?'
+      ],
+      estimatedExecutionTime: 4000,
+      requiresConfirmation: false
+    });
+
+    // General calendar agent tool (for backward compatibility)
+    this.registerTool({
+      name: 'calendarAgent',
+      description: 'General calendar operations agent for creating, updating, and managing calendar events',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['create', 'list', 'update', 'delete', 'check_availability', 'find_slots'],
+            description: 'Calendar action to perform'
+          },
+          summary: { type: 'string', description: 'Event title for create/update actions' },
+          description: { type: 'string', description: 'Event description' },
+          start: { type: 'string', description: 'Event start time (ISO format)' },
+          end: { type: 'string', description: 'Event end time (ISO format)' },
+          attendees: { type: 'array', items: { type: 'string' }, description: 'Attendee email addresses' },
+          location: { type: 'string', description: 'Event location' },
+          eventId: { type: 'string', description: 'Event ID for update/delete actions' },
+          duration: { type: 'number', description: 'Duration in minutes for find_slots' },
+          calendarId: { type: 'string', description: 'Calendar ID (optional)' }
+        },
+        required: ['action']
+      },
+      capabilities: ['All calendar operations', 'Intelligent action routing'],
+      examples: [
+        'Schedule a meeting with the team',
+        'Cancel my 3pm appointment'
+      ],
+      estimatedExecutionTime: 5000,
+      requiresConfirmation: true
+    });
   }
 
   /**
@@ -222,47 +404,64 @@ Always return structured execution status with event details and confirmation.`;
       sessionId: context.sessionId
     });
 
-    // Handle calendar-specific tools
-    switch (toolName.toLowerCase()) {
-      case 'calendaragent':
-      case 'manage_calendar':
-      case 'calendar_create':
-      case 'create_event':
-        // Execute calendar operations directly using AI planning
-        try {
-          const calendarParams = {
-            ...parameters,
-            accessToken: parameters.accessToken
-          } as CalendarAgentRequest;
-          
-          // Execute the calendar operation using AI planning
-          const result = await this.executeWithAIPlanning(calendarParams, context);
-          this.logger.info('Calendar tool executed successfully in AI plan', {
-            toolName,
-            success: result.success,
-            sessionId: context.sessionId
-          });
-          
-          return {
-            success: true,
-            data: result
-          };
-        } catch (error) {
-          this.logger.error('Calendar tool execution failed in AI plan', {
-            toolName,
-            error: error instanceof Error ? error.message : error,
-            sessionId: context.sessionId
-          });
-          
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Calendar tool execution failed'
-          };
-        }
+    // Get CalendarService from service manager
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      return {
+        success: false,
+        error: 'Calendar service not available'
+      };
+    }
 
-      default:
-        // Call parent implementation for unknown tools
-        return super.executeCustomTool(toolName, parameters, context);
+    // Ensure we have access token
+    if (!parameters.accessToken) {
+      return {
+        success: false,
+        error: 'Access token required for calendar operations'
+      };
+    }
+
+    try {
+      // Handle specific calendar tools
+      switch (toolName.toLowerCase()) {
+        case 'create_calendar_event':
+          return await this.handleCreateEvent(parameters, calendarService);
+          
+        case 'list_calendar_events':
+          return await this.handleListEvents(parameters, calendarService);
+          
+        case 'update_calendar_event':
+          return await this.handleUpdateEvent(parameters, calendarService);
+          
+        case 'delete_calendar_event':
+          return await this.handleDeleteEvent(parameters, calendarService);
+          
+        case 'check_availability':
+          return await this.handleCheckAvailability(parameters, calendarService);
+          
+        case 'find_time_slots':
+          return await this.handleFindTimeSlots(parameters, calendarService);
+          
+        case 'calendaragent':
+        case 'manage_calendar':
+          // General calendar agent tool - route based on action parameter
+          return await this.handleGeneralCalendarOperation(parameters, calendarService);
+
+        default:
+          // Call parent implementation for unknown tools
+          return super.executeCustomTool(toolName, parameters, context);
+      }
+    } catch (error) {
+      this.logger.error('Calendar tool execution failed', {
+        toolName,
+        error: error instanceof Error ? error.message : error,
+        sessionId: context.sessionId
+      });
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Calendar tool execution failed'
+      };
     }
   }
 
@@ -687,9 +886,12 @@ Always return structured execution status with event details and confirmation.`;
    * Create a new calendar event
    */
   private async createEvent(
-    parameters: CalendarAgentRequest, 
-    calendarService: CalendarService
+    parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
     if (!parameters.summary || !parameters.start || !parameters.end) {
       throw this.createError('Summary, start time, and end time are required to create an event', 'MISSING_REQUIRED_FIELDS');
     }
@@ -733,9 +935,12 @@ Always return structured execution status with event details and confirmation.`;
    * List calendar events
    */
   private async listEvents(
-    parameters: CalendarAgentRequest, 
-    calendarService: CalendarService
+    parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
     const options = {
       timeMin: parameters.timeMin,
       timeMax: parameters.timeMax,
@@ -761,9 +966,12 @@ Always return structured execution status with event details and confirmation.`;
    * Update an existing calendar event
    */
   private async updateEvent(
-    parameters: CalendarAgentRequest, 
-    calendarService: CalendarService
+    parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
     if (!parameters.eventId) {
       throw this.createError('Event ID is required to update an event', 'MISSING_EVENT_ID');
     }
@@ -813,9 +1021,12 @@ Always return structured execution status with event details and confirmation.`;
    * Delete a calendar event
    */
   private async deleteEvent(
-    parameters: CalendarAgentRequest, 
-    calendarService: CalendarService
+    parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
     if (!parameters.eventId) {
       throw this.createError('Event ID is required to delete an event', 'MISSING_EVENT_ID');
     }
@@ -837,9 +1048,12 @@ Always return structured execution status with event details and confirmation.`;
    * Check availability for a specific time slot
    */
   private async checkAvailability(
-    parameters: CalendarAgentRequest, 
-    calendarService: CalendarService
+    parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
     if (!parameters.start || !parameters.end) {
       throw this.createError('Start and end times are required to check availability', 'MISSING_TIME_RANGE');
     }
@@ -866,9 +1080,12 @@ Always return structured execution status with event details and confirmation.`;
    * Find available time slots
    */
   private async findAvailableSlots(
-    parameters: CalendarAgentRequest, 
-    calendarService: CalendarService
+    parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
+    const calendarService = getService<CalendarService>('calendarService');
+    if (!calendarService) {
+      throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
     if (!parameters.start || !parameters.end || !parameters.duration) {
       throw this.createError('Start time, end time, and duration are required to find available slots', 'MISSING_PARAMETERS');
     }
@@ -886,5 +1103,189 @@ Always return structured execution status with event details and confirmation.`;
       message: `Found ${slots.length} available time slot(s)`,
       data: { slots }
     };
+  }
+
+  // HANDLER METHODS FOR TOOL EXECUTION
+
+  /**
+   * Handle create calendar event tool execution
+   */
+  private async handleCreateEvent(parameters: any, calendarService: CalendarService): Promise<any> {
+    const calendarParams: CalendarAgentRequest = {
+      action: 'create',
+      summary: parameters.summary,
+      description: parameters.description,
+      start: parameters.start,
+      end: parameters.end,
+      attendees: parameters.attendees,
+      location: parameters.location,
+      accessToken: parameters.accessToken,
+      calendarId: parameters.calendarId || 'primary'
+    };
+
+    const result = await this.withRetries(async () => {
+      return await this.createEvent(calendarParams);
+    });
+
+    return {
+      success: result.success,
+      data: result,
+      message: result.message
+    };
+  }
+
+  /**
+   * Handle list calendar events tool execution
+   */
+  private async handleListEvents(parameters: any, calendarService: CalendarService): Promise<any> {
+    const calendarParams: CalendarAgentRequest = {
+      action: 'list',
+      timeMin: parameters.timeMin,
+      timeMax: parameters.timeMax,
+      accessToken: parameters.accessToken,
+      calendarId: parameters.calendarId || 'primary'
+    };
+
+    const result = await this.withRetries(async () => {
+      return await this.listEvents(calendarParams);
+    });
+
+    return {
+      success: result.success,
+      data: result,
+      message: result.message
+    };
+  }
+
+  /**
+   * Handle update calendar event tool execution
+   */
+  private async handleUpdateEvent(parameters: any, calendarService: CalendarService): Promise<any> {
+    const calendarParams: CalendarAgentRequest = {
+      action: 'update',
+      eventId: parameters.eventId,
+      summary: parameters.summary,
+      description: parameters.description,
+      start: parameters.start,
+      end: parameters.end,
+      attendees: parameters.attendees,
+      location: parameters.location,
+      accessToken: parameters.accessToken,
+      calendarId: parameters.calendarId || 'primary'
+    };
+
+    const result = await this.withRetries(async () => {
+      return await this.updateEvent(calendarParams);
+    });
+
+    return {
+      success: result.success,
+      data: result,
+      message: result.message
+    };
+  }
+
+  /**
+   * Handle delete calendar event tool execution
+   */
+  private async handleDeleteEvent(parameters: any, calendarService: CalendarService): Promise<any> {
+    const calendarParams: CalendarAgentRequest = {
+      action: 'delete',
+      eventId: parameters.eventId,
+      accessToken: parameters.accessToken,
+      calendarId: parameters.calendarId || 'primary'
+    };
+
+    const result = await this.withRetries(async () => {
+      return await this.deleteEvent(calendarParams);
+    });
+
+    return {
+      success: result.success,
+      data: result,
+      message: result.message
+    };
+  }
+
+  /**
+   * Handle check availability tool execution
+   */
+  private async handleCheckAvailability(parameters: any, calendarService: CalendarService): Promise<any> {
+    const calendarParams: CalendarAgentRequest = {
+      action: 'check_availability',
+      start: parameters.start,
+      end: parameters.end,
+      accessToken: parameters.accessToken,
+      calendarId: parameters.calendarId
+    };
+
+    const result = await this.withRetries(async () => {
+      return await this.checkAvailability(calendarParams);
+    });
+
+    return {
+      success: result.success,
+      data: result,
+      message: result.message
+    };
+  }
+
+  /**
+   * Handle find time slots tool execution
+   */
+  private async handleFindTimeSlots(parameters: any, calendarService: CalendarService): Promise<any> {
+    const calendarParams: CalendarAgentRequest = {
+      action: 'find_slots',
+      start: parameters.startDate,
+      end: parameters.endDate,
+      duration: parameters.duration,
+      accessToken: parameters.accessToken,
+      calendarId: parameters.calendarId
+    };
+
+    const result = await this.withRetries(async () => {
+      return await this.findAvailableSlots(calendarParams);
+    });
+
+    return {
+      success: result.success,
+      data: result,
+      message: result.message
+    };
+  }
+
+  /**
+   * Handle general calendar operation tool execution
+   */
+  private async handleGeneralCalendarOperation(parameters: any, calendarService: CalendarService): Promise<any> {
+    const action = parameters.action as 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots';
+    
+    // Route to specific handler based on action
+    switch (action) {
+      case 'create':
+        return await this.handleCreateEvent(parameters, calendarService);
+      case 'list':
+        return await this.handleListEvents(parameters, calendarService);
+      case 'update':
+        return await this.handleUpdateEvent(parameters, calendarService);
+      case 'delete':
+        return await this.handleDeleteEvent(parameters, calendarService);
+      case 'check_availability':
+        return await this.handleCheckAvailability(parameters, calendarService);
+      case 'find_slots':
+        return await this.handleFindTimeSlots(parameters, calendarService);
+      default:
+        return {
+          success: false,
+          error: `Unknown calendar action: ${action}`
+        };
+    }
+  }
+
+  /**
+   * Get action type for preview generation - required by AIAgent base class
+   */
+  protected getActionType(params: CalendarAgentRequest): string {
+    return 'calendar';
   }
 }
