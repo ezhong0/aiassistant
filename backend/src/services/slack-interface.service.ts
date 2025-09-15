@@ -254,8 +254,7 @@ export class SlackInterfaceService extends BaseService {
         
         // Send a polite message explaining DM-only policy
         await this.sendMessage(slackContext.channelId, {
-          text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance.",
-          thread_ts: slackContext.threadTs
+          text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance."
         });
         return;
       }
@@ -317,8 +316,7 @@ export class SlackInterfaceService extends BaseService {
       
       if (!this.slackMessageReaderService) {
         await this.sendMessage(context.channelId, {
-          text: "I detected a confirmation response, but I can't process it without access to recent messages. Please try again.",
-          thread_ts: context.threadTs
+          text: "I detected a confirmation response, but I can't process it without access to recent messages. Please try again."
         });
         return;
       }
@@ -335,8 +333,7 @@ export class SlackInterfaceService extends BaseService {
       
       if (!proposal) {
         await this.sendMessage(context.channelId, {
-          text: "I couldn't find a recent proposal to confirm. Please make a request first, then confirm it.",
-          thread_ts: context.threadTs
+          text: "I couldn't find a recent proposal to confirm. Please make a request first, then confirm it."
         });
         return;
       }
@@ -347,19 +344,16 @@ export class SlackInterfaceService extends BaseService {
         
         if (actionResult.success) {
           await this.sendMessage(context.channelId, {
-            text: `✅ ${actionResult.message || 'Action completed successfully!'}`,
-            thread_ts: context.threadTs
+            text: `✅ ${actionResult.message || 'Action completed successfully!'}`
           });
         } else {
           await this.sendMessage(context.channelId, {
-            text: `❌ Action failed: ${actionResult.error || 'Unknown error'}`,
-            thread_ts: context.threadTs
+            text: `❌ Action failed: ${actionResult.error || 'Unknown error'}`
           });
         }
       } else {
         await this.sendMessage(context.channelId, {
-          text: "❌ Action cancelled as requested.",
-          thread_ts: context.threadTs
+          text: "❌ Action cancelled as requested."
         });
       }
 
@@ -370,8 +364,7 @@ export class SlackInterfaceService extends BaseService {
       });
       
       await this.sendMessage(context.channelId, {
-        text: "I encountered an error processing your confirmation. Please try again.",
-        thread_ts: context.threadTs
+        text: "I encountered an error processing your confirmation. Please try again."
       });
     }
   }
@@ -721,8 +714,7 @@ export class SlackInterfaceService extends BaseService {
     // Validate message
     if (!message || message.trim().length === 0) {
       await this.sendMessage(context.channelId, {
-        text: 'I received your message but it appears to be empty. Please try sending a message with some content.',
-        thread_ts: context.threadTs
+        text: 'I received your message but it appears to be empty. Please try sending a message with some content.'
       });
       return;
     }
@@ -1249,13 +1241,11 @@ export class SlackInterfaceService extends BaseService {
       try {
         if (response.response.blocks && response.response.blocks.length > 0) {
           await this.sendFormattedMessage(context.channelId, response.response.blocks, {
-            text: response.response.text,
-            thread_ts: context.threadTs
+            text: response.response.text
           });
         } else if (response.response.text) {
           await this.sendMessage(context.channelId, {
-            text: response.response.text,
-            thread_ts: context.threadTs
+            text: response.response.text
           });
         }
       } catch (error) {
@@ -1294,14 +1284,12 @@ export class SlackInterfaceService extends BaseService {
       ];
 
       await this.sendFormattedMessage(context.channelId, blocks, {
-        text: 'Gmail authentication required. Please connect your Gmail account to use email features.',
-        thread_ts: context.threadTs
+        text: 'Gmail authentication required. Please connect your Gmail account to use email features.'
       });
     } catch (error) {
       this.logError('Error sending OAuth required message', error);
       await this.sendMessage(context.channelId, {
-        text: '🔐 Gmail authentication required. Please contact support to connect your Gmail account.',
-        thread_ts: context.threadTs
+        text: '🔐 Gmail authentication required. Please contact support to connect your Gmail account.'
       });
     }
   }
@@ -1358,13 +1346,19 @@ export class SlackInterfaceService extends BaseService {
   /**
    * Send simple text message to Slack
    */
-  private async sendMessage(channelId: string, message: { text: string; thread_ts?: string }): Promise<void> {
+  private async sendMessage(channelId: string, message: { text: string }): Promise<void> {
     try {
-      await this.client.chat.postMessage({
+      const messagePayload = {
         channel: channelId,
-        text: message.text,
-        thread_ts: message.thread_ts
+        text: message.text
+      };
+      
+      this.logDebug('Sending message to Slack', { 
+        channel: channelId,
+        messagePayload: JSON.stringify(messagePayload)
       });
+      
+      await this.client.chat.postMessage(messagePayload);
     } catch (error) {
       this.logError('Error sending message to Slack', error);
     }
@@ -1376,7 +1370,7 @@ export class SlackInterfaceService extends BaseService {
   private async sendFormattedMessage(
     channelId: string, 
     blocks: any[], 
-    options?: { text?: string; thread_ts?: string }
+    options?: { text?: string }
   ): Promise<void> {
     try {
       const messagePayload: any = {
@@ -1385,7 +1379,6 @@ export class SlackInterfaceService extends BaseService {
       };
 
       if (options?.text) messagePayload.text = options.text;
-      if (options?.thread_ts) messagePayload.thread_ts = options.thread_ts;
 
       await this.client.chat.postMessage(messagePayload);
     } catch (error) {
@@ -1394,8 +1387,7 @@ export class SlackInterfaceService extends BaseService {
       // Fallback to simple text message
       if (options?.text) {
         await this.sendMessage(channelId, { 
-          text: options.text, 
-          thread_ts: options.thread_ts 
+          text: options.text
         });
       }
     }

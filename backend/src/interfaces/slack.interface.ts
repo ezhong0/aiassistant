@@ -161,8 +161,7 @@ export class SlackInterface {
         // Send a polite message explaining DM-only policy
         await this.client.chat.postMessage({
           channel: slackContext.channelId,
-          text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance.",
-          thread_ts: slackContext.threadTs
+          text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance."
         });
         return;
       }
@@ -189,8 +188,7 @@ export class SlackInterface {
             await this.client.chat.postMessage({
               channel: slackContext.channelId,
               text: typeof message === 'string' ? message : message.text,
-              blocks: message.blocks,
-              thread_ts: slackContext.threadTs
+              blocks: message.blocks
             });
           },
           client: this.client
@@ -632,8 +630,7 @@ export class SlackInterface {
       // Validate message
       if (!message || message.trim().length === 0) {
         await slackHandlers.say({
-          text: 'I received your message but it appears to be empty. Please try sending a message with some content.',
-          thread_ts: slackHandlers.thread_ts
+          text: 'I received your message but it appears to be empty. Please try sending a message with some content.'
         });
         return;
       }
@@ -661,14 +658,14 @@ export class SlackInterface {
             message: message.substring(0, 100)
           });
           
-          await this.sendOAuthRequiredMessage(slackHandlers.say, context, slackHandlers.thread_ts);
+          await this.sendOAuthRequiredMessage(slackHandlers.say, context);
           return;
         } else {
           // User has OAuth tokens, check if they recently completed authentication
           const isRecentlyConnected = await this.isRecentlyConnected(context);
           if (isRecentlyConnected) {
             // Send OAuth success message in the current thread context
-            await this.sendOAuthSuccessMessage(slackHandlers.say, context, slackHandlers.thread_ts);
+            await this.sendOAuthSuccessMessage(slackHandlers.say, context);
             // Don't continue processing - let user send their request again
             return;
           }
@@ -715,15 +712,13 @@ export class SlackInterface {
             agentResponse.response.blocks,
             {
               text: agentResponse.response.text,
-              thread_ts: slackHandlers.thread_ts,
               response_type: eventType === 'slash_command' ? 'in_channel' : undefined
             }
           );
           logger.info('Formatted message sent successfully');
         } else if (agentResponse.response.text) {
           await slackHandlers.say({
-            text: agentResponse.response.text,
-            thread_ts: slackHandlers.thread_ts
+            text: agentResponse.response.text
           });
           logger.info('Text message sent successfully via say()');
         } else {
@@ -776,8 +771,7 @@ export class SlackInterface {
 
       try {
         await slackHandlers.say({
-          text: `${errorMessage} If the issue persists, please contact support.`,
-          thread_ts: slackHandlers.thread_ts
+          text: `${errorMessage} If the issue persists, please contact support.`
         });
       } catch (sayError) {
         logger.error('Failed to send error message to user:', sayError);
@@ -1356,7 +1350,7 @@ export class SlackInterface {
   /**
    * Send a success message when OAuth is completed
    */
-  private async sendOAuthSuccessMessage(say: any, slackContext: SlackContext, threadTs?: string): Promise<void> {
+  private async sendOAuthSuccessMessage(say: any, slackContext: SlackContext): Promise<void> {
     try {
       // Only show this message if we haven't shown it recently for this user
       const successMessageKey = `oauth_success_${slackContext.userId}_${slackContext.teamId}`;
@@ -1408,16 +1402,14 @@ export class SlackInterface {
       };
 
       await say({
-        ...successMessage,
-        thread_ts: threadTs
+        ...successMessage
       });
     } catch (error) {
       logger.error('Error sending OAuth success message', { error, userId: slackContext.userId });
       
       // Fallback to simple text message
       await say({
-        text: "🎉 Gmail successfully connected! You can now try your email request again.",
-        thread_ts: threadTs
+        text: "🎉 Gmail successfully connected! You can now try your email request again."
       });
     }
   }
@@ -1503,7 +1495,7 @@ export class SlackInterface {
   /**
    * Send a helpful message when user doesn't have OAuth tokens
    */
-  private async sendOAuthRequiredMessage(say: any, slackContext: SlackContext, threadTs?: string): Promise<void> {
+  private async sendOAuthRequiredMessage(say: any, slackContext: SlackContext): Promise<void> {
     try {
       const oauthUrl = await this.generateOAuthUrl(slackContext);
       
@@ -1549,16 +1541,14 @@ export class SlackInterface {
 
       await say({
         blocks: blocks,
-        text: 'Gmail authentication required. Please connect your Gmail account to use email features.',
-        thread_ts: threadTs
+        text: 'Gmail authentication required. Please connect your Gmail account to use email features.'
       });
     } catch (error) {
       logger.error('Error sending OAuth required message', { error, userId: slackContext.userId });
       
       // Fallback to simple text message
       await say({
-        text: '🔐 Gmail authentication required. Please contact support to connect your Gmail account.',
-        thread_ts: threadTs
+        text: '🔐 Gmail authentication required. Please contact support to connect your Gmail account.'
       });
     }
   }
@@ -2034,7 +2024,6 @@ export class SlackInterface {
     blocks: any[], 
     options?: {
       text?: string;
-      thread_ts?: string;
       response_type?: 'in_channel' | 'ephemeral';
       replace_original?: boolean;
     }
@@ -2047,13 +2036,12 @@ export class SlackInterface {
 
       // Add optional parameters
       if (options?.text) messagePayload.text = options.text;
-      if (options?.thread_ts) messagePayload.thread_ts = options.thread_ts;
       if (options?.response_type === 'ephemeral') messagePayload.ephemeral = true;
 
       logger.debug('Sending formatted Slack message', { 
         channel: channelId, 
         blocks: blocks.length,
-        thread_ts: options?.thread_ts 
+        messagePayload: JSON.stringify(messagePayload)
       });
 
       const result = await this.client.chat.postMessage(messagePayload);
@@ -2088,12 +2076,11 @@ export class SlackInterface {
   /**
    * Send simple text message as fallback
    */
-  private async sendFallbackTextMessage(channelId: string, text: string, thread_ts?: string): Promise<void> {
+  private async sendFallbackTextMessage(channelId: string, text: string): Promise<void> {
     try {
       await this.client.chat.postMessage({
         channel: channelId,
-        text: text,
-        thread_ts: thread_ts
+        text: text
       });
     } catch (error) {
       logger.error('Error sending fallback text message:', error);
