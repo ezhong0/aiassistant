@@ -3,6 +3,7 @@ import { AIAgent } from '../framework/ai-agent';
 import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api.types';
 import { CalendarService, CalendarEvent } from '../services/calendar.service';
 import { getService } from '../services/service-manager';
+import { TokenManager } from '../services/token-manager';
 
 export interface CalendarAgentRequest {
   action: 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots';
@@ -34,6 +35,8 @@ export interface CalendarAgentResponse {
     slots?: Array<{ start: string; end: string }>;
   };
   error?: string;
+  needsReauth?: boolean;
+  reauth_reason?: string;
 }
 
 /**
@@ -413,41 +416,122 @@ Always return structured execution status with event details and confirmation.`;
       };
     }
 
-    // Ensure we have access token
-    if (!parameters.accessToken) {
+    // Check if calendar service is ready
+    if (!calendarService.isReady()) {
       return {
         success: false,
-        error: 'Access token required for calendar operations'
+        error: `Calendar service not ready - current state: ${calendarService.state}`
       };
     }
+
+    // Ensure we have access token
+    if (!parameters.accessToken) {
+      this.logger.warn('Calendar operation called without access token', {
+        toolName,
+        sessionId: context.sessionId,
+        hasParameters: !!parameters,
+        parametersKeys: Object.keys(parameters || {})
+      });
+
+      // Only check for tokens via TokenManager if no access token provided
+      const needsAuth = ['create_calendar_event', 'update_calendar_event', 'delete_calendar_event', 'list_calendar_events', 'calendaragent', 'manage_calendar', 'calendarAgent'].includes(toolName.toLowerCase()) || toolName.toLowerCase().includes('calendar');
+
+      if (needsAuth) {
+        // Extract team/user info from context for token validation
+        const teamId = context.metadata?.teamId || context.sessionId?.split(':')[1];
+        const userId = context.metadata?.userId || context.sessionId?.split(':')[2];
+
+        if (!teamId || !userId) {
+          return {
+            success: false,
+            error: 'Unable to identify user for authentication',
+            needsReauth: true,
+            reauth_reason: 'missing_user_context'
+          };
+        }
+
+        // Check if user has valid calendar tokens using TokenManager
+        const tokenManager = getService<TokenManager>('tokenManager');
+        if (tokenManager) {
+          try {
+            const calendarToken = await tokenManager.getValidTokensForCalendar(teamId, userId);
+            if (!calendarToken) {
+              // Check specific reason for lack of tokens
+              const authStatus = await tokenManager.needsCalendarReauth(teamId, userId);
+              return {
+                success: false,
+                error: 'Calendar authentication required',
+                needsReauth: true,
+                reauth_reason: authStatus.reason || 'missing_calendar_permissions',
+                message: '🔐 Your Google account needs calendar permissions to create events. Please re-authenticate by typing `/assistant auth` in Slack to grant calendar access.'
+              };
+            }
+            // Update parameters with validated token
+            parameters.accessToken = calendarToken;
+          } catch (error) {
+            this.logger.error('Failed to validate calendar tokens', { error, teamId, userId });
+            return {
+              success: false,
+              error: 'Authentication validation failed',
+              needsReauth: true,
+              reauth_reason: 'token_validation_error'
+            };
+          }
+        }
+      }
+
+      if (!parameters.accessToken) {
+        return {
+          success: false,
+          error: 'Access token required for calendar operations',
+          needsReauth: true,
+          reauth_reason: 'missing_access_token'
+        };
+      }
+    }
+
+    this.logger.debug('Calendar tool execution starting', {
+      toolName,
+      hasAccessToken: !!parameters.accessToken,
+      action: parameters.action,
+      sessionId: context.sessionId
+    });
 
     try {
       // Handle specific calendar tools
       switch (toolName.toLowerCase()) {
         case 'create_calendar_event':
+          this.logger.debug('Routing to handleCreateEvent');
           return await this.handleCreateEvent(parameters, calendarService);
-          
+
         case 'list_calendar_events':
+          this.logger.debug('Routing to handleListEvents');
           return await this.handleListEvents(parameters, calendarService);
-          
+
         case 'update_calendar_event':
+          this.logger.debug('Routing to handleUpdateEvent');
           return await this.handleUpdateEvent(parameters, calendarService);
-          
+
         case 'delete_calendar_event':
+          this.logger.debug('Routing to handleDeleteEvent');
           return await this.handleDeleteEvent(parameters, calendarService);
-          
+
         case 'check_availability':
+          this.logger.debug('Routing to handleCheckAvailability');
           return await this.handleCheckAvailability(parameters, calendarService);
-          
+
         case 'find_time_slots':
+          this.logger.debug('Routing to handleFindTimeSlots');
           return await this.handleFindTimeSlots(parameters, calendarService);
-          
+
         case 'calendaragent':
         case 'manage_calendar':
           // General calendar agent tool - route based on action parameter
+          this.logger.debug('Routing to handleGeneralCalendarOperation', { action: parameters.action });
           return await this.handleGeneralCalendarOperation(parameters, calendarService);
 
         default:
+          this.logger.warn('Unknown calendar tool, calling parent implementation', { toolName });
           // Call parent implementation for unknown tools
           return super.executeCustomTool(toolName, parameters, context);
       }
@@ -455,9 +539,27 @@ Always return structured execution status with event details and confirmation.`;
       this.logger.error('Calendar tool execution failed', {
         toolName,
         error: error instanceof Error ? error.message : error,
-        sessionId: context.sessionId
+        errorStack: error instanceof Error ? error.stack : undefined,
+        sessionId: context.sessionId,
+        hasAccessToken: !!parameters.accessToken,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorCode: (error as any).code,
+        errorStatus: (error as any).response?.status,
+        errorData: (error as any).response?.data
       });
-      
+
+      // Check if this is an auth-related error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('401') || errorMessage.includes('unauthorized') || errorMessage.includes('invalid_grant')) {
+        return {
+          success: false,
+          error: 'Calendar authentication required',
+          needsReauth: true,
+          reauth_reason: 'api_auth_error',
+          message: '🔐 Your Google account needs calendar permissions to create events. Please re-authenticate by typing `/assistant auth` in Slack to grant calendar access.'
+        };
+      }
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Calendar tool execution failed'
@@ -470,13 +572,40 @@ Always return structured execution status with event details and confirmation.`;
    */
   protected validateParams(params: CalendarAgentRequest): void {
     super.validateParams(params);
-    
+
     if (!params.accessToken || typeof params.accessToken !== 'string') {
       throw this.createError('Access token is required for calendar operations', 'MISSING_ACCESS_TOKEN');
     }
-    
+
     if (params.action === 'create' && (!params.summary || !params.start || !params.end)) {
       throw this.createError('Summary, start time, and end time are required to create an event', 'MISSING_REQUIRED_FIELDS');
+    }
+  }
+
+  /**
+   * Check if the current access token has calendar scopes
+   */
+  private async validateCalendarScopes(accessToken: string): Promise<{ hasScopes: boolean; scopes?: string[] }> {
+    try {
+      // Call Google's tokeninfo API to get token details including scopes
+      const axios = require('axios');
+      const response = await axios.get(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`);
+
+      if (response.data && response.data.scope) {
+        const scopes = response.data.scope.split(' ');
+        const hasCalendarScopes = scopes.some((scope: string) =>
+          scope.includes('calendar') ||
+          scope === 'https://www.googleapis.com/auth/calendar' ||
+          scope === 'https://www.googleapis.com/auth/calendar.events'
+        );
+
+        return { hasScopes: hasCalendarScopes, scopes };
+      }
+
+      return { hasScopes: false };
+    } catch (error) {
+      this.logger.warn('Failed to validate token scopes', { error: error instanceof Error ? error.message : error });
+      return { hasScopes: false };
     }
   }
 
@@ -485,26 +614,32 @@ Always return structured execution status with event details and confirmation.`;
    */
   protected createUserFriendlyErrorMessage(error: Error, params: CalendarAgentRequest): string {
     const errorCode = (error as any).code;
-    
+
     switch (errorCode) {
       case 'MISSING_ACCESS_TOKEN':
         return 'I need access to your Google Calendar to manage events. Please check your Google authentication settings.';
-      
+
       case 'MISSING_REQUIRED_FIELDS':
         return 'I need more information to create this calendar event. Please provide the event title, start time, and end time.';
-      
+
       case 'MISSING_EVENT_ID':
         return 'I need the event ID to update or delete this calendar event. Please specify which event you want to modify.';
-      
+
       case 'MISSING_TIME_RANGE':
         return 'I need start and end times to check availability. Please specify the time range you want to check.';
-      
+
       case 'SERVICE_UNAVAILABLE':
         return 'Google Calendar service is temporarily unavailable. Please try again in a few moments.';
-      
+
+      case 'SERVICE_NOT_READY':
+        return 'Google Calendar service is still starting up. Please try again in a few moments.';
+
       case 'INVALID_ACTION':
         return 'I don\'t understand this calendar action. Please try creating, updating, deleting, or listing events.';
-      
+
+      case 'INSUFFICIENT_CALENDAR_PERMISSIONS':
+        return '🔐 Your Google account needs additional calendar permissions to create events. Please re-authenticate by typing `/assistant auth` in Slack to grant calendar access.';
+
       default:
         return super.createUserFriendlyErrorMessage(error, params);
     }
@@ -540,10 +675,79 @@ Always return structured execution status with event details and confirmation.`;
   protected async generatePreview(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
     try {
       const { query } = params;
-      
+
+      // First check authentication before generating preview
+      this.logger.debug('Calendar preview generation - checking auth', {
+        hasAccessToken: !!params.accessToken,
+        sessionId: context.sessionId
+      });
+
+      if (!params.accessToken) {
+        // Extract team/user info from context for token validation
+        const teamId = context.metadata?.teamId || context.sessionId?.split(':')[1];
+        const userId = context.metadata?.userId || context.sessionId?.split(':')[2];
+
+        this.logger.debug('No access token in preview, checking TokenManager', {
+          teamId,
+          userId,
+          sessionIdParts: context.sessionId?.split(':')
+        });
+
+        if (teamId && userId) {
+          // Check if user has valid calendar tokens using TokenManager
+          const tokenManager = getService<TokenManager>('tokenManager');
+          if (tokenManager) {
+            try {
+              const calendarToken = await tokenManager.getValidTokensForCalendar(teamId, userId);
+              if (!calendarToken) {
+                // Check specific reason for lack of tokens
+                const authStatus = await tokenManager.needsCalendarReauth(teamId, userId);
+
+                this.logger.info('Calendar preview auth check failed', {
+                  teamId,
+                  userId,
+                  reason: authStatus.reason
+                });
+
+                return {
+                  success: false,
+                  error: 'Calendar authentication required for preview',
+                  fallbackMessage: '🔐 Your Google account needs calendar permissions to create events. Please re-authenticate by typing `/assistant auth` in Slack to grant calendar access.',
+                  authRequired: true,
+                  authReason: authStatus.reason || 'missing_calendar_permissions'
+                };
+              }
+              // Update parameters with validated token for preview generation
+              params.accessToken = calendarToken;
+              this.logger.debug('Calendar preview auth successful, proceeding with preview');
+            } catch (error) {
+              this.logger.error('Failed to validate calendar tokens during preview', { error, teamId, userId });
+              return {
+                success: false,
+                error: 'Authentication validation failed',
+                fallbackMessage: '🔐 Unable to verify calendar permissions. Please re-authenticate by typing `/assistant auth` in Slack.',
+                authRequired: true,
+                authReason: 'token_validation_error'
+              };
+            }
+          }
+        }
+
+        if (!params.accessToken) {
+          this.logger.warn('Calendar preview requires authentication but no tokens available');
+          return {
+            success: false,
+            error: 'Calendar authentication required',
+            fallbackMessage: '🔐 Your Google account needs calendar permissions to create events. Please re-authenticate by typing `/assistant auth` in Slack to grant calendar access.',
+            authRequired: true,
+            authReason: 'missing_access_token'
+          };
+        }
+      }
+
       // Use AI-powered operation detection from base class
       const operation = await this.detectOperation(params);
-      
+
       // Check if this operation actually needs confirmation
       const needsConfirmation = this.operationRequiresConfirmation(operation);
       
@@ -644,8 +848,10 @@ Always return structured execution status with event details and confirmation.`;
    * Generate preview data for event creation
    */
   private async generateCreateEventPreview(params: CalendarAgentRequest): Promise<CalendarPreviewData> {
-    const startTime = params.start || new Date().toISOString();
-    const endTime = params.end || new Date(Date.now() + 3600000).toISOString(); // Default 1 hour
+    // Use local times instead of UTC times
+    const now = new Date();
+    const startTime = params.start || now.toISOString();
+    const endTime = params.end || new Date(now.getTime() + 3600000).toISOString(); // Default 1 hour
     
     const conflicts = await this.detectSchedulingConflicts(params);
     const duration = this.calculateDuration(startTime, endTime);
@@ -892,43 +1098,104 @@ Always return structured execution status with event details and confirmation.`;
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
+    if (!calendarService.isReady()) {
+      throw this.createError(`Calendar service not ready - current state: ${calendarService.state}`, 'SERVICE_NOT_READY');
+    }
     if (!parameters.summary || !parameters.start || !parameters.end) {
       throw this.createError('Summary, start time, and end time are required to create an event', 'MISSING_REQUIRED_FIELDS');
     }
 
+    // Check if the access token has calendar scopes
+    const scopeValidation = await this.validateCalendarScopes(parameters.accessToken);
+    if (!scopeValidation.hasScopes) {
+      this.logger.warn('Calendar operation attempted with insufficient scopes', {
+        hasScopes: scopeValidation.hasScopes,
+        scopes: scopeValidation.scopes,
+        action: 'create_event'
+      });
+      return {
+        success: false,
+        error: 'Calendar authentication required',
+        needsReauth: true,
+        reauth_reason: 'missing_calendar_scopes',
+        message: '🔐 Your Google account needs calendar permissions to create events. Please re-authenticate by typing `/assistant auth` in Slack to grant calendar access.'
+      };
+    }
+
+    this.logger.debug('Creating calendar event with parameters', {
+      summary: parameters.summary,
+      start: parameters.start,
+      end: parameters.end,
+      description: parameters.description,
+      location: parameters.location,
+      attendees: parameters.attendees
+    });
+
+    // Simple fix: Use the times as-is but ensure proper timezone handling
+    // The Google Calendar API will interpret the times in the specified timezone
     const calendarEvent: CalendarEvent = {
       summary: parameters.summary,
       description: parameters.description,
       start: {
-        dateTime: parameters.start,
-        timeZone: 'America/Los_Angeles' // TODO: Make timezone configurable
+        dateTime: parameters.start.replace('Z', ''), // Remove Z suffix for local time
+        timeZone: 'America/Los_Angeles'
       },
       end: {
-        dateTime: parameters.end,
+        dateTime: parameters.end.replace('Z', ''), // Remove Z suffix for local time
         timeZone: 'America/Los_Angeles'
       },
       location: parameters.location
     };
 
-    // Add attendees if provided
+    // Add attendees if provided and valid
     if (parameters.attendees && parameters.attendees.length > 0) {
-      calendarEvent.attendees = parameters.attendees.map(email => ({
-        email,
-        responseStatus: 'needsAction'
-      }));
+      // Filter out invalid email addresses
+      const validAttendees = parameters.attendees.filter(email => {
+        if (!email || typeof email !== 'string') return false;
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email.trim());
+      });
+
+      if (validAttendees.length > 0) {
+        calendarEvent.attendees = validAttendees.map(email => ({
+          email: email.trim(),
+          responseStatus: 'needsAction'
+        }));
+      }
     }
 
-    const event = await calendarService.createEvent(
-      calendarEvent, 
-      parameters.accessToken,
-      parameters.calendarId
-    );
+    try {
+      const event = await calendarService.createEvent(
+        calendarEvent, 
+        parameters.accessToken,
+        parameters.calendarId
+      );
 
-    return {
-      success: true,
-      message: `Event "${parameters.summary}" created successfully`,
-      data: { event }
-    };
+      this.logger.info('Calendar event created successfully', {
+        eventId: event.id,
+        summary: event.summary,
+        start: event.start?.dateTime,
+        end: event.end?.dateTime,
+        calendarId: parameters.calendarId || 'primary'
+      });
+
+      return {
+        success: true,
+        message: `Event "${parameters.summary}" created successfully`,
+        data: { event }
+      };
+    } catch (error) {
+      this.logger.error('Failed to create calendar event', {
+        error: error instanceof Error ? error.message : error,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorCode: (error as any).code,
+        errorStatus: (error as any).response?.status,
+        errorData: (error as any).response?.data,
+        calendarEvent: JSON.stringify(calendarEvent, null, 2)
+      });
+      throw error; // Re-throw to trigger retry logic
+    }
   }
 
   /**
@@ -940,6 +1207,9 @@ Always return structured execution status with event details and confirmation.`;
     const calendarService = getService<CalendarService>('calendarService');
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
+    if (!calendarService.isReady()) {
+      throw this.createError(`Calendar service not ready - current state: ${calendarService.state}`, 'SERVICE_NOT_READY');
     }
     const options = {
       timeMin: parameters.timeMin,
@@ -972,6 +1242,9 @@ Always return structured execution status with event details and confirmation.`;
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
+    if (!calendarService.isReady()) {
+      throw this.createError(`Calendar service not ready - current state: ${calendarService.state}`, 'SERVICE_NOT_READY');
+    }
     if (!parameters.eventId) {
       throw this.createError('Event ID is required to update an event', 'MISSING_EVENT_ID');
     }
@@ -997,10 +1270,20 @@ Always return structured execution status with event details and confirmation.`;
     }
 
     if (parameters.attendees) {
-      updateData.attendees = parameters.attendees.map(email => ({
-        email,
-        responseStatus: 'needsAction'
-      }));
+      // Filter out invalid email addresses
+      const validAttendees = parameters.attendees.filter(email => {
+        if (!email || typeof email !== 'string') return false;
+        // Basic email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email.trim());
+      });
+
+      if (validAttendees.length > 0) {
+        updateData.attendees = validAttendees.map(email => ({
+          email: email.trim(),
+          responseStatus: 'needsAction'
+        }));
+      }
     }
 
     const event = await calendarService.updateEvent(
@@ -1026,6 +1309,9 @@ Always return structured execution status with event details and confirmation.`;
     const calendarService = getService<CalendarService>('calendarService');
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
+    if (!calendarService.isReady()) {
+      throw this.createError(`Calendar service not ready - current state: ${calendarService.state}`, 'SERVICE_NOT_READY');
     }
     if (!parameters.eventId) {
       throw this.createError('Event ID is required to delete an event', 'MISSING_EVENT_ID');
@@ -1053,6 +1339,9 @@ Always return structured execution status with event details and confirmation.`;
     const calendarService = getService<CalendarService>('calendarService');
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
+    }
+    if (!calendarService.isReady()) {
+      throw this.createError(`Calendar service not ready - current state: ${calendarService.state}`, 'SERVICE_NOT_READY');
     }
     if (!parameters.start || !parameters.end) {
       throw this.createError('Start and end times are required to check availability', 'MISSING_TIME_RANGE');
@@ -1086,6 +1375,9 @@ Always return structured execution status with event details and confirmation.`;
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
+    if (!calendarService.isReady()) {
+      throw this.createError(`Calendar service not ready - current state: ${calendarService.state}`, 'SERVICE_NOT_READY');
+    }
     if (!parameters.start || !parameters.end || !parameters.duration) {
       throw this.createError('Start time, end time, and duration are required to find available slots', 'MISSING_PARAMETERS');
     }
@@ -1111,6 +1403,13 @@ Always return structured execution status with event details and confirmation.`;
    * Handle create calendar event tool execution
    */
   private async handleCreateEvent(parameters: any, calendarService: CalendarService): Promise<any> {
+    this.logger.debug('Creating calendar event', {
+      summary: parameters.summary,
+      start: parameters.start,
+      end: parameters.end,
+      hasAccessToken: !!parameters.accessToken
+    });
+
     const calendarParams: CalendarAgentRequest = {
       action: 'create',
       summary: parameters.summary,

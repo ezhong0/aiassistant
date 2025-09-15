@@ -93,9 +93,24 @@ export class ToolExecutorService extends BaseService {
             
             // Execute agent in preview mode
             result = await (agent as any).executePreview(executionParameters, context);
-            
-            // Ensure the result has the expected structure for preview mode
-            if (result && typeof result === 'object' && 'result' in result) {
+
+            // Check if preview failed due to auth requirements
+            if (result && typeof result === 'object' && 'authRequired' in result && result.authRequired) {
+              const authResult = result as any; // Cast to avoid TypeScript issues
+              this.logInfo(`Preview failed due to auth requirements for ${toolCall.name}`, {
+                authReason: authResult.authReason,
+                hasMessage: !!authResult.fallbackMessage
+              });
+
+              // Convert auth failure to a tool result that indicates auth is needed
+              result = {
+                success: false,
+                needsReauth: true,
+                reauth_reason: authResult.authReason,
+                error: authResult.error || 'Authentication required',
+                message: authResult.fallbackMessage || 'Authentication required to proceed'
+              };
+            } else if (result && typeof result === 'object' && 'result' in result) {
               // Extract the actual result data which should contain awaitingConfirmation
               result = result.result;
             }

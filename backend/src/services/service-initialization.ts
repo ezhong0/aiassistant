@@ -147,11 +147,11 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 12. CalendarService - Depends on authService
+    // 12. CalendarService - No dependencies (handles auth internally)
     const calendarService = new CalendarService();
     serviceManager.registerService('calendarService', calendarService, {
-      dependencies: ['authService'],
-      priority: 40,
+      dependencies: [], // No dependencies - uses OAuth tokens passed to methods
+      priority: 20, // Higher priority since it has no dependencies
       autoStart: true
     });
 

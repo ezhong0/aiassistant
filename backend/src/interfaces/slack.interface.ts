@@ -1128,28 +1128,41 @@ export class SlackInterface {
 
         // Handle failed results with OAuth guidance
         if (failedResults.length > 0) {
-          const oauthFailures = failedResults.filter((fr: any) => 
-            fr.error?.includes('OAuth authentication required') || 
-            fr.error?.includes('Access token is required')
+          const oauthFailures = failedResults.filter((fr: any) =>
+            fr.error?.includes('OAuth authentication required') ||
+            fr.error?.includes('Access token is required') ||
+            fr.error?.includes('Calendar authentication required') ||
+            fr.needsReauth === true
           );
           
           if (oauthFailures.length > 0) {
             blocks.push({ type: 'divider' });
             
+            // Determine if this is calendar-specific or general auth
+            const hasCalendarFailures = oauthFailures.some((fr: any) =>
+              fr.error?.includes('Calendar authentication required') ||
+              fr.reauth_reason?.includes('calendar') ||
+              fr.reauth_reason?.includes('missing_calendar_scopes')
+            );
+
             // Add OAuth guidance block
             blocks.push({
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: '*🔐 Gmail Authentication Required*\n' +
-                      'To send emails, read your Gmail, or access contacts, you need to connect your Gmail account first.\n\n' +
-                      'This is a one-time setup that keeps your data secure.'
+                text: hasCalendarFailures
+                  ? '*🔐 Google Calendar Authentication Required*\n' +
+                    'To create calendar events and manage your schedule, you need to connect your Google account with calendar permissions.\n\n' +
+                    'This is a one-time setup that keeps your data secure.'
+                  : '*🔐 Gmail Authentication Required*\n' +
+                    'To send emails, read your Gmail, or access contacts, you need to connect your Gmail account first.\n\n' +
+                    'This is a one-time setup that keeps your data secure.'
               },
               accessory: {
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: '🔗 Connect Gmail Account'
+                  text: hasCalendarFailures ? '🔗 Connect Google Account' : '🔗 Connect Gmail Account'
                 },
                 style: 'primary',
                 action_id: 'gmail_oauth',
@@ -1769,7 +1782,7 @@ export class SlackInterface {
         toolCall = {
           name: 'calendarAgent',
           parameters: { 
-            query: pendingAction.originalQuery,
+            ...pendingAction.preview.parameters,  // Use parsed parameters from preview
             accessToken
           }
         };

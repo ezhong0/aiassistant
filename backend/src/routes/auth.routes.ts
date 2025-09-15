@@ -35,14 +35,16 @@ const router = express.Router();
 router.get('/google/slack', authRateLimit, (req: Request, res: Response) => {
   try {
     const { user_id, team_id } = req.query;
-    
+
     const scopes = [
-      'openid', 
-      'email', 
+      'openid',
+      'email',
       'profile',
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/contacts.readonly'
+      'https://www.googleapis.com/auth/contacts.readonly',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
     ];
     
     const authService = getService<AuthService>('authService');
@@ -87,12 +89,14 @@ router.get('/google/slack', authRateLimit, (req: Request, res: Response) => {
 router.get('/google', authRateLimit, (req: Request, res: Response) => {
   try {
     const scopes = [
-      'openid', 
-      'email', 
+      'openid',
+      'email',
       'profile',
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/contacts.readonly'
+      'https://www.googleapis.com/auth/contacts.readonly',
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
     ];
     const authService = getService<AuthService>('authService');
     if (!authService) {

@@ -19,6 +19,11 @@ export interface ToolExecutionContext {
   timestamp: Date;
   previousResults?: ToolResult[];
   slackContext?: SlackContext; // 🆕 NEW: Slack context for agent operations
+  metadata?: {
+    teamId?: string;
+    userId?: string;
+    [key: string]: any;
+  };
 }
 
 export interface Tool {

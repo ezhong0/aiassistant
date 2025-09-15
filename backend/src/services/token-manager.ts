@@ -450,4 +450,87 @@ export class TokenManager extends BaseService {
     await this.invalidateAllTokenCaches(teamId, userId);
     logger.info('Invalidated all token caches for Slack user', { teamId, userId });
   }
+
+  /**
+   * Check if token has required calendar scopes for calendar operations
+   */
+  private hasCalendarScopes(token: any): boolean {
+    if (!token?.scope || typeof token.scope !== 'string') {
+      return false;
+    }
+
+    const scopes = token.scope.split(' ');
+    const requiredCalendarScopes = [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
+    ];
+
+    // Check if token has at least one calendar scope
+    return requiredCalendarScopes.some(requiredScope =>
+      scopes.includes(requiredScope)
+    );
+  }
+
+  /**
+   * Get valid tokens specifically for calendar operations
+   * Returns null if user doesn't have calendar permissions
+   */
+  async getValidTokensForCalendar(teamId: string, userId: string): Promise<string | null> {
+    logger.debug('Getting valid calendar tokens for Slack user', { teamId, userId });
+
+    const userId_key = `${teamId}:${userId}`;
+    const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
+
+    if (!tokens?.googleTokens?.access_token) {
+      logger.debug('No OAuth tokens found for calendar operation', { teamId, userId });
+      return null;
+    }
+
+    // First check basic token validation
+    const validationResult = this.validateToken(tokens.googleTokens);
+    if (!validationResult.isValid) {
+      logger.info('OAuth tokens invalid for calendar operation', {
+        teamId,
+        userId,
+        reason: validationResult.reason
+      });
+      return null;
+    }
+
+    // Check calendar scopes
+    if (!this.hasCalendarScopes(tokens.googleTokens)) {
+      logger.info('OAuth tokens missing calendar scopes', {
+        teamId,
+        userId,
+        scopes: tokens.googleTokens.scope || 'no_scopes'
+      });
+      return null;
+    }
+
+    logger.debug('Valid calendar tokens found for Slack user', { teamId, userId });
+    return tokens.googleTokens.access_token;
+  }
+
+  /**
+   * Check if user needs to re-authenticate for calendar operations
+   */
+  async needsCalendarReauth(teamId: string, userId: string): Promise<{ needsReauth: boolean; reason?: string }> {
+    const userId_key = `${teamId}:${userId}`;
+    const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
+
+    if (!tokens?.googleTokens?.access_token) {
+      return { needsReauth: true, reason: 'no_tokens' };
+    }
+
+    const validationResult = this.validateToken(tokens.googleTokens);
+    if (!validationResult.isValid) {
+      return { needsReauth: true, reason: validationResult.reason };
+    }
+
+    if (!this.hasCalendarScopes(tokens.googleTokens)) {
+      return { needsReauth: true, reason: 'missing_calendar_scopes' };
+    }
+
+    return { needsReauth: false };
+  }
 }

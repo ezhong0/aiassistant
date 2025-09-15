@@ -257,7 +257,13 @@ export class ServiceManager {
       await delay(10);
       
       if (!registration.service.isReady()) {
-        throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
+        // Check if this is a service that can be partially ready (like OpenAI with invalid API key)
+        const baseService = registration.service as any;
+        if (baseService.state === ServiceState.READY && baseService.initialized) {
+          logger.warn(`Service ${name} is initialized but not fully ready - allowing partial initialization`);
+        } else {
+          throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
+        }
       }
       
       // Service initialization complete

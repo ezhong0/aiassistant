@@ -84,10 +84,35 @@ export class CalendarService extends BaseService {
     this.assertReady();
 
     try {
-      this.logDebug('Creating calendar event', { 
+      // Validate required parameters
+      if (!calendarEvent.summary) {
+        throw new Error('Calendar event summary is required');
+      }
+      if (!calendarEvent.start?.dateTime) {
+        throw new Error('Calendar event start time is required');
+      }
+      if (!calendarEvent.end?.dateTime) {
+        throw new Error('Calendar event end time is required');
+      }
+      if (!accessToken) {
+        throw new Error('Access token is required');
+      }
+
+      this.logDebug('Creating calendar event', {
         summary: calendarEvent.summary,
         start: calendarEvent.start.dateTime,
-        calendarId 
+        end: calendarEvent.end.dateTime,
+        calendarId: calendarId
+      });
+      
+      this.logInfo('Creating calendar event', { 
+        summary: calendarEvent.summary,
+        start: calendarEvent.start.dateTime,
+        end: calendarEvent.end.dateTime,
+        timeZone: calendarEvent.start.timeZone,
+        calendarId,
+        hasAttendees: !!calendarEvent.attendees,
+        attendeeCount: calendarEvent.attendees?.length || 0
       });
 
       const auth = new google.auth.OAuth2();
@@ -107,6 +132,12 @@ export class CalendarService extends BaseService {
 
       return response.data;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logError('Calendar event creation failed', {
+        error: errorMessage,
+        errorType: error instanceof Error ? error.constructor.name : typeof error
+      });
+      
       this.handleCalendarError(error, 'createEvent');
     }
   }
@@ -421,7 +452,14 @@ export class CalendarService extends BaseService {
   protected handleCalendarError(error: any, operation: string): never {
     const calendarError = error as CalendarServiceError;
     
-    this.logError(`Calendar service error in ${operation}`, error);
+    this.logError(`Calendar service error in ${operation}`, {
+      error: error,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorStatus: error.response?.status,
+      errorData: error.response?.data,
+      operation: operation
+    });
     
     // Transform common Google Calendar API errors
     if (error.response?.status === 404) {
