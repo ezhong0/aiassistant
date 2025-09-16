@@ -1,4 +1,6 @@
 import express, { Request, Response } from 'express';
+import { GoogleOAuthCallbackSchema } from '../schemas/auth.schemas';
+import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
@@ -653,7 +655,10 @@ router.get('/init', authRateLimit, (req: Request, res: Response) => {
  * GET /auth/callback
  * Handle OAuth callback from Google
  */
-router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Request, res: Response) => {
+router.get('/callback', 
+  authRateLimit, 
+  validateRequest({ query: GoogleOAuthCallbackSchema }),
+  async (req: Request, res: Response) => {
   try {
     const { code, error, error_description, state }: OAuthCallbackQuery = req.query;
 

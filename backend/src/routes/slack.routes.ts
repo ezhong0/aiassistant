@@ -1,4 +1,9 @@
 import express from 'express';
+import { 
+  SlackOAuthCallbackSchema,
+  ErrorResponseSchema
+} from '../schemas';
+import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackInterface } from '../interfaces/slack.interface';
 import logger from '../utils/logger';
@@ -14,7 +19,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   /**
    * Slack OAuth callback handler
    */
-  router.get('/oauth/callback', async (req, res): Promise<void> => {
+  router.get('/oauth/callback', 
+    validateRequest({ query: SlackOAuthCallbackSchema }),
+    async (req, res): Promise<void> => {
     try {
       const { code, state, error } = req.query;
 

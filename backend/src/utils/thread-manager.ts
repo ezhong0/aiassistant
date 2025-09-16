@@ -1,4 +1,4 @@
-import { getService } from '../services/service-manager';
+import { resolveGmailService } from '../services/service-resolver';
 import { GmailService } from '../services/gmail.service';
 import { EmailParser } from './email-parser';
 import {
@@ -35,7 +35,7 @@ export class ThreadManager {
     try {
       logger.info('Getting enhanced thread', { threadId });
 
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
@@ -252,7 +252,7 @@ export class ThreadManager {
     try {
       logger.info('Updating thread', { threadId: updateRequest.threadId });
 
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
@@ -281,7 +281,7 @@ export class ThreadManager {
     try {
       logger.info('Archiving thread', { threadId });
 
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
@@ -507,7 +507,7 @@ export class ThreadSearch {
         searchQuery += ` before:${dateStr}`;
       }
 
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }

@@ -2,6 +2,7 @@ import { ToolExecutionContext } from '../types/tools';
 import { AIAgent } from '../framework/ai-agent';
 import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api.types';
 import { CalendarService, CalendarEvent } from '../services/calendar.service';
+import { resolveCalendarService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { TokenManager } from '../services/token-manager';
 import { APP_CONSTANTS } from '../config/constants';
@@ -419,7 +420,7 @@ Always return structured execution status with event details and confirmation.`;
     });
 
     // Get CalendarService from service manager
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       return {
         success: false,
@@ -1118,7 +1119,7 @@ Always return structured execution status with event details and confirmation.`;
   private async createEvent(
     parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
@@ -1228,7 +1229,7 @@ Always return structured execution status with event details and confirmation.`;
   private async listEvents(
     parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
@@ -1262,7 +1263,7 @@ Always return structured execution status with event details and confirmation.`;
   private async updateEvent(
     parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
@@ -1330,7 +1331,7 @@ Always return structured execution status with event details and confirmation.`;
   private async deleteEvent(
     parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
@@ -1360,7 +1361,7 @@ Always return structured execution status with event details and confirmation.`;
   private async checkAvailability(
     parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }
@@ -1395,7 +1396,7 @@ Always return structured execution status with event details and confirmation.`;
   private async findAvailableSlots(
     parameters: CalendarAgentRequest
   ): Promise<CalendarAgentResponse> {
-    const calendarService = getService<CalendarService>('calendarService');
+    const calendarService = await resolveCalendarService();
     if (!calendarService) {
       throw this.createError('Calendar service not available', 'SERVICE_UNAVAILABLE');
     }

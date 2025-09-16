@@ -1,6 +1,7 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api.types';
+import { resolveGmailService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { GmailService } from '../services/gmail.service';
 import { ThreadManager } from '../utils/thread-manager';
@@ -574,7 +575,7 @@ You are a specialized email management agent powered by Gmail API.
       case 'get_email_overview':
         // Handle email overview fetching
         try {
-          const gmailService = getService<GmailService>('gmailService');
+          const gmailService = await resolveGmailService();
           if (!gmailService) {
             throw new Error('Gmail service not available');
           }
@@ -611,7 +612,7 @@ You are a specialized email management agent powered by Gmail API.
       case 'get_full_email_content':
         // Handle full email content fetching
         try {
-          const gmailService = getService<GmailService>('gmailService');
+          const gmailService = await resolveGmailService();
           if (!gmailService) {
             throw new Error('Gmail service not available');
           }
@@ -1265,7 +1266,7 @@ Return JSON with:
 
     // Use retry mechanism from AIAgent for reliability
     const sentEmail = await this.withRetries(async () => {
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
@@ -1317,7 +1318,7 @@ Return JSON with:
     }
 
     const replyEmail = await this.withRetries(async () => {
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
@@ -1351,7 +1352,7 @@ Return JSON with:
     };
 
     const searchResult = await this.withRetries(async () => {
-      const gmailService = getService<GmailService>('gmailService');
+      const gmailService = await resolveGmailService();
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
@@ -1416,7 +1417,7 @@ Return JSON with:
     }
 
           const email = await this.withRetries(async () => {
-        const gmailService = getService<GmailService>('gmailService');
+        const gmailService = await resolveGmailService();
         if (!gmailService) {
           throw new Error('Gmail service not available');
         }

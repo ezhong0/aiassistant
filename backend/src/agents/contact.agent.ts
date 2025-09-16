@@ -1,6 +1,7 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api.types';
+import { resolveContactService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
 import { AIClassificationService } from '../services/ai-classification.service';
@@ -407,7 +408,7 @@ You are a specialized contact discovery and management agent.
 
     // Use retry mechanism from AIAgent for reliability
     const searchResult = await this.withRetries(async () => {
-      const contactService = getService<ContactService>('contactService');
+      const contactService = await resolveContactService();
       if (!contactService) {
         throw new Error('Contact service not available');
       }

@@ -22,12 +22,16 @@ import {
   requestTimeout,
   sanitizeRequest
 } from './middleware/security.middleware';
-import { apiRateLimit } from './middleware/rate-limiting.middleware';
+import { 
+  applyComprehensiveValidation,
+  handleValidationErrors 
+} from './middleware/comprehensive-validation.middleware';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 import { createSlackRoutes } from './routes/slack.routes';
+import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
 import { initializeInterfaces, startInterfaces, InterfaceManager } from './interfaces';
 
@@ -72,6 +76,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request processing middleware
 app.use(sanitizeRequest);
 app.use(requestLogger);
+
+// Apply comprehensive validation middleware
+app.use(applyComprehensiveValidation());
 
 // Rate limiting (apply to all routes)
 app.use(apiRateLimit);
@@ -132,6 +139,7 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Error handling middleware (must be last)
+app.use(handleValidationErrors);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

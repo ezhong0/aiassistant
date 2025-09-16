@@ -1,6 +1,7 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, SlackAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api.types';
+import { resolveSlackService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { SlackInterfaceService } from '../services/slack-interface.service';
 import { SlackMessageReaderService } from '../services/slack-message-reader.service';
@@ -1025,7 +1026,7 @@ Provide a clear, structured analysis.`;
     includeReactions?: boolean,
     includeAttachments?: boolean
   ): Promise<SlackMessage[]> {
-    const slackMessageReaderService = getService<SlackMessageReaderService>('slackMessageReaderService');
+    const slackMessageReaderService = await resolveSlackService();
     if (!slackMessageReaderService) {
       throw new Error('SlackMessageReaderService not available');
     }
@@ -1042,7 +1043,7 @@ Provide a clear, structured analysis.`;
       });
 
       // Convert ReaderSlackMessage to SlackMessage format
-      const messages: SlackMessage[] = readerMessages.map(msg => ({
+      const messages: SlackMessage[] = readerMessages.map((msg: any) => ({
         id: msg.id,
         text: msg.text,
         userId: msg.userId,
@@ -1090,7 +1091,7 @@ Provide a clear, structured analysis.`;
     includeReactions?: boolean,
     includeAttachments?: boolean
   ): Promise<SlackMessage[]> {
-    const slackMessageReaderService = getService<SlackMessageReaderService>('slackMessageReaderService');
+    const slackMessageReaderService = await resolveSlackService();
     if (!slackMessageReaderService) {
       throw new Error('SlackMessageReaderService not available');
     }
@@ -1107,7 +1108,7 @@ Provide a clear, structured analysis.`;
       });
 
       // Convert ReaderSlackMessage to SlackMessage format
-      const messages: SlackMessage[] = readerMessages.map(msg => ({
+      const messages: SlackMessage[] = readerMessages.map((msg: any) => ({
         id: msg.id,
         text: msg.text,
         userId: msg.userId,
@@ -1153,7 +1154,7 @@ Provide a clear, structured analysis.`;
     channelId?: string,
     limit: number = 20
   ): Promise<SlackMessage[]> {
-    const slackMessageReaderService = getService<SlackMessageReaderService>('slackMessageReaderService');
+    const slackMessageReaderService = await resolveSlackService();
     if (!slackMessageReaderService) {
       throw new Error('SlackMessageReaderService not available');
     }
@@ -1178,7 +1179,7 @@ Provide a clear, structured analysis.`;
       const readerMessages = await slackMessageReaderService.searchMessages(query, searchOptions);
 
       // Convert ReaderSlackMessage to SlackMessage format
-      const messages: SlackMessage[] = readerMessages.map(msg => ({
+      const messages: SlackMessage[] = readerMessages.map((msg: any) => ({
         id: msg.id,
         text: msg.text,
         userId: msg.userId,
@@ -1220,7 +1221,7 @@ Provide a clear, structured analysis.`;
    * Detect draft messages in a channel
    */
   private async detectDraftMessages(channelId?: string): Promise<SlackDraft[]> {
-    const slackService = getService<SlackInterfaceService>('slackInterfaceService');
+    const slackService = await resolveSlackService();
     if (!slackService) {
       throw new Error('Slack service not available');
     }
