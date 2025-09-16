@@ -352,21 +352,21 @@ export interface ApiRequestHeaders {
 export interface ActionRiskAssessment {
   level: 'low' | 'medium' | 'high';
   factors: string[];
-  warnings?: string[];
+  warnings?: string[] | undefined;
 }
 
 export interface EmailPreviewData extends Record<string, unknown> {
   recipients: {
     to: string[];
-    cc?: string[];
-    bcc?: string[];
+    cc?: string[] | undefined;
+    bcc?: string[] | undefined;
   };
   subject: string;
   contentSummary: string;
-  attachmentCount?: number;
-  totalAttachmentSize?: number;
-  sendTimeEstimate?: string;
-  externalDomains?: string[];
+  attachmentCount?: number | undefined;
+  totalAttachmentSize?: number | undefined;
+  sendTimeEstimate?: string | undefined;
+  externalDomains?: string[] | undefined;
   recipientCount: number;
 }
 
@@ -375,15 +375,15 @@ export interface CalendarPreviewData extends Record<string, unknown> {
   startTime: string;
   endTime: string;
   duration: string;
-  attendees?: string[];
+  attendees?: string[] | undefined;
   conflicts?: Array<{
     conflictType: 'time_overlap' | 'busy_attendee' | 'resource_conflict';
     details: string;
     severity: 'low' | 'medium' | 'high';
-  }>;
-  location?: string;
-  timeZone?: string;
-  attendeeCount?: number;
+  }> | undefined;
+  location?: string | undefined;
+  timeZone?: string | undefined;
+  attendeeCount?: number | undefined;
 }
 
 export interface ActionPreview {

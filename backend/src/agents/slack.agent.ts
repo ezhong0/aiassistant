@@ -28,16 +28,16 @@ export interface SlackMessage {
   userId: string;
   channelId: string;
   timestamp: string;
-  threadTs?: string;
+  threadTs?: string | undefined;
   isBot: boolean;
-  attachments?: Array<Record<string, unknown> | SlackAttachment>;
-  blocks?: SlackBlock[];
+  attachments?: Array<Record<string, unknown> | SlackAttachment> | undefined;
+  blocks?: SlackBlock[] | undefined;
   reactions?: Array<{
     name: string;
     count: number;
     users: string[];
     [key: string]: unknown; // Index signature for Record<string, unknown> compatibility
-  }>;
+  }> | undefined;
 }
 
 /**
@@ -58,14 +58,14 @@ export interface SlackThread {
 export interface SlackDraft {
   id: string;
   channelId: string;
-  threadTs?: string;
+  threadTs?: string | undefined;
   content: string;
-  attachments?: any[];
-  blocks?: any[];
+  attachments?: any[] | undefined;
+  blocks?: any[] | undefined;
   createdAt: string;
   updatedAt: string;
   isPendingConfirmation: boolean;
-  confirmationId?: string;
+  confirmationId?: string | undefined;
 }
 
 /**
@@ -77,10 +77,10 @@ export interface SlackAgentResult {
   drafts: SlackDraft[];
   operation: 'read_messages' | 'read_thread' | 'detect_drafts' | 'manage_drafts' | 'confirmation_handling';
   totalCount: number;
-  channelId?: string;
-  threadTs?: string;
-  searchTerm?: string;
-  confirmationStatus?: 'pending' | 'confirmed' | 'rejected' | 'expired';
+  channelId?: string | undefined;
+  threadTs?: string | undefined;
+  searchTerm?: string | undefined;
+  confirmationStatus?: 'pending' | 'confirmed' | 'rejected' | 'expired' | undefined;
 }
 
 /**
@@ -88,12 +88,12 @@ export interface SlackAgentResult {
  */
 export interface SlackAgentRequest extends SlackAgentParams {
   accessToken: string;
-  operation?: 'read_messages' | 'read_thread' | 'detect_drafts' | 'manage_drafts' | 'confirmation_handling';
-  channelId?: string;
-  threadTs?: string;
-  limit?: number;
-  includeReactions?: boolean;
-  includeAttachments?: boolean;
+  operation?: 'read_messages' | 'read_thread' | 'detect_drafts' | 'manage_drafts' | 'confirmation_handling' | undefined;
+  channelId?: string | undefined;
+  threadTs?: string | undefined;
+  limit?: number | undefined;
+  includeReactions?: boolean | undefined;
+  includeAttachments?: boolean | undefined;
 }
 
 /**
@@ -1011,8 +1011,8 @@ Provide a clear, structured analysis.`;
 
     return {
       searchTerm: cleanedQuery || query,
-      channelId,
-      limit
+      channelId: channelId || undefined,
+      limit: limit || undefined
     };
   }
 
@@ -1048,7 +1048,7 @@ Provide a clear, structured analysis.`;
         userId: msg.userId,
         channelId: msg.channelId,
         timestamp: msg.timestamp.toISOString(),
-        threadTs: msg.threadTs,
+        threadTs: msg.threadTs || undefined,
         isBot: !!msg.botId,
         attachments: includeAttachments ? msg.attachments : undefined,
         reactions: includeReactions ? msg.reactions : undefined,
@@ -1113,7 +1113,7 @@ Provide a clear, structured analysis.`;
         userId: msg.userId,
         channelId: msg.channelId,
         timestamp: msg.timestamp.toISOString(),
-        threadTs: msg.threadTs,
+        threadTs: msg.threadTs || undefined,
         isBot: !!msg.botId,
         attachments: includeAttachments ? msg.attachments : undefined,
         reactions: includeReactions ? msg.reactions : undefined,
@@ -1160,12 +1160,22 @@ Provide a clear, structured analysis.`;
 
     try {
       // Use SlackMessageReaderService to search messages
-      const readerMessages = await slackMessageReaderService.searchMessages(query, {
-        channels: channelId ? [channelId] : undefined,
-        limit,
+      const searchOptions: {
+        channels?: string[];
+        limit?: number;
+        sort?: 'timestamp' | 'score';
+        sortDir?: 'asc' | 'desc';
+      } = {
+        limit: limit || undefined,
         sort: 'timestamp',
         sortDir: 'desc'
-      });
+      };
+      
+      if (channelId) {
+        searchOptions.channels = [channelId];
+      }
+      
+      const readerMessages = await slackMessageReaderService.searchMessages(query, searchOptions);
 
       // Convert ReaderSlackMessage to SlackMessage format
       const messages: SlackMessage[] = readerMessages.map(msg => ({
@@ -1174,7 +1184,7 @@ Provide a clear, structured analysis.`;
         userId: msg.userId,
         channelId: msg.channelId,
         timestamp: msg.timestamp.toISOString(),
-        threadTs: msg.threadTs,
+        threadTs: msg.threadTs || undefined,
         isBot: !!msg.botId,
         attachments: msg.attachments,
         reactions: msg.reactions,

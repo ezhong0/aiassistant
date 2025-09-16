@@ -12,21 +12,21 @@ export interface SlackMessage {
   userId: string;
   text: string;
   timestamp: Date;
-  threadTs?: string;
+  threadTs?: string | undefined;
   isThreadReply: boolean;
-  subtype?: string;
-  botId?: string;
+  subtype?: string | undefined;
+  botId?: string | undefined;
   attachments: SlackAttachment[];
   files: SlackFile[];
   reactions: SlackReaction[];
   edited?: {
     user: string;
     timestamp: Date;
-  };
+  } | undefined;
   metadata: {
-    clientMsgId?: string;
+    clientMsgId?: string | undefined;
     type: string;
-    hasMore?: boolean;
+    hasMore?: boolean | undefined;
   };
 }
 
@@ -120,25 +120,25 @@ export interface SlackReaction {
  * Options for reading message history
  */
 export interface SlackMessageHistoryOptions {
-  limit?: number;
-  oldest?: string; // Timestamp
-  latest?: string; // Timestamp
-  inclusive?: boolean;
-  includeAllMetadata?: boolean;
-  filter?: SlackMessageFilter;
+  limit?: number | undefined;
+  oldest?: string | undefined; // Timestamp
+  latest?: string | undefined; // Timestamp
+  inclusive?: boolean | undefined;
+  includeAllMetadata?: boolean | undefined;
+  filter?: SlackMessageFilter | undefined;
 }
 
 /**
  * Message filtering options
  */
 export interface SlackMessageFilter {
-  excludeBotMessages?: boolean;
-  excludeSystemMessages?: boolean;
-  excludeSensitiveContent?: boolean;
-  excludeKeywords?: string[];
-  userIds?: string[]; // Only include messages from these users
-  dateAfter?: Date;
-  dateBefore?: Date;
+  excludeBotMessages?: boolean | undefined;
+  excludeSystemMessages?: boolean | undefined;
+  excludeSensitiveContent?: boolean | undefined;
+  excludeKeywords?: string[] | undefined;
+  userIds?: string[] | undefined; // Only include messages from these users
+  dateAfter?: Date | undefined;
+  dateBefore?: Date | undefined;
 }
 
 /**
@@ -149,19 +149,19 @@ export interface SlackChannelInfo {
   name: string;
   type: 'im' | 'private' | 'public';
   isPrivate: boolean;
-  memberCount?: number;
-  topic?: string;
-  purpose?: string;
+  memberCount?: number | undefined;
+  topic?: string | undefined;
+  purpose?: string | undefined;
 }
 
 /**
  * Search options
  */
 export interface SlackMessageSearchOptions {
-  channels?: string[];
-  limit?: number;
-  sort?: 'score' | 'timestamp';
-  sortDir?: 'asc' | 'desc';
+  channels?: string[] | undefined;
+  limit?: number | undefined;
+  sort?: 'score' | 'timestamp' | undefined;
+  sortDir?: 'asc' | 'desc' | undefined;
 }
 
 /**

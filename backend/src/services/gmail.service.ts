@@ -61,16 +61,30 @@ export class GmailService extends BaseService {
         hasAttachments: !!(options.attachments?.length) 
       });
 
+      const emailOptions: {
+        from?: string;
+        replyTo?: string;
+        cc?: string[];
+        bcc?: string[];
+        attachments?: Array<{
+          filename: string;
+          content: string;
+          contentType: string;
+        }>;
+      } = {};
+      
+      if (options.from) emailOptions.from = options.from;
+      if (options.replyTo) emailOptions.replyTo = options.replyTo;
+      if (options.cc) emailOptions.cc = options.cc;
+      if (options.bcc) emailOptions.bcc = options.bcc;
+      if (options.attachments) emailOptions.attachments = options.attachments;
+      
       // Build email message
       const message = this.buildEmailMessage({
         to,
         subject,
         body,
-        from: options.from,
-        replyTo: options.replyTo,
-        cc: options.cc,
-        bcc: options.bcc,
-        attachments: options.attachments
+        ...emailOptions
       });
 
       // Create OAuth2 client with access token
@@ -183,14 +197,30 @@ export class GmailService extends BaseService {
       const inReplyTo = headers.find((h: any) => h.name === 'Message-ID')?.value || '';
 
       // Build reply message
-      const message = this.buildEmailMessage({
+      const replyOptions: {
+        to: string;
+        subject: string;
+        body: string;
+        references?: string;
+        inReplyTo?: string;
+        attachments?: Array<{
+          filename: string;
+          content: string;
+          contentType: string;
+        }>;
+      } = {
         to: from, // Reply to sender
         subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
         body: replyBody,
         references,
-        inReplyTo,
-        attachments: options.attachments
-      });
+        inReplyTo
+      };
+      
+      if (options.attachments) {
+        replyOptions.attachments = options.attachments;
+      }
+      
+      const message = this.buildEmailMessage(replyOptions);
 
       // Create OAuth2 client with access token
       const auth = new google.auth.OAuth2();
@@ -484,20 +514,39 @@ export class GmailService extends BaseService {
       // Extract attachments
       const attachments = this.extractAttachments(message.payload);
 
-      const fullMessage = {
+      const fullMessage: {
+        id: string;
+        threadId: string;
+        subject: string;
+        from: string;
+        to: string[];
+        cc?: string[];
+        bcc?: string[];
+        date: Date;
+        body: { text?: string; html?: string };
+        snippet: string;
+        labels: string[];
+        attachments?: Array<{
+          filename: string;
+          mimeType: string;
+          size: number;
+          attachmentId: string;
+        }>;
+      } = {
         id: message.id!,
         threadId: message.threadId!,
         subject,
         from,
         to,
-        cc: cc.length > 0 ? cc : undefined,
-        bcc: bcc.length > 0 ? bcc : undefined,
         date: dateStr ? new Date(dateStr) : new Date(),
         body,
         snippet: message.snippet || '',
-        labels: message.labelIds || [],
-        attachments: attachments.length > 0 ? attachments : undefined
+        labels: message.labelIds || []
       };
+      
+      if (cc.length > 0) fullMessage.cc = cc;
+      if (bcc.length > 0) fullMessage.bcc = bcc;
+      if (attachments.length > 0) fullMessage.attachments = attachments;
 
       this.logInfo('Full message retrieved successfully', { 
         messageId, 
@@ -520,7 +569,7 @@ export class GmailService extends BaseService {
   private extractMessageBody(payload: any): { text?: string; html?: string } {
     if (!payload) return {};
 
-    const body = { text: undefined as string | undefined, html: undefined as string | undefined };
+    const body: { text?: string; html?: string } = {};
 
     // Handle single part message
     if (payload.body?.data) {

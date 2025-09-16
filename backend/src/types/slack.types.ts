@@ -8,10 +8,10 @@ export interface SlackContext {
   userId: string;
   channelId: string;
   teamId: string;
-  threadTs?: string;
+  threadTs?: string | undefined;
   isDirectMessage: boolean;
-  userName?: string;
-  userEmail?: string;
+  userName?: string | undefined;
+  userEmail?: string | undefined;
 }
 
 /**

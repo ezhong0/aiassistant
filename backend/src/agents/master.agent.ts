@@ -20,30 +20,30 @@ interface AgentCapability {
 
 export interface MasterAgentResponse {
   message: string;
-  toolCalls?: ToolCall[];
-  toolResults?: ToolResult[];
-  needsThinking?: boolean;
-  proposal?: ProposalResponse;
-  contextGathered?: ContextGatheringResult;
+  toolCalls?: ToolCall[] | undefined;
+  toolResults?: ToolResult[] | undefined;
+  needsThinking?: boolean | undefined;
+  proposal?: ProposalResponse | undefined;
+  contextGathered?: ContextGatheringResult | undefined;
   executionMetadata?: {
-    processingTime?: number;
-    totalExecutionTime?: number;
-    toolsExecuted?: number;
-    successfulTools?: number;
-    slackContext?: any;
+    processingTime?: number | undefined;
+    totalExecutionTime?: number | undefined;
+    toolsExecuted?: number | undefined;
+    successfulTools?: number | undefined;
+    slackContext?: any | undefined;
     toolResults?: Array<{
       toolName: string;
       success: boolean;
       executionTime: number;
-      error?: string;
-      result?: any;
-    }>;
-    confirmationFlows?: Array<any>;
-    masterAgentResponse?: string;
-    error?: string;
-    errorType?: string;
-    errorContext?: any;
-  };
+      error?: string | undefined;
+      result?: any | undefined;
+    }> | undefined;
+    confirmationFlows?: Array<any> | undefined;
+    masterAgentResponse?: string | undefined;
+    error?: string | undefined;
+    errorType?: string | undefined;
+    errorContext?: any | undefined;
+  } | undefined;
 }
 
 export interface ProposalResponse {

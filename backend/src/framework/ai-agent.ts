@@ -518,8 +518,8 @@ export abstract class AIAgent<TParams = any, TResult = any> {
           systemPrompt,
           this.getPlanningSchema(),
           {
-            temperature: this.aiConfig.planningTemperature,
-            maxTokens: this.aiConfig.planningMaxTokens
+            temperature: this.aiConfig.planningTemperature || undefined,
+            maxTokens: this.aiConfig.planningMaxTokens || undefined
           }
         ),
         this.aiConfig.planningTimeout
@@ -1489,7 +1489,7 @@ Please provide a detailed execution plan that accomplishes this request efficien
   private stopCacheCleanup(): void {
     if (this.cacheCleanupInterval) {
       clearInterval(this.cacheCleanupInterval);
-      this.cacheCleanupInterval = undefined;
+      this.cacheCleanupInterval = undefined as any;
     }
   }
 

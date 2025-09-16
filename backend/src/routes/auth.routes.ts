@@ -765,10 +765,10 @@ router.get('/callback', authRateLimit, validateGoogleCallback, async (req: Reque
           await tokenStorageService.storeUserTokens(userId, {
             google: {
               access_token: tokens.access_token,
-              refresh_token: tokens.refresh_token,
-              expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + (tokens.expires_in * 1000)),
+              refresh_token: tokens.refresh_token || undefined,
+              expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + ((tokens.expires_in || 3600) * 1000)),
               token_type: tokens.token_type,
-              scope: tokens.scope
+              scope: tokens.scope || undefined
             },
             slack: {
               access_token: undefined, // Slack doesn't need access token for this flow

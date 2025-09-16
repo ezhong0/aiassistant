@@ -232,13 +232,24 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     // Create overall assessment
     const overallAssessment = this.generateOverallAssessment(verificationStatus, toolAnalysis.length);
 
-    return {
+    const result: {
+      verificationStatus: 'correct' | 'incorrect' | 'partial' | 'unclear';
+      reasoning: string;
+      suggestions?: string[];
+      toolAnalysis: { toolName: string; appropriateness: 'correct' | 'incorrect' | 'suboptimal'; reason: string; }[];
+      overallAssessment: string;
+    } = {
       verificationStatus,
       reasoning,
-      suggestions: suggestions.length > 0 ? suggestions : undefined,
       toolAnalysis,
       overallAssessment
     };
+    
+    if (suggestions.length > 0) {
+      result.suggestions = suggestions;
+    }
+    
+    return result;
   }
 
   /**
@@ -533,12 +544,22 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     // Suggest appropriate tools based on AI analysis
     const suggestions = await this.suggestToolsForQuery(query);
 
-    return {
+    const result: {
+      verificationStatus: 'correct' | 'incorrect' | 'partial' | 'unclear';
+      reasoning: string;
+      suggestions?: string[];
+      overallAssessment: string;
+    } = {
       verificationStatus: 'unclear',
       reasoning,
-      suggestions: suggestions.length > 0 ? suggestions : undefined,
       overallAssessment: '❓ No previous actions to verify - providing guidance for appropriate tool selection.'
     };
+    
+    if (suggestions.length > 0) {
+      result.suggestions = suggestions;
+    }
+    
+    return result;
   }
 
   /**

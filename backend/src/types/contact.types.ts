@@ -2,18 +2,18 @@ export interface Contact {
   id: string;
   name: string;
   email: string;
-  phone?: string;
-  photo?: string | null;
+  phone?: string | undefined;
+  photo?: string | null | undefined;
   source: 'contacts' | 'other_contacts';
-  lastInteraction?: Date;
-  interactionCount?: number;
-  confidence?: number; // For fuzzy matching results
+  lastInteraction?: Date | undefined;
+  interactionCount?: number | undefined;
+  confidence?: number | undefined; // For fuzzy matching results
 }
 
 export interface ContactSearchRequest {
   query: string;
-  maxResults?: number;
-  includeOtherContacts?: boolean; // Include frequently contacted people
+  maxResults?: number | undefined;
+  includeOtherContacts?: boolean | undefined; // Include frequently contacted people
 }
 
 export interface ContactSearchResult {

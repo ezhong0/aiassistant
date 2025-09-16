@@ -3,13 +3,13 @@ import { CryptoUtil } from './crypto.util';
 
 export interface AuditEvent {
   event: string;
-  userId?: string;
-  sessionId?: string;
-  teamId?: string;
-  details?: Record<string, any>;
-  timestamp?: Date;
-  ipAddress?: string;
-  userAgent?: string;
+  userId?: string | undefined;
+  sessionId?: string | undefined;
+  teamId?: string | undefined;
+  details?: Record<string, any> | undefined;
+  timestamp?: Date | undefined;
+  ipAddress?: string | undefined;
+  userAgent?: string | undefined;
 }
 
 /**

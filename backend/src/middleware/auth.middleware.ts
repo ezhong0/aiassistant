@@ -99,7 +99,7 @@ export const authenticateToken = (
       userId: payload.sub,
       email: payload.email,
       name: payload.email,
-      picture: undefined
+      picture: undefined as any
     };
     req.token = token;
 
@@ -166,7 +166,7 @@ export const optionalAuth = (
           userId: payload.sub,
           email: payload.email,
           name: payload.email,
-          picture: undefined
+          picture: undefined as any
         };
         req.token = token;
         

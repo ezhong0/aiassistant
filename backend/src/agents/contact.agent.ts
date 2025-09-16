@@ -510,7 +510,7 @@ You are a specialized contact discovery and management agent.
       
       return {
         searchTerm,
-        maxResults
+        maxResults: maxResults || undefined
       };
     } catch (error) {
       this.logger.error('Failed to extract search parameters:', error);
@@ -531,7 +531,7 @@ You are a specialized contact discovery and management agent.
     return contacts.map(contact => ({
       name: contact.name,
       email: contact.email,
-      phone: contact.phone
+      phone: contact.phone || undefined
     }));
   }
   

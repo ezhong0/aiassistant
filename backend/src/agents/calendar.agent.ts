@@ -37,16 +37,16 @@ export interface CalendarAgentResponse {
   success: boolean;
   message: string;
   data?: {
-    events?: CalendarEvent[];
-    event?: CalendarEvent;
+    events?: CalendarEvent[] | undefined;
+    event?: CalendarEvent | undefined;
     availability?: {
       busy: boolean;
       conflicts: CalendarEvent[];
-    };
-    slots?: Array<{ start: string; end: string }>;
-  };
-  error?: string;
-  needsReauth?: boolean;
+    } | undefined;
+    slots?: Array<{ start: string; end: string }> | undefined;
+  } | undefined;
+  error?: string | undefined;
+  needsReauth?: boolean | undefined;
   reauth_reason?: string;
 }
 
@@ -1437,11 +1437,11 @@ Always return structured execution status with event details and confirmation.`;
     const calendarParams: CalendarAgentRequest = {
       action: 'create',
       summary: parameters.title,
-      description: parameters.description,
+      description: parameters.description || undefined,
       start: parameters.startTime,
       end: parameters.endTime,
       attendees: Array.isArray(parameters.attendees) ? parameters.attendees : parameters.attendees ? [parameters.attendees] : undefined,
-      location: parameters.location,
+      location: parameters.location || undefined,
       accessToken: (parameters as any).accessToken,
       calendarId: (parameters as any).calendarId || 'primary'
     };
@@ -1456,14 +1456,14 @@ Always return structured execution status with event details and confirmation.`;
       title: result.data.event.summary || '',
       startTime: result.data.event.start?.dateTime || '',
       endTime: result.data.event.end?.dateTime || '',
-      location: result.data.event.location,
-      attendees: result.data.event.attendees?.map(a => a.email).filter((email): email is string => email !== null && email !== undefined) || []
+      location: result.data.event.location || undefined,
+      attendees: result.data.event.attendees?.map(a => a.email).filter((email): email is string => email !== null && email !== undefined) || undefined
     } : undefined;
 
     return {
       success: result.success,
       event: transformedEvent,
-      error: result.error
+      error: result.error || undefined
     };
   }
 
@@ -1473,8 +1473,8 @@ Always return structured execution status with event details and confirmation.`;
   private async handleListEvents(parameters: ListEventsActionParams, calendarService: CalendarService): Promise<{ success: boolean; events?: CalendarEvent[]; error?: string; }> {
     const calendarParams: CalendarAgentRequest = {
       action: 'list',
-      timeMin: parameters.timeMin,
-      timeMax: parameters.timeMax,
+      timeMin: parameters.timeMin || undefined,
+      timeMax: parameters.timeMax || undefined,
       accessToken: (parameters as any).accessToken,
       calendarId: (parameters as any).calendarId || 'primary'
     };
@@ -1485,8 +1485,8 @@ Always return structured execution status with event details and confirmation.`;
 
     return {
       success: result.success,
-      events: result.data?.events,
-      error: result.error
+      events: result.data?.events || undefined,
+      error: result.error || undefined || undefined
     };
   }
 
@@ -1518,14 +1518,14 @@ Always return structured execution status with event details and confirmation.`;
       title: result.data.event.summary || '',
       startTime: result.data.event.start?.dateTime || '',
       endTime: result.data.event.end?.dateTime || '',
-      location: result.data.event.location,
-      attendees: result.data.event.attendees?.map(a => a.email).filter((email): email is string => email !== null && email !== undefined) || []
+      location: result.data.event.location || undefined,
+      attendees: result.data.event.attendees?.map(a => a.email).filter((email): email is string => email !== null && email !== undefined) || undefined
     } : undefined;
 
     return {
       success: result.success,
       event: transformedEvent,
-      error: result.error
+      error: result.error || undefined
     };
   }
 
@@ -1547,7 +1547,7 @@ Always return structured execution status with event details and confirmation.`;
 
     return {
       success: result.success,
-      error: result.error
+      error: result.error || undefined || undefined
     };
   }
 
@@ -1569,9 +1569,9 @@ Always return structured execution status with event details and confirmation.`;
 
     return {
       success: result.success,
-      available: result.data?.availability?.busy,
-      conflicts: result.data?.availability?.conflicts,
-      error: result.error
+      available: result.data?.availability?.busy || undefined,
+      conflicts: result.data?.availability?.conflicts || undefined,
+      error: result.error || undefined || undefined
     };
   }
 
@@ -1594,8 +1594,8 @@ Always return structured execution status with event details and confirmation.`;
 
     return {
       success: result.success,
-      slots: result.data?.slots,
-      error: result.error
+      slots: result.data?.slots || undefined,
+      error: result.error || undefined || undefined
     };
   }
 

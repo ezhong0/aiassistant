@@ -4,12 +4,13 @@
 
 export interface GoogleTokens {
   access_token: string;
-  refresh_token?: string;
-  id_token?: string;
-  token_type: string;
-  expires_in: number;
-  scope?: string;
-  expiry_date?: number;
+  refresh_token?: string | undefined;
+  id_token?: string | undefined;
+  token_type?: string | undefined;
+  expires_in?: number | undefined;
+  expires_at?: Date | undefined;
+  expiry_date?: number | undefined;
+  scope?: string | undefined;
 }
 
 export interface TokenRefreshRequest {
@@ -40,11 +41,11 @@ export interface AuthenticatedUser {
   userId: string;
   email: string;
   name: string;
-  picture?: string;
-  givenName?: string;
-  familyName?: string;
-  locale?: string;
-  verifiedEmail?: boolean;
+  picture?: string | undefined;
+  givenName?: string | undefined;
+  familyName?: string | undefined;
+  locale?: string | undefined;
+  verifiedEmail?: boolean | undefined;
 }
 
 export interface JWTPayload {

@@ -2,18 +2,19 @@ import { TokenStorageService } from './token-storage.service';
 import { AuthService } from './auth.service';
 import { CacheService } from './cache.service';
 import { GoogleTokens } from '../types/auth.types';
+import { SlackTokens } from './token-storage.service';
 import { BaseService } from './base-service';
 import { serviceManager } from './service-manager';
 import { AuditLogger } from '../utils/audit-logger';
 import logger from '../utils/logger';
 
 export interface OAuthTokens {
-  google?: GoogleTokens;
+  google?: GoogleTokens | undefined;
   slack?: {
-    access_token?: string;
-    team_id?: string;
-    user_id?: string;
-  };
+    access_token?: string | undefined;
+    team_id?: string | undefined;
+    user_id?: string | undefined;
+  } | undefined;
 }
 
 export class TokenManager extends BaseService {
@@ -258,7 +259,7 @@ export class TokenManager extends BaseService {
           refresh_token: refreshedTokens.refresh_token || tokens.googleTokens.refresh_token,
           expires_at: refreshedTokens.expiry_date ? new Date(refreshedTokens.expiry_date) : undefined,
           token_type: refreshedTokens.token_type,
-          scope: refreshedTokens.scope
+          scope: refreshedTokens.scope || undefined
         },
         slack: tokens.slackTokens // Preserve existing Slack tokens
       });
@@ -316,16 +317,26 @@ export class TokenManager extends BaseService {
         
         // Remove the invalid refresh token to prevent future failures
         try {
-          await this.tokenStorageService!.storeUserTokens(userId_key, {
-            google: {
+          const clearOptions: {
+            google?: GoogleTokens;
+            slack?: SlackTokens;
+          } = {};
+          
+          if (tokens.googleTokens) {
+            clearOptions.google = {
               access_token: '', // Clear access token
-              refresh_token: '', // Clear refresh token
+              refresh_token: undefined, // Clear refresh token
               expires_at: new Date(0), // Set to expired
               token_type: 'Bearer',
-              scope: ''
-            },
-            slack: tokens.slackTokens // Preserve Slack tokens
-          });
+              scope: undefined
+            };
+          }
+          
+          if (tokens.slackTokens) {
+            clearOptions.slack = tokens.slackTokens;
+          }
+          
+          await this.tokenStorageService!.storeUserTokens(userId_key, clearOptions);
           logger.info('Cleared invalid Google tokens', { teamId, userId });
         } catch (clearError) {
           logger.error('Failed to clear invalid tokens', { teamId, userId, error: clearError });

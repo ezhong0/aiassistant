@@ -9,14 +9,14 @@ interface RequestLogData {
   url: string;
   path: string;
   ip: string;
-  userAgent?: string;
-  userId?: string;
-  body?: unknown;
-  query?: unknown;
-  params?: unknown;
-  headers?: Record<string, string>;
+  userAgent?: string | undefined;
+  userId?: string | undefined;
+  body?: unknown | undefined;
+  query?: unknown | undefined;
+  params?: unknown | undefined;
+  headers?: Record<string, string> | undefined;
   timestamp: string;
-  contentLength?: number;
+  contentLength?: number | undefined;
 }
 
 interface ResponseLogData {
@@ -65,7 +65,7 @@ export const apiLoggingMiddleware = (options: {
       path: req.path,
       ip: req.ip || req.connection.remoteAddress || 'unknown',
       userAgent: req.get('User-Agent'),
-      userId: (req as AuthenticatedRequest).user?.userId,
+      userId: (req as AuthenticatedRequest).user?.userId || undefined,
       timestamp: new Date().toISOString()
     };
 
@@ -317,7 +317,7 @@ export const getRequestSummary = (req: Request): {
     requestId: req.requestId || 'unknown',
     method: req.method,
     path: req.path,
-    userId: (req as AuthenticatedRequest).user?.userId,
+    userId: (req as AuthenticatedRequest).user?.userId || undefined,
     ip: req.ip || 'unknown',
     timestamp: new Date().toISOString()
   };

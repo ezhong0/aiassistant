@@ -15,15 +15,15 @@ export interface GoogleTokens {
 }
 
 export interface SlackTokens {
-  access_token?: string;
-  team_id?: string;
-  user_id?: string;
+  access_token?: string | undefined;
+  team_id?: string | undefined;
+  user_id?: string | undefined;
 }
 
 export interface UserTokens {
   userId: string;
-  googleTokens?: GoogleTokens;
-  slackTokens?: SlackTokens;
+  googleTokens?: GoogleTokens | undefined;
+  slackTokens?: SlackTokens | undefined;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -108,15 +108,18 @@ export class TokenStorageService extends BaseService {
     // Store in database if available
     if (this.databaseService && this.databaseService.isReady()) {
       try {
+        const googleTokens: GoogleTokens = {
+          access_token: tokens.google!.access_token
+        };
+        
+        if (encryptedGoogleRefreshToken) googleTokens.refresh_token = encryptedGoogleRefreshToken;
+        if (tokens.google!.expires_at) googleTokens.expires_at = tokens.google!.expires_at;
+        if (tokens.google!.token_type) googleTokens.token_type = tokens.google!.token_type;
+        if (tokens.google!.scope) googleTokens.scope = tokens.google!.scope;
+        
         const userTokens: UserTokens = {
           userId,
-          googleTokens: tokens.google ? {
-            access_token: tokens.google.access_token,
-            refresh_token: encryptedGoogleRefreshToken,
-            expires_at: tokens.google.expires_at,
-            token_type: tokens.google.token_type,
-            scope: tokens.google.scope
-          } : undefined,
+          googleTokens,
           slackTokens: tokens.slack,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -150,15 +153,18 @@ export class TokenStorageService extends BaseService {
         this.logWarn('Falling back to in-memory storage', { userId });
         
         // Store in memory as fallback
+        const googleTokens: GoogleTokens = {
+          access_token: tokens.google!.access_token
+        };
+        
+        if (tokens.google!.refresh_token) googleTokens.refresh_token = tokens.google!.refresh_token;
+        if (tokens.google!.expires_at) googleTokens.expires_at = tokens.google!.expires_at;
+        if (tokens.google!.token_type) googleTokens.token_type = tokens.google!.token_type;
+        if (tokens.google!.scope) googleTokens.scope = tokens.google!.scope;
+        
         const userTokens: UserTokens = {
           userId,
-          googleTokens: tokens.google ? {
-            access_token: tokens.google.access_token,
-            refresh_token: tokens.google.refresh_token, // Store unencrypted in memory
-            expires_at: tokens.google.expires_at,
-            token_type: tokens.google.token_type,
-            scope: tokens.google.scope
-          } : undefined,
+          googleTokens,
           slackTokens: tokens.slack,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -192,10 +198,10 @@ export class TokenStorageService extends BaseService {
         userId,
         googleTokens: tokens.google ? {
           access_token: tokens.google.access_token,
-          refresh_token: tokens.google.refresh_token, // Store unencrypted in memory
-          expires_at: tokens.google.expires_at,
-          token_type: tokens.google.token_type,
-          scope: tokens.google.scope
+          refresh_token: tokens.google.refresh_token || undefined, // Store unencrypted in memory
+          expires_at: tokens.google.expires_at || undefined,
+          token_type: tokens.google.token_type || undefined,
+          scope: tokens.google.scope || undefined
         } : undefined,
         slackTokens: tokens.slack,
         createdAt: new Date(),
@@ -413,15 +419,25 @@ export class TokenStorageService extends BaseService {
         const updatedGoogleTokens: GoogleTokens = {
           ...currentTokens.googleTokens,
           access_token: tokenData.access_token,
-          expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)),
-          // Keep existing refresh token or update if provided
-          refresh_token: tokenData.refresh_token || currentTokens.googleTokens.refresh_token
+          expires_at: new Date(Date.now() + (tokenData.expires_in * 1000))
         };
         
-        await this.storeUserTokens(userId, {
-          google: updatedGoogleTokens,
-          slack: currentTokens.slackTokens
-        });
+        if (tokenData.refresh_token || currentTokens.googleTokens.refresh_token) {
+          updatedGoogleTokens.refresh_token = tokenData.refresh_token || currentTokens.googleTokens.refresh_token;
+        }
+        
+        const storeOptions: {
+          google?: GoogleTokens;
+          slack?: SlackTokens;
+        } = {
+          google: updatedGoogleTokens
+        };
+        
+        if (currentTokens.slackTokens) {
+          storeOptions.slack = currentTokens.slackTokens;
+        }
+        
+        await this.storeUserTokens(userId, storeOptions);
       }
 
       return {

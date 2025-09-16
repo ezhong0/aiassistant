@@ -778,8 +778,8 @@ export class SlackInterface {
         eventType,
         metadata: {
           timestamp: new Date().toISOString(),
-          triggerId: slackHandlers.commandInfo?.triggerId,
-          responseUrl: slackHandlers.commandInfo?.responseUrl
+          triggerId: slackHandlers.commandInfo?.triggerId || undefined,
+          responseUrl: slackHandlers.commandInfo?.responseUrl || undefined
         }
       };
 
@@ -801,7 +801,7 @@ export class SlackInterface {
             context.channelId, 
             agentResponse.response.blocks,
             {
-              text: agentResponse.response.text,
+              text: agentResponse.response.text || undefined,
               response_type: eventType === 'slash_command' ? 'in_channel' : undefined
             }
           );
@@ -1134,7 +1134,13 @@ export class SlackInterface {
         shouldRespond: true,
         executionMetadata: {
           processingTime,
-          toolResults,
+          toolResults: toolResults.map(tr => ({
+            toolName: tr.toolName,
+            success: tr.success,
+            executionTime: tr.executionTime,
+            error: tr.error || undefined,
+            result: tr.result
+          })),
           masterAgentResponse: masterResponse.message
         }
       };
@@ -1300,7 +1306,7 @@ export class SlackInterface {
 
       const finalResponse = {
         text: responseText,
-        blocks: blocks.length > 1 ? blocks : undefined // Only include blocks if we have more than just the main text
+        blocks: blocks.length > 1 ? blocks : undefined
       };
 
       logger.debug('Response formatted for Slack', {
@@ -2206,7 +2212,7 @@ export class SlackInterface {
         channel: channelId,
         ts: timestamp,
         blocks: blocks,
-        text: text
+        text: text || undefined
       });
     } catch (error) {
       logger.error('Error updating Slack message:', error);

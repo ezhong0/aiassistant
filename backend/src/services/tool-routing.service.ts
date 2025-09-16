@@ -27,7 +27,7 @@ export interface ToolRoutingDecision {
   confidence: number;
   reasoning: string;
   requiresConfirmation: boolean;
-  confirmationMessage?: string;
+  confirmationMessage?: string | undefined;
   parameters: any;
 }
 

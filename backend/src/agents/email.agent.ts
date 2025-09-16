@@ -881,8 +881,8 @@ Return JSON with:
     return {
       action: 'send', // Use the intended action based on params
       count: 0,
-      messageId: undefined,
-      threadId: undefined,
+      messageId: undefined as any,
+      threadId: undefined as any,
       // Add error information
       error: failedResults.length > 0 ? 
         `Plan execution failed: ${failedResults[0]?.error || 'Unknown error'}` : 
@@ -1269,15 +1269,25 @@ Return JSON with:
       if (!gmailService) {
         throw new Error('Gmail service not available');
       }
+      const emailOptions: {
+        cc?: string[];
+        bcc?: string[];
+      } = {};
+      
+      if (emailRequest.cc) {
+        emailOptions.cc = Array.isArray(emailRequest.cc) ? emailRequest.cc : [emailRequest.cc];
+      }
+      
+      if (emailRequest.bcc) {
+        emailOptions.bcc = Array.isArray(emailRequest.bcc) ? emailRequest.bcc : [emailRequest.bcc];
+      }
+      
       return await gmailService.sendEmail(
         params.accessToken,
         (Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to) || '',
         emailRequest.subject,
         emailRequest.body,
-        {
-          cc: Array.isArray(emailRequest.cc) ? emailRequest.cc : emailRequest.cc ? [emailRequest.cc] : undefined,
-          bcc: Array.isArray(emailRequest.bcc) ? emailRequest.bcc : emailRequest.bcc ? [emailRequest.bcc] : undefined
-        }
+        emailOptions
       );
     });
 
@@ -1291,7 +1301,7 @@ Return JSON with:
       messageId: sentEmail.messageId,
       threadId: sentEmail.threadId,
       action: 'send',
-      recipient: Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to,
+      recipient: Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to || undefined,
       subject: emailRequest.subject
     };
   }
@@ -1336,8 +1346,8 @@ Return JSON with:
   private async handleSearchEmails(params: EmailAgentRequest, actionParams: SearchEmailActionParams): Promise<EmailResult> {
     const searchRequest: SearchEmailsRequest = {
       query: actionParams.query || '',
-      maxResults: actionParams.maxResults || EMAIL_CONSTANTS.DEFAULT_SEARCH_RESULTS,
-      includeSpamTrash: (actionParams.includeSpamTrash as boolean) || false
+      maxResults: actionParams.maxResults || undefined,
+      includeSpamTrash: (actionParams.includeSpamTrash as boolean) || undefined
     };
 
     const searchResult = await this.withRetries(async () => {
@@ -1389,10 +1399,10 @@ Return JSON with:
       subject: emailRequest.subject 
     });
 
-          return {
+    return {
       draft,
       action: 'draft',
-      recipient: Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to,
+      recipient: Array.isArray(emailRequest.to) ? emailRequest.to[0] : emailRequest.to || undefined,
       subject: emailRequest.subject
     };
   }
@@ -1522,8 +1532,8 @@ Return JSON with:
 
     return {
       to: to || actionParams.to || [],
-      cc: cc || actionParams.cc,
-      bcc: bcc || actionParams.bcc,
+      cc: cc || actionParams.cc || undefined,
+      bcc: bcc || actionParams.bcc || undefined,
       subject: subject || actionParams.subject || '',
       body: body || actionParams.body || ''
     };

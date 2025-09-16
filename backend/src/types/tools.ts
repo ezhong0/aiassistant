@@ -9,7 +9,7 @@ export interface ToolResult {
   toolName: string;
   result: any;
   success: boolean;
-  error?: string;
+  error?: string | undefined;
   executionTime: number;
 }
 
@@ -119,11 +119,11 @@ export interface ThinkParams {
 
 export interface SlackAgentParams {
   query: string;
-  channelId?: string;
-  threadTs?: string;
-  limit?: number;
-  includeReactions?: boolean;
-  includeAttachments?: boolean;
+  channelId?: string | undefined;
+  threadTs?: string | undefined;
+  limit?: number | undefined;
+  includeReactions?: boolean | undefined;
+  includeAttachments?: boolean | undefined;
 }
 
 // Tool execution pipeline types

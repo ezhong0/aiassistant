@@ -507,7 +507,7 @@ export class SlackInterfaceService extends BaseService {
       return {
         success: result.success,
         message: result.success ? 'Action completed successfully!' : undefined,
-        error: result.error
+        error: result.error || undefined
       };
 
     } catch (error) {
@@ -954,7 +954,13 @@ export class SlackInterfaceService extends BaseService {
         shouldRespond: true,
         executionMetadata: {
           processingTime,
-          toolResults,
+          toolResults: toolResults.map(tr => ({
+            toolName: tr.toolName,
+            success: tr.success,
+            executionTime: tr.executionTime,
+            error: tr.error || undefined,
+            result: tr.result
+          })),
           masterAgentResponse: masterResponse.message
         }
       };
@@ -1241,7 +1247,7 @@ export class SlackInterfaceService extends BaseService {
       try {
         if (response.response.blocks && response.response.blocks.length > 0) {
           await this.sendFormattedMessage(context.channelId, response.response.blocks, {
-            text: response.response.text
+            text: response.response.text || undefined
           });
         } else if (response.response.text) {
           await this.sendMessage(context.channelId, {

@@ -9,8 +9,8 @@ export interface GmailMessage {
   subject: string;
   from: string;
   to: string;
-  cc?: string;
-  bcc?: string;
+  cc?: string | undefined;
+  bcc?: string | undefined;
   date: string;
   body: string;
   snippet: string;
@@ -26,7 +26,7 @@ export interface GmailThread {
   id: string;
   historyId: string;
   messages: GmailMessage[];
-  snippet?: string;
+  snippet?: string | undefined;
 }
 
 export interface EmailAttachment {
@@ -43,12 +43,12 @@ export interface EmailAttachment {
 
 export interface SendEmailRequest {
   to: string | string[];
-  cc?: string | string[];
-  bcc?: string | string[];
+  cc?: string | string[] | undefined;
+  bcc?: string | string[] | undefined;
   subject: string;
   body: string;
-  replyTo?: string;
-  attachments?: EmailAttachment[];
+  replyTo?: string | undefined;
+  attachments?: EmailAttachment[] | undefined;
 }
 
 export interface ReplyEmailRequest {
@@ -101,30 +101,30 @@ export interface ParsedEmail {
   subject: string;
   from: {
     email: string;
-    name?: string;
+    name?: string | undefined;
   };
   to: Array<{
     email: string;
-    name?: string;
+    name?: string | undefined;
   }>;
   cc?: Array<{
     email: string;
-    name?: string;
-  }>;
+    name?: string | undefined;
+  }> | undefined;
   date: Date;
   body: {
-    text?: string;
-    html?: string;
+    text?: string | undefined;
+    html?: string | undefined;
   };
   attachments: EmailAttachment[];
   isUnread: boolean;
   labels: string[];
-  importance?: 'high' | 'normal' | 'low';
+  importance?: 'high' | 'normal' | 'low' | undefined;
 }
 
 export interface EmailContact {
   email: string;
-  name?: string;
+  name?: string | undefined;
 }
 
 /**
@@ -298,13 +298,13 @@ export interface EmailParsingOptions {
 export interface EmailMetadata {
   messageId: string;
   threadId: string;
-  references?: string[];
-  inReplyTo?: string;
-  importance?: 'high' | 'normal' | 'low';
-  autoReplied?: boolean;
-  listUnsubscribe?: string;
-  deliveredTo?: string;
-  returnPath?: string;
+  references?: string[] | undefined;
+  inReplyTo?: string | undefined;
+  importance?: 'high' | 'normal' | 'low' | undefined;
+  autoReplied?: boolean | undefined;
+  listUnsubscribe?: string | undefined;
+  deliveredTo?: string | undefined;
+  returnPath?: string | undefined;
 }
 
 /**

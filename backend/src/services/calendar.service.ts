@@ -3,33 +3,33 @@ import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
 export interface CalendarEvent {
-  id?: string | null;
-  summary?: string | null;
-  description?: string | null;
+  id?: string | null | undefined;
+  summary?: string | null | undefined;
+  description?: string | null | undefined;
   start?: {
-    dateTime?: string | null;
-    date?: string | null;
-    timeZone?: string | null;
-  };
+    dateTime?: string | null | undefined;
+    date?: string | null | undefined;
+    timeZone?: string | null | undefined;
+  } | undefined;
   end?: {
-    dateTime?: string | null;
-    date?: string | null;
-    timeZone?: string | null;
-  };
+    dateTime?: string | null | undefined;
+    date?: string | null | undefined;
+    timeZone?: string | null | undefined;
+  } | undefined;
   attendees?: Array<{
-    email?: string | null;
-    responseStatus?: string | null;
-  }>;
-  location?: string | null;
-  conferenceData?: any;
+    email?: string | null | undefined;
+    responseStatus?: string | null | undefined;
+  }> | undefined;
+  location?: string | null | undefined;
+  conferenceData?: any | undefined;
 }
 
 export interface CalendarQueryOptions {
-  timeMin?: string;
-  timeMax?: string;
-  maxResults?: number;
-  singleEvents?: boolean;
-  orderBy?: 'startTime' | 'updated';
+  timeMin?: string | undefined;
+  timeMax?: string | undefined;
+  maxResults?: number | undefined;
+  singleEvents?: boolean | undefined;
+  orderBy?: 'startTime' | 'updated' | undefined;
 }
 
 export interface CalendarServiceError extends Error {
@@ -120,10 +120,12 @@ export class CalendarService extends BaseService {
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: accessToken });
 
+      const googleEvent = this.convertToGoogleEvent(calendarEvent);
+      
       const response = await this.calendarService.events.insert({
         auth,
         calendarId,
-        requestBody: calendarEvent,
+        requestBody: googleEvent,
         sendUpdates: 'all' // Send updates to attendees
       });
 
@@ -142,6 +144,30 @@ export class CalendarService extends BaseService {
       
       this.handleCalendarError(error, 'createEvent');
     }
+  }
+
+  /**
+   * Convert CalendarEvent to Google Calendar API format
+   */
+  private convertToGoogleEvent(calendarEvent: CalendarEvent): any {
+    return {
+      summary: calendarEvent.summary || undefined,
+      description: calendarEvent.description || undefined,
+      start: calendarEvent.start ? {
+        dateTime: calendarEvent.start.dateTime || undefined,
+        timeZone: calendarEvent.start.timeZone || undefined
+      } : undefined,
+      end: calendarEvent.end ? {
+        dateTime: calendarEvent.end.dateTime || undefined,
+        timeZone: calendarEvent.end.timeZone || undefined
+      } : undefined,
+      attendees: calendarEvent.attendees?.map(attendee => ({
+        email: attendee.email || undefined,
+        responseStatus: attendee.responseStatus || undefined
+      })) || undefined,
+      location: calendarEvent.location || undefined,
+      conferenceData: calendarEvent.conferenceData || undefined
+    };
   }
 
   /**
@@ -173,15 +199,20 @@ export class CalendarService extends BaseService {
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: accessToken });
 
-      const response = await this.calendarService.events.list({
+      const listOptions: any = {
         auth,
         calendarId,
         timeMin,
-        timeMax,
         maxResults,
         singleEvents,
         orderBy
-      });
+      };
+      
+      if (timeMax) {
+        listOptions.timeMax = timeMax;
+      }
+      
+      const response = await this.calendarService.events.list(listOptions);
 
       const events = response.data.items || [];
       

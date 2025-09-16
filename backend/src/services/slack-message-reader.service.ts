@@ -251,13 +251,16 @@ export class SlackMessageReaderService extends BaseService {
       });
 
       // Fetch thread replies
-      const response = await this.client.conversations.replies({
+      const replyOptions: any = {
         channel: channelId,
         ts: threadTs,
-        limit: options.limit || 50,
-        oldest: options.oldest,
-        latest: options.latest
-      });
+        limit: options.limit || 50
+      };
+      
+      if (options.oldest) replyOptions.oldest = options.oldest;
+      if (options.latest) replyOptions.latest = options.latest;
+      
+      const response = await this.client.conversations.replies(replyOptions);
 
       if (!response.messages) {
         this.logDebug('No thread messages found', { channelId, threadTs });
@@ -374,15 +377,24 @@ export class SlackMessageReaderService extends BaseService {
       }
 
       const channel = response.channel;
-      const channelInfo = {
+      const channelInfo: {
+        id: string;
+        name: string;
+        type: string;
+        isPrivate: boolean;
+        memberCount?: number;
+        topic?: string;
+        purpose?: string;
+      } = {
         id: channel.id!,
         name: channel.name || 'Unknown',
         type: channel.is_im ? 'im' : channel.is_private ? 'private' : 'public',
-        isPrivate: channel.is_private || false,
-        memberCount: channel.num_members,
-        topic: channel.topic?.value,
-        purpose: channel.purpose?.value
+        isPrivate: channel.is_private || false
       };
+      
+      if (channel.num_members) channelInfo.memberCount = channel.num_members;
+      if (channel.topic?.value) channelInfo.topic = channel.topic.value;
+      if (channel.purpose?.value) channelInfo.purpose = channel.purpose.value;
 
       this.logDebug('Channel information retrieved', channelInfo);
       return channelInfo;
@@ -447,13 +459,16 @@ export class SlackMessageReaderService extends BaseService {
     channelId: string,
     options: SlackMessageHistoryOptions
   ): Promise<SlackMessage[]> {
-    const response = await this.client.conversations.history({
+    const historyOptions: any = {
       channel: channelId,
       limit: Math.min(options.limit || this.rateLimitConfig.maxMessagesPerRequest, this.rateLimitConfig.maxMessagesPerRequest),
-      oldest: options.oldest,
-      latest: options.latest,
       inclusive: options.inclusive || false
-    });
+    };
+    
+    if (options.oldest) historyOptions.oldest = options.oldest;
+    if (options.latest) historyOptions.latest = options.latest;
+    
+    const response = await this.client.conversations.history(historyOptions);
 
     if (!response.messages) {
       this.logDebug('No messages found in channel', { channelId });

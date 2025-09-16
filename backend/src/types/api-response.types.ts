@@ -17,10 +17,10 @@ export interface StandardAPIResponse<T = any> {
   message: string;
   
   /** Response data (optional) */
-  data?: T;
+  data?: T | undefined;
   
   /** Error code for failed operations (optional) */
-  error?: string;
+  error?: string | undefined;
   
   /** Response metadata */
   metadata: ResponseMetadata;
@@ -34,19 +34,19 @@ export interface ResponseMetadata {
   timestamp: string;
   
   /** Request ID for tracking */
-  requestId?: string;
+  requestId?: string | undefined;
   
   /** Session ID if applicable */
-  sessionId?: string;
+  sessionId?: string | undefined;
   
   /** User ID if authenticated */
-  userId?: string;
+  userId?: string | undefined;
   
   /** Execution time in milliseconds */
-  executionTime?: number;
+  executionTime?: number | undefined;
   
   /** API version */
-  version?: string;
+  version?: string | undefined;
   
   /** Additional context-specific metadata */
   [key: string]: any;

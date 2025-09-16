@@ -63,14 +63,14 @@ export interface CalendarParameters extends BaseToolParameters {
  */
 export interface ToolExecutionResult {
   success: boolean;
-  result?: unknown;
-  error?: string;
-  executionTime?: number;
-  metadata?: Record<string, unknown>;
+  result?: unknown | undefined;
+  error?: string | undefined;
+  executionTime?: number | undefined;
+  metadata?: Record<string, unknown> | undefined;
   // Agent-specific properties
-  needsReauth?: boolean;
-  analysis?: string;
-  reasoning?: string;
+  needsReauth?: boolean | undefined;
+  analysis?: string | undefined;
+  reasoning?: string | undefined;
   [key: string]: unknown; // Allow additional properties
 }
 

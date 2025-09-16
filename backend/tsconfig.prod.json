@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "skipLibCheck": true,
-    "noEmitOnError": false
+    "noEmitOnError": true
   },
   "include": ["src/**/*"],
   "exclude": [
