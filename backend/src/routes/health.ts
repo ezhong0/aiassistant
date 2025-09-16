@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { HealthCheckResponse, ServiceStatus } from '../types/api.types';
 import { rateLimitStore } from '../middleware/rate-limiting.middleware';
 import { HealthCheckSchema } from '../schemas/api.schemas';
-import { validate } from '../middleware/validation.middleware';
+import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -32,7 +32,7 @@ const checkServiceHealth = async (serviceName: string, checkFunction: () => Prom
   }
 }
 
-router.get('/', validate({ query: z.object({}) }), async (req: Request, res: Response) => {
+router.get('/', validateRequest({ query: z.object({}) }), async (req: Request, res: Response) => {
   try {
     // Get memory usage with more details
     const memoryUsage = process.memoryUsage();

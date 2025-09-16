@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { BaseAPIResponseSchema, ErrorResponseSchema, SuccessResponseSchema } from './common.schemas';
+import { BaseAPIResponseSchema } from './common.schemas';
 
 // Tool execution schemas
 export const ToolCallSchema = z.object({
@@ -128,4 +128,66 @@ export const CacheOperationSchema = z.object({
   ttl: z.number().optional(),
   success: z.boolean(),
   executionTime: z.number(),
+});
+
+// Response validation schemas
+export const SuccessResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+  data: z.any().optional(),
+  metadata: z.object({
+    timestamp: z.string(),
+    requestId: z.string().optional(),
+    sessionId: z.string().optional(),
+    userId: z.string().optional(),
+    executionTime: z.number().optional(),
+    version: z.string().optional(),
+  }).optional(),
+});
+
+export const ErrorResponseSchema = z.object({
+  success: z.literal(false),
+  error: z.string(),
+  code: z.string().optional(),
+  details: z.record(z.any()).optional(),
+  metadata: z.object({
+    timestamp: z.string(),
+    requestId: z.string().optional(),
+    sessionId: z.string().optional(),
+    userId: z.string().optional(),
+    executionTime: z.number().optional(),
+    version: z.string().optional(),
+  }).optional(),
+});
+
+export const ProfileResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    user: z.object({
+      id: z.string(),
+      email: z.string(),
+      name: z.string(),
+      picture: z.string().optional(),
+    }),
+    metadata: z.object({
+      lastAccess: z.string(),
+      tokenValid: z.boolean(),
+    }),
+  }),
+});
+
+export const AdminUsersResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    users: z.array(z.object({
+      id: z.string(),
+      email: z.string(),
+      name: z.string(),
+      role: z.string(),
+      lastLogin: z.string(),
+    })),
+    total: z.number(),
+    page: z.number(),
+    limit: z.number(),
+  }),
 });

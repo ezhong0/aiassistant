@@ -1,6 +1,6 @@
 import express, { Response } from 'express';
 import { z } from 'zod';
-import { validate } from '../middleware/validation.middleware';
+import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { 
   authenticateToken, 
   optionalAuth, 
@@ -10,6 +10,8 @@ import {
   AuthenticatedRequest 
 } from '../middleware/auth.middleware';
 import { Permission } from '../types/auth.types';
+import { ProfileResponseSchema, AdminUsersResponseSchema, SuccessResponseSchema } from '../schemas/api.schemas';
+import { validateAndSendResponse } from '../utils/response-validation.util';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -32,13 +34,28 @@ const apiHeavyRequestSchema = z.object({
 const emptyQuerySchema = z.object({});
 const emptyBodySchema = z.object({});
 
+// Admin users query schema with pagination
+const adminUsersQuerySchema = z.object({
+  page: z.string().transform(val => parseInt(val, 10)).pipe(z.number().min(1)).optional(),
+  limit: z.string().transform(val => parseInt(val, 10)).pipe(z.number().min(1).max(100)).optional(),
+  search: z.string().optional(),
+  sortBy: z.enum(['name', 'email', 'lastLogin', 'createdAt']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
+
+// Dashboard query schema with optional parameters
+const dashboardQuerySchema = z.object({
+  view: z.enum(['overview', 'detailed', 'compact']).optional(),
+  refresh: z.string().transform(val => val === 'true').pipe(z.boolean()).optional(),
+});
+
 /**
  * GET /protected/profile
  * Get user profile - requires authentication
  */
 router.get('/profile', 
   authenticateToken,
-  validate({ query: emptyQuerySchema }),
+  validateRequest({ query: emptyQuerySchema }),
   (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!; // TypeScript knows this exists due to authenticateToken middleware
@@ -75,7 +92,7 @@ router.get('/profile',
  */
 router.put('/profile', 
   authenticateToken,
-  validate({ body: profileUpdateSchema }),
+  validateRequest({ body: profileUpdateSchema }),
   (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
@@ -114,7 +131,7 @@ router.put('/profile',
  */
 router.get('/users/:userId', 
   authenticateToken, 
-  validate({ params: userIdParamSchema }),
+  validateRequest({ params: userIdParamSchema }),
   requireOwnership('userId'),
   (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -156,7 +173,7 @@ router.get('/users/:userId',
 router.get('/admin/users', 
   authenticateToken,
   requirePermissions([Permission.ADMIN_ACCESS]),
-  validate({ query: emptyQuerySchema }),
+  validateRequest({ query: adminUsersQuerySchema }),
   (req: AuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
@@ -197,7 +214,7 @@ router.get('/admin/users',
  */
 router.get('/dashboard', 
   optionalAuth, 
-  validate({ query: emptyQuerySchema }),
+  validateRequest({ query: dashboardQuerySchema }),
   (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user;
@@ -255,7 +272,7 @@ router.get('/dashboard',
  */
 router.post('/api-heavy', 
   authenticateToken,
-  validate({ body: apiHeavyRequestSchema }),
+  validateRequest({ body: apiHeavyRequestSchema }),
   rateLimitAuth(10, 60 * 1000), // 10 requests per minute
   (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -295,7 +312,7 @@ router.post('/api-heavy',
  */
 router.get('/health', 
   authenticateToken, 
-  validate({ query: emptyQuerySchema }),
+  validateRequest({ query: emptyQuerySchema }),
   (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
   

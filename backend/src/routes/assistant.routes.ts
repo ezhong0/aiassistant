@@ -10,7 +10,8 @@ import {
   HTTP_STATUS, 
   ERROR_CODES 
 } from '../types/api-response.types';
-import { validate, sanitizeString } from '../middleware/validation.middleware';
+import { validateRequest } from '../middleware/enhanced-validation.middleware';
+import { sanitizeString } from '../middleware/validation.middleware';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
@@ -132,13 +133,16 @@ router.post('/text-command',
     RATE_LIMITS.assistant.textCommand.maxRequests, 
     RATE_LIMITS.assistant.textCommand.windowMs
   ),
-  validate({ body: textCommandSchema }),
+  validateRequest({ body: textCommandSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { command, sessionId, accessToken, context } = req.validatedBody as z.infer<typeof textCommandSchema>;
     const user = req.user!;
 
-    const finalSessionId = sessionId || `session-${user.userId}-${Date.now()}`;
+    const finalSessionId = String(sessionId || `session-${user.userId}-${Date.now()}`);
+    
+    // Ensure command is properly typed as string
+    const commandString = String(command);
     
     // For now, we'll work with client-provided context only
     const sessionContext = null;
@@ -150,11 +154,11 @@ router.post('/text-command',
     });
     
     // Use client context directly (no session merging)
-    const mergedContext = context || {};
+    const mergedContext = (context as any) || {};
     
     logger.info('Processing assistant text command', { 
       userId: user.userId, 
-      command: command.substring(0, 100) + (command.length > 100 ? '...' : ''),
+      command: commandString.substring(0, 100) + (commandString.length > 100 ? '...' : ''),
       sessionId: finalSessionId,
       hasContext: !!mergedContext,
       hasAccessToken: !!accessToken,
@@ -176,13 +180,13 @@ router.post('/text-command',
     });
     
     if (mergedContext?.pendingActions && mergedContext.pendingActions.length > 0) {
-      const pendingAction = mergedContext.pendingActions.find(action => action.awaitingConfirmation);
+      const pendingAction = mergedContext.pendingActions.find((action: any) => action.awaitingConfirmation);
       logger.info('Found pending action for confirmation', { pendingAction, command });
       
-      const isConfirmation = await isConfirmationResponse(command);
+      const isConfirmation = await isConfirmationResponse(commandString);
       if (pendingAction && isConfirmation) {
         logger.info('Processing confirmation response', { actionId: pendingAction.actionId });
-        return await handleActionConfirmation(req, res, pendingAction, command, finalSessionId);
+        return await handleActionConfirmation(req, res, pendingAction, commandString, finalSessionId);
       }
     }
 
@@ -202,7 +206,7 @@ router.post('/text-command',
     }
 
     // Get Master Agent response (determines which tools to call)
-    const masterResponse = await masterAgent.processUserInput(command, finalSessionId, user.userId);
+    const masterResponse = await masterAgent.processUserInput(commandString, finalSessionId, user.userId);
     
     // Step 2: First run tools in preview mode to check for confirmation needs
     if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
@@ -223,12 +227,12 @@ router.post('/text-command',
       if (!toolExecutorService) {
         throw new Error('Tool executor service not available');
       }
-      const previewResults = await toolExecutorService.executeTools(
-        masterResponse.toolCalls,
-        executionContext,
-        accessToken,
-        { preview: true } // Run in preview mode
-      );
+        const previewResults = await toolExecutorService.executeTools(
+          masterResponse.toolCalls,
+          executionContext,
+          accessToken as string | undefined,
+          { preview: true } // Run in preview mode
+        );
       
       logger.info('Preview mode execution completed', {
         previewResultsCount: previewResults.length,
@@ -273,8 +277,8 @@ router.post('/text-command',
         // Note: Using stateless architecture with TokenStorageService now
         
         // Generate dynamic confirmation message
-        const confirmationMessage = await generateDynamicConfirmationMessage(masterResponse.toolCalls, previewResults, command);
-        const confirmationPrompt = await generateDynamicConfirmationPrompt(masterResponse.toolCalls, previewResults, command);
+        const confirmationMessage = await generateDynamicConfirmationMessage(masterResponse.toolCalls, previewResults, commandString);
+        const confirmationPrompt = await generateDynamicConfirmationPrompt(masterResponse.toolCalls, previewResults, commandString);
         
         // Return confirmation required response
         const confirmationResponse = ResponseBuilder.confirmationRequired(
@@ -284,7 +288,7 @@ router.post('/text-command',
             toolResults: previewResults,
             pendingActions: pendingActions,
             confirmationPrompt: confirmationPrompt,
-            conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
+            conversationContext: buildConversationContext(commandString, masterResponse.message, mergedContext)
           },
           {
             sessionId: finalSessionId,
@@ -301,12 +305,12 @@ router.post('/text-command',
         const toolResults = await toolExecutorService.executeTools(
           masterResponse.toolCalls,
           executionContext,
-          accessToken,
+          accessToken as string | undefined,
           { preview: false } // Execute normally
         );
         
         const executionStats = toolExecutorService.getExecutionStats(toolResults);
-        const completionMessage = await generateDynamicCompletionMessage(toolResults, command);
+        const completionMessage = await generateDynamicCompletionMessage(toolResults, commandString);
         
         const actionResponse = ResponseBuilder.actionCompleted(
           completionMessage,
@@ -314,7 +318,7 @@ router.post('/text-command',
             sessionId: finalSessionId,
             toolResults,
             executionStats,
-            conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
+            conversationContext: buildConversationContext(commandString, masterResponse.message, mergedContext)
           },
           {
             sessionId: finalSessionId,
@@ -359,7 +363,7 @@ router.post('/text-command',
 router.post('/confirm-action',
   authenticateToken,
   sensitiveOperationRateLimit,
-  validate({ body: confirmActionSchema }),
+  validateRequest({ body: confirmActionSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { actionId, confirmed, sessionId, parameters } = req.validatedBody as z.infer<typeof confirmActionSchema>;
@@ -421,7 +425,7 @@ router.post('/confirm-action',
  */
 router.post('/email/send', 
   authenticateToken,
-  validate({ body: SendEmailRequestSchema }),
+  validateRequest({ body: SendEmailRequestSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { to, subject, body, cc, bcc } = req.validatedBody as z.infer<typeof SendEmailRequestSchema>;
@@ -493,7 +497,7 @@ router.post('/email/send',
  */
 router.get('/email/search', 
   authenticateToken,
-  validate({ query: SearchEmailRequestSchema }),
+  validateRequest({ query: SearchEmailRequestSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { query, maxResults, includeSpamTrash, labelIds } = req.validatedQuery as z.infer<typeof SearchEmailRequestSchema>;
@@ -564,7 +568,7 @@ router.get('/email/search',
  */
 router.get('/status', 
   authenticateToken, 
-  validate({ query: z.object({}) }),
+  validateRequest({ query: z.object({}) }),
   (req: AuthenticatedRequest, res: Response) => {
   res.json({
     success: true,
