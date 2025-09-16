@@ -60,10 +60,8 @@ export const isAgentFactoryInitialized = (): boolean => {
  */
 export const createMasterAgent = (config?: MasterAgentConfig): MasterAgent => {
   try {
-    // Ensure AgentFactory is initialized
-    if (!isAgentFactoryInitialized()) {
-      initializeAgentFactory();
-    }
+    // AgentFactory is already initialized by the main application
+    // No need to check or initialize it again here
     
     const masterAgent = new MasterAgent(config);
     logger.info('MasterAgent created successfully', {

@@ -164,8 +164,9 @@ router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
       // Create a mock SlackInterface instance to test OAuth URL generation
       const mockSlackInterface = new SlackInterface({} as any, {} as any);
       slackOAuthUrl = await mockSlackInterface['generateOAuthUrl'](mockSlackContext);
-    } catch (slackError: any) {
-      slackOAuthUrl = `Error: ${slackError?.message || 'Unknown error'}`;
+    } catch (slackError: unknown) {
+      const errorMessage = slackError instanceof Error ? slackError.message : 'Unknown error';
+      slackOAuthUrl = `Error: ${errorMessage}`;
     }
     
     return res.json({
@@ -308,7 +309,7 @@ router.get('/debug/test-token-exchange', async (req: Request, res: Response) => 
           verified: userInfo.email_verified
         }
       });
-    } catch (exchangeError: any) {
+    } catch (exchangeError: unknown) {
       logger.error('Token exchange test failed:', {
         error: exchangeError instanceof Error ? exchangeError.message : exchangeError,
         stack: exchangeError instanceof Error ? exchangeError.stack : undefined,
@@ -355,17 +356,17 @@ router.get('/debug/token-info', async (req: Request, res: Response) => {
         message: 'Token is valid',
         tokenInfo: response.data
       });
-    } catch (tokenError: any) {
+    } catch (tokenError: unknown) {
       logger.error('Token info check failed:', {
         error: tokenError instanceof Error ? tokenError.message : tokenError,
-        status: tokenError.response?.status,
-        data: tokenError.response?.data
+            status: (tokenError as any).response?.status,
+            data: (tokenError as any).response?.data
       });
       
       return res.status(400).json({
         success: false,
         error: 'Token validation failed',
-        details: tokenError.response?.data || tokenError.message
+        details: (tokenError as any).response?.data || (tokenError as any).message
       });
     }
   } catch (error) {
@@ -398,7 +399,7 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
       return res.status(500).json({ error: 'Auth service not available' });
     }
 
-    const results: any = {
+    const results: Record<string, unknown> = {
       step1_tokenExchange: null,
       step2_tokenValidation: null,
       step3_userinfoTest: null,
@@ -427,11 +428,11 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
           success: true,
           data: tokenInfoResponse.data
         };
-      } catch (tokenError: any) {
+      } catch (tokenError: unknown) {
         results.step2_tokenValidation = {
           success: false,
-          error: tokenError.response?.data || tokenError.message,
-          status: tokenError.response?.status
+          error: (tokenError as any).response?.data || (tokenError as any).message,
+          status: (tokenError as any).response?.status
         };
       }
 
@@ -451,17 +452,17 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
               Authorization: `Bearer ${tokens.access_token}`
             }
           });
-          results.step4_alternativeEndpoints.push({
+          (results as any).step4_alternativeEndpoints.push({
             endpoint,
             success: true,
             data: response.data
           });
-        } catch (endpointError: any) {
-          results.step4_alternativeEndpoints.push({
+        } catch (endpointError: unknown) {
+          (results as any).step4_alternativeEndpoints.push({
             endpoint,
             success: false,
-            status: endpointError.response?.status,
-            error: endpointError.response?.data || endpointError.message
+            status: (endpointError as any).response?.status,
+            error: (endpointError as any).response?.data || (endpointError as any).message
           });
         }
       }
@@ -473,11 +474,11 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
           success: true,
           userInfo
         };
-      } catch (userinfoError: any) {
+      } catch (userinfoError: unknown) {
         results.step3_userinfoTest = {
           success: false,
-          error: userinfoError.message,
-          details: userinfoError.response?.data
+          error: (userinfoError as any).message,
+          details: (userinfoError as any).response?.data
         };
       }
 
@@ -487,11 +488,11 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
         results
       });
 
-    } catch (exchangeError: any) {
+    } catch (exchangeError: unknown) {
       results.step1_tokenExchange = {
         success: false,
-        error: exchangeError.message,
-        details: exchangeError.response?.data
+        error: (exchangeError as any).message,
+        details: (exchangeError as any).response?.data
       };
 
       return res.json({
@@ -500,7 +501,7 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
         results
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Debug detailed token test endpoint error:', error);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
@@ -563,7 +564,7 @@ router.get('/debug/oauth-validation', async (req: Request, res: Response) => {
         scopesIncludeProfile: (params.scope || '').includes('profile')
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Debug OAuth validation endpoint error:', error);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',

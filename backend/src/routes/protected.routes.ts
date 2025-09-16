@@ -1,4 +1,6 @@
 import express, { Response } from 'express';
+import { z } from 'zod';
+import { validate } from '../middleware/validation.middleware';
 import { 
   authenticateToken, 
   optionalAuth, 
@@ -11,6 +13,21 @@ import { Permission } from '../types/auth.types';
 import logger from '../utils/logger';
 
 const router = express.Router();
+
+// Validation schemas
+const profileUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  picture: z.string().url().optional(),
+});
+
+const userIdParamSchema = z.object({
+  userId: z.string().uuid().or(z.string().min(1)),
+});
+
+const apiHeavyRequestSchema = z.object({
+  operation: z.string().min(1).max(100).optional(),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+});
 
 /**
  * GET /protected/profile
@@ -50,12 +67,15 @@ router.get('/profile', authenticateToken, (req: AuthenticatedRequest, res: Respo
  * PUT /protected/profile
  * Update user profile - requires authentication
  */
-router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.put('/profile', 
+  authenticateToken,
+  validate({ body: profileUpdateSchema }),
+  (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
-    const { name, picture } = req.body;
+    const { name, picture } = req.validatedBody as z.infer<typeof profileUpdateSchema>;
     
-    // In a real app, you'd update the user in the database here
+    // Validation is now handled by Zod schema
     logger.info('Profile update requested', { 
       userId: user.userId, 
       updates: { name: !!name, picture: !!picture } 
@@ -88,6 +108,7 @@ router.put('/profile', authenticateToken, (req: AuthenticatedRequest, res: Respo
  */
 router.get('/users/:userId', 
   authenticateToken, 
+  validate({ params: userIdParamSchema }),
   requireOwnership('userId'),
   (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -224,12 +245,17 @@ router.get('/dashboard', optionalAuth, (req: AuthenticatedRequest, res: Response
  */
 router.post('/api-heavy', 
   authenticateToken,
+  validate({ body: apiHeavyRequestSchema }),
   rateLimitAuth(10, 60 * 1000), // 10 requests per minute
   (req: AuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
+      const { operation, parameters } = req.validatedBody as z.infer<typeof apiHeavyRequestSchema>;
       
-      logger.info('Heavy API operation requested', { userId: user.userId });
+      logger.info('Heavy API operation requested', { 
+        userId: user.userId,
+        operation: operation || 'default'
+      });
       
       // Simulate heavy processing
       (globalThis as any).setTimeout(() => {

@@ -1,8 +1,9 @@
 import express from 'express';
 import { 
-  SlackOAuthCallbackSchema,
-  ErrorResponseSchema
-} from '../schemas';
+  SlackWebhookEventSchema,
+  SlackSlashCommandPayloadSchema,
+  SlackInteractiveComponentPayloadSchema
+} from '../schemas/slack.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackInterface } from '../interfaces/slack.interface';
@@ -20,7 +21,6 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Slack OAuth callback handler
    */
   router.get('/oauth/callback', 
-    validateRequest({ query: SlackOAuthCallbackSchema }),
     async (req, res): Promise<void> => {
     try {
       const { code, state, error } = req.query;
@@ -155,7 +155,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Slack Event Subscription endpoint - handles URL verification challenge
    * This is the main endpoint that Slack calls for all events
    */
-  router.post('/events', async (req, res): Promise<void> => {
+  router.post('/events', 
+    validateRequest({ body: SlackWebhookEventSchema }),
+    async (req, res): Promise<void> => {
     const requestStartTime = Date.now();
     
     try {
@@ -223,7 +225,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         const interfaces = getInterfaces ? getInterfaces() : null;
         if (interfaces?.slackInterface) {
           // Process in background - don't block the response
-          interfaces.slackInterface.handleEvent(event, team_id).catch((processError: any) => {
+          interfaces.slackInterface.handleEvent(event, team_id).catch((processError: unknown) => {
             logger.error('Error processing Slack event asynchronously', processError);
           });
         } else {
@@ -246,7 +248,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Slack commands endpoint - handles slash commands
    * This endpoint will be used by the Bolt framework
    */
-  router.post('/commands', async (req, res): Promise<void> => {
+  router.post('/commands', 
+    validateRequest({ body: SlackSlashCommandPayloadSchema }),
+    async (req, res): Promise<void> => {
     try {
       const { command, text, user_id, channel_id } = req.body;
       
@@ -277,7 +281,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   /**
    * Slack interactive components endpoint - handles button clicks, modals, etc.
    */
-  router.post('/interactive', async (req, res): Promise<void> => {
+  router.post('/interactive', 
+    validateRequest({ body: SlackInteractiveComponentPayloadSchema }),
+    async (req, res): Promise<void> => {
     try {
       const payload = req.body.payload;
       if (!payload) {

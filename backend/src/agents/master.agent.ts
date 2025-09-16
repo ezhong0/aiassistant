@@ -3,7 +3,6 @@ import { OpenAIService } from '../services/openai.service';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
-import { initializeAgentFactory } from '../config/agent-factory-init';
 import { getService } from '../services/service-manager';
 import { SlackMessageReaderService } from '../services/slack-message-reader.service';
 import { SlackContext } from '../types/slack.types';
@@ -78,10 +77,8 @@ export class MasterAgent {
   constructor(config?: MasterAgentConfig) {
     // Agents are now stateless - no session management needed
     
-    // Initialize AgentFactory if not already done
-    if (!AgentFactory.getStats().totalTools) {
-      initializeAgentFactory();
-    }
+    // AgentFactory should already be initialized by the main application
+    // No need to initialize it again here
 
     // Generate dynamic system prompt from AgentFactory
     this.systemPrompt = this.generateSystemPrompt();
@@ -133,7 +130,7 @@ export class MasterAgent {
       
       // Register agent schemas
       this.agentSchemas.set('emailAgent', EmailAgent.getOpenAIFunctionSchema());
-      this.agentSchemas.set('contactAgent', ContactAgent.getOpenAIFunctionSchema());
+      this.agentSchemas.set('contactAgent', ContactAgent.getOpenAIFunctionSchema() as any);
       this.agentSchemas.set('calendarAgent', CalendarAgent.getOpenAIFunctionSchema());
       
       logger.info('Agent schemas initialized for OpenAI function calling', {
@@ -171,7 +168,7 @@ export class MasterAgent {
         contactAgent: {
           capabilities: ContactAgent.getCapabilities(),
           limitations: ContactAgent.getLimitations(),
-          schema: ContactAgent.getOpenAIFunctionSchema()
+          schema: ContactAgent.getOpenAIFunctionSchema() as any
         },
         calendarAgent: {
           capabilities: CalendarAgent.getCapabilities(),

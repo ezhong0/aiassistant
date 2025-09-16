@@ -344,7 +344,7 @@ export class AgentFactory {
       
       // Add agent-specific function schemas
       functions.push(EmailAgent.getOpenAIFunctionSchema());
-      functions.push(ContactAgent.getOpenAIFunctionSchema());
+      functions.push(ContactAgent.getOpenAIFunctionSchema() as any);
       functions.push(CalendarAgent.getOpenAIFunctionSchema());
       
       // Add other tools from metadata

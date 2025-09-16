@@ -252,23 +252,23 @@ export function applyComprehensiveValidation() {
  * Error handling middleware for validation errors
  */
 export function handleValidationErrors(
-  error: any,
+  error: unknown,
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
-  if (error.name === 'ZodError') {
+  if (error && typeof error === 'object' && 'name' in error && error.name === 'ZodError') {
     logger.warn('Validation error', {
       path: req.path,
       method: req.method,
-      errors: error.errors,
+      errors: (error as any).errors,
     });
 
     res.status(400).json({
       success: false,
       error: 'Validation failed',
       code: 'VALIDATION_ERROR',
-      details: error.errors.map((err: any) => ({
+      details: (error as any).errors.map((err: any) => ({
         field: err.path.join('.'),
         message: err.message,
         code: err.code,

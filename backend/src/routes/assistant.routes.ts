@@ -20,17 +20,24 @@ import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
 import { ToolExecutorService } from '../services/tool-executor.service';
 import { TokenStorageService } from '../services/token-storage.service';
-import { ToolExecutionContext } from '../types/tools';
+import { ToolExecutionContext, ToolResult, ToolCall } from '../types/tools';
 import { 
-  TextCommandRequest, 
-  TextCommandResponse, 
-  ConfirmActionRequest, 
-  ConfirmActionResponse,
-  SessionDataResponse,
-  
-  EmailSendRequest,
-  EmailOperationResponse
-} from '../types/api.types';
+  SendEmailRequestSchema,
+  SearchEmailRequestSchema
+} from '../schemas/email.schemas';
+
+// Type definitions for better type safety
+type PendingAction = {
+  actionId: string;
+  type: string;
+  parameters: Record<string, unknown>;
+  awaitingConfirmation?: boolean;
+};
+
+type ConfirmationCheck = {
+  needsConfirmation: boolean;
+  action: ToolCall;
+};
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -381,7 +388,7 @@ router.post('/confirm-action',
       }
 
       // Execute the confirmed action
-      const result = await executeConfirmedAction(actionId, parameters, user.userId, sessionId, req.body.accessToken);
+      const result = await executeConfirmedAction(actionId, parameters || {}, user.userId, sessionId, req.body.accessToken);
 
       return res.json({
         success: result.success,
@@ -412,17 +419,15 @@ router.post('/confirm-action',
  * POST /assistant/email/send
  * Direct email sending endpoint
  */
-router.post('/email/send', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/email/send', 
+  authenticateToken,
+  validate({ body: SendEmailRequestSchema }),
+  async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { to, subject, body, cc, bcc } = req.body;
+    const { to, subject, body, cc, bcc } = req.validatedBody as z.infer<typeof SendEmailRequestSchema>;
     const user = req.user!;
     
-    if (!to || !body) {
-      return res.status(400).json({
-        success: false,
-        error: 'Recipient (to) and body are required'
-      });
-    }
+    // Validation is now handled by Zod schema
 
     // Get access token
     const accessToken = req.headers.authorization?.replace('Bearer ', '');
@@ -486,14 +491,17 @@ router.post('/email/send', authenticateToken, async (req: AuthenticatedRequest, 
  * GET /assistant/email/search
  * Search emails
  */
-router.get('/email/search', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/email/search', 
+  authenticateToken,
+  validate({ query: SearchEmailRequestSchema }),
+  async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { q, maxResults } = req.query;
+    const { query, maxResults, includeSpamTrash, labelIds } = req.validatedQuery as z.infer<typeof SearchEmailRequestSchema>;
     const user = req.user!;
     
-    const query = (q as string) || '';
+    // Validation is now handled by Zod schema
     const limit = Math.min(
-      parseInt(maxResults as string) || REQUEST_LIMITS.emailSearch.defaultMaxResults, 
+      maxResults || REQUEST_LIMITS.emailSearch.defaultMaxResults, 
       REQUEST_LIMITS.emailSearch.maxResults
     );
 
@@ -592,7 +600,7 @@ const isConfirmationResponse = async (command: string): Promise<boolean> => {
 const handleActionConfirmation = async (
   req: AuthenticatedRequest,
   res: Response,
-  pendingAction: any,
+  pendingAction: PendingAction,
   command: string,
   sessionId: string
 ): Promise<Response> => {
@@ -651,10 +659,10 @@ const handleActionConfirmation = async (
 /**
  * Check if tool calls require user confirmation
  */
-const checkForConfirmationRequirements = async (toolCalls: any[], command: string): Promise<{
+const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: string): Promise<{
   message: string;
   prompt: string;
-  action: any;
+  action: ToolCall;
 } | null> => {
   // Check for potentially destructive or sensitive operations using AI
   const sensitiveOperations = [];
@@ -663,7 +671,7 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (aiClassificationService) {
         const requiresConfirmation = await aiClassificationService.operationRequiresConfirmation(
-          tc.parameters.query, 
+          tc.parameters.query as string, 
           tc.name
         );
         if (requiresConfirmation) {
@@ -686,21 +694,20 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
       const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
       
       if (toolRoutingService) {
-        const userQuery = operation.parameters?.query || `Execute ${operation.name} operation`;
+        const userQuery = (operation?.parameters?.query as string) || `Execute ${operation?.name} operation`;
         const confirmationMessage = await toolRoutingService.generateConfirmationMessage(
-          operation.name,
+          operation?.name || 'unknown',
           userQuery,
-          operation.parameters
+          operation?.parameters
         );
         
         return {
           message: confirmationMessage.message,
           prompt: confirmationMessage.prompt,
           action: {
-            actionId,
-            type: operation.name,
-            parameters: operation.parameters,
-            awaitingConfirmation: true
+            name: operation?.name || 'unknown',
+            parameters: operation?.parameters || {},
+            ...(operation as any) // Include any additional properties
           }
         };
       }
@@ -720,8 +727,8 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
       }
     };
 
-    const fallback = fallbackMessages[operation.name] || {
-      message: `I'm about to execute a ${operation.name} operation. Would you like me to proceed?`,
+    const fallback = fallbackMessages[operation?.name || 'unknown'] || {
+      message: `I'm about to execute a ${operation?.name || 'unknown'} operation. Would you like me to proceed?`,
       prompt: 'Reply with "yes" to continue or "no" to cancel.'
     };
 
@@ -729,10 +736,9 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
       message: fallback.message,
       prompt: fallback.prompt,
       action: {
-        actionId,
-        type: operation.name,
-        parameters: operation.parameters,
-        awaitingConfirmation: true
+        name: operation?.name || 'unknown',
+        parameters: operation?.parameters || {},
+        ...(operation as any) // Include any additional properties
       }
     };
   }
@@ -745,11 +751,11 @@ const checkForConfirmationRequirements = async (toolCalls: any[], command: strin
  */
 const executeConfirmedAction = async (
   actionId: string,
-  parameters: any,
+  parameters: Record<string, unknown>,
   userId: string,
   sessionId?: string,
   accessToken?: string
-): Promise<{ success: boolean; message: string; data?: any }> => {
+): Promise<{ success: boolean; message: string; data?: unknown }> => {
   try {
     logger.info('Executing confirmed action', { actionId, userId, sessionId });
     
@@ -773,13 +779,13 @@ const executeConfirmedAction = async (
     };
 
     // Use AI-powered tool selection instead of hardcoded action type mapping
-    let toolCall: any;
+    let toolCall: ToolCall;
     try {
       const { ToolRoutingService } = await import('../services/tool-routing.service');
       const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
       
       if (toolRoutingService) {
-        const routingDecision = await toolRoutingService.selectAgentForTask(query, executionContext);
+        const routingDecision = await toolRoutingService.selectAgentForTask(query as string, executionContext);
         toolCall = routingDecision.toolCall;
         
         logger.info('AI tool routing completed', {
@@ -801,7 +807,7 @@ const executeConfirmedAction = async (
         'slack': 'slackAgent'
       };
       
-      const agentName = actionTypeMapping[actionType];
+      const agentName = actionTypeMapping[actionType as string];
       if (!agentName) {
         return {
           success: false,
@@ -859,12 +865,12 @@ const executeConfirmedAction = async (
  * Format assistant response based on results and user preferences
  */
 const formatAssistantResponse = async (
-  masterResponse: any,
-  toolResults: any[],
+  masterResponse: ToolResult,
+  toolResults: ToolResult[],
   originalCommand: string,
   verbosity: 'minimal' | 'normal' | 'detailed'
 ): Promise<{
-  formattedResponse: { message: string; data?: any };
+  formattedResponse: { message: string; data?: unknown };
   responseType: 'response' | 'action_completed' | 'partial_success' | 'error';
 }> => {
   const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
@@ -875,9 +881,9 @@ const formatAssistantResponse = async (
   const hasErrors = toolResults.some(result => !result.success);
   const successfulResults = toolResults.filter(r => r.success && r.toolName !== 'Think');
   
-  let message = masterResponse.message;
+  let message = (masterResponse as any).message || 'Operation completed';
   let responseType: 'response' | 'action_completed' | 'partial_success' | 'error' = 'response';
-  let responseData: any = {};
+  let responseData: Record<string, unknown> = {};
 
   if (stats.successful > 0) {
     responseType = hasErrors ? 'partial_success' : 'action_completed';
@@ -942,8 +948,8 @@ const formatAssistantResponse = async (
 const buildConversationContext = (
   userCommand: string,
   assistantResponse: string,
-  existingContext?: any
-): any => {
+  existingContext?: Record<string, unknown>
+): Record<string, unknown> => {
   const newEntry = {
     role: 'user' as const,
     content: userCommand,
@@ -960,7 +966,7 @@ const buildConversationContext = (
   
   return {
     conversationHistory: [
-      ...history.slice(-10), // Keep last 10 entries
+      ...(history as any[]).slice(-10), // Keep last 10 entries
       newEntry,
       responseEntry
     ],
@@ -969,7 +975,7 @@ const buildConversationContext = (
 }
 
 // Helper functions
-const extractPendingActions = (toolResults: any[]): any[] => {
+const extractPendingActions = (toolResults: ToolResult[]): PendingAction[] => {
   return toolResults
     .filter(result => result.result && typeof result.result === 'object' && 'awaitingConfirmation' in result.result)
     .map(result => ({
@@ -984,7 +990,7 @@ const extractPendingActions = (toolResults: any[]): any[] => {
     }));
 }
 
-const generateDynamicConfirmationMessage = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
+const generateDynamicConfirmationMessage = async (toolCalls: ToolCall[], toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
     const openaiService = masterAgent?.getOpenAIService();
     if (openaiService) {
@@ -1012,7 +1018,7 @@ const generateDynamicConfirmationMessage = async (toolCalls: any[], toolResults:
   return 'I need your confirmation before proceeding with this action.';
 }
 
-const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
+const generateDynamicConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
     const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
@@ -1033,7 +1039,7 @@ const generateDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: 
   }
 };
 
-const generateFallbackDynamicConfirmationPrompt = async (toolCalls: any[], toolResults: any[], userCommand: string): Promise<string> => {
+const generateFallbackDynamicConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
     const openaiService = masterAgent?.getOpenAIService();
     if (openaiService) {
@@ -1067,7 +1073,7 @@ const generateFallbackDynamicConfirmationPrompt = async (toolCalls: any[], toolR
   return 'Reply with "yes" to proceed or "no" to cancel.';
 }
 
-const generateConfirmationPrompt = async (toolCalls: any[], toolResults: any[]): Promise<string> => {
+const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[]): Promise<string> => {
   try {
     const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
@@ -1092,7 +1098,7 @@ const generateConfirmationPrompt = async (toolCalls: any[], toolResults: any[]):
   }
 };
 
-const generateFallbackConfirmationPrompt = (toolCalls: any[], toolResults: any[]): string => {
+const generateFallbackConfirmationPrompt = (toolCalls: ToolCall[], toolResults: ToolResult[]): string => {
   const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
   if (!mainAction) {
     return 'Would you like me to proceed with this action?';
@@ -1107,7 +1113,7 @@ const generateFallbackConfirmationPrompt = (toolCalls: any[], toolResults: any[]
   return 'Would you like me to proceed with this action?';
 }
 
-const generateDynamicCompletionMessage = async (toolResults: any[], userCommand: string): Promise<string> => {
+const generateDynamicCompletionMessage = async (toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
     const openaiService = masterAgent?.getOpenAIService();
     if (openaiService) {
@@ -1165,7 +1171,7 @@ const generateDynamicCancelMessage = async (actionId: string): Promise<string> =
   return 'Action cancelled.';
 }
 
-const generateCompletionMessage = (toolResults: any[]): string => {
+const generateCompletionMessage = (toolResults: ToolResult[]): string => {
   const successfulResults = toolResults.filter(r => r.success);
   const failedResults = toolResults.filter(r => !r.success);
   

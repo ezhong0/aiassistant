@@ -124,7 +124,7 @@ You are a specialized contact discovery and management agent.
     /**
      * Generate OpenAI function calling schema for this agent
      */
-    static getOpenAIFunctionSchema(): any {
+    static getOpenAIFunctionSchema(): Record<string, unknown> {
       return {
         name: 'search_contacts',
         description: 'Search and retrieve contact information from Google Contacts and email history. Use this to find contact details before sending emails or creating calendar events.',
@@ -377,7 +377,7 @@ You are a specialized contact discovery and management agent.
   /**
    * Sanitize sensitive data from logs
    */
-  protected sanitizeForLogging(params: ContactAgentRequest): any {
+  protected sanitizeForLogging(params: ContactAgentRequest): Record<string, unknown> {
     return {
       query: params.query?.substring(0, 100) + (params.query?.length > 100 ? '...' : ''),
       accessToken: '[REDACTED]',
