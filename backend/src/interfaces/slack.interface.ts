@@ -1,12 +1,39 @@
 import { WebClient } from '@slack/web-api';
 import { ServiceManager, getService } from '../services/service-manager';
-import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../types/slack.types';
+import {
+  SlackContext,
+  SlackEventType,
+  SlackAgentRequest,
+  SlackAgentResponse,
+  SlackEvent,
+  SlackSayFunction,
+  SlackMessage,
+  SlackBlock,
+  SlackRespondFunction,
+  SlackHandlers,
+  SlackSlashCommandPayload
+} from '../types/slack.types';
 import { ToolExecutionContext, ToolResult } from '../types/tools';
 import { TokenStorageService } from '../services/token-storage.service';
 import { TokenManager } from '../services/token-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
 import { ToolRoutingService } from '../services/tool-routing.service';
 import logger from '../utils/logger';
+import { APP_CONSTANTS } from '../config/constants';
+import { MasterAgentResponse } from '../agents/master.agent';
+import {
+  validateSlackEvent,
+  validateSlackContext,
+  validateSlackMessage,
+  isSlackEvent,
+  isSlackContext
+} from '../utils/type-guards';
+
+// Master Agent interface
+interface MasterAgentInterface {
+  processUserInput: (message: string, sessionId: string, userId: string, context: SlackContext) => Promise<MasterAgentResponse>;
+  processToolResultsWithLLM: (message: string, toolResults: ToolResult[], sessionId: string) => Promise<string>;
+}
 
 export interface SlackConfig {
   signingSecret: string;
@@ -23,7 +50,7 @@ export class SlackInterface {
   private config: SlackConfig;
   private tokenStorageService: TokenStorageService | null = null;
   private tokenManager: TokenManager | null = null;
-  private processedEvents = new Set<string>(); // Track processed events to prevent duplicates
+  private processedEvents = new Map<string, number>(); // Track processed events with timestamps for TTL
   private pendingActions = new Map<string, any>(); // Store pending actions awaiting confirmation
   private botUserId: string | null = null; // Cache bot user ID to prevent infinite loops
 
@@ -70,50 +97,51 @@ export class SlackInterface {
   /**
    * Handle Slack events directly
    */
-  public async handleEvent(event: any, teamId: string): Promise<void> {
+  public async handleEvent(event: unknown, teamId: string): Promise<void> {
     try {
+      // Validate event structure using type guards
+      const validatedEvent = validateSlackEvent(event);
+
       // Create unique event ID for deduplication
-      const eventId = `${event.ts}-${event.user}-${event.channel}-${event.type}`;
-      
-      // Check if we've already processed this event
+      const ts = 'ts' in validatedEvent ? validatedEvent.ts : Date.now().toString();
+      const user = 'user' in validatedEvent ? validatedEvent.user : 'user_id' in validatedEvent ? (validatedEvent as any).user_id : 'unknown';
+      const channel = 'channel' in validatedEvent ? validatedEvent.channel : 'channel_id' in validatedEvent ? (validatedEvent as any).channel_id : 'unknown';
+      const eventType = 'type' in validatedEvent ? validatedEvent.type : 'slash_command';
+      const eventId = `${ts}-${user}-${channel}-${eventType}`;
+
+      // Check if we've already processed this event (TTL-based)
+      this.cleanupExpiredEvents();
       if (this.processedEvents.has(eventId)) {
         logger.debug('Duplicate event detected, skipping');
         return;
       }
-      
-      // Mark event as being processed
-      this.processedEvents.add(eventId);
-      
-      // Clean up old events (keep only last 1000 to prevent memory leaks)
-      if (this.processedEvents.size > 1000) {
-        const eventsArray = Array.from(this.processedEvents);
-        const eventsToRemove = eventsArray.slice(0, 500);
-        eventsToRemove.forEach(id => this.processedEvents.delete(id));
-      }
+
+      // Mark event as being processed with timestamp
+      this.processedEvents.set(eventId, Date.now());
       
       logger.debug('Processing Slack event', {
         eventId,
-        eventType: event.type,
-        userId: event.user,
-        channelId: event.channel
+        eventType: eventType,
+        userId: user,
+        channelId: channel
       });
 
       // Skip bot messages to prevent infinite loops
-      if (event.bot_id || event.subtype === 'bot_message') {
+      if ((validatedEvent as any).bot_id || (validatedEvent as any).subtype === 'bot_message') {
         logger.debug('Bot message detected, skipping to prevent infinite loop', {
           eventId,
-          botId: event.bot_id,
-          subtype: event.subtype
+          botId: (validatedEvent as any).bot_id,
+          subtype: (validatedEvent as any).subtype
         });
         return;
       }
 
       // Skip messages from the bot user itself
-      if (this.botUserId && event.user === this.botUserId) {
+      if (this.botUserId && user === this.botUserId) {
         logger.debug('Message from bot user detected, skipping to prevent infinite loop', {
           eventId,
           botUserId: this.botUserId,
-          eventUserId: event.user
+          eventUserId: user
         });
         return;
       }
@@ -126,11 +154,11 @@ export class SlackInterface {
           logger.debug('Bot user ID cached', { botUserId: this.botUserId });
           
           // Double-check with cached value
-          if (event.user === this.botUserId) {
+          if (user === this.botUserId) {
             logger.debug('Message from bot user detected (cached check), skipping to prevent infinite loop', {
               eventId,
               botUserId: this.botUserId,
-              eventUserId: event.user
+              eventUserId: user
             });
             return;
           }
@@ -140,24 +168,31 @@ export class SlackInterface {
       }
 
       // Create Slack context from event
+      const threadTs = 'thread_ts' in validatedEvent ? validatedEvent.thread_ts : undefined;
       const slackContext: SlackContext = {
-        userId: event.user,
-        channelId: event.channel,
+        userId: user,
+        channelId: channel,
         teamId: teamId,
-        threadTs: event.ts,
-        isDirectMessage: event.channel_type === 'im'
+        threadTs: threadTs,
+        isDirectMessage: (validatedEvent as any).channel_type === 'im'
       };
+
+      // Validate the created context using type guards
+      if (!isSlackContext(slackContext)) {
+        logger.error('Invalid SlackContext created from event', { eventId, slackContext });
+        return;
+      }
 
       // Enforce DM-only mode - reject channel-based interactions
       if (!slackContext.isDirectMessage) {
         logger.warn('Channel interaction rejected - DM-only mode enforced', {
           eventId,
-          eventType: event.type,
-          userId: event.user,
-          channelId: event.channel,
-          channelType: event.channel_type
+          eventType: eventType,
+          userId: user,
+          channelId: channel,
+          channelType: (validatedEvent as any).channel_type
         });
-        
+
         // Send a polite message explaining DM-only policy
         await this.client.chat.postMessage({
           channel: slackContext.channelId,
@@ -166,36 +201,51 @@ export class SlackInterface {
         return;
       }
 
-      // Determine event type
-      let eventType: SlackEventType;
-      if (event.type === 'app_mention') {
-        eventType = 'app_mention';
-      } else if (event.type === 'message') {
-        eventType = 'message';
+      // Determine event type for processing
+      let processEventType: SlackEventType;
+      if (eventType === 'app_mention') {
+        processEventType = 'app_mention';
+      } else if (eventType === 'message') {
+        processEventType = 'message';
+      } else if (eventType === 'slash_command') {
+        processEventType = 'slash_command';
       } else {
-        logger.warn('Unsupported event type', { eventType: event.type });
+        logger.warn('Unsupported event type', { eventType: eventType });
         return;
       }
 
       // Process the event using existing logic
       await this.handleSlackEvent(
-        event.text || '', 
-        slackContext, 
-        eventType,
+        (validatedEvent as any).text || '',
+        slackContext,
+        processEventType,
         {
-          say: async (message: any) => {
+          say: async (message: string | SlackMessage) => {
             // Send response back to Slack via Web API
-            await this.client.chat.postMessage({
+            const postMessageArgs: any = {
               channel: slackContext.channelId,
-              text: typeof message === 'string' ? message : message.text,
-              blocks: message.blocks
-            });
+              text: typeof message === 'string' ? message : message.text
+            };
+
+            if (typeof message !== 'string' && message.blocks) {
+              postMessageArgs.blocks = message.blocks;
+            }
+
+            await this.client.chat.postMessage(postMessageArgs);
           },
           client: this.client
         }
       );
 
     } catch (error) {
+      if (error instanceof Error && error.message.includes('Invalid SlackEvent')) {
+        logger.warn('Invalid Slack event structure received', {
+          error: error.message,
+          eventData: typeof event === 'object' ? JSON.stringify(event) : event
+        });
+        return; // Silently ignore invalid events
+      }
+
       logger.error('Error handling Slack event directly', error);
     }
   }
@@ -204,43 +254,66 @@ export class SlackInterface {
   /**
    * Enhanced context extraction from Slack events
    */
-  private async createSlackContextFromEvent(event: any, payload?: any): Promise<SlackContext> {
+  private async createSlackContextFromEvent(event: SlackEvent, payload?: SlackEvent): Promise<SlackContext> {
     try {
+      // Extract user ID safely from different event types
+      const userId = 'user' in event ? event.user : 'user_id' in event ? (event as any).user_id : 'unknown';
+
       // Get additional user information if available
       let userName: string | undefined;
       let userEmail: string | undefined;
-      
-      try {
-        const userInfo = await this.client.users.info({ user: event.user });
-        if (userInfo.user) {
-          userName = userInfo.user.name;
-          userEmail = userInfo.user.profile?.email;
+
+      if (userId && userId !== 'unknown') {
+        try {
+          const userInfo = await this.client.users.info({ user: userId });
+          if (userInfo.user) {
+            userName = userInfo.user.name;
+            userEmail = userInfo.user.profile?.email;
+          }
+        } catch (userError) {
+          logger.debug('Could not fetch additional user info:', userError);
         }
-      } catch (userError) {
-        logger.debug('Could not fetch additional user info:', userError);
       }
 
-      const teamId = event.team_id || payload?.team?.id || (await this.client.auth.test()).team_id;
+      // Extract team ID safely from different event types
+      const teamId = ('team_id' in event ? (event as any).team_id : null) ||
+                     (payload && 'team' in payload ? (payload as any).team?.id : null) ||
+                     (await this.client.auth.test()).team_id;
       
+      // Extract channel ID safely from different event types
+      const channelId = 'channel' in event ? event.channel : 'channel_id' in event ? (event as any).channel_id : 'unknown';
+
+      // Extract thread timestamp safely
+      const threadTs = 'thread_ts' in event ? event.thread_ts : undefined;
+
+      // Extract channel type safely
+      const isDirectMessage = 'channel_type' in event ? (event as any).channel_type === 'im' : false;
+
       return {
-        userId: event.user || event.user_id,
-        channelId: event.channel || event.channel_id,
+        userId,
+        channelId,
         teamId: teamId as string,
-        threadTs: event.thread_ts,
-        isDirectMessage: event.channel_type === 'im',
+        threadTs,
+        isDirectMessage,
         userName,
         userEmail
       };
     } catch (error) {
       logger.error('Error creating enhanced Slack context:', error);
       
-      // Fallback to basic context
+      // Fallback to basic context with safe property access
+      const fallbackUserId = 'user' in event ? event.user : 'user_id' in event ? (event as any).user_id : 'unknown';
+      const fallbackChannelId = 'channel' in event ? event.channel : 'channel_id' in event ? (event as any).channel_id : 'unknown';
+      const fallbackTeamId = 'team_id' in event ? (event as any).team_id : 'unknown';
+      const fallbackThreadTs = 'thread_ts' in event ? event.thread_ts : undefined;
+      const fallbackIsDirectMessage = 'channel_type' in event ? (event as any).channel_type === 'im' : false;
+
       return {
-        userId: event.user || event.user_id || 'unknown',
-        channelId: event.channel || event.channel_id || 'unknown',
-        teamId: event.team_id || 'unknown',
-        threadTs: event.thread_ts,
-        isDirectMessage: event.channel_type === 'im'
+        userId: fallbackUserId,
+        channelId: fallbackChannelId,
+        teamId: fallbackTeamId,
+        threadTs: fallbackThreadTs,
+        isDirectMessage: fallbackIsDirectMessage
       };
     }
   }
@@ -317,7 +390,13 @@ export class SlackInterface {
   /**
    * Send welcome message to new users
    */
-  private async sendWelcomeMessage(say: any, context: SlackContext): Promise<void> {
+  private async sendWelcomeMessage(say: SlackSayFunction, context: SlackContext): Promise<void> {
+    // Validate context before proceeding
+    if (!isSlackContext(context)) {
+      logger.error('Invalid SlackContext provided to sendWelcomeMessage');
+      return;
+    }
+
     const welcomeMessage = {
       text: "👋 Welcome to your AI Assistant!",
       blocks: [
@@ -367,13 +446,21 @@ export class SlackInterface {
       ]
     };
 
-    await say(welcomeMessage);
+    // Validate message before sending
+    try {
+      validateSlackMessage(welcomeMessage);
+      await say(welcomeMessage as SlackMessage);
+    } catch (error) {
+      logger.error('Invalid welcome message structure', { error });
+      // Fallback to simple text message
+      await say({ text: "👋 Welcome to your AI Assistant!" });
+    }
   }
 
   /**
    * Send a welcome message specifically for email-related requests for first-time users
    */
-  private async sendEmailWelcomeMessage(say: any, context: SlackContext): Promise<void> {
+  private async sendEmailWelcomeMessage(say: SlackSayFunction, context: SlackContext): Promise<void> {
     try {
       const oauthUrl = await this.generateOAuthUrl(context);
       
@@ -419,7 +506,7 @@ export class SlackInterface {
         ]
       };
 
-      await say(welcomeMessage);
+      await say(welcomeMessage as SlackMessage);
     } catch (error) {
       logger.error('Error sending email welcome message', { error, userId: context.userId });
       
@@ -433,7 +520,7 @@ export class SlackInterface {
   /**
    * Format quick help response for empty commands
    */
-  private formatQuickHelpResponse(): any {
+  private formatQuickHelpResponse(): SlackMessage {
     return {
       response_type: 'ephemeral' as const,
       text: "👋 How can I help you today?",
@@ -465,7 +552,7 @@ export class SlackInterface {
   /**
    * Format comprehensive help response
    */
-  private formatHelpResponse(): any {
+  private formatHelpResponse(): SlackMessage {
     return {
       response_type: 'ephemeral' as const,
       text: "🤖 AI Assistant Help",
@@ -519,9 +606,12 @@ export class SlackInterface {
           type: "context",
           elements: [
             {
-              type: "mrkdwn",
-              text: "💡 *Example:* `/assistant help me organize my day` or `/assistant what's the weather like?`"
-            }
+              type: "plain_text_input" as any, // Temporary fix for complex Slack type
+              text: {
+                type: "mrkdwn",
+                text: "💡 *Example:* `/assistant help me organize my day` or `/assistant what's the weather like?`"
+              }
+            } as any
           ]
         }
       ]
@@ -531,7 +621,7 @@ export class SlackInterface {
   /**
    * Format help response for slash commands with empty input
    */
-  private formatSlashCommandHelp(): any {
+  private formatSlashCommandHelp(): SlackMessage {
     return {
       response_type: 'ephemeral' as const,
       text: "👋 How can I help you today?",
@@ -563,14 +653,14 @@ export class SlackInterface {
   /**
    * Create Slack context from event
    */
-  private async createSlackContext(event: any): Promise<SlackContext> {
+  private async createSlackContext(event: SlackEvent): Promise<SlackContext> {
     return this.createSlackContextFromEvent(event);
   }
 
   /**
    * Create Slack context from slash command
    */
-  private createSlackContextFromCommand(command: any): SlackContext {
+  private createSlackContextFromCommand(command: SlackSlashCommandPayload): SlackContext {
     return {
       userId: command.user_id,
       channelId: command.channel_id,
@@ -604,8 +694,8 @@ export class SlackInterface {
     context: SlackContext, 
     eventType: SlackEventType,
     slackHandlers: { 
-      say: any; 
-      client: any; 
+      say: SlackSayFunction;
+      client: WebClient; 
       thread_ts?: string;
       commandInfo?: {
         command: string;
@@ -792,7 +882,7 @@ export class SlackInterface {
    */
   private async routeToAgent(request: SlackAgentRequest): Promise<SlackAgentResponse> {
     const startTime = Date.now();
-    let masterAgent: any = null;
+    let masterAgent: MasterAgentInterface | null = null;
     
     try {
       logger.info('Routing Slack request to MasterAgent', { 
@@ -1091,9 +1181,9 @@ export class SlackInterface {
    * Format agent response for Slack with comprehensive formatting
    */
   private async formatAgentResponseForSlack(
-    masterResponse: any, 
+    masterResponse: MasterAgentResponse,
     slackContext: SlackContext
-  ): Promise<{ text: string; blocks?: any[] }> {
+  ): Promise<{ text: string; blocks?: SlackBlock[] }> {
     try {
       logger.debug('Formatting agent response for Slack', {
         hasMessage: !!masterResponse.message,
@@ -1234,7 +1324,7 @@ export class SlackInterface {
   /**
    * Send help message for slash commands
    */
-  private async sendHelpMessage(respond: any, context: SlackContext): Promise<void> {
+  private async sendHelpMessage(respond: SlackRespondFunction, context: SlackContext): Promise<void> {
     try {
       const blocks = [
         {
@@ -1302,7 +1392,7 @@ export class SlackInterface {
   /**
    * Handle authentication-related commands
    */
-  private async handleAuthCommand(respond: any, context: SlackContext): Promise<void> {
+  private async handleAuthCommand(respond: SlackRespondFunction, context: SlackContext): Promise<void> {
     try {
       const hasOAuth = await this.hasOAuthTokens(context);
       
@@ -1327,7 +1417,7 @@ export class SlackInterface {
   /**
    * Handle status command to check authentication status
    */
-  private async handleStatusCommand(respond: any, context: SlackContext): Promise<void> {
+  private async handleStatusCommand(respond: SlackRespondFunction, context: SlackContext): Promise<void> {
     try {
       const hasOAuth = await this.hasOAuthTokens(context);
       const statusMessage = hasOAuth ? 
@@ -2020,8 +2110,8 @@ export class SlackInterface {
    * Enhanced response sending functionality using WebClient
    */
   private async sendFormattedMessage(
-    channelId: string, 
-    blocks: any[], 
+    channelId: string,
+    blocks: SlackBlock[],
     options?: {
       text?: string;
       response_type?: 'in_channel' | 'ephemeral';
@@ -2031,7 +2121,8 @@ export class SlackInterface {
     try {
       const messagePayload: any = {
         channel: channelId,
-        blocks: blocks
+        blocks: blocks,
+        text: options?.text
       };
 
       // Add optional parameters
@@ -2181,6 +2272,49 @@ export class SlackInterface {
 • "Find contact information for Sarah Johnson"
 
 Need more help? Just ask!`;
+  }
+
+  /**
+   * Clean up expired events from processedEvents Map based on TTL
+   */
+  private cleanupExpiredEvents(): void {
+    const now = Date.now();
+    const expiredEvents: string[] = [];
+
+    // Find expired events
+    for (const [eventId, timestamp] of this.processedEvents.entries()) {
+      if (now - timestamp > APP_CONSTANTS.EVENT_TTL_MS) {
+        expiredEvents.push(eventId);
+      }
+    }
+
+    // Remove expired events
+    expiredEvents.forEach(eventId => {
+      this.processedEvents.delete(eventId);
+    });
+
+    // Log cleanup if events were removed
+    if (expiredEvents.length > 0) {
+      logger.debug('Cleaned up expired events', {
+        expiredCount: expiredEvents.length,
+        remainingCount: this.processedEvents.size
+      });
+    }
+
+    // Safety fallback - if we still have too many events, remove oldest ones
+    if (this.processedEvents.size > APP_CONSTANTS.EVENT_CLEANUP_THRESHOLD) {
+      const entries = Array.from(this.processedEvents.entries());
+      entries.sort((a, b) => a[1] - b[1]); // Sort by timestamp
+      const toRemove = entries.slice(0, 500); // Remove oldest 500
+      toRemove.forEach(([eventId]) => {
+        this.processedEvents.delete(eventId);
+      });
+
+      logger.warn('Emergency cleanup performed - removed oldest events', {
+        removedCount: toRemove.length,
+        remainingCount: this.processedEvents.size
+      });
+    }
   }
 
   /**

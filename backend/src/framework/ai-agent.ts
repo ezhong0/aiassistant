@@ -7,6 +7,13 @@ import logger from '../utils/logger';
 import { aiConfigService } from '../config/ai-config';
 import { AGENT_HELPERS } from '../config/agent-config';
 import { setTimeout as sleep } from 'timers/promises';
+import {
+  ToolParameters,
+  ToolExecutionResult,
+  AgentExecutionSummary,
+  ThinkParameters,
+  validateToolParameters
+} from '../types/agent-parameters';
 
 /**
  * AI Planning Configuration
@@ -33,7 +40,7 @@ export interface AIPlanStep {
   id: string;
   tool: string;
   description: string;
-  parameters: any;
+  parameters: ToolParameters;
   dependencies?: string[];
   estimatedTime?: number;
   requiresConfirmation?: boolean;
@@ -59,7 +66,7 @@ export interface AIPlan {
 export interface AITool {
   name: string;
   description: string;
-  parameters: any;
+  parameters: Record<string, unknown>;
   examples?: string[];
   estimatedExecutionTime?: number;
   requiresConfirmation?: boolean;
@@ -408,6 +415,8 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    * Enhanced with proper error handling and graceful degradation
    */
   protected async executeWithAIPlanning(params: TParams, context: ToolExecutionContext): Promise<TResult> {
+    const startTime = Date.now();
+
     // Check AI service availability first
     const openaiService = this.getOpenAIService();
     if (!openaiService || !openaiService.isReady()) {
@@ -454,7 +463,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     const executionResults = await this.executePlan(plan, params, context);
 
     // Step 3: Synthesize results
-    return this.synthesizeResults(plan, executionResults, params, context);
+    return this.synthesizeResults(plan, executionResults, params, context, startTime);
   }
 
   /**
@@ -683,7 +692,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   /**
    * Execute a think step (analysis/reasoning)
    */
-  protected async executeThinkStep(parameters: any, _context: ToolExecutionContext): Promise<any> {
+  protected async executeThinkStep(parameters: ThinkParameters, _context: ToolExecutionContext): Promise<ToolExecutionResult> {
     const openaiService = this.getOpenAIService();
     if (!openaiService || !openaiService.isReady()) {
       return { 
@@ -701,9 +710,12 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
       return {
         success: true,
-        analysis: response,
-        reasoning: response,
-        timestamp: new Date().toISOString()
+        result: response,
+        metadata: {
+          analysis: response,
+          reasoning: response,
+          timestamp: new Date().toISOString()
+        }
       };
     } catch (error) {
       return {
@@ -720,7 +732,8 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     plan: AIPlan,
     executionResults: Map<string, any>,
     params: TParams,
-    context: ToolExecutionContext
+    context: ToolExecutionContext,
+    startTime?: number
   ): Promise<TResult> {
     // Default synthesis - combine all successful results
     const successfulResults = Array.from(executionResults.values())
@@ -730,13 +743,13 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       .filter(result => result?.success === false);
 
     // Build result summary
-    const summary = {
-      planId: plan.id,
+    const summary: AgentExecutionSummary = {
       totalSteps: plan.steps.length,
       successfulSteps: successfulResults.length,
       failedSteps: failedResults.length,
-      executionTime: Date.now(),
-      results: Object.fromEntries(executionResults)
+      totalExecutionTime: startTime ? Date.now() - startTime : 0,
+      errors: failedResults.map(r => r.error || 'Unknown error'),
+      warnings: []
     };
 
       this.logger.debug('AI plan results synthesized', {
@@ -828,9 +841,9 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    * Override this method to customize how results are formatted
    */
   protected abstract buildFinalResult(
-    summary: any,
-    successfulResults: any[],
-    failedResults: any[],
+    summary: AgentExecutionSummary,
+    successfulResults: ToolExecutionResult[],
+    failedResults: ToolExecutionResult[],
     params: TParams,
     context: ToolExecutionContext
   ): TResult;
@@ -992,7 +1005,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   /**
    * Helper method to create typed errors with consistent structure
    */
-  protected createError(message: string, code?: string, details?: any): Error {
+  protected createError(message: string, code?: string, details?: Record<string, unknown>): Error {
     const error = new Error(message) as any;
     if (code) error.code = code;
     if (details) error.details = details;
@@ -1164,7 +1177,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   /**
    * Execute custom tools not handled by the base implementation
    */
-  protected async executeCustomTool(toolName: string, _parameters: any, _context: ToolExecutionContext): Promise<any> {
+  protected async executeCustomTool(toolName: string, _parameters: ToolParameters, _context: ToolExecutionContext): Promise<ToolExecutionResult> {
     // Override this method to handle custom tools specific to your agent
     this.logger.warn(`Unknown tool in AI plan: ${toolName}`, {
       agent: this.config.name,

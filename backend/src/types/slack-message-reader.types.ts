@@ -103,6 +103,7 @@ export interface SlackFile {
   display_as_bot?: boolean;
   username?: string;
   timestamp: number;
+  [key: string]: unknown; // Index signature for Record<string, unknown> compatibility
 }
 
 /**
@@ -112,6 +113,7 @@ export interface SlackReaction {
   name: string;
   count: number;
   users: string[];
+  [key: string]: unknown; // Index signature for Record<string, unknown> compatibility
 }
 
 /**

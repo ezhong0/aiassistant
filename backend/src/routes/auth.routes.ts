@@ -122,8 +122,8 @@ router.get('/google', authRateLimit, (req: Request, res: Response) => {
  */
 router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
   try {
-    const { ENVIRONMENT } = require('../config/environment');
-    const { getService } = require('../services/service-manager');
+    const { ENVIRONMENT } = await import('../config/environment');
+    const { getService } = await import('../services/service-manager');
     
     const authService = getService('authService');
     if (!authService) {
@@ -145,17 +145,18 @@ router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/contacts.readonly'
     ];
-    
-    const authUrl = authService.generateAuthUrl(testScopes, testState);
-    
+
+    const authUrl = (authService as any).generateAuthUrl(testScopes, testState);
+
     // Also test the Slack interface OAuth URL generation
     let slackOAuthUrl = 'Not available';
     try {
-      const { SlackInterface } = require('../interfaces/slack.interface');
+      const { SlackInterface } = await import('../interfaces/slack.interface');
       const mockSlackContext = {
         teamId: 'test_team',
         userId: 'test_user',
-        channelId: 'test_channel'
+        channelId: 'test_channel',
+        isDirectMessage: false
       };
       
       // Create a mock SlackInterface instance to test OAuth URL generation
@@ -198,9 +199,9 @@ router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
  * GET /auth/debug/current-config
  * Simple endpoint to show current OAuth configuration
  */
-router.get('/debug/current-config', (req: Request, res: Response) => {
+router.get('/debug/current-config', async (req: Request, res: Response) => {
   try {
-    const { ENVIRONMENT } = require('../config/environment');
+    const { ENVIRONMENT } = await import('../config/environment');
     
     return res.json({
       success: true,
@@ -231,9 +232,9 @@ router.get('/debug/current-config', (req: Request, res: Response) => {
  * GET /auth/debug/oauth-config
  * Debug endpoint to check OAuth configuration
  */
-router.get('/debug/oauth-config', (req: Request, res: Response) => {
+router.get('/debug/oauth-config', async (req: Request, res: Response) => {
   try {
-    const { ENVIRONMENT } = require('../config/environment');
+    const { ENVIRONMENT } = await import('../config/environment');
     
     const config = {
       baseUrl: ENVIRONMENT.baseUrl,
@@ -527,7 +528,7 @@ router.get('/debug/oauth-validation', async (req: Request, res: Response) => {
     const params = Object.fromEntries(url.searchParams.entries());
 
     // Get config details
-    const { ENVIRONMENT } = require('../config/environment');
+    const { ENVIRONMENT } = await import('../config/environment');
 
     return res.json({
       success: true,

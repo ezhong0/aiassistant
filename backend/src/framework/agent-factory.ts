@@ -9,6 +9,28 @@ import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import logger from '../utils/logger';
 
+// OpenAI Function Schema interface
+export interface OpenAIFunctionSchema {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, {
+      type: string;
+      description?: string;
+      enum?: string[];
+    }>;
+    required?: string[];
+  };
+}
+
+// Agent class interface
+export interface AgentClass {
+  getOpenAIFunctionSchema(): OpenAIFunctionSchema;
+  getCapabilities(): string[];
+  getLimitations(): string[];
+}
+
 /**
  * Enhanced AgentFactory that handles all agent management including tool metadata
  * This replaces the need for a separate tool registry system
@@ -151,7 +173,7 @@ export class AgentFactory {
   /**
    * Register tools based on naming conventions
    */
-  private static registerConventionalTools(agentName: string, agentClass: any): void {
+  private static registerConventionalTools(agentName: string, agentClass: AgentClass): void {
     const conventionalMappings: Record<string, string[]> = {
       'emailAgent': ['manage_emails', 'send_email', 'search_emails', 'emailAgent'],
       'contactAgent': ['search_contacts', 'contactAgent'],
@@ -236,7 +258,7 @@ export class AgentFactory {
    */
   static async executeAgent(
     name: string, 
-    parameters: any, 
+    parameters: Record<string, any>,
     context: ToolExecutionContext,
     accessToken?: string
   ): Promise<ToolResult> {
@@ -300,7 +322,7 @@ export class AgentFactory {
   /**
    * Generate OpenAI function definitions for all registered tools
    */
-  static generateOpenAIFunctions(): any[] {
+  static generateOpenAIFunctions(): OpenAIFunctionSchema[] {
     return Array.from(this.toolMetadata.values()).map(tool => ({
       name: tool.name,
       description: tool.description,
@@ -311,14 +333,14 @@ export class AgentFactory {
   /**
    * Generate enhanced OpenAI function definitions with agent schemas
    */
-  static generateEnhancedOpenAIFunctions(): any[] {
-    const functions: any[] = [];
-    
+  static async generateEnhancedOpenAIFunctions(): Promise<OpenAIFunctionSchema[]> {
+    const functions: OpenAIFunctionSchema[] = [];
+
     // Get agent schemas from agent classes
     try {
-      const { EmailAgent } = require('../agents/email.agent');
-      const { ContactAgent } = require('../agents/contact.agent');
-      const { CalendarAgent } = require('../agents/calendar.agent');
+      const { EmailAgent } = await import('../agents/email.agent');
+      const { ContactAgent } = await import('../agents/contact.agent');
+      const { CalendarAgent } = await import('../agents/calendar.agent');
       
       // Add agent-specific function schemas
       functions.push(EmailAgent.getOpenAIFunctionSchema());
@@ -348,13 +370,13 @@ export class AgentFactory {
   /**
    * Get agent discovery metadata for AI planning
    */
-  static getAgentDiscoveryMetadata(): Record<string, any> {
+  static async getAgentDiscoveryMetadata(): Promise<Record<string, any>> {
     const metadata: Record<string, any> = {};
-    
+
     try {
-      const { EmailAgent } = require('../agents/email.agent');
-      const { ContactAgent } = require('../agents/contact.agent');
-      const { CalendarAgent } = require('../agents/calendar.agent');
+      const { EmailAgent } = await import('../agents/email.agent');
+      const { ContactAgent } = await import('../agents/contact.agent');
+      const { CalendarAgent } = await import('../agents/calendar.agent');
       
       metadata.emailAgent = {
         schema: EmailAgent.getOpenAIFunctionSchema(),
@@ -420,7 +442,7 @@ export class AgentFactory {
    */
   static async toolNeedsConfirmationForOperation(toolName: string, operation: string): Promise<boolean> {
     // Import AGENT_HELPERS dynamically to avoid circular imports
-    const { AGENT_HELPERS } = require('../config/agent-config');
+    const { AGENT_HELPERS } = await import('../config/agent-config');
     
     // Map AgentFactory tool names to AGENT_CONFIG names
     const toolNameMapping: Record<string, string> = {
@@ -443,8 +465,8 @@ export class AgentFactory {
    * Detect operation from tool parameters using AI classification
    * Maps AgentFactory tool names to AGENT_CONFIG names
    */
-  static async detectOperationFromParameters(toolName: string, parameters: any): Promise<string> {
-    const { AGENT_HELPERS } = require('../config/agent-config');
+  static async detectOperationFromParameters(toolName: string, parameters: Record<string, any>): Promise<string> {
+    const { AGENT_HELPERS } = await import('../config/agent-config');
     
     // Map AgentFactory tool names to AGENT_CONFIG names
     const toolNameMapping: Record<string, string> = {
@@ -832,7 +854,7 @@ export class AgentFactory {
   /**
    * Get detailed agent information for debugging
    */
-  static getAgentInfo(name: string): any {
+  static getAgentInfo(name: string): AgentConfig | null {
     const agent = this.agents.get(name);
     if (!agent) {
       return null;
@@ -840,11 +862,10 @@ export class AgentFactory {
     
     return {
       name,
-      config: agent.getConfig(),
+      description: agent.getConfig().description,
       enabled: agent.isEnabled(),
       timeout: agent.getTimeout(),
-      retries: agent.getRetries(),
-      className: agent.constructor.name
+      retryCount: agent.getRetries()
     };
   }
   
@@ -881,7 +902,7 @@ export const getAgent = (name: string): AIAgent | undefined => {
  */
 export async function executeAgent(
   name: string, 
-  parameters: any, 
+  parameters: Record<string, any>,
   context: ToolExecutionContext
 ): Promise<ToolResult> {
   return AgentFactory.executeAgent(name, parameters, context);

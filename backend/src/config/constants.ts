@@ -4,6 +4,26 @@
  */
 
 /**
+ * Application configuration constants
+ */
+export const APP_CONSTANTS = {
+  /** Default timezone for calendar operations */
+  DEFAULT_TIMEZONE: 'America/Los_Angeles',
+
+  /** Memory usage warning threshold in MB */
+  MEMORY_WARNING_THRESHOLD_MB: 400,
+
+  /** Event processing cleanup threshold */
+  EVENT_CLEANUP_THRESHOLD: 1000,
+
+  /** Event TTL in milliseconds (1 hour) */
+  EVENT_TTL_MS: 3600000,
+
+  /** Cache cleanup interval in milliseconds (5 minutes) */
+  CACHE_CLEANUP_INTERVAL_MS: 300000
+} as const;
+
+/**
  * Session and timeout constants
  */
 export const SESSION_CONSTANTS = {

@@ -4,10 +4,20 @@ import { PreviewGenerationResult } from '../types/api.types';
 import { getService } from '../services/service-manager';
 import { SlackInterfaceService } from '../services/slack-interface.service';
 import { SlackMessageReaderService } from '../services/slack-message-reader.service';
-import { SlackContext, SlackMessageEvent, SlackResponse } from '../types/slack.types';
-import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError } from '../types/slack-message-reader.types';
+import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack.types';
+import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack-message-reader.types';
 import { AIClassificationService } from '../services/ai-classification.service';
 import { SLACK_CONSTANTS } from '../config/constants';
+import {
+  ToolParameters,
+  ToolExecutionResult,
+  AgentExecutionSummary
+} from '../types/agent-parameters';
+import {
+  SlackReadMessagesParams,
+  SlackMessageSummary,
+  SlackReadResult
+} from '../types/agent-specific-parameters';
 
 /**
  * Slack message data structure
@@ -20,12 +30,13 @@ export interface SlackMessage {
   timestamp: string;
   threadTs?: string;
   isBot: boolean;
-  attachments?: any[];
-  blocks?: any[];
+  attachments?: Array<Record<string, unknown> | SlackAttachment>;
+  blocks?: SlackBlock[];
   reactions?: Array<{
     name: string;
     count: number;
     users: string[];
+    [key: string]: unknown; // Index signature for Record<string, unknown> compatibility
   }>;
 }
 
@@ -427,7 +438,7 @@ You are a specialized Slack workspace management agent focused on reading and un
   /**
    * Execute Slack-specific tools during AI planning
    */
-  protected async executeCustomTool(toolName: string, parameters: any, context: ToolExecutionContext): Promise<any> {
+  protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
     this.logger.debug(`Executing Slack tool: ${toolName}`, {
       toolName,
       parametersKeys: Object.keys(parameters),
@@ -601,8 +612,8 @@ Query: "${query}"
 Focus Area: ${focusArea}
 
 Messages:
-${messages.map((msg: any, index: number) => 
-  `${index + 1}. ${msg.userId || 'Unknown'}: ${msg.text || msg.content || 'No text'}`
+${messages.map((msg: SlackMessage, index: number) => 
+  `${index + 1}. ${msg.userId || 'Unknown'}: ${msg.text || 'No text'}`
 ).join('\n')}
 
 Based on the focus area "${focusArea}", provide analysis in the following areas:
@@ -705,15 +716,18 @@ Provide a clear, structured analysis.`;
    * Build final result from AI planning execution
    */
   protected buildFinalResult(
-    summary: any,
-    successfulResults: any[],
-    failedResults: any[],
+    summary: AgentExecutionSummary,
+    successfulResults: ToolExecutionResult[],
+    failedResults: ToolExecutionResult[],
     params: SlackAgentRequest,
     _context: ToolExecutionContext
   ): SlackAgentResult {
     // For Slack operations, we typically want the first successful result
     if (successfulResults.length > 0) {
-      return successfulResults[0] as SlackAgentResult;
+      const firstResult = successfulResults[0];
+      if (firstResult && firstResult.result && typeof firstResult.result === 'object') {
+        return firstResult.result as SlackAgentResult;
+      }
     }
 
     // If no successful results, create a summary result

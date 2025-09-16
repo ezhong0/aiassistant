@@ -3,6 +3,15 @@ import { AIAgent } from '../framework/ai-agent';
 import { PreviewGenerationResult } from '../types/api.types';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
+import {
+  ToolParameters,
+  AgentExecutionSummary,
+  ToolExecutionResult
+} from '../types/agent-parameters';
+import {
+  ThinkAnalysisParams,
+  ThinkAnalysisResult
+} from '../types/agent-specific-parameters';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {
@@ -118,15 +127,18 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    * Build final result from AI planning execution
    */
   protected buildFinalResult(
-    summary: any,
-    successfulResults: any[],
-    failedResults: any[],
+    summary: AgentExecutionSummary,
+    successfulResults: ToolExecutionResult[],
+    failedResults: ToolExecutionResult[],
     params: ThinkParams,
     _context: ToolExecutionContext
   ): ThinkAgentResponse {
     // For think operations, we typically want the first successful result
     if (successfulResults.length > 0) {
-      return successfulResults[0] as ThinkAgentResponse;
+      const firstResult = successfulResults[0];
+      if (firstResult && firstResult.result && typeof firstResult.result === 'object') {
+        return firstResult.result as ThinkAgentResponse;
+      }
     }
 
     // If no successful results, create a summary result
@@ -233,8 +245,8 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    * Analyze individual tool call appropriateness using AI
    */
   private async analyzeIndividualTool(
-    toolCall: ToolCall, 
-    originalQuery: string, 
+    toolCall: ToolCall,
+    originalQuery: string,
     _context?: string
   ): Promise<{
     toolName: string;
@@ -259,8 +271,8 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
       
       default:
         return {
-          toolName,
-          appropriateness: 'unclear' as any,
+          toolName: toolName,
+          appropriateness: 'suboptimal',
           reason: `Unknown tool "${toolName}" - cannot assess appropriateness`
         };
     }
@@ -270,7 +282,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    * Analyze ContactAgent usage using AI instead of regex patterns
    * Replaces regex patterns and string matching with AI analysis
    */
-  private async analyzeContactAgentUsage(query: string, _parameters: any): Promise<{
+  private async analyzeContactAgentUsage(query: string, _parameters: ToolParameters): Promise<{
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -285,7 +297,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
         };
       }
       const result = await aiClassificationService.analyzeToolAppropriateness(query, 'contactAgent');
-      
+
+      // Map appropriateness to relevance score
+      const relevance = result.appropriateness === 'correct' ? 0.9 :
+                       result.appropriateness === 'suboptimal' ? 0.6 : 0.3;
+
       return {
         toolName: 'contactAgent',
         appropriateness: result.appropriateness,
@@ -303,7 +319,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
   /**
    * Analyze EmailAgent usage using AI instead of string matching
    */
-  private async analyzeEmailAgentUsage(query: string, _parameters: any): Promise<{
+  private async analyzeEmailAgentUsage(query: string, _parameters: ToolParameters): Promise<{
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -336,7 +352,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
   /**
    * Analyze CalendarAgent usage using AI instead of string matching
    */
-  private async analyzeCalendarAgentUsage(query: string, _parameters: any): Promise<{
+  private async analyzeCalendarAgentUsage(query: string, _parameters: ToolParameters): Promise<{
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -369,7 +385,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
   /**
    * Analyze SlackAgent usage using AI instead of string matching
    */
-  private async analyzeSlackAgentUsage(query: string, _parameters: any): Promise<{
+  private async analyzeSlackAgentUsage(query: string, _parameters: ToolParameters): Promise<{
     toolName: string;
     appropriateness: 'correct' | 'incorrect' | 'suboptimal';
     reason: string;
@@ -403,10 +419,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    * Determine overall verification status
    */
   private determineOverallStatus(
-    toolAnalysis: Array<{ appropriateness: 'correct' | 'incorrect' | 'suboptimal'; }>
+    toolAnalysis: Array<{ toolName: string; appropriateness: 'correct' | 'incorrect' | 'suboptimal'; reason: string; }>
   ): 'correct' | 'incorrect' | 'partial' | 'unclear' {
     if (toolAnalysis.length === 0) return 'unclear';
 
+    // Convert appropriateness to counts
     const correctCount = toolAnalysis.filter(t => t.appropriateness === 'correct').length;
     const incorrectCount = toolAnalysis.filter(t => t.appropriateness === 'incorrect').length;
     const suboptimalCount = toolAnalysis.filter(t => t.appropriateness === 'suboptimal').length;
@@ -422,7 +439,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
   /**
    * Generate detailed reasoning
    */
-  private generateReasoning(query: string, toolAnalysis: any[], context?: string): string {
+  private generateReasoning(query: string, toolAnalysis: Array<{ toolName: string; appropriateness: 'correct' | 'incorrect' | 'suboptimal'; reason: string; }>, context?: string): string {
     const reasoningParts = [`Analysis of query: "${query}"`];
 
     if (toolAnalysis.length === 0) {
@@ -434,7 +451,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     
     toolAnalysis.forEach(analysis => {
       const status = analysis.appropriateness === 'correct' ? '✅' : 
-                    analysis.appropriateness === 'incorrect' ? '❌' : '⚠️';
+                    analysis.appropriateness === 'suboptimal' ? '⚠️' : '❌';
       reasoningParts.push(`${status} ${analysis.toolName}: ${analysis.reason}`);
     });
 
@@ -449,9 +466,10 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    * Generate improvement suggestions using AI analysis
    * Replaces regex patterns with AI contact name extraction
    */
-  private async generateSuggestions(toolAnalysis: any[], query: string): Promise<string[]> {
+  private async generateSuggestions(toolAnalysis: Array<{ toolName: string; appropriateness: 'correct' | 'incorrect' | 'suboptimal'; reason: string; }>, query: string): Promise<string[]> {
     const suggestions: string[] = [];
 
+    // Filter tools by appropriateness
     const incorrectTools = toolAnalysis.filter(t => t.appropriateness === 'incorrect');
     const suboptimalTools = toolAnalysis.filter(t => t.appropriateness === 'suboptimal');
 

@@ -109,7 +109,7 @@ export class OpenAIService extends BaseService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userInput }
         ],
-        tools: this.getToolDefinitions(),
+        tools: await this.getToolDefinitions(),
         tool_choice: 'auto',
         temperature: 0.1,
         max_tokens: 500 // Reduced to prevent memory issues
@@ -300,13 +300,13 @@ export class OpenAIService extends BaseService {
    * Get tool definitions for OpenAI function calling
    * Uses enhanced agent schemas from AgentFactory
    */
-  private getToolDefinitions(): any[] {
+  private async getToolDefinitions(): Promise<any[]> {
     try {
       // Import AgentFactory dynamically to avoid circular imports
-      const { AgentFactory } = require('../framework/agent-factory');
-      
+      const { AgentFactory } = await import('../framework/agent-factory');
+
       // Use enhanced OpenAI functions from AgentFactory
-      const enhancedFunctions = AgentFactory.generateEnhancedOpenAIFunctions();
+      const enhancedFunctions = await AgentFactory.generateEnhancedOpenAIFunctions();
       
       // Convert to OpenAI tool format
       const tools = enhancedFunctions.map((func: any) => ({

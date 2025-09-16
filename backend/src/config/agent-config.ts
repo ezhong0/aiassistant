@@ -284,7 +284,7 @@ Return only the operation name.`;
       
     } catch (error) {
       // If AI fails, provide graceful degradation without string matching
-      console.warn('AI operation detection failed:', error);
+      logger.warn('AI operation detection failed:', error);
       return 'read'; // Safe default - most operations are reads
     }
   },
@@ -301,7 +301,7 @@ Return only the operation name.`;
       }
       return await aiClassificationService.validateOperation(operation, agentName);
     } catch (error) {
-      console.warn('AI operation validation failed:', error);
+      logger.warn('AI operation validation failed:', error);
       return true; // Default to valid if AI fails
     }
   },
@@ -335,7 +335,7 @@ Return only the operation name.`;
       
       return true; // Assume write operations need confirmation
     } catch (error) {
-      console.warn('AI confirmation check failed:', error);
+      logger.warn('AI confirmation check failed:', error);
       return true; // Default to requiring confirmation if AI fails
     }
   },

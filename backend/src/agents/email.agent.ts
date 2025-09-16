@@ -6,14 +6,24 @@ import { GmailService } from '../services/gmail.service';
 import { ThreadManager } from '../utils/thread-manager';
 import { OpenAIService } from '../services/openai.service';
 import { AIClassificationService } from '../services/ai-classification.service';
-import { 
-  SendEmailRequest, 
-  SearchEmailsRequest, 
+import {
+  SendEmailRequest,
+  SearchEmailsRequest,
   ReplyEmailRequest,
   GmailMessage,
   EmailDraft
 } from '../types/gmail.types';
 import { EMAIL_CONSTANTS } from '../config/constants';
+import {
+  ToolParameters,
+  ToolExecutionResult,
+  AgentExecutionSummary
+} from '../types/agent-parameters';
+import {
+  SendEmailActionParams,
+  SearchEmailActionParams,
+  EmailSummaryParams
+} from '../types/agent-specific-parameters';
 
 /**
  * Email operation result interface
@@ -449,7 +459,7 @@ You are a specialized email management agent powered by Gmail API.
   /**
    * Execute email-specific tools during AI planning
    */
-  protected async executeCustomTool(toolName: string, parameters: any, context: ToolExecutionContext): Promise<any> {
+  protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
     this.logger.debug(`Executing email tool: ${toolName}`, {
       toolName,
       parametersKeys: Object.keys(parameters),
@@ -536,7 +546,7 @@ You are a specialized email management agent powered by Gmail API.
             accessToken: parameters.accessToken
           } as EmailAgentRequest;
           
-          const result = await this.handleSearchEmails(emailParams, parameters);
+          const result = await this.handleSearchEmails(emailParams, parameters as SearchEmailActionParams);
           this.logger.info('Search emails tool executed successfully', {
             toolName,
             action: result.action,
@@ -569,10 +579,10 @@ You are a specialized email management agent powered by Gmail API.
             throw new Error('Gmail service not available');
           }
 
-          const overview = await gmailService.getEmailOverview(parameters.accessToken, {
-            maxResults: parameters.maxResults || 20,
-            query: parameters.query || 'in:inbox',
-            includeSpamTrash: parameters.includeSpamTrash || false
+          const overview = await gmailService.getEmailOverview(parameters.accessToken as string, {
+            maxResults: (parameters.maxResults as number) || 20,
+            query: (parameters.query as string) || 'in:inbox',
+            includeSpamTrash: (parameters.includeSpamTrash as boolean) || false
           });
 
           this.logger.info('Email overview fetched successfully', {
@@ -614,7 +624,7 @@ You are a specialized email management agent powered by Gmail API.
           const fullEmails = await Promise.all(
             emailIds.slice(0, 5).map(async (emailId: string) => {
               try {
-                return await gmailService.getFullMessage(parameters.accessToken, emailId);
+                return await gmailService.getFullMessage(parameters.accessToken as string, emailId);
               } catch (error) {
                 this.logger.warn('Failed to get full content for email', { emailId, error });
                 return null;
@@ -656,7 +666,7 @@ You are a specialized email management agent powered by Gmail API.
             throw new Error('OpenAI service not available for relevance analysis');
           }
 
-          const userQuery = parameters.userQuery || '';
+          const userQuery = (parameters.userQuery as string) || '';
           const emailOverview = parameters.emailOverview || [];
           const maxRelevant = parameters.maxRelevant || 3;
 
@@ -676,7 +686,7 @@ You are a specialized email management agent powered by Gmail API.
 User Query: "${userQuery}"
 
 Available Emails:
-${emailOverview.map((email: any, index: number) => 
+${emailOverview.map((email: GmailMessage, index: number) => 
   `${index + 1}. ID: ${email.id}
      Subject: ${email.subject}
      From: ${email.from}
@@ -751,7 +761,7 @@ Return JSON with:
         return {
           success: true,
           analysis: 'Email operation analyzed',
-          reasoning: parameters.query || 'Email planning step'
+          reasoning: (parameters.query as string) || 'Email planning step'
         };
 
       default:
@@ -763,7 +773,7 @@ Return JSON with:
   /**
    * Execute email operation directly based on detected operation (prevents recursion)
    */
-  private async executeDirectEmailOperation(operation: string, params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async executeDirectEmailOperation(operation: string, params: EmailAgentRequest, actionParams: ToolParameters): Promise<EmailResult> {
     this.logger.debug('Executing direct email operation', {
       operation,
       hasAccessToken: !!params.accessToken,
@@ -782,7 +792,7 @@ Return JSON with:
       case 'search':
       case 'find':
       case 'get':
-        return await this.handleSearchEmails(params, actionParams);
+        return await this.handleSearchEmails(params, actionParams as SearchEmailActionParams);
         
       case 'draft':
         return await this.handleCreateDraft(params, actionParams);
@@ -816,16 +826,15 @@ Return JSON with:
    * Build final result from AI planning execution
    */
   protected buildFinalResult(
-    summary: any,
-    successfulResults: any[],
-    failedResults: any[],
+    summary: AgentExecutionSummary,
+    successfulResults: ToolExecutionResult[],
+    failedResults: ToolExecutionResult[],
     params: EmailAgentRequest,
     _context: ToolExecutionContext
   ): EmailResult {
     this.logger.debug('Building final result from AI planning', {
       successfulResultsCount: successfulResults.length,
       failedResultsCount: failedResults.length,
-      planId: summary?.planId,
       sessionId: _context.sessionId
     });
 
@@ -840,27 +849,32 @@ Return JSON with:
           hasMessageId: !!firstResult.messageId,
           sessionId: _context.sessionId
         });
-        return firstResult as EmailResult;
+        return {
+          ...firstResult,
+          action: 'search' // Default action for email results
+        } as EmailResult;
       }
       
       // If it's a nested result from executeCustomTool
       if (firstResult && firstResult.data && typeof firstResult.data === 'object' && 'action' in firstResult.data) {
         this.logger.info('Using nested successful AI planning result', {
           action: firstResult.data.action,
-          hasMessageId: !!firstResult.data.messageId,
+          hasMessageId: !!(firstResult.data as any).messageId,
           sessionId: _context.sessionId
         });
         return firstResult.data as EmailResult;
       }
       
       // Fallback - try to extract meaningful data
-      return firstResult as EmailResult;
+      return {
+        ...firstResult,
+        action: 'search' // Default action for email results
+      } as EmailResult;
     }
 
     // If no successful results, create an error result (not placeholder data)
     this.logger.warn('No successful results from AI planning, creating error result', {
       failedCount: failedResults.length,
-      planId: summary?.planId,
       sessionId: _context.sessionId
     });
     
@@ -1239,7 +1253,7 @@ Return JSON with:
   /**
    * Handle sending a new email
    */
-  private async handleSendEmail(params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async handleSendEmail(params: EmailAgentRequest, actionParams: SendEmailActionParams): Promise<EmailResult> {
     const emailRequest = await this.buildSendEmailRequest(params, actionParams);
     
     if (!emailRequest.to || (!emailRequest.subject && !emailRequest.body)) {
@@ -1285,7 +1299,7 @@ Return JSON with:
   /**
    * Handle replying to an email
    */
-  private async handleReplyEmail(params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async handleReplyEmail(params: EmailAgentRequest, actionParams: ToolParameters): Promise<EmailResult> {
     const replyRequest = await this.buildReplyEmailRequest(params, actionParams);
     
     if (!replyRequest.messageId || !replyRequest.threadId || !replyRequest.body) {
@@ -1319,11 +1333,11 @@ Return JSON with:
   /**
    * Handle searching for emails
    */
-  private async handleSearchEmails(params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async handleSearchEmails(params: EmailAgentRequest, actionParams: SearchEmailActionParams): Promise<EmailResult> {
     const searchRequest: SearchEmailsRequest = {
-      query: actionParams.query,
+      query: actionParams.query || '',
       maxResults: actionParams.maxResults || EMAIL_CONSTANTS.DEFAULT_SEARCH_RESULTS,
-      includeSpamTrash: actionParams.includeSpamTrash || false
+      includeSpamTrash: (actionParams.includeSpamTrash as boolean) || false
     };
 
     const searchResult = await this.withRetries(async () => {
@@ -1356,7 +1370,7 @@ Return JSON with:
   /**
    * Handle creating a draft email
    */
-  private async handleCreateDraft(params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async handleCreateDraft(params: EmailAgentRequest, actionParams: ToolParameters): Promise<EmailResult> {
     const emailRequest = await this.buildSendEmailRequest(params, actionParams);
     
     if (!emailRequest.to) {
@@ -1386,7 +1400,7 @@ Return JSON with:
   /**
    * Handle getting a specific email
    */
-  private async handleGetEmail(params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async handleGetEmail(params: EmailAgentRequest, actionParams: ToolParameters): Promise<EmailResult> {
     if (!actionParams.messageId) {
       throw this.createError('Message ID is required to get email', 'MISSING_MESSAGE_ID');
     }
@@ -1396,28 +1410,28 @@ Return JSON with:
         if (!gmailService) {
           throw new Error('Gmail service not available');
         }
-        return await gmailService.getEmail(params.accessToken, actionParams.messageId);
+        return await gmailService.getEmail(params.accessToken, actionParams.messageId as string);
       });
 
-    this.logger.info('Email retrieved successfully', { messageId: actionParams.messageId });
+    this.logger.info('Email retrieved successfully', { messageId: actionParams.messageId as string });
 
       return {
       emails: [email],
       action: 'get',
-      messageId: actionParams.messageId
+      messageId: actionParams.messageId as string
     };
   }
   
   /**
    * Handle getting an email thread
    */
-  private async handleGetThread(params: EmailAgentRequest, actionParams: any): Promise<EmailResult> {
+  private async handleGetThread(params: EmailAgentRequest, actionParams: ToolParameters): Promise<EmailResult> {
     if (!actionParams.threadId) {
       throw this.createError('Thread ID is required to get thread', 'MISSING_THREAD_ID');
     }
 
     const enhancedThread = await this.withRetries(async () => {
-      return await ThreadManager.getEnhancedThread(params.accessToken, actionParams.threadId);
+      return await ThreadManager.getEnhancedThread(params.accessToken, actionParams.threadId as string);
     });
 
     this.logger.info('Thread retrieved successfully', { 
@@ -1503,28 +1517,28 @@ Return JSON with:
   /**
    * Build SendEmailRequest from user input and contacts
    */
-  private async buildSendEmailRequest(params: EmailAgentRequest, actionParams: any): Promise<SendEmailRequest> {
+  private async buildSendEmailRequest(params: EmailAgentRequest, actionParams: SendEmailActionParams): Promise<SendEmailRequest> {
     const { to, cc, bcc, subject, body } = await this.extractEmailContent(params.query, params.contacts);
 
     return {
-      to: to || actionParams.to,
+      to: to || actionParams.to || [],
       cc: cc || actionParams.cc,
       bcc: bcc || actionParams.bcc,
-      subject: subject || actionParams.subject,
-      body: body || actionParams.body
+      subject: subject || actionParams.subject || '',
+      body: body || actionParams.body || ''
     };
   }
 
   /**
    * Build ReplyEmailRequest from user input  
    */
-  private async buildReplyEmailRequest(params: EmailAgentRequest, actionParams: any): Promise<ReplyEmailRequest> {
+  private async buildReplyEmailRequest(params: EmailAgentRequest, actionParams: ToolParameters): Promise<ReplyEmailRequest> {
     const { body } = await this.extractEmailContent(params.query, params.contacts);
 
     return {
-      messageId: actionParams.messageId,
-      threadId: actionParams.threadId,
-      body: body || actionParams.body
+      messageId: actionParams.messageId as string,
+      threadId: actionParams.threadId as string,
+      body: (body as string) || (actionParams.body as string) || ''
     };
   }
 
@@ -1621,7 +1635,7 @@ Guidelines:
     subject?: string;
     body?: string;
   } {
-    const result: any = {};
+    const result: Record<string, unknown> = {};
 
     // Extract recipients
     if (contacts && contacts.length > 0) {
@@ -1654,7 +1668,7 @@ Guidelines:
 
   // Parameter extraction methods (simplified)
   private extractSendEmailParams(query: string): any {
-    const params: any = {};
+    const params: Record<string, unknown> = {};
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     const emails = query.match(emailRegex);
     if (emails) {
@@ -1664,7 +1678,7 @@ Guidelines:
   }
 
   private extractReplyParams(query: string): any {
-    const params: any = {};
+    const params: Record<string, unknown> = {};
     const messageIdMatch = query.match(/message[:\s]+(\w+)/i);
     const threadIdMatch = query.match(/thread[:\s]+(\w+)/i);
     if (messageIdMatch) params.messageId = messageIdMatch[1];
@@ -1673,7 +1687,7 @@ Guidelines:
   }
 
   private extractSearchParams(query: string): any {
-    const params: any = {};
+    const params: Record<string, unknown> = {};
     const searchPatterns = [
       /(?:search|find|look for)[\s:]+([^$]+)/i,
       /emails?.+(?:from|about|containing)[\s:]+([^$]+)/i
@@ -1695,7 +1709,7 @@ Guidelines:
   }
 
   private extractGetEmailParams(query: string): any {
-    const params: any = {};
+    const params: Record<string, unknown> = {};
     const messageIdMatch = query.match(/(?:email|message)[\s:]+(\w+)/i);
     if (messageIdMatch) {
       params.messageId = messageIdMatch[1];
@@ -1704,7 +1718,7 @@ Guidelines:
   }
 
   private extractGetThreadParams(query: string): any {
-    const params: any = {};
+    const params: Record<string, unknown> = {};
     const threadIdMatch = query.match(/(?:thread|conversation)[\s:]+(\w+)/i);
     if (threadIdMatch) {
       params.threadId = threadIdMatch[1];

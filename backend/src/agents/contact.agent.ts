@@ -9,6 +9,15 @@ import {
   ContactSearchRequest
 } from '../types/contact.types';
 import { CONTACT_CONSTANTS } from '../config/constants';
+import {
+  ToolParameters,
+  ToolExecutionResult,
+  AgentExecutionSummary
+} from '../types/agent-parameters';
+import {
+  ContactSearchParams,
+  ContactSearchResult
+} from '../types/agent-specific-parameters';
 
 /**
  * Contact operation result interface
@@ -219,7 +228,7 @@ You are a specialized contact discovery and management agent.
   /**
    * Execute contact-specific tools during AI planning
    */
-  protected async executeCustomTool(toolName: string, parameters: any, context: ToolExecutionContext): Promise<any> {
+  protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
     this.logger.debug(`Executing contact tool: ${toolName}`, {
       toolName,
       parametersKeys: Object.keys(parameters),
@@ -313,15 +322,18 @@ You are a specialized contact discovery and management agent.
    * Build final result from AI planning execution
    */
   protected buildFinalResult(
-    summary: any,
-    successfulResults: any[],
-    failedResults: any[],
+    summary: AgentExecutionSummary,
+    successfulResults: ToolExecutionResult[],
+    failedResults: ToolExecutionResult[],
     params: ContactAgentRequest,
     _context: ToolExecutionContext
   ): ContactResult {
     // For contact operations, we typically want the first successful result
     if (successfulResults.length > 0) {
-      return successfulResults[0] as ContactResult;
+      const firstResult = successfulResults[0];
+      if (firstResult && firstResult.result && typeof firstResult.result === 'object') {
+        return firstResult.result as ContactResult;
+      }
     }
 
     // If no successful results, create a summary result
@@ -329,7 +341,7 @@ You are a specialized contact discovery and management agent.
       contacts: [],
       totalCount: 0,
       operation: 'search',
-      searchTerm: params.query
+      searchTerm: params.query || 'unknown'
     };
   }
   

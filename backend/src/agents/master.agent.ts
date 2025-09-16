@@ -8,6 +8,15 @@ import { getService } from '../services/service-manager';
 import { SlackMessageReaderService } from '../services/slack-message-reader.service';
 import { SlackContext } from '../types/slack.types';
 import { SlackMessage } from '../types/slack-message-reader.types';
+import { APP_CONSTANTS } from '../config/constants';
+import { OpenAIFunctionSchema } from '../framework/agent-factory';
+
+// Agent capabilities interface
+interface AgentCapability {
+  capabilities: string[];
+  limitations: string[];
+  schema: OpenAIFunctionSchema;
+}
 
 export interface MasterAgentResponse {
   message: string;
@@ -16,6 +25,25 @@ export interface MasterAgentResponse {
   needsThinking?: boolean;
   proposal?: ProposalResponse;
   contextGathered?: ContextGatheringResult;
+  executionMetadata?: {
+    processingTime?: number;
+    totalExecutionTime?: number;
+    toolsExecuted?: number;
+    successfulTools?: number;
+    slackContext?: any;
+    toolResults?: Array<{
+      toolName: string;
+      success: boolean;
+      executionTime: number;
+      error?: string;
+      result?: any;
+    }>;
+    confirmationFlows?: Array<any>;
+    masterAgentResponse?: string;
+    error?: string;
+    errorType?: string;
+    errorContext?: any;
+  };
 }
 
 export interface ProposalResponse {
@@ -43,7 +71,7 @@ export interface ContextDetectionResult {
 export class MasterAgent {
   private useOpenAI: boolean = false;
   private systemPrompt: string;
-  private agentSchemas: Map<string, any> = new Map();
+  private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
   private slackMessageReaderService: SlackMessageReaderService | null = null;
 
@@ -59,7 +87,9 @@ export class MasterAgent {
     this.systemPrompt = this.generateSystemPrompt();
     
     // Initialize agent schemas for OpenAI function calling
-    this.initializeAgentSchemas();
+    this.initializeAgentSchemas().catch(error => {
+      logger.error('Failed to initialize agent schemas:', error);
+    });
     
     // Initialize SlackMessageReaderService for context gathering
     this.initializeSlackMessageReader();
@@ -94,12 +124,12 @@ export class MasterAgent {
   /**
    * Initialize OpenAI function schemas for all agents
    */
-  private initializeAgentSchemas(): void {
+  private async initializeAgentSchemas(): Promise<void> {
     try {
       // Import agent classes dynamically to avoid circular imports
-      const { EmailAgent } = require('./email.agent');
-      const { ContactAgent } = require('./contact.agent');
-      const { CalendarAgent } = require('./calendar.agent');
+      const { EmailAgent } = await import('./email.agent');
+      const { ContactAgent } = await import('./contact.agent');
+      const { CalendarAgent } = await import('./calendar.agent');
       
       // Register agent schemas
       this.agentSchemas.set('emailAgent', EmailAgent.getOpenAIFunctionSchema());
@@ -119,31 +149,34 @@ export class MasterAgent {
   /**
    * Get all agent schemas for OpenAI function calling
    */
-  public getAgentSchemas(): any[] {
+  public getAgentSchemas(): OpenAIFunctionSchema[] {
     return Array.from(this.agentSchemas.values());
   }
 
   /**
    * Get agent capabilities summary for AI planning
    */
-  public getAgentCapabilities(): Record<string, any> {
+  public async getAgentCapabilities(): Promise<Record<string, AgentCapability>> {
     try {
-      const { EmailAgent } = require('./email.agent');
-      const { ContactAgent } = require('./contact.agent');
-      const { CalendarAgent } = require('./calendar.agent');
+      const { EmailAgent } = await import('./email.agent');
+      const { ContactAgent } = await import('./contact.agent');
+      const { CalendarAgent } = await import('./calendar.agent');
       
       return {
         emailAgent: {
           capabilities: EmailAgent.getCapabilities(),
-          limitations: EmailAgent.getLimitations()
+          limitations: EmailAgent.getLimitations(),
+          schema: EmailAgent.getOpenAIFunctionSchema()
         },
         contactAgent: {
           capabilities: ContactAgent.getCapabilities(),
-          limitations: ContactAgent.getLimitations()
+          limitations: ContactAgent.getLimitations(),
+          schema: ContactAgent.getOpenAIFunctionSchema()
         },
         calendarAgent: {
           capabilities: CalendarAgent.getCapabilities(),
-          limitations: CalendarAgent.getLimitations()
+          limitations: CalendarAgent.getLimitations(),
+          schema: CalendarAgent.getOpenAIFunctionSchema()
         }
       };
     } catch (error) {
@@ -205,7 +238,7 @@ export class MasterAgent {
       }
 
       // Step 3: Enhanced AI planning with context
-      const enhancedSystemPrompt = this.generateEnhancedSystemPrompt(contextGathered);
+      const enhancedSystemPrompt = await this.generateEnhancedSystemPrompt(contextGathered);
       
       // Use enhanced system prompt with agent capabilities and context
       const response = await openaiService.generateToolCalls(
@@ -321,7 +354,7 @@ export class MasterAgent {
     };
 
     const agentName = toolToAgentMap[toolName];
-    const agentCapabilities = agentName ? this.getAgentCapabilities()[agentName] : null;
+    const agentCapabilities = agentName ? (await this.getAgentCapabilities())[agentName] : null;
     
     if (!agentCapabilities) {
       return toolCall;
@@ -679,7 +712,7 @@ IMPORTANT: For email actions, always include the full body content in the propos
       // Use AI-powered operation-aware confirmation logic instead of blanket forcing
       if (result.actionType === 'email' || result.actionType === 'calendar') {
         // Detect operation from the user input using AI
-        const { AGENT_HELPERS } = require('../config/agent-config');
+        const { AGENT_HELPERS } = await import('../config/agent-config');
         const operation = await AGENT_HELPERS.detectOperation(result.actionType, userInput);
         const operationRequiresConfirmation = await AGENT_HELPERS.operationRequiresConfirmation(result.actionType, operation);
         
@@ -718,9 +751,9 @@ IMPORTANT: For email actions, always include the full body content in the propos
   /**
    * Generate enhanced system prompt with agent capabilities and context
    */
-  private generateEnhancedSystemPrompt(contextGathered?: ContextGatheringResult): string {
+  private async generateEnhancedSystemPrompt(contextGathered?: ContextGatheringResult): Promise<string> {
     const basePrompt = this.generateSystemPrompt();
-    const agentCapabilities = this.getAgentCapabilities();
+    const agentCapabilities = await this.getAgentCapabilities();
     
     const capabilitiesSection = `
 ## Agent Capabilities and Limitations
@@ -875,8 +908,8 @@ You are an intelligent personal assistant that uses AI planning to understand us
       rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`
     });
 
-    // If heap usage exceeds 400MB, trigger garbage collection and cleanup
-    if (heapUsedMB > 400) {
+    // If heap usage exceeds threshold, trigger garbage collection and cleanup
+    if (heapUsedMB > APP_CONSTANTS.MEMORY_WARNING_THRESHOLD_MB) {
       logger.warn('High memory usage detected, triggering cleanup', {
         heapUsed: `${heapUsedMB}MB`,
         heapTotal: `${heapTotalMB}MB`
@@ -887,7 +920,9 @@ You are an intelligent personal assistant that uses AI planning to understand us
         const schemasSize = this.agentSchemas.size;
         this.agentSchemas.clear();
         // Reinitialize immediately to maintain functionality
-        this.initializeAgentSchemas();
+        this.initializeAgentSchemas().catch(error => {
+          logger.error('Failed to reinitialize agent schemas:', error);
+        });
         logger.debug('Agent schemas cleared and reinitialized', { previousSize: schemasSize });
       }
       

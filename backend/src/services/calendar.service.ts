@@ -3,22 +3,24 @@ import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
 export interface CalendarEvent {
-  id?: string;
-  summary: string;
-  description?: string;
-  start: {
-    dateTime: string;
-    timeZone?: string;
+  id?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  start?: {
+    dateTime?: string | null;
+    date?: string | null;
+    timeZone?: string | null;
   };
-  end: {
-    dateTime: string;
-    timeZone?: string;
+  end?: {
+    dateTime?: string | null;
+    date?: string | null;
+    timeZone?: string | null;
   };
   attendees?: Array<{
-    email: string;
-    responseStatus?: string;
+    email?: string | null;
+    responseStatus?: string | null;
   }>;
-  location?: string;
+  location?: string | null;
   conferenceData?: any;
 }
 
