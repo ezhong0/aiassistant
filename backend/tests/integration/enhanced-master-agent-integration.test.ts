@@ -4,7 +4,7 @@
  */
 
 import { MasterAgent, MasterAgentResponse, ProposalResponse, ContextGatheringResult } from '../../src/agents/master.agent';
-import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
+// import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
 import { SlackContext } from '../../src/types/slack.types';
 import { SlackMessage } from '../../src/types/slack-message-reader.types';
 import { ToolCall } from '../../src/types/tools';
@@ -18,7 +18,7 @@ jest.mock('../../src/utils/logger');
 
 describe('Enhanced MasterAgent Integration Tests', () => {
   let masterAgent: MasterAgent;
-  let mockSlackMessageReaderService: jest.Mocked<SlackMessageReaderService>;
+  let mockSlackMessageReaderService: jest.Mocked<any>; // SlackMessageReaderService>;
   let mockSlackContext: SlackContext;
 
   beforeEach(() => {

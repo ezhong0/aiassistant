@@ -46,20 +46,6 @@ export const AGENT_CAPABILITIES = {
   }
 };
 
-/** 
- * DEPRECATED: CONFIRMATION_WORDS arrays replaced with AI classification
- * Use AIClassificationService.classifyConfirmationResponse() instead
- * 
- * @deprecated Use AI classification instead of hardcoded word arrays
- */
-export const CONFIRMATION_WORDS = {
-  /** Words that indicate user confirmation/approval */
-  confirm: ['yes', 'y', 'confirm', 'ok', 'okay', 'proceed', 'go ahead', 'do it'],
-  
-  /** Words that indicate user rejection/cancellation */
-  reject: ['no', 'n', 'cancel', 'abort', 'stop', 'nevermind', 'never mind']
-};
-
 /** AI-Driven Agent Configuration */
 export const AGENT_CONFIG = {
   think: {

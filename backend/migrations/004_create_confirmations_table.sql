@@ -93,4 +93,4 @@ COMMENT ON COLUMN confirmations.response_context IS 'Context from user response:
 -- Note: This table supports the confirmation and preview system architecture
 -- It stores rich preview data as JSONB for flexibility while maintaining performance through targeted indexes
 -- The status field tracks the full lifecycle of confirmations from creation to execution
--- Cleanup of expired confirmations should be handled by the ConfirmationService
+-- Cleanup of expired confirmations should be handled by the confirmation system

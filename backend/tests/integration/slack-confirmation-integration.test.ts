@@ -4,7 +4,7 @@
  */
 
 import { SlackInterfaceService } from '../../src/services/slack-interface.service';
-import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
+// import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
 import { ToolExecutorService } from '../../src/services/tool-executor.service';
 import { TokenManager } from '../../src/services/token-manager';
 import { serviceManager } from '../../src/services/service-manager';
@@ -12,7 +12,7 @@ import { SlackContext } from '../../src/types/slack.types';
 
 describe('Slack Confirmation Integration', () => {
   let slackInterface: SlackInterfaceService;
-  let mockSlackMessageReader: jest.Mocked<SlackMessageReaderService>;
+  let mockSlackMessageReader: jest.Mocked<any>; // SlackMessageReaderService>;
   let mockToolExecutor: jest.Mocked<ToolExecutorService>;
   let mockTokenManager: jest.Mocked<TokenManager>;
 

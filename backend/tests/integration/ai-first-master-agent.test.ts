@@ -1,7 +1,7 @@
-import { MasterAgent } from '../../src/agents/master.agent.refactored';
+import { MasterAgent } from '../../src/agents/master.agent';
 import { AIServiceCircuitBreaker, AIServiceUnavailableError } from '../../src/services/ai-circuit-breaker.service';
 import { OpenAIService } from '../../src/services/openai.service';
-import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
+// import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
 import { serviceManager } from '../../src/services/service-manager';
 import { SlackContext } from '../../src/types/slack.types';
 
@@ -25,7 +25,7 @@ const mockOpenAIService = {
 const mockSlackMessageReader = {
   readRecentMessages: jest.fn(),
   readThreadMessages: jest.fn()
-} as unknown as SlackMessageReaderService;
+} as unknown as any; // SlackMessageReaderService;
 
 const mockGetService = serviceManager.getService as jest.Mock;
 

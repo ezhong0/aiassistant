@@ -46,7 +46,7 @@ export class SlackInterfaceService extends BaseService {
   // Injected service dependencies
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
-  private slackMessageReaderService: any | null = null;
+  private slackMessageAnalyzer: any | null = null;
   
   // Focused Slack services for proper separation of concerns
   private slackEventHandler: SlackEventHandler | null = null;
@@ -90,7 +90,7 @@ export class SlackInterfaceService extends BaseService {
       this.logInfo('SlackInterface initialized successfully', {
         hasTokenManager: !!this.tokenManager,
         hasToolExecutor: !!this.toolExecutorService,
-        hasSlackMessageReader: !!this.slackMessageReaderService,
+        hasSlackMessageAnalyzer: !!this.slackMessageAnalyzer,
         hasEmailOperationHandler: !!this.emailOperationHandler,
         hasContactResolver: !!this.contactResolver,
         hasEmailValidator: !!this.emailValidator,
@@ -115,7 +115,7 @@ export class SlackInterfaceService extends BaseService {
       // Reset service references
       this.tokenManager = null;
       this.toolExecutorService = null;
-      this.slackMessageReaderService = null;
+      this.slackMessageAnalyzer = null;
       
       // Reset focused Slack service references
       this.slackEventHandler = null;
@@ -166,14 +166,6 @@ export class SlackInterfaceService extends BaseService {
       throw new Error('ToolExecutorService is required but not available');
     } else {
       this.logDebug('ToolExecutorService injected successfully');
-    }
-
-    // Get SlackMessageReaderService (for reading recent messages and parsing proposals)
-    this.slackMessageReaderService = serviceManager.getService('slackMessageReaderService');
-    if (!this.slackMessageReaderService) {
-      this.logWarn('SlackMessageReaderService not available - confirmation detection will be limited');
-    } else {
-      this.logDebug('SlackMessageReaderService injected successfully');
     }
 
     // Get focused Slack services for proper separation of concerns
@@ -530,7 +522,7 @@ export class SlackInterfaceService extends BaseService {
     try {
       const isConfirmed = await this.parseConfirmationResponse(message);
       
-      if (!this.slackMessageReaderService) {
+      if (!this.slackMessageAnalyzer) {
         await this.sendMessage(context.channelId, {
           text: "I detected a confirmation response, but I can't process it without access to recent messages. Please try again."
         });
@@ -538,7 +530,7 @@ export class SlackInterfaceService extends BaseService {
       }
 
       // Read recent messages to find proposals
-      const recentMessages = await this.slackMessageReaderService.readRecentMessages(
+      const recentMessages = await this.slackMessageAnalyzer.readMessageHistory(
         context.channelId,
         20, // Read last 20 messages
         { filter: { excludeBotMessages: false } } // Include bot messages to find proposals
@@ -1768,7 +1760,7 @@ export class SlackInterfaceService extends BaseService {
         dependencies: {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
-          slackMessageReaderService: !!this.slackMessageReaderService,
+          slackMessageAnalyzer: !!this.slackMessageAnalyzer,
         },
         processedEventsCount: this.processedEvents.size
       }

@@ -9,7 +9,6 @@ import { CalendarService } from './calendar/calendar.service';
 import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
-// import { SlackMessageReaderService } from './slack-message-reader.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { AIClassificationService } from './ai-classification.service';
 import { SlackEventHandler } from './slack/slack-event-handler.service';
@@ -209,24 +208,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 11. SlackMessageReaderService - Dedicated service for reading Slack message history
-    // Only register if Slack is configured
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      // Note: SlackMessageReaderService is commented out due to import issues
-      // const slackMessageReaderService = new SlackMessageReaderService(
-      //   ENVIRONMENT.slack.botToken
-      // );
-      // serviceManager.registerService('slackMessageReaderService', slackMessageReaderService, {
-      //   dependencies: ['cacheService'], // Optional dependency
-      //   priority: 65,
-      //   autoStart: true
-      // });
-      logger.debug('SlackMessageReaderService skipped - import issues');
-    } else {
-      logger.debug('SlackMessageReaderService skipped - Slack not configured');
-    }
-
-    // 12. SlackEventHandler - Focused service for Slack event processing
+    // 11. SlackEventHandler - Focused service for Slack event processing
     if (ENV_VALIDATION.isSlackConfigured()) {
       const { WebClient } = await import('@slack/web-api');
       const client = new WebClient(ENVIRONMENT.slack.botToken);

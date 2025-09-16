@@ -322,19 +322,6 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           actionType: typeof actionId 
         });
 
-        // Handle confirmation buttons (legacy support - now handled by SlackInterface)
-        if (actionId && (actionId.startsWith('confirm_') || actionId.startsWith('reject_'))) {
-          logger.info('Legacy confirmation button click received - redirecting to SlackInterface', { actionId, actionValue });
-          
-          // Legacy confirmation handling is now managed by SlackInterfaceService
-          // through natural language confirmation detection
-          res.status(200).json({
-            text: '⚠️ This confirmation method is no longer supported. Please use natural language responses like "yes" or "no" to confirm actions.',
-            response_type: 'ephemeral'
-          });
-          return;
-        }
-
         // Handle view results buttons (legacy support)
         if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
           logger.info('Matched view results button pattern');
