@@ -12,6 +12,13 @@ import { CacheService } from './cache.service';
 import { SlackMessageReaderService } from './slack-message-reader.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { AIClassificationService } from './ai-classification.service';
+import { SlackEventHandler } from './slack-event-handler.service';
+import { SlackOAuthManager } from './slack-oauth-manager.service';
+import { SlackConfirmationHandler } from './slack-confirmation-handler.service';
+import { EmailOperationHandler } from './email-operation-handler.service';
+import { ContactResolver } from './contact-resolver.service';
+import { EmailValidator } from './email-validator.service';
+import { EmailFormatter } from './email-formatter.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -210,12 +217,84 @@ const registerCoreServices = async (): Promise<void> => {
       logger.debug('SlackMessageReaderService skipped - Slack not configured');
     }
 
+    // 12. SlackEventHandler - Focused service for Slack event processing
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const { WebClient } = await import('@slack/web-api');
+      const client = new WebClient(ENVIRONMENT.slack.botToken);
+      const slackEventHandler = new SlackEventHandler({
+        enableDeduplication: true,
+        deduplicationTTL: 5 * 60 * 1000, // 5 minutes
+        enableBotMessageFiltering: true,
+        enableDMOnlyMode: true
+      }, client);
+      serviceManager.registerService('slackEventHandler', slackEventHandler, {
+        priority: 70,
+        autoStart: true
+      });
+    }
+
+    // 13. SlackOAuthManager - Focused service for Slack OAuth handling
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackOAuthManager = new SlackOAuthManager({
+        clientId: ENVIRONMENT.slack.clientId,
+        clientSecret: ENVIRONMENT.slack.clientSecret,
+        redirectUri: ENVIRONMENT.slack.redirectUri,
+        scopes: ['chat:write', 'im:write', 'im:read']
+      });
+      serviceManager.registerService('slackOAuthManager', slackOAuthManager, {
+        dependencies: ['tokenManager', 'aiClassificationService'],
+        priority: 75,
+        autoStart: true
+      });
+    }
+
+    // 14. SlackConfirmationHandler - Focused service for Slack confirmation handling
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackConfirmationHandler = new SlackConfirmationHandler({
+        confirmationTimeout: 10 * 60 * 1000, // 10 minutes
+        maxPendingConfirmations: 100,
+        enableProposalParsing: true,
+        enableAIClassification: true
+      });
+      serviceManager.registerService('slackConfirmationHandler', slackConfirmationHandler, {
+        dependencies: ['aiClassificationService', 'toolExecutorService'],
+        priority: 80,
+        autoStart: true
+      });
+    }
+
+    // 15. EmailOperationHandler - Focused service for Gmail API operations
+    const emailOperationHandler = new EmailOperationHandler();
+    serviceManager.registerService('emailOperationHandler', emailOperationHandler, {
+      dependencies: ['gmailService'],
+      priority: 85,
+      autoStart: true
+    });
+
+    // 16. ContactResolver - Focused service for contact resolution
+    const contactResolver = new ContactResolver();
+    serviceManager.registerService('contactResolver', contactResolver, {
+      dependencies: ['contactService'],
+      priority: 86,
+      autoStart: true
+    });
+
+    // 17. EmailValidator - Focused service for email validation
+    const emailValidator = new EmailValidator();
+    serviceManager.registerService('emailValidator', emailValidator, {
+      priority: 87,
+      autoStart: true
+    });
+
+    // 18. EmailFormatter - Focused service for email response formatting
+    const emailFormatter = new EmailFormatter();
+    serviceManager.registerService('emailFormatter', emailFormatter, {
+      priority: 88,
+      autoStart: true
+    });
+
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
-
-    logger.debug('Core services registered', {
-      serviceCount: serviceManager.getServiceCount()
-    });
 
   } catch (error) {
     logger.error('Failed to register core services:', error);

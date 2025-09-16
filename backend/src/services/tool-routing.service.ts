@@ -242,11 +242,11 @@ Return JSON with:
 
       // Validate selected agent exists
       if (!this.agentCapabilities.has(response.selectedAgent)) {
-        logger.warn('AI selected unknown agent, falling back to default', {
+        logger.error('AI selected unknown agent', {
           selectedAgent: response.selectedAgent,
           availableAgents: agents
         });
-        response.selectedAgent = this.selectFallbackAgent(userQuery);
+        throw new Error(`AI selected unknown agent: ${response.selectedAgent}. Available agents: ${agents.join(', ')}`);
       }
 
       // Create tool call
@@ -285,18 +285,8 @@ Return JSON with:
       return decision;
 
     } catch (error) {
-      logger.error('AI agent selection failed, using fallback', error);
-      
-      // Fallback to simple agent selection
-      const fallbackAgent = this.selectFallbackAgent(userQuery);
-      return {
-        selectedAgent: fallbackAgent,
-        toolCall: { name: fallbackAgent, parameters: { query: userQuery } },
-        confidence: 0.5,
-        reasoning: 'Fallback selection due to AI routing failure',
-        requiresConfirmation: this.agentRequiresConfirmation(fallbackAgent),
-        parameters: { query: userQuery }
-      };
+      logger.error('AI agent selection failed', error);
+      throw new Error('AI agent selection failed. Please check your OpenAI configuration.');
     }
   }
 
@@ -309,7 +299,7 @@ Return JSON with:
     parameters: any
   ): Promise<ConfirmationMessage> {
     if (!this.openaiService) {
-      return this.getFallbackConfirmationMessage(agentName);
+      throw new Error('OpenAI service is not available. AI confirmation generation is required for this operation.');
     }
 
     try {
@@ -362,8 +352,8 @@ Return JSON with:
       return response;
 
     } catch (error) {
-      logger.error('AI confirmation generation failed, using fallback', error);
-      return this.getFallbackConfirmationMessage(agentName);
+      logger.error('AI confirmation generation failed', error);
+      throw new Error('AI confirmation generation failed. Please check your OpenAI configuration.');
     }
   }
 
@@ -381,52 +371,6 @@ Return JSON with:
   - Specialties: ${capability.specialties.join(', ')}
   - Requires Confirmation: ${capability.requiresConfirmation}`;
     }).join('\n\n');
-  }
-
-  /**
-   * Fallback agent selection using simple heuristics
-   */
-  private selectFallbackAgent(userQuery: string): string {
-    const query = userQuery.toLowerCase();
-    
-    if (query.includes('email') || query.includes('send') || query.includes('message')) {
-      return 'emailAgent';
-    } else if (query.includes('calendar') || query.includes('meeting') || query.includes('schedule')) {
-      return 'calendarAgent';
-    } else if (query.includes('contact') || query.includes('person') || query.includes('phone')) {
-      return 'contactAgent';
-    } else if (query.includes('slack') || query.includes('thread') || query.includes('draft')) {
-      return 'slackAgent';
-    } else {
-      return 'thinkAgent'; // Default thinking agent
-    }
-  }
-
-  /**
-   * Fallback confirmation message generation
-   */
-  private getFallbackConfirmationMessage(agentName: string): ConfirmationMessage {
-    const messages: Record<string, ConfirmationMessage> = {
-      'emailAgent': {
-        message: 'I\'m about to send an email. Would you like me to proceed?',
-        prompt: 'Reply with "yes" to send the email or "no" to cancel.',
-        riskLevel: 'medium',
-        contextualDetails: ['Email will be sent to external recipients']
-      },
-      'calendarAgent': {
-        message: 'I\'m about to create a calendar event. Would you like me to proceed?',
-        prompt: 'Reply with "yes" to create the event or "no" to cancel.',
-        riskLevel: 'low',
-        contextualDetails: ['Calendar event will be created']
-      }
-    };
-
-    return messages[agentName] || {
-      message: `I'm about to execute a ${agentName} operation. Would you like me to proceed?`,
-      prompt: 'Reply with "yes" to continue or "no" to cancel.',
-      riskLevel: 'medium',
-      contextualDetails: [`${agentName} operation will be executed`]
-    };
   }
 
   /**

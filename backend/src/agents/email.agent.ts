@@ -1473,40 +1473,19 @@ Return JSON with:
       // Convert AI result to expected format
       switch (operation) {
         case 'write':
-          // Determine if it's send, reply, or draft based on context
-          if (query.toLowerCase().includes('reply') || query.toLowerCase().includes('respond')) {
-            return {
-              type: 'REPLY_EMAIL',
-              params: this.extractReplyParams(query)
-            };
-          } else if (query.toLowerCase().includes('draft')) {
-            return {
-              type: 'CREATE_DRAFT',
-              params: this.extractSendEmailParams(query)
-            };
-          } else {
-            return {
-              type: 'SEND_EMAIL',
-              params: this.extractSendEmailParams(query)
-            };
-          }
+          // Use AI to determine specific write sub-operation
+          const writeSubOperation = await aiClassificationService.classifyEmailSubOperation(query);
+          return {
+            type: writeSubOperation,
+            params: this.extractParamsForSubOperation(writeSubOperation, query)
+          };
         case 'read':
-          if (query.toLowerCase().includes('thread') || query.toLowerCase().includes('conversation')) {
-            return {
-              type: 'GET_THREAD',
-              params: this.extractGetThreadParams(query)
-            };
-          } else if (query.toLowerCase().includes('get email') || query.toLowerCase().includes('show email')) {
-            return {
-              type: 'GET_EMAIL',
-              params: this.extractGetEmailParams(query)
-            };
-          } else {
-            return {
-              type: 'SEARCH_EMAILS',
-              params: this.extractSearchParams(query)
-            };
-          }
+          // Use AI to determine specific read sub-operation
+          const readSubOperation = await aiClassificationService.classifyEmailReadSubOperation(query);
+          return {
+            type: readSubOperation,
+            params: this.extractParamsForSubOperation(readSubOperation, query)
+          };
         case 'search':
           return {
             type: 'SEARCH_EMAILS',
@@ -1522,6 +1501,27 @@ Return JSON with:
     } catch (error) {
       this.logger.error('Failed to determine email action with AI:', error);
       throw new Error('AI email operation detection failed. Please check your OpenAI configuration.');
+    }
+  }
+
+  /**
+   * Extract parameters based on sub-operation type
+   */
+  private extractParamsForSubOperation(subOperation: string, query: string): any {
+    switch (subOperation) {
+      case 'REPLY_EMAIL':
+        return this.extractReplyParams(query);
+      case 'CREATE_DRAFT':
+      case 'SEND_EMAIL':
+        return this.extractSendEmailParams(query);
+      case 'GET_THREAD':
+        return this.extractGetThreadParams(query);
+      case 'GET_EMAIL':
+        return this.extractGetEmailParams(query);
+      case 'SEARCH_EMAILS':
+        return this.extractSearchParams(query);
+      default:
+        return this.extractSearchParams(query);
     }
   }
 

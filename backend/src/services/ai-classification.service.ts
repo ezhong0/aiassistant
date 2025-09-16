@@ -411,6 +411,102 @@ export class AIClassificationService extends BaseService {
       throw new Error('AI help request detection failed. Please check your OpenAI configuration.');
     }
   }
+
+  /**
+   * Classify email sub-operations using AI instead of string matching
+   * Replaces: query.toLowerCase().includes('reply') patterns in email agent
+   */
+  async classifyEmailSubOperation(query: string): Promise<'SEND_EMAIL' | 'REPLY_EMAIL' | 'CREATE_DRAFT'> {
+    if (!this.openaiService) {
+      throw new Error('OpenAI service is not available. AI email sub-operation classification is required for this operation.');
+    }
+
+    try {
+      const response = await this.openaiService.generateText(
+        `Classify this email operation: "${query}"
+        
+        Return exactly one of: SEND_EMAIL, REPLY_EMAIL, CREATE_DRAFT
+        
+        Examples:
+        - "Send email to John" → SEND_EMAIL
+        - "Reply to Sarah's message" → REPLY_EMAIL  
+        - "Answer Mike's email" → REPLY_EMAIL
+        - "Draft a response" → CREATE_DRAFT
+        - "Create a draft for the team" → CREATE_DRAFT
+        - "Compose new email" → SEND_EMAIL
+        - "Respond to the meeting invite" → REPLY_EMAIL
+        - "Save as draft" → CREATE_DRAFT
+        - "Send meeting notes" → SEND_EMAIL
+        
+        Guidelines:
+        - SEND_EMAIL: Creating and sending new emails
+        - REPLY_EMAIL: Responding to existing emails or messages
+        - CREATE_DRAFT: Saving emails without sending`,
+        'Classify email sub-operations from natural language',
+        { temperature: 0, maxTokens: 20 }
+      );
+
+      const result = response.trim();
+      const validOperations = ['SEND_EMAIL', 'REPLY_EMAIL', 'CREATE_DRAFT'];
+      
+      if (validOperations.includes(result)) {
+        return result as 'SEND_EMAIL' | 'REPLY_EMAIL' | 'CREATE_DRAFT';
+      }
+      
+      // Default to SEND_EMAIL for unclear cases
+      return 'SEND_EMAIL';
+    } catch (error) {
+      logger.error('Failed to classify email sub-operation with AI:', error);
+      throw new Error('AI email sub-operation classification failed. Please check your OpenAI configuration.');
+    }
+  }
+
+  /**
+   * Classify email read sub-operations using AI instead of string matching
+   * Replaces: query.toLowerCase().includes('thread') patterns in email agent
+   */
+  async classifyEmailReadSubOperation(query: string): Promise<'GET_THREAD' | 'GET_EMAIL' | 'SEARCH_EMAILS'> {
+    if (!this.openaiService) {
+      throw new Error('OpenAI service is not available. AI email read sub-operation classification is required for this operation.');
+    }
+
+    try {
+      const response = await this.openaiService.generateText(
+        `Classify this email read operation: "${query}"
+        
+        Return exactly one of: GET_THREAD, GET_EMAIL, SEARCH_EMAILS
+        
+        Examples:
+        - "Show me the conversation with John" → GET_THREAD
+        - "Get the email thread" → GET_THREAD
+        - "Show me email from Sarah" → GET_EMAIL
+        - "Get that specific email" → GET_EMAIL
+        - "Search my inbox" → SEARCH_EMAILS
+        - "Find emails about project X" → SEARCH_EMAILS
+        - "Check my emails" → SEARCH_EMAILS
+        
+        Guidelines:
+        - GET_THREAD: Getting conversation threads or message chains
+        - GET_EMAIL: Getting a specific single email
+        - SEARCH_EMAILS: Searching through multiple emails`,
+        'Classify email read sub-operations from natural language',
+        { temperature: 0, maxTokens: 20 }
+      );
+
+      const result = response.trim();
+      const validOperations = ['GET_THREAD', 'GET_EMAIL', 'SEARCH_EMAILS'];
+      
+      if (validOperations.includes(result)) {
+        return result as 'GET_THREAD' | 'GET_EMAIL' | 'SEARCH_EMAILS';
+      }
+      
+      // Default to SEARCH_EMAILS for unclear cases
+      return 'SEARCH_EMAILS';
+    } catch (error) {
+      logger.error('Failed to classify email read sub-operation with AI:', error);
+      throw new Error('AI email read sub-operation classification failed. Please check your OpenAI configuration.');
+    }
+  }
   async extractContactNames(userInput: string): Promise<{needed: boolean, names: string[]}> {
     if (!this.openaiService) {
       throw new Error('OpenAI service is not available. AI contact name extraction is required for this operation.');

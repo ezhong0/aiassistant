@@ -4,6 +4,9 @@ import { ServiceManager } from './service-manager';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
 import { OpenAIService } from './openai.service';
+import { SlackEventHandler } from './slack-event-handler.service';
+import { SlackOAuthManager } from './slack-oauth-manager.service';
+import { SlackConfirmationHandler } from './slack-confirmation-handler.service';
 import { 
   SlackContext, 
   SlackEventType, 
@@ -14,6 +17,10 @@ import {
 import { ToolCall, ToolExecutionContext, ToolResult } from '../types/tools';
 import { serviceManager, getService } from './service-manager';
 import { AIClassificationService } from './ai-classification.service';
+import { EmailOperationHandler } from './email-operation-handler.service';
+import { ContactResolver } from './contact-resolver.service';
+import { EmailValidator } from './email-validator.service';
+import { EmailFormatter } from './email-formatter.service';
 import logger from '../utils/logger';
 
 export interface SlackConfig {
@@ -40,6 +47,17 @@ export class SlackInterfaceService extends BaseService {
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
   private slackMessageReaderService: any | null = null;
+  
+  // Focused Slack services for proper separation of concerns
+  private slackEventHandler: SlackEventHandler | null = null;
+  private slackOAuthManager: SlackOAuthManager | null = null;
+  private slackConfirmationHandler: SlackConfirmationHandler | null = null;
+  
+  // Focused email services for enhanced email handling
+  private emailOperationHandler: EmailOperationHandler | null = null;
+  private contactResolver: ContactResolver | null = null;
+  private emailValidator: EmailValidator | null = null;
+  private emailFormatter: EmailFormatter | null = null;
 
   constructor(config: SlackConfig) {
     super('SlackInterfaceService');
@@ -72,7 +90,11 @@ export class SlackInterfaceService extends BaseService {
       this.logInfo('SlackInterface initialized successfully', {
         hasTokenManager: !!this.tokenManager,
         hasToolExecutor: !!this.toolExecutorService,
-        hasSlackMessageReader: !!this.slackMessageReaderService
+        hasSlackMessageReader: !!this.slackMessageReaderService,
+        hasEmailOperationHandler: !!this.emailOperationHandler,
+        hasContactResolver: !!this.contactResolver,
+        hasEmailValidator: !!this.emailValidator,
+        hasEmailFormatter: !!this.emailFormatter
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -94,6 +116,17 @@ export class SlackInterfaceService extends BaseService {
       this.tokenManager = null;
       this.toolExecutorService = null;
       this.slackMessageReaderService = null;
+      
+      // Reset focused Slack service references
+      this.slackEventHandler = null;
+      this.slackOAuthManager = null;
+      this.slackConfirmationHandler = null;
+      
+      // Reset focused email service references
+      this.emailOperationHandler = null;
+      this.contactResolver = null;
+      this.emailValidator = null;
+      this.emailFormatter = null;
 
       this.logInfo('SlackInterface destroyed successfully');
     } catch (error) {
@@ -143,6 +176,57 @@ export class SlackInterfaceService extends BaseService {
       this.logDebug('SlackMessageReaderService injected successfully');
     }
 
+    // Get focused Slack services for proper separation of concerns
+    this.slackEventHandler = serviceManager.getService('slackEventHandler') as SlackEventHandler;
+    if (!this.slackEventHandler) {
+      this.logWarn('SlackEventHandler not available - event processing will use fallback');
+    } else {
+      this.logDebug('SlackEventHandler injected successfully');
+    }
+
+    this.slackOAuthManager = serviceManager.getService('slackOAuthManager') as SlackOAuthManager;
+    if (!this.slackOAuthManager) {
+      this.logWarn('SlackOAuthManager not available - OAuth handling will use fallback');
+    } else {
+      this.logDebug('SlackOAuthManager injected successfully');
+    }
+
+    this.slackConfirmationHandler = serviceManager.getService('slackConfirmationHandler') as SlackConfirmationHandler;
+    if (!this.slackConfirmationHandler) {
+      this.logWarn('SlackConfirmationHandler not available - confirmation handling will use fallback');
+    } else {
+      this.logDebug('SlackConfirmationHandler injected successfully');
+    }
+
+    // Get focused email services for enhanced email handling
+    this.emailOperationHandler = serviceManager.getService('emailOperationHandler') as EmailOperationHandler;
+    if (!this.emailOperationHandler) {
+      this.logWarn('EmailOperationHandler not available - email operations will use fallback');
+    } else {
+      this.logDebug('EmailOperationHandler injected successfully');
+    }
+
+    this.contactResolver = serviceManager.getService('contactResolver') as ContactResolver;
+    if (!this.contactResolver) {
+      this.logWarn('ContactResolver not available - contact resolution will use fallback');
+    } else {
+      this.logDebug('ContactResolver injected successfully');
+    }
+
+    this.emailValidator = serviceManager.getService('emailValidator') as EmailValidator;
+    if (!this.emailValidator) {
+      this.logWarn('EmailValidator not available - email validation will use fallback');
+    } else {
+      this.logDebug('EmailValidator injected successfully');
+    }
+
+    this.emailFormatter = serviceManager.getService('emailFormatter') as EmailFormatter;
+    if (!this.emailFormatter) {
+      this.logWarn('EmailFormatter not available - email formatting will use fallback');
+    } else {
+      this.logDebug('EmailFormatter injected successfully');
+    }
+
   }
 
   /**
@@ -164,11 +248,57 @@ export class SlackInterfaceService extends BaseService {
 
   /**
    * Main entry point for handling Slack events
-   * Processes events with deduplication and delegates to appropriate handlers
+   * Delegates to SlackEventHandler for proper separation of concerns
    */
   async handleEvent(event: any, teamId: string): Promise<void> {
     this.assertReady();
 
+    try {
+      // Use SlackEventHandler for proper event processing
+      if (this.slackEventHandler) {
+        const processingResult = await this.slackEventHandler.processEvent(event, teamId);
+        
+        if (!processingResult.success) {
+          this.logWarn('Event processing failed via SlackEventHandler', {
+            eventId: processingResult.eventId,
+            error: processingResult.error
+          });
+          return;
+        }
+
+        // Extract Slack context from the processed event
+        const slackContext = await this.extractSlackContext(event, teamId);
+        
+        // Route to appropriate handler based on event type
+        const eventType = this.determineEventType(event);
+        if (!eventType) {
+          this.logWarn('Unsupported event type', { eventType: event.type });
+          return;
+        }
+
+        await this.routeEvent(event, slackContext, eventType);
+        
+        this.logInfo('Slack event processed successfully via SlackEventHandler', {
+          eventId: processingResult.eventId,
+          eventType: processingResult.eventType,
+          userId: processingResult.userId,
+          channelId: processingResult.channelId
+        });
+      } else {
+        // Fallback to original logic if SlackEventHandler not available
+        this.logWarn('SlackEventHandler not available, using fallback event processing');
+        await this.handleEventFallback(event, teamId);
+      }
+    } catch (error) {
+      this.logError('Error handling Slack event', error);
+    }
+  }
+
+  /**
+   * Fallback event handling when SlackEventHandler is not available
+   * Contains the original monolithic event processing logic
+   */
+  private async handleEventFallback(event: any, teamId: string): Promise<void> {
     const startTime = Date.now();
     let eventId: string | undefined;
 
@@ -190,7 +320,7 @@ export class SlackInterfaceService extends BaseService {
       // Mark event as being processed
       this.markEventProcessed(eventId);
       
-      this.logInfo('Processing Slack event', {
+      this.logInfo('Processing Slack event (fallback)', {
         eventId,
         eventType: event.type,
         userId: event.user,
@@ -270,7 +400,7 @@ export class SlackInterfaceService extends BaseService {
       await this.routeEvent(event, slackContext, eventType);
 
       const processingTime = Date.now() - startTime;
-      this.logInfo('Slack event processed successfully', {
+      this.logInfo('Slack event processed successfully (fallback)', {
         eventId,
         eventType,
         processingTimeMs: processingTime
@@ -278,7 +408,7 @@ export class SlackInterfaceService extends BaseService {
 
     } catch (error) {
       const processingTime = Date.now() - startTime;
-      this.logError('Error processing Slack event', error, {
+      this.logError('Error processing Slack event (fallback)', error, {
         eventId,
         eventType: event.type,
         processingTimeMs: processingTime
@@ -289,14 +419,45 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Check if a message is a confirmation response using AI classification
+   * Check if a message is a confirmation response using SlackConfirmationHandler
+   * Delegates confirmation detection to SlackConfirmationHandler for proper separation of concerns
    */
   private async isConfirmationResponse(message: string, context: SlackContext): Promise<boolean> {
+    try {
+      // Use SlackConfirmationHandler for proper confirmation detection
+      if (this.slackConfirmationHandler) {
+        const detectionResult = await this.slackConfirmationHandler.detectConfirmation(message);
+        
+        if (detectionResult.isConfirmation) {
+          this.logInfo('Confirmation response detected via SlackConfirmationHandler', {
+            message: message.substring(0, 50),
+            classification: detectionResult.classification,
+            userId: context.userId,
+            channelId: context.channelId
+          });
+        }
+        
+        return detectionResult.isConfirmation;
+      } else {
+        // Fallback to original logic if SlackConfirmationHandler not available
+        this.logWarn('SlackConfirmationHandler not available, using fallback confirmation detection');
+        return await this.isConfirmationResponseFallback(message, context);
+      }
+    } catch (error) {
+      this.logError('Error detecting confirmation response', error);
+      return false;
+    }
+  }
+
+  /**
+   * Fallback confirmation detection when SlackConfirmationHandler is not available
+   */
+  private async isConfirmationResponseFallback(message: string, context: SlackContext): Promise<boolean> {
     const classification = await this.classifyConfirmationResponse(message);
     const isConfirmation = classification !== 'unknown';
     
     if (isConfirmation) {
-      this.logInfo('Confirmation response detected', {
+      this.logInfo('Confirmation response detected (fallback)', {
         message: message.substring(0, 50),
         classification,
         userId: context.userId,
@@ -308,9 +469,64 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Handle confirmation response by reading recent messages and executing actions
+   * Handle confirmation response using SlackConfirmationHandler
+   * Delegates confirmation processing to SlackConfirmationHandler for proper separation of concerns
    */
   private async handleConfirmationResponse(message: string, context: SlackContext): Promise<void> {
+    try {
+      // Use SlackConfirmationHandler for proper confirmation handling
+      if (this.slackConfirmationHandler) {
+        const confirmationRequest = {
+          sessionId: `user:${context.teamId}:${context.userId}`,
+          userId: context.userId,
+          channelId: context.channelId,
+          teamId: context.teamId,
+          message: message,
+          originalToolResults: [], // Will be populated by the confirmation handler
+          userMessage: message
+        };
+        
+        const confirmationResult = await this.slackConfirmationHandler.processConfirmationResponse(confirmationRequest);
+        
+        if (confirmationResult) {
+          this.logInfo('Confirmation response processed successfully via SlackConfirmationHandler', {
+            userId: context.userId,
+            channelId: context.channelId
+          });
+          
+          // Send response message if provided
+          if (confirmationResult.response?.text) {
+            await this.sendMessage(context.channelId, {
+              text: confirmationResult.response.text
+            });
+          }
+        } else {
+          this.logWarn('Confirmation response processing failed via SlackConfirmationHandler', {
+            userId: context.userId,
+            channelId: context.channelId
+          });
+          
+          await this.sendMessage(context.channelId, {
+            text: "I had trouble processing your confirmation. Please try again."
+          });
+        }
+      } else {
+        // Fallback to original logic if SlackConfirmationHandler not available
+        this.logWarn('SlackConfirmationHandler not available, using fallback confirmation handling');
+        await this.handleConfirmationResponseFallback(message, context);
+      }
+    } catch (error) {
+      this.logError('Error handling confirmation response', error);
+      await this.sendMessage(context.channelId, {
+        text: "I encountered an error processing your confirmation. Please try again."
+      });
+    }
+  }
+
+  /**
+   * Fallback confirmation handling when SlackConfirmationHandler is not available
+   */
+  private async handleConfirmationResponseFallback(message: string, context: SlackContext): Promise<void> {
     try {
       const isConfirmed = await this.parseConfirmationResponse(message);
       
@@ -750,10 +966,43 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Check if request requires OAuth and handle accordingly using AI
-   * Replaces: Hardcoded keyword arrays with AI-driven OAuth detection
+   * Check if request requires OAuth and handle accordingly using SlackOAuthManager
+   * Delegates OAuth handling to SlackOAuthManager for proper separation of concerns
    */
   private async checkOAuthRequirement(message: string, context: SlackContext): Promise<boolean> {
+    try {
+      // Use SlackOAuthManager for proper OAuth handling
+      if (this.slackOAuthManager) {
+        const oauthResult = await this.slackOAuthManager.detectOAuthRequirement(message);
+        
+        if (oauthResult.requiresOAuth) {
+          this.logInfo('OAuth required for operation', { 
+            userId: context.userId,
+            oauthRequirement: oauthResult.oauthType,
+            message: message.substring(0, 100)
+          });
+          
+          // Send OAuth message using SlackOAuthManager
+          await this.slackOAuthManager.sendOAuthRequiredMessage(context, oauthResult.oauthType);
+          return true;
+        }
+        
+        return false;
+      } else {
+        // Fallback to original logic if SlackOAuthManager not available
+        this.logWarn('SlackOAuthManager not available, using fallback OAuth detection');
+        return await this.checkOAuthRequirementFallback(message, context);
+      }
+    } catch (error) {
+      this.logError('Error checking OAuth requirement', error);
+      return false;
+    }
+  }
+
+  /**
+   * Fallback OAuth requirement checking when SlackOAuthManager is not available
+   */
+  private async checkOAuthRequirementFallback(message: string, context: SlackContext): Promise<boolean> {
     try {
       const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
       if (!aiClassificationService) {
@@ -765,7 +1014,7 @@ export class SlackInterfaceService extends BaseService {
       if (oauthRequirement !== 'none' && this.tokenManager) {
         const hasOAuth = await this.tokenManager.hasValidOAuthTokens(context.teamId, context.userId);
         if (!hasOAuth) {
-          this.logInfo('OAuth required for operation but no tokens found', { 
+          this.logInfo('OAuth required for operation but no tokens found (fallback)', { 
             userId: context.userId,
             oauthRequirement,
             message: message.substring(0, 100)
@@ -778,7 +1027,7 @@ export class SlackInterfaceService extends BaseService {
       
       return false;
     } catch (error) {
-      this.logError('Error checking OAuth requirement', error);
+      this.logError('Error checking OAuth requirement (fallback)', error);
       return false;
     }
   }
@@ -1204,29 +1453,44 @@ export class SlackInterfaceService extends BaseService {
       return 'I processed your request successfully.';
     }
 
-    // Check what types of actions were performed
-    const emailResults = successfulResults.filter(r => r.toolName === 'emailAgent');
-    const contactResults = successfulResults.filter(r => r.toolName === 'contactAgent');
-    const calendarResults = successfulResults.filter(r => r.toolName === 'calendarAgent');
+    // Check what types of actions were performed - Intent-agnostic filtering
+    // Filter results based on result content, not hardcoded tool names
+    const emailResults = successfulResults.filter(r => 
+      r.result && (
+        (r.result as any).data?.messageId || 
+        (r.result as any).data?.emails || 
+        (r.result as any).data?.draft
+      )
+    );
+    const contactResults = successfulResults.filter(r => 
+      r.result && (r.result as any).data?.contacts
+    );
+    const calendarResults = successfulResults.filter(r => 
+      r.result && (r.result as any).data?.events
+    );
 
     let message = '';
 
     if (emailResults.length > 0) {
       const emailResult = emailResults[0];
-      if (emailResult.result && emailResult.result.action === 'send') {
-        message = `✅ Great! I successfully sent your email`;
-        if (emailResult.result.recipient) {
-          message += ` to ${emailResult.result.recipient}`;
+      
+      // Use EmailFormatter service for better formatting if available
+      if (this.emailFormatter && emailResult.result) {
+        try {
+          const formattingResult = this.emailFormatter.formatEmailResult(emailResult.result);
+          if (formattingResult.success && formattingResult.formattedText) {
+            message = formattingResult.formattedText;
+          } else {
+            // Fallback to basic formatting
+            message = this.formatBasicEmailResult(emailResult.result);
+          }
+        } catch (error) {
+          this.logError('Error formatting email result with EmailFormatter', error);
+          message = this.formatBasicEmailResult(emailResult.result);
         }
-        if (emailResult.result.subject) {
-          message += ` about "${emailResult.result.subject}"`;
-        }
-        message += '.';
-      } else if (emailResult.result && emailResult.result.action === 'search') {
-        const count = emailResult.result.count || 0;
-        message = `✅ I found ${count} email${count !== 1 ? 's' : ''} matching your search.`;
       } else {
-        message = '✅ I successfully processed your email request.';
+        // Fallback to basic formatting
+        message = this.formatBasicEmailResult(emailResult.result);
       }
     } else if (contactResults.length > 0) {
       message = '✅ I successfully found the contact information you requested.';
@@ -1237,6 +1501,77 @@ export class SlackInterfaceService extends BaseService {
     }
 
     return message;
+  }
+
+  /**
+   * Format basic email result as fallback when EmailFormatter is not available
+   * Intent-agnostic formatting based on result content
+   */
+  private formatBasicEmailResult(emailResult: any): string {
+    if (!emailResult) {
+      return '✅ I successfully processed your email request.';
+    }
+
+    // Format based on result content, not hardcoded action strings
+    if (emailResult.messageId && emailResult.threadId) {
+      // Email was sent/replied
+      let message = `✅ Great! I successfully sent your email`;
+      if (emailResult.recipient) {
+        message += ` to ${emailResult.recipient}`;
+      }
+      if (emailResult.subject) {
+        message += ` about "${emailResult.subject}"`;
+      }
+      message += '.';
+      return message;
+    } else if (emailResult.emails && emailResult.emails.length > 0) {
+      // Emails were retrieved/searched
+      const count = emailResult.count || emailResult.emails.length;
+      return `✅ I found ${count} email${count !== 1 ? 's' : ''} matching your search.`;
+    } else if (emailResult.count !== undefined) {
+      // Operation completed with count
+      return `✅ I successfully processed your email request.`;
+    } else {
+      return '✅ I successfully processed your email request.';
+    }
+  }
+
+  /**
+   * Enhanced email validation using EmailValidator service
+   */
+  private async validateEmailRequest(message: string, context: SlackContext): Promise<{
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  }> {
+    try {
+      if (!this.emailValidator) {
+        return { isValid: true, errors: [], warnings: [] };
+      }
+
+      // Check email permissions
+      const permissionCheck = await this.emailValidator.checkEmailPermissions(
+        context.userId,
+        'dummy-token' // We'll get the real token later
+      );
+
+      if (!permissionCheck.hasPermission) {
+        return {
+          isValid: false,
+          errors: [`Missing permissions: ${permissionCheck.missingPermissions?.join(', ')}`],
+          warnings: []
+        };
+      }
+
+      return { isValid: true, errors: [], warnings: [] };
+    } catch (error) {
+      this.logError('Error validating email request', error);
+      return {
+        isValid: false,
+        errors: ['Email validation failed'],
+        warnings: []
+      };
+    }
   }
 
   /**
