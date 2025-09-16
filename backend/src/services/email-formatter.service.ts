@@ -1,5 +1,5 @@
 import { BaseService } from './base-service';
-import { EmailResult } from '../agents/email-agent-refactored';
+import { EmailResult } from '../agents/email.agent';
 import { GmailMessage } from '../types/gmail.types';
 import { SlackMessage } from '../types/slack.types';
 import { EMAIL_SERVICE_CONSTANTS } from '../config/email-service-constants';

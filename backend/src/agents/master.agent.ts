@@ -4,11 +4,11 @@ import { OpenAIService } from '../services/openai.service';
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { getService } from '../services/service-manager';
-import { SlackMessageReaderService } from '../services/slack-message-reader.service';
 import { SlackContext } from '../types/slack.types';
 import { SlackMessage } from '../types/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
+import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 
 // Agent capabilities interface
 interface AgentCapability {
@@ -53,26 +53,11 @@ export interface ProposalResponse {
   originalToolCalls: ToolCall[];
 }
 
-export interface ContextGatheringResult {
-  messages: SlackMessage[];
-  relevantContext: string;
-  contextType: 'recent_messages' | 'thread_history' | 'search_results' | 'none';
-  confidence: number;
-}
-
-export interface ContextDetectionResult {
-  needsContext: boolean;
-  contextType: 'recent_messages' | 'thread_history' | 'search_results' | 'none';
-  confidence: number;
-  reasoning: string;
-}
-
 export class MasterAgent {
   private useOpenAI: boolean = false;
   private systemPrompt: string;
   private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
-  private slackMessageReaderService: SlackMessageReaderService | null = null;
 
   constructor(config?: MasterAgentConfig) {
     // Agents are now stateless - no session management needed
@@ -88,9 +73,6 @@ export class MasterAgent {
       logger.error('Failed to initialize agent schemas:', error);
     });
     
-    // Initialize SlackMessageReaderService for context gathering
-    this.initializeSlackMessageReader();
-    
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
       this.useOpenAI = true;
@@ -100,23 +82,6 @@ export class MasterAgent {
     }
   }
 
-  /**
-   * Initialize SlackMessageReaderService for context gathering
-   */
-  private initializeSlackMessageReader(): void {
-    try {
-      // Get SlackMessageReaderService from service registry
-      this.slackMessageReaderService = getService<SlackMessageReaderService>('slackMessageReaderService') || null;
-      if (this.slackMessageReaderService) {
-        logger.info('SlackMessageReaderService initialized for context gathering');
-      } else {
-        logger.warn('SlackMessageReaderService not available - context gathering will be limited');
-      }
-    } catch (error) {
-      logger.error('Failed to initialize SlackMessageReaderService:', error);
-      this.slackMessageReaderService = null;
-    }
-  }
 
   /**
    * Initialize OpenAI function schemas for all agents
@@ -183,6 +148,18 @@ export class MasterAgent {
   }
 
   /**
+   * Get SlackAgent from AgentFactory for context gathering
+   */
+  private getSlackAgent(): SlackAgent | null {
+    try {
+      return AgentFactory.getAgent('slackAgent') as SlackAgent;
+    } catch (error) {
+      logger.warn('SlackAgent not available from AgentFactory:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get OpenAI service from the registry
    */
   public getOpenAIService(): OpenAIService | null {
@@ -225,13 +202,24 @@ export class MasterAgent {
 
       // Step 2: Gather context if needed
       let contextGathered: ContextGatheringResult | undefined;
-      if (contextDetection.needsContext && this.slackMessageReaderService && slackContext) {
-        contextGathered = await this.gatherContext(userInput, contextDetection, slackContext);
-        logger.info('Context gathered:', { 
-          contextType: contextGathered.contextType, 
-          messageCount: contextGathered.messages.length,
-          confidence: contextGathered.confidence 
-        });
+      if (contextDetection.needsContext && slackContext) {
+        const slackAgent = this.getSlackAgent();
+        if (slackAgent) {
+          contextGathered = await slackAgent.gatherContext(userInput, contextDetection, slackContext);
+          logger.info('Context gathered via SlackAgent delegation:', { 
+            contextType: contextGathered?.contextType, 
+            messageCount: contextGathered?.messages.length || 0,
+            confidence: contextGathered?.confidence || 0
+          });
+        } else {
+          logger.warn('SlackAgent not available for context gathering');
+          contextGathered = {
+            messages: [],
+            relevantContext: '',
+            contextType: 'none',
+            confidence: 0.0
+          };
+        }
       }
 
       // Step 3: Enhanced AI planning with context
@@ -494,133 +482,6 @@ Examples:
     }
   }
 
-  /**
-   * Gather context from Slack messages based on detection result
-   */
-  private async gatherContext(
-    userInput: string, 
-    contextDetection: ContextDetectionResult, 
-    slackContext: SlackContext
-  ): Promise<ContextGatheringResult> {
-    try {
-      if (!this.slackMessageReaderService) {
-        throw new Error('SlackMessageReaderService not available');
-      }
-
-      let messages: SlackMessage[] = [];
-      let contextType: ContextGatheringResult['contextType'] = 'none';
-      let relevantContext = '';
-
-      switch (contextDetection.contextType) {
-        case 'thread_history':
-          if (slackContext.threadTs) {
-            messages = await this.slackMessageReaderService.readThreadMessages(
-              slackContext.channelId,
-              slackContext.threadTs,
-              { limit: 20 }
-            );
-            contextType = 'thread_history';
-            relevantContext = this.extractRelevantContext(messages, userInput);
-          }
-          break;
-
-        case 'recent_messages':
-          messages = await this.slackMessageReaderService.readRecentMessages(
-            slackContext.channelId,
-            10,
-            { 
-              filter: {
-                userIds: [slackContext.userId],
-                excludeBotMessages: true
-              }
-            }
-          );
-          contextType = 'recent_messages';
-          relevantContext = this.extractRelevantContext(messages, userInput);
-          break;
-
-        case 'search_results':
-          // Extract key terms from user input for search
-          const searchTerms = this.extractSearchTerms(userInput);
-          if (searchTerms.length > 0) {
-            messages = await this.slackMessageReaderService.searchMessages(
-              searchTerms.join(' '),
-              { 
-                channels: [slackContext.channelId],
-                limit: 10 
-              }
-            );
-            contextType = 'search_results';
-            relevantContext = this.extractRelevantContext(messages, userInput);
-          }
-          break;
-
-        default:
-          contextType = 'none';
-      }
-
-      return {
-        messages,
-        relevantContext,
-        contextType,
-        confidence: contextDetection.confidence
-      };
-
-    } catch (error) {
-      logger.error('Error gathering context:', error);
-      return {
-        messages: [],
-        relevantContext: '',
-        contextType: 'none',
-        confidence: 0.0
-      };
-    }
-  }
-
-  /**
-   * Extract relevant context from messages for the user input
-   */
-  private extractRelevantContext(messages: SlackMessage[], userInput: string): string {
-    if (messages.length === 0) return '';
-
-    // Simple relevance scoring based on keyword overlap
-    const userKeywords = userInput.toLowerCase().split(/\s+/).filter(word => word.length > 3);
-    
-    const relevantMessages = messages
-      .map(msg => ({
-        message: msg,
-        score: this.calculateRelevanceScore(msg.text, userKeywords)
-      }))
-      .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3); // Top 3 most relevant messages
-
-    return relevantMessages
-      .map(item => `[${item.message.timestamp.toISOString()}] ${item.message.text}`)
-      .join('\n');
-  }
-
-  /**
-   * Calculate relevance score between message text and user keywords
-   */
-  private calculateRelevanceScore(messageText: string, keywords: string[]): number {
-    const text = messageText.toLowerCase();
-    return keywords.reduce((score, keyword) => {
-      return score + (text.includes(keyword) ? 1 : 0);
-    }, 0);
-  }
-
-  /**
-   * Extract search terms from user input
-   */
-  private extractSearchTerms(userInput: string): string[] {
-    // Simple extraction of potential search terms
-    const words = userInput.toLowerCase().split(/\s+/);
-    return words.filter(word => 
-      word.length > 2 && 
-      !['the', 'and', 'or', 'but', 'for', 'with', 'about', 'from', 'that', 'this'].includes(word)
-    );
-  }
 
   /**
    * Generate conversational proposal from tool calls
@@ -1003,7 +864,6 @@ Response:`;
    */
   public cleanup(): void {
     this.agentSchemas.clear();
-    this.slackMessageReaderService = null;
     logger.debug('MasterAgent cleanup completed');
   }
 }

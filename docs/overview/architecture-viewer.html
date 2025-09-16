@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant Platform - Architecture Diagrams</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .diagram {
+            margin-bottom: 50px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+        }
+        .diagram h2 {
+            color: #444;
+            margin-top: 0;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #007acc;
+        }
+        .diagram svg {
+            width: 100%;
+            height: auto;
+            background: white;
+            border-radius: 4px;
+        }
+        .toc {
+            background: #f0f8ff;
+            border: 1px solid #b0d4ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .toc h2 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .toc li {
+            margin: 8px 0;
+        }
+        .toc a {
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏗️ AI Assistant Platform - Architecture Diagrams</h1>
+
+        <div class="toc">
+            <h2>📋 Table of Contents</h2>
+            <ul>
+                <li><a href="#diagram1">High-Level System Architecture</a></li>
+                <li><a href="#diagram2">AI Agent Layer Architecture</a></li>
+                <li><a href="#diagram3">Request Processing Pipeline</a></li>
+                <li><a href="#diagram4">Email Agent Service Architecture</a></li>
+                <li><a href="#diagram5">Security Architecture</a></li>
+                <li><a href="#diagram6">Data Flow Sequence</a></li>
+                <li><a href="#diagram7">External Service Integrations</a></li>
+                <li><a href="#diagram8">Caching Strategy</a></li>
+                <li><a href="#diagram9">Production Features</a></li>
+            </ul>
+        </div>
+
+        <div id="diagram1" class="diagram">
+            <h2>🏗️ High-Level System Architecture</h2>
+            <p>Complete system overview showing all layers from interface to data storage.</p>
+            <object data="./architecture-diagrams-1.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram2" class="diagram">
+            <h2>🤖 AI Agent Layer Architecture</h2>
+            <p>Multi-agent system with Master Agent orchestrating specialized agents.</p>
+            <object data="./architecture-diagrams-2.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram3" class="diagram">
+            <h2>🛡️ Request Processing Pipeline</h2>
+            <p>10-layer security and validation middleware pipeline.</p>
+            <object data="./architecture-diagrams-3.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram4" class="diagram">
+            <h2>📧 Email Agent Service Architecture</h2>
+            <p>Refactored Email Agent showing service decomposition (1,738 → 604 lines).</p>
+            <object data="./architecture-diagrams-4.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram5" class="diagram">
+            <h2>🔒 Security Architecture</h2>
+            <p>Multi-layer security model with OAuth 2.0 and comprehensive protection.</p>
+            <object data="./architecture-diagrams-5.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram6" class="diagram">
+            <h2>🔄 Data Flow Sequence</h2>
+            <p>Request-response flow through the entire system.</p>
+            <object data="./architecture-diagrams-6.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram7" class="diagram">
+            <h2>🌐 External Service Integrations</h2>
+            <p>Integration patterns with Google, OpenAI, and Slack APIs.</p>
+            <object data="./architecture-diagrams-7.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram8" class="diagram">
+            <h2>⚡ Caching Strategy</h2>
+            <p>Multi-level caching architecture for performance optimization.</p>
+            <object data="./architecture-diagrams-8.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+
+        <div id="diagram9" class="diagram">
+            <h2>🚀 Production Features</h2>
+            <p>Production-ready features including observability, reliability, and security.</p>
+            <object data="./architecture-diagrams-9.svg" type="image/svg+xml" width="100%"></object>
+        </div>
+    </div>
+</body>
+</html>

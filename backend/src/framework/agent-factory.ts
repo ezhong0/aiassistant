@@ -1,10 +1,10 @@
 import { AIAgent } from './ai-agent';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agent.types';
-import { EmailAgent } from '../agents/email-agent-refactored';
+import { EmailAgent } from '../agents/email.agent';
+import { CalendarAgent } from '../agents/calendar.agent';
 import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
-import { CalendarAgent } from '../agents/calendar.agent';
 import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import logger from '../utils/logger';
