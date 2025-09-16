@@ -4,8 +4,8 @@ import { OpenAIService } from '../services/openai.service';
 import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { getService } from '../services/service-manager';
-import { SlackContext } from '../types/slack.types';
-import { SlackMessage } from '../types/slack-message-reader.types';
+import { SlackContext } from '../types/slack/slack.types';
+import { SlackMessage } from '../types/slack/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
@@ -160,6 +160,27 @@ export class MasterAgent {
   }
 
   /**
+   * Get ContactAgent for contact operations
+   */
+  private getContactAgent(): any {
+    return AgentFactory.getAgent('contactAgent');
+  }
+
+  /**
+   * Get AIClassificationService for AI classification operations
+   */
+  private getAIClassificationService(): any {
+    return getService('aiClassificationService');
+  }
+
+  /**
+   * Get EmailFormatter for proposal generation
+   */
+  private getEmailFormatter(): any {
+    return getService('emailFormatter');
+  }
+
+  /**
    * Get OpenAI service from the registry
    */
   public getOpenAIService(): OpenAIService | null {
@@ -196,8 +217,9 @@ export class MasterAgent {
         throw new Error('OpenAI service is required but not available. Please check OpenAI configuration.');
       }
 
-      // Step 1: Detect if context is needed
-      const contextDetection = await this.detectContextNeeds(userInput, slackContext);
+      // Step 1: Detect if context is needed (delegate to AIClassificationService)
+      const aiClassificationService = this.getAIClassificationService();
+      const contextDetection = await aiClassificationService.detectContextNeeds(userInput, slackContext);
       logger.info('Context detection result:', contextDetection);
 
       // Step 2: Gather context if needed
@@ -240,8 +262,9 @@ export class MasterAgent {
 
       logger.info(`MasterAgent determined ${validatedToolCalls.length} tool calls:`, validatedToolCalls.map(tc => tc.name));
 
-      // Step 5: Generate conversational proposal if appropriate
-      const proposal = await this.generateProposal(userInput, validatedToolCalls, contextGathered, slackContext);
+      // Step 5: Generate conversational proposal if appropriate (delegate to EmailFormatter)
+      const emailFormatter = this.getEmailFormatter();
+      const proposal = await emailFormatter.generateProposal(userInput, validatedToolCalls, contextGathered, slackContext);
       
       const result = {
         message: proposal?.text || message,
@@ -348,9 +371,10 @@ export class MasterAgent {
     // Add agent-specific enhancements based on capabilities
     const enhancedParameters = { ...toolCall.parameters };
 
-    // For email operations, ensure we have contact context if needed
+    // For email operations, ensure we have contact context if needed (delegate to ContactAgent)
     if (toolName === 'send_email') {
-      const contactLookup = await this.needsContactLookup(userInput);
+      const contactAgent = this.getContactAgent();
+      const contactLookup = await contactAgent.detectContactNeeds(userInput);
       if (contactLookup.needed) {
         // This will be handled by the MasterAgent's orchestration logic
         enhancedParameters.requiresContactLookup = true;
@@ -368,120 +392,6 @@ export class MasterAgent {
       parameters: enhancedParameters
     };
   }
-
-  /**
-   * Check if user input requires contact lookup using AI entity extraction
-   */
-  private async needsContactLookup(userInput: string): Promise<{needed: boolean, names: string[]}> {
-    try {
-      const openaiService = this.getOpenAIService();
-      if (!openaiService) {
-        throw new Error('OpenAI service is not available. AI contact lookup detection is required for this operation.');
-      }
-
-      const response = await openaiService.generateText(
-        `Extract person names that need contact lookup: "${userInput}"
-        
-        Return JSON: {"needed": boolean, "names": ["name1", "name2"]}
-        
-        Examples:
-        - "Send email to John" → {"needed": true, "names": ["John"]}
-        - "Email john@example.com" → {"needed": false, "names": []}
-        - "What's on my calendar?" → {"needed": false, "names": []}`,
-        'Extract contact names from user requests. Always return valid JSON.',
-        { temperature: 0, maxTokens: 100 }
-      );
-
-      const result = JSON.parse(response);
-      return {
-        needed: Boolean(result.needed),
-        names: Array.isArray(result.names) ? result.names : []
-      };
-    } catch (error) {
-      logger.error('Failed to extract contact names:', error);
-      throw new Error('AI contact lookup detection failed. Please check your OpenAI configuration.');
-    }
-  }
-
-  /**
-   * Detect if context gathering is needed for the user input
-   */
-  private async detectContextNeeds(userInput: string, slackContext?: SlackContext): Promise<ContextDetectionResult> {
-    try {
-      const openaiService = this.getOpenAIService();
-      if (!openaiService || !slackContext) {
-        throw new Error('OpenAI service or Slack context is not available. AI context detection is required for this operation.');
-      }
-
-      const contextDetectionPrompt = `Analyze this user request to determine if context from recent Slack messages would be helpful:
-
-User Request: "${userInput}"
-Current Context: Direct message conversation
-
-IMPORTANT: Be proactive about gathering context! When in doubt, choose to gather context rather than asking for clarification.
-
-Determine if the user is referring to:
-1. Previous messages in this conversation (thread_history)
-2. Recent messages from the user (recent_messages)
-3. Specific topics or people mentioned (search_results)
-4. No context needed (none)
-
-BIAS TOWARD CONTEXT GATHERING for these patterns:
-- Follow-up questions like "what about...", "other...", "also...", "more..."
-- Ambiguous requests that could benefit from conversation history
-- References to "emails", "messages", "meetings" without specifics
-- Pronouns or incomplete information
-
-Return JSON with:
-{
-  "needsContext": boolean,
-  "contextType": "recent_messages" | "thread_history" | "search_results" | "none",
-  "confidence": number (0-1),
-  "reasoning": "explanation of decision"
-}
-
-Examples:
-- "Send that email we discussed" → needsContext: true, contextType: "thread_history"
-- "Email John about the project" → needsContext: false, contextType: "none"
-- "what about my other emails?" → needsContext: true, contextType: "thread_history"
-- "other emails" → needsContext: true, contextType: "recent_messages"
-- "more details" → needsContext: true, contextType: "thread_history"
-- "Follow up on my last message" → needsContext: true, contextType: "recent_messages"
-- "What did Sarah say about the meeting?" → needsContext: true, contextType: "search_results"`;
-
-      const response = await openaiService.generateStructuredData<ContextDetectionResult>(
-        userInput,
-        contextDetectionPrompt,
-        {
-          type: 'object',
-          properties: {
-            needsContext: { type: 'boolean' },
-            contextType: { 
-              type: 'string', 
-              enum: ['recent_messages', 'thread_history', 'search_results', 'none'] 
-            },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
-            reasoning: { type: 'string' }
-          },
-          required: ['needsContext', 'contextType', 'confidence', 'reasoning']
-        },
-        { temperature: 0.1, maxTokens: 200 }
-      );
-
-      logger.debug('Context detection completed', response);
-      return response;
-
-    } catch (error) {
-      logger.error('Error in context detection:', error);
-      return {
-        needsContext: false,
-        contextType: 'none',
-        confidence: 0.5,
-        reasoning: 'Error occurred during context detection'
-      };
-    }
-  }
-
 
   /**
    * Generate conversational proposal from tool calls

@@ -1,5 +1,5 @@
 import { resolveGmailService } from '../services/service-resolver';
-import { GmailService } from '../services/gmail.service';
+import { GmailService } from '../services/email/gmail.service';
 import { EmailParser } from './email-parser';
 import {
   GmailMessage,
@@ -8,7 +8,7 @@ import {
   ThreadSummary,
   ThreadUpdateRequest,
   EmailContact
-} from '../types/gmail.types';
+} from '../types/email/gmail.types';
 import logger from './logger';
 
 /**

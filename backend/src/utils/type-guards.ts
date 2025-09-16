@@ -13,7 +13,7 @@ import {
   SlackAppMentionEvent,
   SlackSlashCommandPayload,
   SlackInteractivePayload
-} from '../types/slack.types';
+} from '../types/slack/slack.types';
 import { ToolCall, ToolResult } from '../types/tools';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
 

@@ -7,7 +7,7 @@ import {
 } from '../schemas/slack.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { ServiceManager } from '../services/service-manager';
-import { SlackInterface } from '../interfaces/slack.interface';
+import { SlackInterface } from '../types/slack/slack.interface';
 import logger from '../utils/logger';
 
 const emptyQuerySchema = z.object({});

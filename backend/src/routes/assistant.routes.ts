@@ -9,7 +9,7 @@ import {
   ResponseBuilder, 
   HTTP_STATUS, 
   ERROR_CODES 
-} from '../types/api-response.types';
+} from '../types/api/api-response.types';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { sanitizeString } from '../middleware/validation.middleware';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';

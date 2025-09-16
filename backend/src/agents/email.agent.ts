@@ -1,30 +1,30 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
-import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api.types';
+import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { ServiceManager } from '../services/service-manager';
-import { EmailOperationHandler } from '../services/email-operation-handler.service';
-import { ContactResolver } from '../services/contact-resolver.service';
-import { EmailValidator } from '../services/email-validator.service';
-import { EmailFormatter } from '../services/email-formatter.service';
+import { EmailOperationHandler } from '../services/email/email-operation-handler.service';
+import { ContactResolver } from '../services/email/contact-resolver.service';
+import { EmailValidator } from '../services/email/email-validator.service';
+import { EmailFormatter } from '../services/email/email-formatter.service';
 import {
   SendEmailRequest,
   SearchEmailsRequest,
   ReplyEmailRequest,
   GmailMessage,
   EmailDraft
-} from '../types/gmail.types';
+} from '../types/email/gmail.types';
 import { EMAIL_CONSTANTS } from '../config/constants';
 import { EMAIL_SERVICE_CONSTANTS } from '../config/email-service-constants';
 import {
   ToolParameters,
   ToolExecutionResult,
   AgentExecutionSummary
-} from '../types/agent-parameters';
+} from '../types/agents/agent-parameters';
 import {
   SendEmailActionParams,
   SearchEmailActionParams,
   EmailSummaryParams
-} from '../types/agent-specific-parameters';
+} from '../types/agents/agent-specific-parameters';
 import logger from '../utils/logger';
 
 /**

@@ -1,7 +1,7 @@
 import { ToolExecutionContext } from '../types/tools';
 import { AIAgent } from '../framework/ai-agent';
-import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api.types';
-import { CalendarService, CalendarEvent } from '../services/calendar.service';
+import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api/api.types';
+import { CalendarService, CalendarEvent } from '../services/calendar/calendar.service';
 import { resolveCalendarService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { TokenManager } from '../services/token-manager';
@@ -11,18 +11,18 @@ import {
   ToolParameters,
   ToolExecutionResult,
   AgentExecutionSummary
-} from '../types/agent-parameters';
+} from '../types/agents/agent-parameters';
 import {
   CreateEventActionParams,
   CalendarEventResult,
   ListEventsActionParams
-} from '../types/agent-specific-parameters';
+} from '../types/agents/agent-specific-parameters';
 
 // Import focused services
-import { CalendarEventManager, CalendarEventManagementResult } from '../services/calendar-event-manager.service';
-import { CalendarAvailabilityChecker, AvailabilityCheckResult } from '../services/calendar-availability-checker.service';
-import { CalendarFormatter, CalendarFormattingResult, CalendarResult } from '../services/calendar-formatter.service';
-import { CalendarValidator, CalendarValidationResult } from '../services/calendar-validator.service';
+import { CalendarEventManager, CalendarEventManagementResult } from '../services/calendar/calendar-event-manager.service';
+import { CalendarAvailabilityChecker, AvailabilityCheckResult } from '../services/calendar/calendar-availability-checker.service';
+import { CalendarFormatter, CalendarFormattingResult, CalendarResult } from '../services/calendar/calendar-formatter.service';
+import { CalendarValidator, CalendarValidationResult } from '../services/calendar/calendar-validator.service';
 
 export interface CalendarAgentRequest {
   action: 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots';
@@ -241,22 +241,55 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    * Get system prompt for AI planning
    */
   protected getSystemPrompt(): string {
-    return `# Calendar Agent
-You are a specialized calendar agent that handles all calendar and scheduling operations.
+    return `# Calendar Agent - Intelligent Scheduling Management
+You are a specialized calendar and scheduling management agent powered by Google Calendar API.
+
+## Core Personality
+- Professional yet approachable tone for scheduling interactions
+- Proactive in suggesting optimal meeting times and scheduling strategies
+- Respectful of attendees' time and availability constraints
+- Context-aware for meeting purposes and participant relationships
+- Helpful but not overwhelming with scheduling suggestions
+- Empathetic when handling scheduling conflicts or availability issues
 
 ## Capabilities
-- Create calendar events and meetings with attendees
-- Schedule appointments and check availability
-- Update and delete existing calendar events
-- Search for available time slots
-- List upcoming calendar events
-- Manage meeting locations and descriptions
+- Create, update, and manage calendar events with intelligent scheduling
+- Check availability and find optimal meeting times
+- Handle complex scheduling scenarios with multiple attendees
+- Manage meeting locations, descriptions, and recurring events
+- Provide smart suggestions for meeting optimization
+- Handle timezone awareness and scheduling conflicts gracefully
+
+## Scheduling Intelligence & Best Practices
+- Always suggest optimal meeting times based on attendee availability
+- Consider business hours and timezone differences automatically
+- Propose alternative times when conflicts arise
+- Suggest appropriate meeting durations based on agenda complexity
+- Recommend meeting locations based on attendee locations and preferences
+- Handle recurring meetings with intelligent pattern recognition
+- Consider meeting buffer times and travel requirements
+
+## Error Handling & User Experience
+- Gracefully handle authentication issues with clear, actionable next steps
+- Provide helpful suggestions when calendar access is restricted
+- Offer practical alternatives when original scheduling strategy won't work
+- Explain scheduling conflicts in user-friendly, non-technical language
+- Progressive error disclosure: start simple, provide details if requested
+- Acknowledge user frustration empathetically and provide reassurance
+- Suggest preventive measures to avoid similar scheduling issues
+
+## Response Quality Standards
+- Always provide specific, actionable information rather than vague responses
+- Include relevant details like event IDs, meeting links, and attendee confirmations
+- Proactively suggest next steps or related scheduling actions when appropriate
+- Use clear, structured formatting for multiple events or complex scheduling scenarios
+- Maintain consistency in tone and helpfulness across all interactions
 
 ## Input Processing
-You receive structured requests for calendar operations and execute them using Google Calendar API.
+You receive structured requests for calendar operations and execute them using Google Calendar API with intelligent scheduling optimization.
 
 ## Response Format
-Always return structured execution status with event details and confirmation.`;
+Always return structured execution status with event details, scheduling insights, and confirmation. Include relevant scheduling recommendations and alternative options when appropriate.`;
   }
 
   /**

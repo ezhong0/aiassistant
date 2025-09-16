@@ -7,67 +7,64 @@ Welcome to the comprehensive documentation for the **AI Assistant Platform** - a
 The AI Assistant Platform is a **Node.js/TypeScript backend** that provides intelligent automation through a sophisticated multi-agent system. It integrates with Google Workspace (Gmail, Calendar, Contacts) and Slack to deliver natural language processing capabilities for productivity tasks.
 
 ### **Core Architecture**
-- **Multi-Agent System**: 6 specialized AI agents orchestrated by a Master Agent
-- **Service-Oriented Architecture**: 15+ microservices with dependency injection
+- **Multi-Agent System**: 6 specialized AI agents orchestrated by a Master Agent with complete delegation patterns
+- **Service-Oriented Architecture**: 20+ focused services with dependency injection and service composition
+- **Delegation Pattern**: MasterAgent acts as pure orchestrator, delegating specialized logic to focused services
+- **AI Prompt Consistency**: All agents use comprehensive, consistent system prompts for optimal AI behavior
 - **Token-Based Authentication**: OAuth 2.0 with JWT and encrypted token storage
 - **Production-Ready**: Railway deployment, health monitoring, graceful shutdown
 - **Enterprise Security**: Rate limiting, input validation, security headers
 
 ## 📚 **Documentation Structure**
 
-### 🚀 **Getting Started**
-- **[Quick Start Guide](./getting-started.md)** - 5-minute setup and first run
-- **[Environment Configuration](./environment-setup.md)** - Complete environment setup
-- **[First Integration](./first-integration.md)** - Connect Slack and Google services
+### 🏗️ **[Architecture](./architecture/)**
+Technical architecture documentation and system design:
+- **[Architecture Overview](./architecture/ARCHITECTURE_OVERVIEW.md)** - Comprehensive system architecture with diagrams
+- **[Tech Stack Evaluation](./architecture/TECH_STACK_EVALUATION.md)** - Detailed technical stack analysis (9.3/10 rating)
+- **[Multi-Agent System](./architecture/multi-agent-system.md)** - AI agent coordination and orchestration
+- **[Interactive Diagrams](./overview/architecture-viewer.html)** - Click-to-expand architecture visualizations
 
-### 🏗️ **Architecture & Design**
-- **[System Architecture](./architecture.md)** - Complete technical architecture
-- **[Multi-Agent System](./multi-agent-system.md)** - AI agent orchestration and capabilities
-- **[Service Architecture](./service-architecture.md)** - Microservices and dependency injection
-- **[API Design](./api-design.md)** - RESTful API patterns and conventions
+### 📚 **[Guides](./guides/)**
+Step-by-step guides for setup, development, and integration:
+- **[Getting Started](./guides/getting-started.md)** - Quick start guide
+- **[Development Setup](./guides/development-setup.md)** - Local development environment
+- **[Slack Integration](./guides/slack-integration.md)** - Slack workspace integration
+- **[Revised Onboarding Guide](./guides/REVISED_ONBOARDING_GUIDE.md)** - Complete onboarding process
+- **[Slack Onboarding Guide](./guides/SLACK_ONBOARDING_GUIDE.md)** - Slack-specific setup
+- **[Testing Guide](./guides/testing-guide.md)** - Testing strategies and best practices
 
-### 🔧 **Development**
-- **[Development Setup](./development-setup.md)** - Local development environment
-- **[Agent Development](./agent-development.md)** - Building and extending AI agents
-- **[Service Development](./service-development.md)** - Creating new services
-- **[Testing Guide](./testing-guide.md)** - Comprehensive testing strategies
+### 🚀 **[Deployment](./deployment/)**
+Production deployment and operations:
+- **[Production Deployment](./deployment/production-deployment.md)** - Production setup and configuration
+- **[Environment Setup](./deployment/environment-setup.md)** - Environment configuration
+- **[Monitoring & Logging](./deployment/monitoring-logging.md)** - Observability and monitoring
+- **[Troubleshooting](./deployment/troubleshooting.md)** - Common issues and solutions
 
-### 🔌 **Integrations**
-- **[Slack Integration](./slack-integration.md)** - Slack bot setup and configuration
-- **[Google Workspace](./google-workspace.md)** - Gmail, Calendar, Contacts integration
-- **[OpenAI Integration](./openai-integration.md)** - AI model configuration and usage
-- **[External APIs](./external-apis.md)** - Third-party service integrations
+### 📋 **[Planning](./planning/)**
+Project planning and strategic documents:
+- **[Refactoring Plan](./planning/REFACTORING_PLAN.md)** - Complete refactoring status (9.5/10 architecture)
+- **[Strategic Framework](./planning/strategic_framework.md)** - Project strategy and goals
+- **[Project Plan](./planning/plan.md)** - Implementation roadmap
+- **[Development Outputs](./planning/outputs.md)** - Development milestones and outputs
 
-### 🚀 **Deployment & Operations**
-- **[Production Deployment](./production-deployment.md)** - Railway and cloud deployment
-- **[Environment Management](./environment-management.md)** - Configuration and secrets
-- **[Monitoring & Logging](./monitoring-logging.md)** - Health checks and observability
-- **[Scaling & Performance](./scaling-performance.md)** - Performance optimization
-
-### 🔒 **Security & Compliance**
-- **[Security Architecture](./security-architecture.md)** - Authentication and authorization
-- **[Data Protection](./data-protection.md)** - Encryption and privacy
-- **[Rate Limiting](./rate-limiting.md)** - Abuse prevention and throttling
-- **[Audit & Compliance](./audit-compliance.md)** - Logging and compliance
-
-### 🛠️ **Operations**
-- **[Troubleshooting](./troubleshooting.md)** - Common issues and solutions
-- **[Maintenance](./maintenance.md)** - Updates and system maintenance
-- **[Backup & Recovery](./backup-recovery.md)** - Data protection strategies
-- **[Performance Tuning](./performance-tuning.md)** - Optimization techniques
+### 🔌 **[API](./api/)**
+API documentation and references:
+- Coming soon: OpenAPI specifications
+- Coming soon: Endpoint documentation
+- Coming soon: Authentication guides
 
 ## 🎯 **Quick Navigation**
 
 | **I want to...** | **Go to...** |
 |------------------|--------------|
-| Set up the platform | [Quick Start Guide](./getting-started.md) |
-| Understand the architecture | [System Architecture](./architecture.md) |
-| Build a new agent | [Agent Development](./agent-development.md) |
-| Deploy to production | [Production Deployment](./production-deployment.md) |
-| Integrate with Slack | [Slack Integration](./slack-integration.md) |
-| Configure Google services | [Google Workspace](./google-workspace.md) |
-| Troubleshoot issues | [Troubleshooting](./troubleshooting.md) |
-| Monitor the system | [Monitoring & Logging](./monitoring-logging.md) |
+| Set up the platform | [Getting Started](./guides/getting-started.md) |
+| Understand the architecture | [Architecture Overview](./architecture/ARCHITECTURE_OVERVIEW.md) |
+| View interactive diagrams | [Architecture Viewer](./overview/architecture-viewer.html) |
+| Deploy to production | [Production Deployment](./deployment/production-deployment.md) |
+| Integrate with Slack | [Slack Integration](./guides/slack-integration.md) |
+| Check project status | [Refactoring Plan](./planning/REFACTORING_PLAN.md) |
+| Troubleshoot issues | [Troubleshooting](./deployment/troubleshooting.md) |
+| Monitor the system | [Monitoring & Logging](./deployment/monitoring-logging.md) |
 
 ## 🏆 **Key Features**
 

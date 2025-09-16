@@ -1,6 +1,6 @@
 import { Logger } from 'winston';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
-import { ActionPreview, PreviewGenerationResult, ActionRiskAssessment } from '../types/api.types';
+import { ActionPreview, PreviewGenerationResult, ActionRiskAssessment } from '../types/api/api.types';
 import { OpenAIService } from '../services/openai.service';
 import { getService } from '../services/service-manager';
 import logger from '../utils/logger';
@@ -13,7 +13,7 @@ import {
   AgentExecutionSummary,
   ThinkParameters,
   validateToolParameters
-} from '../types/agent-parameters';
+} from '../types/agents/agent-parameters';
 
 /**
  * AI Planning Configuration

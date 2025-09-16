@@ -1,4 +1,4 @@
-import { SlackContext } from './slack.types';
+import { SlackContext } from './slack/slack.types';
 
 export interface ToolCall {
   name: string;

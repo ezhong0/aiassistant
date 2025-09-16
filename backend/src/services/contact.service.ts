@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { Contact, ContactSearchResult, ContactServiceError } from '../types/contact.types';
+import { Contact, ContactSearchResult, ContactServiceError } from '../types/agents/contact.types';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
 

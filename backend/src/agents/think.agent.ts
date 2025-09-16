@@ -1,17 +1,17 @@
 import { ToolCall, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
 import { AIAgent } from '../framework/ai-agent';
-import { PreviewGenerationResult } from '../types/api.types';
+import { PreviewGenerationResult } from '../types/api/api.types';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
 import {
   ToolParameters,
   AgentExecutionSummary,
   ToolExecutionResult
-} from '../types/agent-parameters';
+} from '../types/agents/agent-parameters';
 import {
   ThinkAnalysisParams,
   ThinkAnalysisResult
-} from '../types/agent-specific-parameters';
+} from '../types/agents/agent-specific-parameters';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {

@@ -4,28 +4,28 @@ import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
 import { AuthService } from './auth.service';
 import { ContactService } from './contact.service';
-import { GmailService } from './gmail.service';
-import { CalendarService } from './calendar.service';
+import { GmailService } from './email/gmail.service';
+import { CalendarService } from './calendar/calendar.service';
 import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 // import { SlackMessageReaderService } from './slack-message-reader.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { AIClassificationService } from './ai-classification.service';
-import { SlackEventHandler } from './slack-event-handler.service';
-import { SlackOAuthManager } from './slack-oauth-manager.service';
-import { SlackConfirmationHandler } from './slack-confirmation-handler.service';
-import { EmailOperationHandler } from './email-operation-handler.service';
-import { ContactResolver } from './contact-resolver.service';
-import { EmailValidator } from './email-validator.service';
-import { EmailFormatter } from './email-formatter.service';
-import { CalendarEventManager } from './calendar-event-manager.service';
-import { CalendarAvailabilityChecker } from './calendar-availability-checker.service';
-import { CalendarFormatter } from './calendar-formatter.service';
-import { CalendarValidator } from './calendar-validator.service';
-import { SlackMessageAnalyzer } from './slack-message-analyzer.service';
-import { SlackDraftManager } from './slack-draft-manager.service';
-import { SlackFormatter } from './slack-formatter.service';
+import { SlackEventHandler } from './slack/slack-event-handler.service';
+import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
+import { SlackConfirmationHandler } from './slack/slack-confirmation-handler.service';
+import { EmailOperationHandler } from './email/email-operation-handler.service';
+import { ContactResolver } from './email/contact-resolver.service';
+import { EmailValidator } from './email/email-validator.service';
+import { EmailFormatter } from './email/email-formatter.service';
+import { CalendarEventManager } from './calendar/calendar-event-manager.service';
+import { CalendarAvailabilityChecker } from './calendar/calendar-availability-checker.service';
+import { CalendarFormatter } from './calendar/calendar-formatter.service';
+import { CalendarValidator } from './calendar/calendar-validator.service';
+import { SlackMessageAnalyzer } from './slack/slack-message-analyzer.service';
+import { SlackDraftManager } from './slack/slack-draft-manager.service';
+import { SlackFormatter } from './slack/slack-formatter.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -236,7 +236,7 @@ const registerCoreServices = async (): Promise<void> => {
         enableBotMessageFiltering: true,
         enableDMOnlyMode: true
       }, client);
-      serviceManager.registerService('slackEventHandler', slackEventHandler, {
+      serviceManager.registerService('slackEventHandler', slackEventHandler as any, {
         priority: 70,
         autoStart: true
       });

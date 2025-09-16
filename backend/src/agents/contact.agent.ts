@@ -1,6 +1,6 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
-import { PreviewGenerationResult } from '../types/api.types';
+import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveContactService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
@@ -8,17 +8,17 @@ import { AIClassificationService } from '../services/ai-classification.service';
 import {
   Contact as ContactType,
   ContactSearchRequest
-} from '../types/contact.types';
+} from '../types/agents/contact.types';
 import { CONTACT_CONSTANTS } from '../config/constants';
 import {
   ToolParameters,
   ToolExecutionResult,
   AgentExecutionSummary
-} from '../types/agent-parameters';
+} from '../types/agents/agent-parameters';
 import {
   ContactSearchParams,
   ContactSearchResult
-} from '../types/agent-specific-parameters';
+} from '../types/agents/agent-specific-parameters';
 
 /**
  * Contact operation result interface
@@ -194,6 +194,41 @@ You are a specialized contact discovery and management agent.
         'Contact confidence scoring',
         'Ambiguous query resolution'
       ];
+    }
+
+    /**
+     * Detect if user input requires contact lookup using AI entity extraction
+     * Delegated from MasterAgent for proper separation of concerns
+     */
+    async detectContactNeeds(userInput: string): Promise<{needed: boolean, names: string[]}> {
+      try {
+        const openaiService = this.getOpenAIService();
+        if (!openaiService) {
+          throw new Error('OpenAI service is not available. AI contact lookup detection is required for this operation.');
+        }
+
+        const response = await openaiService.generateText(
+          `Extract person names that need contact lookup: "${userInput}"
+          
+          Return JSON: {"needed": boolean, "names": ["name1", "name2"]}
+          
+          Examples:
+          - "Send email to John" → {"needed": true, "names": ["John"]}
+          - "Email john@example.com" → {"needed": false, "names": []}
+          - "What's on my calendar?" → {"needed": false, "names": []}`,
+          'Extract contact names from user requests. Always return valid JSON.',
+          { temperature: 0, maxTokens: 100 }
+        );
+
+        const result = JSON.parse(response);
+        return {
+          needed: Boolean(result.needed),
+          names: Array.isArray(result.names) ? result.names : []
+        };
+      } catch (error) {
+        this.logger.error('Failed to extract contact names:', error);
+        throw new Error('AI contact lookup detection failed. Please check your OpenAI configuration.');
+      }
     }
 
     /**

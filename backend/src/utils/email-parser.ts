@@ -5,7 +5,7 @@ import {
   EmailParsingOptions, 
   EmailMetadata,
   AttachmentType 
-} from '../types/gmail.types';
+} from '../types/email/gmail.types';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
 import logger from './logger';

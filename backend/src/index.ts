@@ -33,7 +33,7 @@ import healthRoutes from './routes/health';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
-import { initializeInterfaces, startInterfaces, InterfaceManager } from './interfaces';
+import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
 
 // Global interfaces store
 let globalInterfaces: InterfaceManager | null = null;

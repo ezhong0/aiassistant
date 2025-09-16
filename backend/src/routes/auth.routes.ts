@@ -179,7 +179,7 @@ router.get('/debug/test-oauth-url',
     // Also test the Slack interface OAuth URL generation
     let slackOAuthUrl = 'Not available';
     try {
-      const { SlackInterface } = await import('../interfaces/slack.interface');
+      const { SlackInterface } = await import('../types/slack/slack.interface');
       const mockSlackContext = {
         teamId: 'test_team',
         userId: 'test_user',

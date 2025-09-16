@@ -3,147 +3,1035 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Assistant Platform - Architecture Diagrams</title>
+    <title>AI Assistant Platform - Interactive Architecture Diagrams</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        * {
             margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
+            padding: 0;
+            box-sizing: border-box;
         }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
-        h1 {
-            color: #333;
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 40px;
             text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .update-badge {
+            display: inline-block;
+            background: #27ae60;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .navigation {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
             margin-bottom: 40px;
+            border: 1px solid #e9ecef;
         }
-        .diagram {
-            margin-bottom: 50px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            background: #fafafa;
-        }
-        .diagram h2 {
-            color: #444;
-            margin-top: 0;
+
+        .navigation h2 {
+            color: #2c3e50;
             margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #007acc;
+            font-size: 1.5rem;
         }
-        .diagram svg {
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #2c3e50;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+        }
+
+        .nav-item .icon {
+            font-size: 1.5rem;
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .nav-item .info {
+            flex: 1;
+        }
+
+        .nav-item .title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .nav-item .description {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .nav-item .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status.complete {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.updated {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .diagram-section {
+            margin-bottom: 50px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+        }
+
+        .diagram-section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .diagram-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #3498db;
+        }
+
+        .diagram-header h2 {
+            color: #2c3e50;
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            flex: 1;
+        }
+
+        .diagram-header .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .diagram-description {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .diagram-description p {
+            margin: 0;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+        .diagram-container {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .diagram-container:hover {
+            border-color: #3498db;
+            box-shadow: 0 8px 25px rgba(52, 152, 219, 0.15);
+        }
+
+        .diagram-container svg {
             width: 100%;
             height: auto;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .diagram-container:hover svg {
+            transform: scale(1.02);
+        }
+
+        .expand-hint {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(52, 152, 219, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .diagram-container:hover .expand-hint {
+            opacity: 1;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            position: relative;
+            margin: auto;
+            padding: 40px;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-diagram {
+            width: 90vw;
+            height: 80vh;
             background: white;
-            border-radius: 4px;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .toc {
-            background: #f0f8ff;
-            border: 1px solid #b0d4ff;
+
+        .modal-diagram svg {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            display: block;
+            transform-origin: center center;
+            transition: transform 0.2s ease;
+        }
+
+        .modal-diagram.zoomed {
+            transform: scale(1.5);
+            max-width: none;
+            max-height: none;
+            overflow: auto;
+            cursor: move;
+        }
+
+        .modal-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+            align-items: center;
+        }
+
+        .zoom-indicator {
+            background: rgba(255,255,255,0.9);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #2c3e50;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .modal-btn {
+            background: rgba(255,255,255,0.9);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            color: #2c3e50;
+        }
+
+        .modal-btn:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+
+        .modal-title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 15px 20px;
             border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 1.1rem;
         }
-        .toc h2 {
-            margin-top: 0;
-            color: #0066cc;
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
-        .toc ul {
-            list-style-type: none;
-            padding-left: 0;
+
+
+        .scroll-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+            transition: all 0.3s ease;
+            z-index: 100;
         }
-        .toc li {
-            margin: 8px 0;
+
+        .scroll-to-top:hover {
+            background: #2980b9;
+            transform: scale(1.1);
         }
-        .toc a {
-            color: #0066cc;
-            text-decoration: none;
-            font-weight: 500;
+
+        .scroll-to-top.visible {
+            display: flex;
         }
-        .toc a:hover {
-            text-decoration: underline;
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px;
+            }
+
+            .header {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .nav-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🏗️ AI Assistant Platform - Architecture Diagrams</h1>
-
-        <div class="toc">
-            <h2>📋 Table of Contents</h2>
-            <ul>
-                <li><a href="#diagram1">High-Level System Architecture</a></li>
-                <li><a href="#diagram2">AI Agent Layer Architecture</a></li>
-                <li><a href="#diagram3">Request Processing Pipeline</a></li>
-                <li><a href="#diagram4">Email Agent Service Architecture</a></li>
-                <li><a href="#diagram5">Security Architecture</a></li>
-                <li><a href="#diagram6">Data Flow Sequence</a></li>
-                <li><a href="#diagram7">External Service Integrations</a></li>
-                <li><a href="#diagram8">Caching Strategy</a></li>
-                <li><a href="#diagram9">Production Features</a></li>
-            </ul>
+        <div class="header">
+            <h1>🏗️ AI Assistant Platform</h1>
+            <div class="subtitle">Interactive Architecture Diagrams</div>
+            <div class="update-badge">✅ Updated with Complete Agent Refactoring</div>
         </div>
 
-        <div id="diagram1" class="diagram">
-            <h2>🏗️ High-Level System Architecture</h2>
-            <p>Complete system overview showing all layers from interface to data storage.</p>
-            <object data="./architecture-diagrams-1.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+        <div class="content">
+            <div class="navigation">
+                <h2>📋 Architecture Overview</h2>
+                <div class="nav-grid">
+                    <a href="#diagram1" class="nav-item">
+                        <div class="icon">🏗️</div>
+                        <div class="info">
+                            <div class="title">High-Level System Architecture</div>
+                            <div class="description">Complete system with 26+ services</div>
+                        </div>
+                        <div class="status updated">UPDATED</div>
+                    </a>
+                    <a href="#diagram2" class="nav-item">
+                        <div class="icon">🤖</div>
+                        <div class="info">
+                            <div class="title">AI Agent Layer Architecture</div>
+                            <div class="description">Multi-agent orchestration system</div>
+                        </div>
+                        <div class="status updated">UPDATED</div>
+                    </a>
+                    <a href="#diagram3" class="nav-item">
+                        <div class="icon">🛡️</div>
+                        <div class="info">
+                            <div class="title">Request Processing Pipeline</div>
+                            <div class="description">10-layer security middleware</div>
+                        </div>
+                    </a>
+                    <a href="#diagram4" class="nav-item">
+                        <div class="icon">📧</div>
+                        <div class="info">
+                            <div class="title">Email Agent Services</div>
+                            <div class="description">4 focused email services</div>
+                        </div>
+                        <div class="status complete">COMPLETE</div>
+                    </a>
+                    <a href="#diagram5" class="nav-item">
+                        <div class="icon">📅</div>
+                        <div class="info">
+                            <div class="title">Calendar Agent Services</div>
+                            <div class="description">4 focused calendar services</div>
+                        </div>
+                        <div class="status complete">COMPLETE</div>
+                    </a>
+                    <a href="#diagram6" class="nav-item">
+                        <div class="icon">💬</div>
+                        <div class="info">
+                            <div class="title">Slack Agent Services</div>
+                            <div class="description">6 focused slack services</div>
+                        </div>
+                        <div class="status complete">COMPLETE</div>
+                    </a>
+                    <a href="#diagram7" class="nav-item">
+                        <div class="icon">🔒</div>
+                        <div class="info">
+                            <div class="title">Security Architecture</div>
+                            <div class="description">Multi-layer security model</div>
+                        </div>
+                    </a>
+                    <a href="#diagram8" class="nav-item">
+                        <div class="icon">🔄</div>
+                        <div class="info">
+                            <div class="title">Data Flow Sequence</div>
+                            <div class="description">Request-response flow</div>
+                        </div>
+                    </a>
+                    <a href="#diagram9" class="nav-item">
+                        <div class="icon">🌐</div>
+                        <div class="info">
+                            <div class="title">External Integrations</div>
+                            <div class="description">Google, OpenAI, Slack APIs</div>
+                        </div>
+                        <div class="status updated">UPDATED</div>
+                    </a>
+                    <a href="#diagram10" class="nav-item">
+                        <div class="icon">⚡</div>
+                        <div class="info">
+                            <div class="title">Caching Strategy</div>
+                            <div class="description">Multi-level caching system</div>
+                        </div>
+                    </a>
+                    <a href="#diagram11" class="nav-item">
+                        <div class="icon">🚀</div>
+                        <div class="info">
+                            <div class="title">Production Features</div>
+                            <div class="description">Observability & reliability</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
 
-        <div id="diagram2" class="diagram">
-            <h2>🤖 AI Agent Layer Architecture</h2>
-            <p>Multi-agent system with Master Agent orchestrating specialized agents.</p>
-            <object data="./architecture-diagrams-2.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <!-- Diagram Sections -->
+            <div id="diagram1" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🏗️ High-Level System Architecture</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram1', 'High-Level System Architecture')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p><strong>Updated:</strong> Complete system overview showing all 26+ services including Email, Calendar, and Slack service ecosystems with proper agent decomposition and external API connections.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram1', 'High-Level System Architecture')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-1.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram3" class="diagram">
-            <h2>🛡️ Request Processing Pipeline</h2>
-            <p>10-layer security and validation middleware pipeline.</p>
-            <object data="./architecture-diagrams-3.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <div id="diagram2" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🤖 AI Agent Layer Architecture</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram2', 'AI Agent Layer Architecture')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p><strong>Updated:</strong> Multi-agent system showing Master Agent orchestrating specialized agents (Email, Calendar, Contact, Slack, Think) with all agents now using focused service architectures.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram2', 'AI Agent Layer Architecture')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-2.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram4" class="diagram">
-            <h2>📧 Email Agent Service Architecture</h2>
-            <p>Refactored Email Agent showing service decomposition (1,738 → 604 lines).</p>
-            <object data="./architecture-diagrams-4.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <div id="diagram3" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🛡️ Request Processing Pipeline</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram3', 'Request Processing Pipeline')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p>10-layer security and validation middleware pipeline providing comprehensive protection with timeout handling, CORS, security headers, input sanitization, Zod validation, and rate limiting.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram3', 'Request Processing Pipeline')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-3.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram5" class="diagram">
-            <h2>🔒 Security Architecture</h2>
-            <p>Multi-layer security model with OAuth 2.0 and comprehensive protection.</p>
-            <object data="./architecture-diagrams-5.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <div id="diagram4" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>📧 Email Agent Service Architecture</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram4', 'Email Agent Service Architecture')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p><strong>✅ Complete refactoring:</strong> Email Agent now uses 4 focused services (EmailOperationHandler, ContactResolver, EmailValidator, EmailFormatter) with proper service injection and error handling.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram4', 'Email Agent Service Architecture')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-4.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram6" class="diagram">
-            <h2>🔄 Data Flow Sequence</h2>
-            <p>Request-response flow through the entire system.</p>
-            <object data="./architecture-diagrams-6.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <div id="diagram5" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>📅 Calendar Agent Service Architecture</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram5', 'Calendar Agent Service Architecture')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p><strong>✅ Complete refactoring:</strong> Calendar Agent now uses 4 focused services (CalendarEventManager, CalendarAvailabilityChecker, CalendarFormatter, CalendarValidator) for comprehensive calendar management.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram5', 'Calendar Agent Service Architecture')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-5.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram7" class="diagram">
-            <h2>🌐 External Service Integrations</h2>
-            <p>Integration patterns with Google, OpenAI, and Slack APIs.</p>
-            <object data="./architecture-diagrams-7.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <div id="diagram6" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>💬 Slack Agent Service Architecture</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram6', 'Slack Agent Service Architecture')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p><strong>✅ Complete refactoring:</strong> Slack Agent now uses 6 focused services (SlackEventHandler, SlackOAuthManager, SlackConfirmationHandler, SlackMessageAnalyzer, SlackDraftManager, SlackFormatter) for comprehensive Slack integration.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram6', 'Slack Agent Service Architecture')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-6.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram8" class="diagram">
-            <h2>⚡ Caching Strategy</h2>
-            <p>Multi-level caching architecture for performance optimization.</p>
-            <object data="./architecture-diagrams-8.svg" type="image/svg+xml" width="100%"></object>
-        </div>
+            <div id="diagram7" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🔒 Security Architecture</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram7', 'Security Architecture')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p>Multi-layer security model with OAuth 2.0 authentication, comprehensive input validation, rate limiting, security headers, and proper authorization for enterprise-grade protection.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram7', 'Security Architecture')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-7.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
 
-        <div id="diagram9" class="diagram">
-            <h2>🚀 Production Features</h2>
-            <p>Production-ready features including observability, reliability, and security.</p>
-            <object data="./architecture-diagrams-9.svg" type="image/svg+xml" width="100%"></object>
+            <div id="diagram8" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🔄 Data Flow Sequence</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram8', 'Data Flow Sequence')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p>Complete request-response flow showing how user requests move through middleware, agents, services, and external APIs with proper error handling and response synthesis.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram8', 'Data Flow Sequence')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-8.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
+
+            <div id="diagram9" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🌐 External Service Integrations</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram9', 'External Service Integrations')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p><strong>Updated:</strong> Comprehensive integration patterns showing all specialized services connecting to their respective APIs (Google APIs, OpenAI, Slack) with proper error handling and authentication.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram9', 'External Service Integrations')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-9.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
+
+            <div id="diagram10" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>⚡ Caching Strategy</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram10', 'Caching Strategy')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p>Multi-level caching architecture with in-memory caching, Redis distributed cache, and database persistence for optimal performance with AI plan caching, session management, and token storage.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram10', 'Caching Strategy')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-10.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
+
+            <div id="diagram11" class="diagram-section">
+                <div class="diagram-header">
+                    <h2>🚀 Production Features</h2>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="openModal('diagram11', 'Production Features')">
+                            🔍 Expand
+                        </button>
+                    </div>
+                </div>
+                <div class="diagram-description">
+                    <p>Production-ready features including comprehensive observability (health checks, logging, metrics), reliability patterns (circuit breakers, retries, fallbacks), and security measures for enterprise deployment.</p>
+                </div>
+                <div class="diagram-container" onclick="openModal('diagram11', 'Production Features')">
+                    <div class="expand-hint">Click to expand</div>
+                    <object data="./architecture-diagrams-11.svg" type="image/svg+xml"></object>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-title" id="modalTitle"></div>
+            <div class="zoom-controls">
+                <button class="modal-btn" onclick="zoomIn()" title="Zoom In">
+                    🔍+
+                </button>
+                <div class="zoom-indicator" id="zoomIndicator">100%</div>
+                <button class="modal-btn" onclick="resetZoom()" title="Reset Zoom">
+                    🔄
+                </button>
+                <button class="modal-btn" onclick="zoomOut()" title="Zoom Out">
+                    🔍-
+                </button>
+            </div>
+            <div class="modal-controls">
+                <button class="modal-btn" onclick="downloadDiagram()" title="Download SVG">
+                    📥
+                </button>
+                <button class="modal-btn" onclick="closeModal()" title="Close">
+                    ✕
+                </button>
+            </div>
+            <div class="modal-diagram" id="modalDiagram"></div>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <button class="scroll-to-top" id="scrollToTop" onclick="scrollToTop()">
+        ↑
+    </button>
+
+    <script>
+        let currentDiagramId = null;
+        let currentZoom = 1;
+        let isDragging = false;
+        let dragStart = { x: 0, y: 0 };
+        let diagramPosition = { x: 0, y: 0 };
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Intersection Observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.diagram-section').forEach(section => {
+            observer.observe(section);
+        });
+
+        // Modal functionality
+        function openModal(diagramId, title) {
+            const modal = document.getElementById('modal');
+            const modalDiagram = document.getElementById('modalDiagram');
+            const modalTitle = document.getElementById('modalTitle');
+            const zoomIndicator = document.getElementById('zoomIndicator');
+            const originalDiagram = document.querySelector(`#${diagramId} object`);
+
+            if (originalDiagram) {
+                currentDiagramId = diagramId;
+                currentZoom = 1;
+                diagramPosition = { x: 0, y: 0 };
+                modalTitle.textContent = title;
+
+                // Reset zoom indicator
+                if (zoomIndicator) {
+                    zoomIndicator.textContent = '100%';
+                }
+
+                // Create a loading indicator
+                modalDiagram.innerHTML = '<div style="text-align: center; padding: 50px; color: #666;">Loading diagram...</div>';
+
+                // Load SVG content directly
+                fetch(originalDiagram.data)
+                    .then(response => response.text())
+                    .then(svgContent => {
+                        modalDiagram.innerHTML = svgContent;
+                        setupModalInteractions();
+                        updateDiagramTransform(); // Ensure initial state is correct
+                    })
+                    .catch(error => {
+                        console.error('Error loading diagram:', error);
+                        modalDiagram.innerHTML = '<div style="text-align: center; padding: 50px; color: #f00;">Error loading diagram</div>';
+                    });
+
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('modal');
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+            currentDiagramId = null;
+            currentZoom = 1;
+            diagramPosition = { x: 0, y: 0 };
+        }
+
+        function setupModalInteractions() {
+            const modalDiagram = document.getElementById('modalDiagram');
+
+            // Mouse wheel zoom
+            modalDiagram.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                setZoom(currentZoom + delta);
+            });
+
+            // Touch events for mobile
+            let touchStartDistance = 0;
+            modalDiagram.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 2) {
+                    touchStartDistance = getTouchDistance(e.touches);
+                }
+            });
+
+            modalDiagram.addEventListener('touchmove', function(e) {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const currentDistance = getTouchDistance(e.touches);
+                    const scale = currentDistance / touchStartDistance;
+                    setZoom(currentZoom * scale);
+                    touchStartDistance = currentDistance;
+                }
+            });
+
+            // Dragging for panning when zoomed
+            modalDiagram.addEventListener('mousedown', startDrag);
+            modalDiagram.addEventListener('touchstart', startDrag);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function getTouchDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function startDrag(e) {
+            if (currentZoom > 1) {
+                isDragging = true;
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                dragStart.x = clientX - diagramPosition.x;
+                dragStart.y = clientY - diagramPosition.y;
+                document.getElementById('modalDiagram').style.cursor = 'grabbing';
+            }
+        }
+
+        function drag(e) {
+            if (isDragging && currentZoom > 1) {
+                e.preventDefault();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                diagramPosition.x = clientX - dragStart.x;
+                diagramPosition.y = clientY - dragStart.y;
+                updateDiagramTransform();
+            }
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.getElementById('modalDiagram').style.cursor = currentZoom > 1 ? 'grab' : 'default';
+        }
+
+        function zoomIn() {
+            setZoom(currentZoom + 0.2);
+        }
+
+        function zoomOut() {
+            setZoom(currentZoom - 0.2);
+        }
+
+        function resetZoom() {
+            currentZoom = 1;
+            diagramPosition = { x: 0, y: 0 };
+            updateDiagramTransform();
+        }
+
+        function setZoom(zoom) {
+            currentZoom = Math.max(0.5, Math.min(3, zoom));
+            updateDiagramTransform();
+        }
+
+        function updateDiagramTransform() {
+            const modalDiagram = document.getElementById('modalDiagram');
+            const zoomIndicator = document.getElementById('zoomIndicator');
+            const svg = modalDiagram.querySelector('svg');
+
+            if (svg) {
+                svg.style.transform = `scale(${currentZoom}) translate(${diagramPosition.x / currentZoom}px, ${diagramPosition.y / currentZoom}px)`;
+                modalDiagram.style.cursor = currentZoom > 1 ? 'grab' : 'default';
+            }
+
+            if (zoomIndicator) {
+                zoomIndicator.textContent = `${Math.round(currentZoom * 100)}%`;
+            }
+        }
+
+        function downloadDiagram() {
+            if (currentDiagramId) {
+                const link = document.createElement('a');
+                link.href = `./architecture-diagrams-${currentDiagramId.replace('diagram', '')}.svg`;
+                link.download = `${currentDiagramId}-architecture.svg`;
+                link.click();
+            }
+        }
+
+        // Close modal on escape key or outside click
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Scroll to top functionality
+        const scrollToTopBtn = document.getElementById('scrollToTop');
+
+        window.addEventListener('scroll', function() {
+            if (window.pageYOffset > 300) {
+                scrollToTopBtn.classList.add('visible');
+            } else {
+                scrollToTopBtn.classList.remove('visible');
+            }
+        });
+
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // Add keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft' && currentDiagramId) {
+                const currentNum = parseInt(currentDiagramId.replace('diagram', ''));
+                if (currentNum > 1) {
+                    closeModal();
+                    setTimeout(() => {
+                        const prevId = `diagram${currentNum - 1}`;
+                        const prevTitle = document.querySelector(`#${prevId} h2`).textContent;
+                        openModal(prevId, prevTitle);
+                    }, 100);
+                }
+            } else if (e.key === 'ArrowRight' && currentDiagramId) {
+                const currentNum = parseInt(currentDiagramId.replace('diagram', ''));
+                if (currentNum < 11) {
+                    closeModal();
+                    setTimeout(() => {
+                        const nextId = `diagram${currentNum + 1}`;
+                        const nextTitle = document.querySelector(`#${nextId} h2`).textContent;
+                        openModal(nextId, nextTitle);
+                    }, 100);
+                }
+            }
+        });
+
+        // Add loading animation for SVGs
+        document.querySelectorAll('object[data$=".svg"]').forEach(obj => {
+            obj.addEventListener('load', function() {
+                this.style.opacity = '1';
+            });
+            obj.style.opacity = '0';
+            obj.style.transition = 'opacity 0.3s ease';
+        });
+    </script>
 </body>
 </html>

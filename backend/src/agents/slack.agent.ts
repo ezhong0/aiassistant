@@ -1,12 +1,12 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, SlackAgentParams } from '../types/tools';
-import { PreviewGenerationResult } from '../types/api.types';
+import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveSlackService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
-import { SlackInterfaceService } from '../services/slack-interface.service';
-// import { SlackMessageReaderService } from '../services/slack-message-reader.service';
-import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack.types';
-import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack-message-reader.types';
+import { SlackInterfaceService } from '../services/slack/slack-interface.service';
+// import { SlackMessageReaderService } from '../services/slack/slack-message-reader.service';
+import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack/slack.types';
+import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack/slack-message-reader.types';
 import { AIClassificationService } from '../services/ai-classification.service';
 import { SLACK_CONSTANTS } from '../config/constants';
 import { SLACK_SERVICE_CONSTANTS } from '../config/slack-service-constants';
@@ -14,17 +14,17 @@ import {
   ToolParameters,
   ToolExecutionResult,
   AgentExecutionSummary
-} from '../types/agent-parameters';
+} from '../types/agents/agent-parameters';
 import {
   SlackReadMessagesParams,
   SlackMessageSummary,
   SlackReadResult
-} from '../types/agent-specific-parameters';
+} from '../types/agents/agent-specific-parameters';
 
 // Import focused services
-import { SlackMessageAnalyzer, SlackMessageReadingResult } from '../services/slack-message-analyzer.service';
-import { SlackDraftManager, SlackDraftManagementResult } from '../services/slack-draft-manager.service';
-import { SlackFormatter, SlackFormattingResult, SlackResult } from '../services/slack-formatter.service';
+import { SlackMessageAnalyzer, SlackMessageReadingResult } from '../services/slack/slack-message-analyzer.service';
+import { SlackDraftManager, SlackDraftManagementResult } from '../services/slack/slack-draft-manager.service';
+import { SlackFormatter, SlackFormattingResult, SlackResult } from '../services/slack/slack-formatter.service';
 
 // Import context gathering interfaces from MasterAgent
 export interface ContextGatheringResult {

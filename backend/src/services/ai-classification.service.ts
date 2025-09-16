@@ -594,4 +594,83 @@ Return exactly one of: read_messages, read_thread, send_message, detect_drafts, 
       throw new Error('AI Slack intent classification failed. Please check your OpenAI configuration.');
     }
   }
+
+  /**
+   * Detect if context gathering is needed for the user input
+   * Delegated from MasterAgent for proper separation of concerns
+   */
+  async detectContextNeeds(userInput: string, slackContext: any): Promise<any> {
+    try {
+      if (!this.openaiService || !slackContext) {
+        throw new Error('OpenAI service or Slack context is not available. AI context detection is required for this operation.');
+      }
+
+      const contextDetectionPrompt = `Analyze this user request to determine if context from recent Slack messages would be helpful:
+
+User Request: "${userInput}"
+Current Context: Direct message conversation
+
+IMPORTANT: Be proactive about gathering context! When in doubt, choose to gather context rather than asking for clarification.
+
+Determine if the user is referring to:
+1. Previous messages in this conversation (thread_history)
+2. Recent messages from the user (recent_messages)
+3. Specific topics or people mentioned (search_results)
+4. No context needed (none)
+
+BIAS TOWARD CONTEXT GATHERING for these patterns:
+- Follow-up questions like "what about...", "other...", "also...", "more..."
+- Ambiguous requests that could benefit from conversation history
+- References to "emails", "messages", "meetings" without specifics
+- Pronouns or incomplete information
+
+Return JSON with:
+{
+  "needsContext": boolean,
+  "contextType": "recent_messages" | "thread_history" | "search_results" | "none",
+  "confidence": number (0-1),
+  "reasoning": "explanation of decision"
+}
+
+Examples:
+- "Send that email we discussed" → needsContext: true, contextType: "thread_history"
+- "Email John about the project" → needsContext: false, contextType: "none"
+- "what about my other emails?" → needsContext: true, contextType: "thread_history"
+- "other emails" → needsContext: true, contextType: "recent_messages"
+- "more details" → needsContext: true, contextType: "thread_history"
+- "Follow up on my last message" → needsContext: true, contextType: "recent_messages"
+- "What did Sarah say about the meeting?" → needsContext: true, contextType: "search_results"`;
+
+      const response = await this.openaiService.generateStructuredData(
+        userInput,
+        contextDetectionPrompt,
+        {
+          type: 'object',
+          properties: {
+            needsContext: { type: 'boolean' },
+            contextType: { 
+              type: 'string', 
+              enum: ['recent_messages', 'thread_history', 'search_results', 'none'] 
+            },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+            reasoning: { type: 'string' }
+          },
+          required: ['needsContext', 'contextType', 'confidence', 'reasoning']
+        },
+        { temperature: 0.1, maxTokens: 200 }
+      );
+
+      logger.info('Context detection completed', {
+        userInput: userInput.substring(0, 100),
+        needsContext: (response as any).needsContext,
+        contextType: (response as any).contextType,
+        confidence: (response as any).confidence
+      });
+
+      return response;
+    } catch (error) {
+      logger.error('Failed to detect context needs:', error);
+      throw new Error('AI context detection failed. Please check your OpenAI configuration.');
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import { AIAgent } from './ai-agent';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
-import { ToolMetadata } from '../types/agent.types';
+import { ToolMetadata } from '../types/agents/agent.types';
 import { EmailAgent } from '../agents/email.agent';
 import { CalendarAgent } from '../agents/calendar.agent';
 import { ContactAgent } from '../agents/contact.agent';
