@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
-import { GoogleOAuthCallbackSchema } from '../schemas/auth.schemas';
+import { z } from 'zod';
+import { GoogleOAuthCallbackSchema, TokenRefreshRequestSchema, LogoutRequestSchema, MobileTokenExchangeSchema } from '../schemas/auth.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
@@ -29,12 +30,32 @@ import logger from '../utils/logger';
 
 const router = express.Router();
 
+// Debug route validation schemas
+const debugQuerySchema = z.object({
+  user_id: z.string().optional(),
+  team_id: z.string().optional(),
+  code: z.string().optional(),
+  token: z.string().optional(),
+  client_id: z.string().optional(),
+  scope: z.string().optional(),
+  state: z.string().optional(),
+  response_type: z.string().optional(),
+  access_type: z.string().optional(),
+  prompt: z.string().optional(),
+});
+
+const emptyQuerySchema = z.object({});
+const emptyBodySchema = z.object({});
+
 
 /**
  * GET /auth/google/slack
  * Initiate Google OAuth flow specifically for Slack users
  */
-router.get('/google/slack', authRateLimit, (req: Request, res: Response) => {
+router.get('/google/slack', 
+  authRateLimit, 
+  validateRequest({ query: debugQuerySchema }),
+  (req: Request, res: Response) => {
   try {
     const { user_id, team_id } = req.query;
 
@@ -88,7 +109,10 @@ router.get('/google/slack', authRateLimit, (req: Request, res: Response) => {
  * GET /auth/google
  * Initiate Google OAuth flow
  */
-router.get('/google', authRateLimit, (req: Request, res: Response) => {
+router.get('/google', 
+  authRateLimit, 
+  validateRequest({ query: debugQuerySchema }),
+  (req: Request, res: Response) => {
   try {
     const scopes = [
       'openid',
@@ -122,7 +146,9 @@ router.get('/google', authRateLimit, (req: Request, res: Response) => {
  * GET /auth/debug/test-oauth-url
  * Test endpoint to generate an OAuth URL for debugging
  */
-router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
+router.get('/debug/test-oauth-url', 
+  validateRequest({ query: debugQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const { ENVIRONMENT } = await import('../config/environment');
     const { getService } = await import('../services/service-manager');
@@ -202,7 +228,9 @@ router.get('/debug/test-oauth-url', async (req: Request, res: Response) => {
  * GET /auth/debug/current-config
  * Simple endpoint to show current OAuth configuration
  */
-router.get('/debug/current-config', async (req: Request, res: Response) => {
+router.get('/debug/current-config', 
+  validateRequest({ query: emptyQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const { ENVIRONMENT } = await import('../config/environment');
     
@@ -235,7 +263,9 @@ router.get('/debug/current-config', async (req: Request, res: Response) => {
  * GET /auth/debug/oauth-config
  * Debug endpoint to check OAuth configuration
  */
-router.get('/debug/oauth-config', async (req: Request, res: Response) => {
+router.get('/debug/oauth-config', 
+  validateRequest({ query: emptyQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const { ENVIRONMENT } = await import('../config/environment');
     
@@ -268,7 +298,9 @@ router.get('/debug/oauth-config', async (req: Request, res: Response) => {
  * GET /auth/debug/test-token-exchange
  * Test endpoint to debug token exchange issues
  */
-router.get('/debug/test-token-exchange', async (req: Request, res: Response) => {
+router.get('/debug/test-token-exchange', 
+  validateRequest({ query: debugQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const { code } = req.query;
     
@@ -335,7 +367,9 @@ router.get('/debug/test-token-exchange', async (req: Request, res: Response) => 
  * GET /auth/debug/token-info
  * Test endpoint to check token validity with Google
  */
-router.get('/debug/token-info', async (req: Request, res: Response) => {
+router.get('/debug/token-info', 
+  validateRequest({ query: debugQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const { token } = req.query;
     
@@ -382,7 +416,9 @@ router.get('/debug/token-info', async (req: Request, res: Response) => {
  * GET /auth/debug/detailed-token-test
  * Comprehensive token debugging endpoint
  */
-router.get('/debug/detailed-token-test', async (req: Request, res: Response) => {
+router.get('/debug/detailed-token-test', 
+  validateRequest({ query: debugQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const { code } = req.query;
     
@@ -514,7 +550,9 @@ router.get('/debug/detailed-token-test', async (req: Request, res: Response) => 
  * GET /auth/debug/oauth-validation
  * Debug OAuth configuration vs. actual usage
  */
-router.get('/debug/oauth-validation', async (req: Request, res: Response) => {
+router.get('/debug/oauth-validation', 
+  validateRequest({ query: emptyQuerySchema }),
+  async (req: Request, res: Response) => {
   try {
     const authService = getService<AuthService>('authService');
     if (!authService) {
@@ -577,7 +615,9 @@ router.get('/debug/oauth-validation', async (req: Request, res: Response) => {
  * GET /auth/debug/sessions
  * Debug endpoint to check session and OAuth token status
  */
-router.get('/debug/sessions', (req: Request, res: Response) => {
+router.get('/debug/sessions', 
+  validateRequest({ query: emptyQuerySchema }),
+  (req: Request, res: Response) => {
   try {
     const tokenStorageService = getService('tokenStorageService') as TokenStorageService;
     if (!tokenStorageService) {
@@ -600,7 +640,10 @@ router.get('/debug/sessions', (req: Request, res: Response) => {
  * GET /auth/init
  * General OAuth initiation endpoint that handles both regular and Slack users
  */
-router.get('/init', authRateLimit, (req: Request, res: Response) => {
+router.get('/init', 
+  authRateLimit, 
+  validateRequest({ query: debugQuerySchema }),
+  (req: Request, res: Response) => {
   try {
     const { client_id, scope, state, response_type, access_type, prompt } = req.query;
     
@@ -917,7 +960,10 @@ router.get('/callback',
  * POST /auth/refresh
  * Refresh access token using refresh token
  */
-router.post('/refresh', authRateLimit, validateTokenRefresh, async (req: Request, res: Response) => {
+router.post('/refresh', 
+  authRateLimit, 
+  validateRequest({ body: TokenRefreshRequestSchema }),
+  async (req: Request, res: Response) => {
   try {
     const { refresh_token }: TokenRefreshRequest = req.body;
 
@@ -977,7 +1023,9 @@ router.post('/refresh', authRateLimit, validateTokenRefresh, async (req: Request
  * POST /auth/logout
  * Revoke tokens and logout user
  */
-router.post('/logout', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/logout', 
+  validateRequest({ body: LogoutRequestSchema }),
+  async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { access_token, everywhere }: LogoutRequest = req.body;
     
@@ -1023,7 +1071,9 @@ router.post('/logout', async (req: AuthenticatedRequest, res: Response) => {
  * GET /auth/validate
  * Validate JWT token
  */
-router.get('/validate', (req: Request, res: Response) => {
+router.get('/validate', 
+  validateRequest({ query: emptyQuerySchema }),
+  (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization;
     
@@ -1066,7 +1116,10 @@ router.get('/validate', (req: Request, res: Response) => {
  * POST /auth/exchange-mobile-tokens
  * Exchange mobile OAuth tokens for JWT
  */
-router.post('/exchange-mobile-tokens', authRateLimit, validateMobileTokenExchange, async (req: Request, res: Response) => {
+router.post('/exchange-mobile-tokens', 
+  authRateLimit, 
+  validateRequest({ body: MobileTokenExchangeSchema }),
+  async (req: Request, res: Response) => {
   try {
     const { access_token, platform }: {
       access_token: string;

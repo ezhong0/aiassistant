@@ -3,6 +3,35 @@ import { Contact, ContactSearchResult, ContactServiceError } from '../types/cont
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
+interface GooglePerson {
+  resourceName: string;
+  names?: Array<{
+    displayName?: string;
+    givenName?: string;
+    familyName?: string;
+  }>;
+  emailAddresses?: Array<{
+    value?: string;
+    type?: string;
+  }>;
+  phoneNumbers?: Array<{
+    value?: string;
+    type?: string;
+  }>;
+  organizations?: Array<{
+    name?: string;
+    title?: string;
+  }>;
+  photos?: Array<{
+    url?: string;
+  }>;
+}
+
+interface GooglePeopleResponse {
+  people?: GooglePerson[];
+  connections?: GooglePerson[];
+}
+
 export class ContactService extends BaseService {
   private peopleService: any;
 
@@ -60,7 +89,7 @@ export class ContactService extends BaseService {
         };
       }
 
-      const contacts: Contact[] = response.data.people.map((person: any) => ({
+      const contacts: Contact[] = response.data.people.map((person: GooglePerson) => ({
         id: person.resourceName,
         name: person.names?.[0]?.displayName || 'Unknown',
         email: person.emailAddresses?.[0]?.value || '',
@@ -191,7 +220,7 @@ export class ContactService extends BaseService {
       }
 
       // Prepare update data
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       
       if (updates.name !== undefined) {
         updateData.names = [{ displayName: updates.name }];
@@ -273,12 +302,12 @@ export class ContactService extends BaseService {
       }
 
       const contacts: Contact[] = response.data.people
-        .filter((person: any) => 
-          person.emailAddresses?.some((emailAddr: any) => 
-            emailAddr.value.toLowerCase() === email.toLowerCase()
+        .filter((person: GooglePerson) => 
+          person.emailAddresses?.some((emailAddr) => 
+            emailAddr.value?.toLowerCase() === email.toLowerCase()
           )
         )
-        .map((person: any) => ({
+        .map((person: GooglePerson) => ({
           id: person.resourceName,
           name: person.names?.[0]?.displayName || 'Unknown',
           email: person.emailAddresses?.[0]?.value || '',
@@ -318,7 +347,7 @@ export class ContactService extends BaseService {
         return [];
       }
 
-      const contacts: Contact[] = response.data.connections.map((person: any) => ({
+      const contacts: Contact[] = response.data.connections.map((person: GooglePerson) => ({
         id: person.resourceName,
         name: person.names?.[0]?.displayName || 'Unknown',
         email: person.emailAddresses?.[0]?.value || '',
@@ -338,7 +367,7 @@ export class ContactService extends BaseService {
   /**
    * Get service health status
    */
-  getHealth(): { healthy: boolean; details?: any } {
+  getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
       const healthy = this.isReady() && this.initialized && !!this.peopleService;
       const details = {
@@ -359,7 +388,7 @@ export class ContactService extends BaseService {
   /**
    * Handle contact service errors
    */
-  private handleContactError(error: any, operation: string): ContactServiceError {
+  private handleContactError(error: unknown, operation: string): ContactServiceError {
     let message = 'Unknown error occurred';
     let code = 'UNKNOWN_ERROR';
 
@@ -377,7 +406,7 @@ export class ContactService extends BaseService {
       }
     }
 
-    return new ContactServiceError(message, code, error);
+    return new ContactServiceError(message, code, error instanceof Error ? error : undefined);
   }
 }
 

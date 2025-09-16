@@ -1,4 +1,5 @@
 import express from 'express';
+import { z } from 'zod';
 import { 
   SlackWebhookEventSchema,
   SlackSlashCommandPayloadSchema,
@@ -8,6 +9,9 @@ import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackInterface } from '../interfaces/slack.interface';
 import logger from '../utils/logger';
+
+const emptyQuerySchema = z.object({});
+const emptyBodySchema = z.object({});
 
 
 /**
@@ -21,6 +25,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Slack OAuth callback handler
    */
   router.get('/oauth/callback', 
+    validateRequest({ query: z.object({ code: z.string().optional(), state: z.string().optional(), error: z.string().optional() }) }),
     async (req, res): Promise<void> => {
     try {
       const { code, state, error } = req.query;
@@ -67,7 +72,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   /**
    * Slack app installation page
    */
-  router.get('/install', async (req, res): Promise<void> => {
+  router.get('/install', 
+    validateRequest({ query: emptyQuerySchema }),
+    async (req, res): Promise<void> => {
     try {
       // TODO: Replace with actual Slack app client ID
       const clientId = process.env.SLACK_CLIENT_ID;
@@ -121,7 +128,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   /**
    * Health check for Slack integration
    */
-  router.get('/health', async (req, res): Promise<void> => {
+  router.get('/health', 
+    validateRequest({ query: emptyQuerySchema }),
+    async (req, res): Promise<void> => {
     try {
       // Check if Slack interface is configured
       const isSlackConfigured = process.env.SLACK_SIGNING_SECRET && 
@@ -378,7 +387,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Manual event testing endpoint (development only)
    */
   if (process.env.NODE_ENV === 'development') {
-    router.post('/test-event', async (req, res): Promise<void> => {
+    router.post('/test-event', 
+      validateRequest({ body: emptyBodySchema }),
+      async (req, res): Promise<void> => {
       try {
         // Check if Slack interface is configured
         const isSlackConfigured = process.env.SLACK_SIGNING_SECRET && 
@@ -414,7 +425,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Test endpoint to verify Slack configuration (development only)
    */
   if (process.env.NODE_ENV === 'development') {
-    router.get('/test-config', async (req, res): Promise<void> => {
+    router.get('/test-config', 
+      validateRequest({ query: emptyQuerySchema }),
+      async (req, res): Promise<void> => {
       try {
         const slackConfig = {
           signingSecret: process.env.SLACK_SIGNING_SECRET ? 'configured' : 'missing',

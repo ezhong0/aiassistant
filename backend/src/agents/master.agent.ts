@@ -29,19 +29,19 @@ export interface MasterAgentResponse {
     totalExecutionTime?: number | undefined;
     toolsExecuted?: number | undefined;
     successfulTools?: number | undefined;
-    slackContext?: any | undefined;
+    slackContext?: SlackContext | undefined;
     toolResults?: Array<{
       toolName: string;
       success: boolean;
       executionTime: number;
       error?: string | undefined;
-      result?: any | undefined;
+      result?: Record<string, unknown> | undefined;
     }> | undefined;
-    confirmationFlows?: Array<any> | undefined;
+    confirmationFlows?: Array<Record<string, unknown>> | undefined;
     masterAgentResponse?: string | undefined;
     error?: string | undefined;
     errorType?: string | undefined;
-    errorContext?: any | undefined;
+    errorContext?: Record<string, unknown> | undefined;
   } | undefined;
 }
 

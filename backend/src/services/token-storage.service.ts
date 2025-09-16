@@ -3,6 +3,7 @@ import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { CryptoUtil } from '../utils/crypto.util';
 import { AuditLogger } from '../utils/audit-logger';
+import { validateUserId } from '../utils/service-validation.util';
 import logger from '../utils/logger';
 import { serviceManager } from './service-manager';
 
@@ -87,9 +88,11 @@ export class TokenStorageService extends BaseService {
   async storeUserTokens(userId: string, tokens: { google?: GoogleTokens; slack?: SlackTokens }): Promise<void> {
     this.assertReady();
     
-    if (!userId || typeof userId !== 'string') {
+    if (!userId) {
       throw new Error('Valid userId is required');
     }
+    
+    const validatedUserId = validateUserId(userId);
 
     let encryptedGoogleRefreshToken: string | undefined;
     

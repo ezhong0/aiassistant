@@ -29,11 +29,17 @@ const apiHeavyRequestSchema = z.object({
   parameters: z.record(z.string(), z.unknown()).optional(),
 });
 
+const emptyQuerySchema = z.object({});
+const emptyBodySchema = z.object({});
+
 /**
  * GET /protected/profile
  * Get user profile - requires authentication
  */
-router.get('/profile', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/profile', 
+  authenticateToken,
+  validate({ query: emptyQuerySchema }),
+  (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!; // TypeScript knows this exists due to authenticateToken middleware
     
@@ -150,6 +156,7 @@ router.get('/users/:userId',
 router.get('/admin/users', 
   authenticateToken,
   requirePermissions([Permission.ADMIN_ACCESS]),
+  validate({ query: emptyQuerySchema }),
   (req: AuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
@@ -188,7 +195,10 @@ router.get('/admin/users',
  * GET /protected/dashboard
  * Dashboard with optional authentication - shows different content for authenticated users
  */
-router.get('/dashboard', optionalAuth, (req: AuthenticatedRequest, res: Response) => {
+router.get('/dashboard', 
+  optionalAuth, 
+  validate({ query: emptyQuerySchema }),
+  (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user;
     
@@ -283,7 +293,10 @@ router.post('/api-heavy',
  * GET /protected/health
  * Health check for protected routes - requires authentication
  */
-router.get('/health', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/health', 
+  authenticateToken, 
+  validate({ query: emptyQuerySchema }),
+  (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
   
   res.json({

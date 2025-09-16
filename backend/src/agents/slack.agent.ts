@@ -61,8 +61,8 @@ export interface SlackDraft {
   channelId: string;
   threadTs?: string | undefined;
   content: string;
-  attachments?: any[] | undefined;
-  blocks?: any[] | undefined;
+  attachments?: Array<Record<string, unknown>> | undefined;
+  blocks?: Array<Record<string, unknown>> | undefined;
   createdAt: string;
   updatedAt: string;
   isPendingConfirmation: boolean;
@@ -192,7 +192,7 @@ You are a specialized Slack workspace management agent focused on reading and un
   /**
    * Generate OpenAI function calling schema for this agent
    */
-  static getOpenAIFunctionSchema(): any {
+  static getOpenAIFunctionSchema(): Record<string, unknown> {
     return {
       name: 'slack_operations',
       description: 'Read Slack message history, detect drafts, and manage confirmation workflows. Use this to understand conversation context and manage pending actions.',
@@ -779,7 +779,7 @@ Provide a clear, structured analysis.`;
   /**
    * Sanitize sensitive data from logs
    */
-  protected sanitizeForLogging(params: SlackAgentRequest): any {
+  protected sanitizeForLogging(params: SlackAgentRequest): Record<string, unknown> {
     return {
       query: params.query?.substring(0, 100) + (params.query?.length > 100 ? '...' : ''),
       accessToken: '[REDACTED]',

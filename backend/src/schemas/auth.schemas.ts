@@ -95,3 +95,15 @@ export const RegisterRequestSchema = z.object({
   password: z.string().min(8),
   name: z.string().min(1),
 });
+
+// Logout request schema
+export const LogoutRequestSchema = z.object({
+  access_token: OptionalStringSchema,
+  everywhere: z.boolean().optional(),
+});
+
+// Mobile token exchange schema
+export const MobileTokenExchangeSchema = z.object({
+  access_token: z.string(),
+  platform: z.string(),
+});

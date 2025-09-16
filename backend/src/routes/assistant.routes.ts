@@ -562,7 +562,10 @@ router.get('/email/search',
  * GET /assistant/status
  * Get assistant service status
  */
-router.get('/status', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+router.get('/status', 
+  authenticateToken, 
+  validate({ query: z.object({}) }),
+  (req: AuthenticatedRequest, res: Response) => {
   res.json({
     success: true,
     status: 'operational',

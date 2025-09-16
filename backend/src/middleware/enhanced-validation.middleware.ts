@@ -17,13 +17,13 @@ export interface ValidationError {
   field: string;
   message: string;
   code: string;
-  value?: any;
+  value?: unknown;
 }
 
 export interface ValidationResult {
   success: boolean;
   errors: ValidationError[];
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -129,7 +129,7 @@ export function validateRequest(options: ValidationOptions) {
 /**
  * Sanitize input data to prevent XSS and other attacks
  */
-export function sanitizeInput(data: any): any {
+export function sanitizeInput(data: unknown): unknown {
   if (typeof data === 'string') {
     return data
       .replace(/[<>]/g, '') // Remove potential HTML tags
@@ -141,7 +141,7 @@ export function sanitizeInput(data: any): any {
   }
   
   if (data && typeof data === 'object') {
-    const sanitized: any = {};
+    const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       sanitized[key] = sanitizeInput(value);
     }
@@ -157,8 +157,8 @@ export function sanitizeInput(data: any): any {
 export function sanitizeRequest(req: Request, res: Response, next: NextFunction): void {
   try {
     req.body = sanitizeInput(req.body);
-    req.query = sanitizeInput(req.query);
-    req.params = sanitizeInput(req.params);
+    req.query = sanitizeInput(req.query) as any;
+    req.params = sanitizeInput(req.params) as any;
     next();
   } catch (error) {
     logger.error('Sanitization middleware error', { error });
@@ -174,31 +174,31 @@ export function sanitizeRequest(req: Request, res: Response, next: NextFunction)
 /**
  * Type guard functions for runtime type checking
  */
-export function isString(value: any): value is string {
+export function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-export function isNumber(value: any): value is number {
+export function isNumber(value: unknown): value is number {
   return typeof value === 'number' && !isNaN(value);
 }
 
-export function isBoolean(value: any): value is boolean {
+export function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
-export function isArray(value: any): value is any[] {
+export function isArray(value: unknown): value is unknown[] {
   return Array.isArray(value);
 }
 
-export function isObject(value: any): value is Record<string, any> {
+export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function isEmail(value: any): value is string {
+export function isEmail(value: unknown): value is string {
   return isString(value) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function isUUID(value: any): value is string {
+export function isUUID(value: unknown): value is string {
   return isString(value) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
@@ -206,7 +206,7 @@ export function isUUID(value: any): value is string {
  * Validate and transform response data
  */
 export function validateResponse<T>(schema: ZodSchema<T>) {
-  return (data: any): T => {
+  return (data: unknown): T => {
     try {
       return schema.parse(data);
     } catch (error) {
@@ -236,7 +236,7 @@ export function createValidationMiddleware<T extends ValidationOptions>(
  */
 export async function validateAsync<T>(
   schema: ZodSchema<T>,
-  data: any
+  data: unknown
 ): Promise<{ success: boolean; data?: T; errors?: ValidationError[] }> {
   try {
     const validatedData = await schema.parseAsync(data);

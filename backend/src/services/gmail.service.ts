@@ -3,6 +3,41 @@ import { GmailServiceError } from '../types/gmail.types';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
+interface GmailHeader {
+  name: string;
+  value: string;
+}
+
+interface GmailMessagePart {
+  filename?: string;
+  mimeType?: string;
+  body?: {
+    attachmentId?: string;
+    data?: string;
+  };
+  parts?: GmailMessagePart[];
+}
+
+interface GmailMessagePayload {
+  headers?: GmailHeader[];
+  parts?: GmailMessagePart[];
+  body?: {
+    attachmentId?: string;
+    data?: string;
+  };
+}
+
+interface GmailMessage {
+  id: string;
+  payload?: GmailMessagePayload;
+}
+
+interface GmailAttachment {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+}
+
 export class GmailService extends BaseService {
   private gmailService: any;
 
@@ -149,7 +184,7 @@ export class GmailService extends BaseService {
 
       this.logDebug('Email retrieved successfully', { 
         messageId, 
-        subject: response.data.payload?.headers?.find((h: any) => h.name === 'Subject')?.value 
+        subject: response.data.payload?.headers?.find((h: GmailHeader) => h.name === 'Subject')?.value 
       });
 
       return response.data;
@@ -190,11 +225,11 @@ export class GmailService extends BaseService {
 
       // Extract headers for reply
       const headers = originalEmail.payload.headers;
-      const subject = headers.find((h: any) => h.name === 'Subject')?.value || 'Re: No Subject';
-      const from = headers.find((h: any) => h.name === 'From')?.value || '';
-      const to = headers.find((h: any) => h.name === 'To')?.value || '';
-      const references = headers.find((h: any) => h.name === 'Message-ID')?.value || '';
-      const inReplyTo = headers.find((h: any) => h.name === 'Message-ID')?.value || '';
+      const subject = headers.find((h: GmailHeader) => h.name === 'Subject')?.value || 'Re: No Subject';
+      const from = headers.find((h: GmailHeader) => h.name === 'From')?.value || '';
+      const to = headers.find((h: GmailHeader) => h.name === 'To')?.value || '';
+      const references = headers.find((h: GmailHeader) => h.name === 'Message-ID')?.value || '';
+      const inReplyTo = headers.find((h: GmailHeader) => h.name === 'Message-ID')?.value || '';
 
       // Build reply message
       const replyOptions: {
@@ -393,7 +428,7 @@ export class GmailService extends BaseService {
       }
 
       // Get basic details for each message (batch request for efficiency)
-      const overviewPromises = response.data.messages.slice(0, options.maxResults || 20).map(async (msg: any) => {
+      const overviewPromises = response.data.messages.slice(0, options.maxResults || 20).map(async (msg: GmailMessage) => {
         try {
           const messageResponse = await this.gmailService.users.messages.get({
             userId: 'me',
@@ -405,7 +440,7 @@ export class GmailService extends BaseService {
 
           const message = messageResponse.data;
           const headers = message.payload?.headers || [];
-          const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+          const getHeader = (name: string) => headers.find((h: GmailHeader) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
           
           const subject = getHeader('Subject');
           const from = getHeader('From');
@@ -422,7 +457,7 @@ export class GmailService extends BaseService {
             snippet: message.snippet || '',
             labels: message.labelIds || [],
             isUnread: (message.labelIds || []).includes('UNREAD'),
-            hasAttachments: (message.payload?.parts || []).some((part: any) => part.filename && part.filename.length > 0)
+            hasAttachments: (message.payload?.parts || []).some((part: GmailMessagePart) => part.filename && part.filename.length > 0)
           };
         } catch (error) {
           this.logWarn('Failed to get overview for message', { messageId: msg.id, error });
@@ -431,7 +466,7 @@ export class GmailService extends BaseService {
       });
 
       const overviewResults = await Promise.all(overviewPromises);
-      const validResults = overviewResults.filter(result => result !== null);
+      const validResults = overviewResults.filter((result: any) => result !== null);
 
       this.logInfo('Email overview retrieved successfully', { 
         requestedCount: response.data.messages.length,
@@ -499,7 +534,7 @@ export class GmailService extends BaseService {
 
       // Extract headers
       const headers = message.payload?.headers || [];
-      const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+      const getHeader = (name: string) => headers.find((h: GmailHeader) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
       
       const subject = getHeader('Subject');
       const from = getHeader('From');
@@ -752,7 +787,7 @@ export class GmailService extends BaseService {
   /**
    * Get service health status
    */
-  getHealth(): { healthy: boolean; details?: any } {
+  getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
       const healthy = this.isReady() && this.initialized && !!this.gmailService;
       const details = {
@@ -773,7 +808,7 @@ export class GmailService extends BaseService {
   /**
    * Handle Gmail service errors
    */
-  private handleGmailError(error: any, operation: string): GmailServiceError {
+  private handleGmailError(error: unknown, operation: string): GmailServiceError {
     let message = 'Unknown error occurred';
     let code = 'UNKNOWN_ERROR';
 

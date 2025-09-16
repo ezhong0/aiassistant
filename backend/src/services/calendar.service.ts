@@ -2,6 +2,24 @@ import { google, calendar_v3 } from 'googleapis';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
 
+interface ConferenceData {
+  conferenceId?: string;
+  conferenceSolutionKey?: {
+    type?: string;
+  };
+  entryPoints?: Array<{
+    entryPointType?: string;
+    uri?: string;
+    label?: string;
+  }>;
+  createRequest?: {
+    requestId?: string;
+    conferenceSolutionKey?: {
+      type?: string;
+    };
+  };
+}
+
 export interface CalendarEvent {
   id?: string | null | undefined;
   summary?: string | null | undefined;
@@ -21,7 +39,7 @@ export interface CalendarEvent {
     responseStatus?: string | null | undefined;
   }> | undefined;
   location?: string | null | undefined;
-  conferenceData?: any | undefined;
+  conferenceData?: ConferenceData | undefined;
 }
 
 export interface CalendarQueryOptions {
@@ -149,7 +167,7 @@ export class CalendarService extends BaseService {
   /**
    * Convert CalendarEvent to Google Calendar API format
    */
-  private convertToGoogleEvent(calendarEvent: CalendarEvent): any {
+  private convertToGoogleEvent(calendarEvent: CalendarEvent): calendar_v3.Schema$Event {
     return {
       summary: calendarEvent.summary || undefined,
       description: calendarEvent.description || undefined,
@@ -199,7 +217,7 @@ export class CalendarService extends BaseService {
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: accessToken });
 
-      const listOptions: any = {
+      const listOptions: calendar_v3.Params$Resource$Events$List = {
         auth,
         calendarId,
         timeMin,
@@ -482,37 +500,43 @@ export class CalendarService extends BaseService {
   /**
    * Handle and transform calendar service errors
    */
-  protected handleCalendarError(error: any, operation: string): never {
+  protected handleCalendarError(error: unknown, operation: string): never {
     const calendarError = error as CalendarServiceError;
     
     this.logError(`Calendar service error in ${operation}`, {
       error: error,
-      errorMessage: error.message,
-      errorCode: error.code,
-      errorStatus: error.response?.status,
-      errorData: error.response?.data,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorCode: error && typeof error === 'object' && 'code' in error ? (error as any).code : undefined,
+      errorStatus: error && typeof error === 'object' && 'response' in error ? (error as any).response?.status : undefined,
+      errorData: error && typeof error === 'object' && 'response' in error ? (error as any).response?.data : undefined,
       operation: operation
     });
     
     // Transform common Google Calendar API errors
-    if (error.response?.status === 404) {
-      calendarError.message = 'Calendar or event not found';
-      calendarError.code = 'CALENDAR_NOT_FOUND';
-    } else if (error.response?.status === 403) {
-      calendarError.message = 'Insufficient permissions for calendar access';
-      calendarError.code = 'CALENDAR_PERMISSION_DENIED';
-    } else if (error.response?.status === 401) {
-      calendarError.message = 'Calendar authentication failed - please reconnect your Google account';
-      calendarError.code = 'CALENDAR_AUTH_FAILED';
-    } else if (error.response?.status === 429) {
-      calendarError.message = 'Calendar API rate limit exceeded - please try again in a moment';
-      calendarError.code = 'CALENDAR_RATE_LIMIT';
-    } else if (!calendarError.message) {
-      calendarError.message = `Calendar service error: ${error.message || 'Unknown error'}`;
+    if (error && typeof error === 'object' && 'response' in error) {
+      const apiError = error as any;
+      if (apiError.response?.status === 404) {
+        calendarError.message = 'Calendar or event not found';
+        calendarError.code = 'CALENDAR_NOT_FOUND';
+      } else if (apiError.response?.status === 403) {
+        calendarError.message = 'Insufficient permissions for calendar access';
+        calendarError.code = 'CALENDAR_PERMISSION_DENIED';
+      } else if (apiError.response?.status === 401) {
+        calendarError.message = 'Calendar authentication failed - please reconnect your Google account';
+        calendarError.code = 'CALENDAR_AUTH_FAILED';
+      } else if (apiError.response?.status === 429) {
+        calendarError.message = 'Calendar API rate limit exceeded - please try again in a moment';
+        calendarError.code = 'CALENDAR_RATE_LIMIT';
+      } else if (!calendarError.message) {
+        calendarError.message = `Calendar service error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        calendarError.code = 'CALENDAR_ERROR';
+      }
+    } else {
+      calendarError.message = `Calendar service error: ${error instanceof Error ? error.message : 'Unknown error'}`;
       calendarError.code = 'CALENDAR_ERROR';
     }
 
-    calendarError.status = error.response?.status;
+    calendarError.status = error && typeof error === 'object' && 'response' in error ? (error as any).response?.status : undefined;
     
     throw calendarError;
   }
