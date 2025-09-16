@@ -14,6 +14,10 @@ import { AIClassificationService } from './ai-classification.service';
 import { SlackEventHandler } from './slack/slack-event-handler.service';
 import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
 import { SlackConfirmationHandler } from './slack/slack-confirmation-handler.service';
+import { SlackMessageProcessor } from './slack/slack-message-processor.service';
+import { SlackResponseFormatter } from './slack/slack-response-formatter.service';
+import { SlackEventValidator } from './slack/slack-event-validator.service';
+import { SlackContextExtractor } from './slack/slack-context-extractor.service';
 import { EmailOperationHandler } from './email/email-operation-handler.service';
 import { ContactResolver } from './email/contact-resolver.service';
 import { EmailValidator } from './email/email-validator.service';
@@ -250,6 +254,64 @@ const registerCoreServices = async (): Promise<void> => {
       serviceManager.registerService('slackConfirmationHandler', slackConfirmationHandler, {
         dependencies: ['aiClassificationService', 'toolExecutorService'],
         priority: 80,
+        autoStart: true
+      });
+    }
+
+    // 15. SlackMessageProcessor - Focused service for message processing pipeline
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackMessageProcessor = new SlackMessageProcessor({
+        enableOAuthDetection: true,
+        enableConfirmationDetection: true,
+        enableDMOnlyMode: true
+      });
+      serviceManager.registerService('slackMessageProcessor', slackMessageProcessor, {
+        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService'],
+        priority: 81,
+        autoStart: true
+      });
+    }
+
+    // 16. SlackResponseFormatter - Focused service for response formatting
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackResponseFormatter = new SlackResponseFormatter({
+        enableRichFormatting: true,
+        maxTextLength: 3800,
+        enableProposalFormatting: true
+      });
+      serviceManager.registerService('slackResponseFormatter', slackResponseFormatter, {
+        dependencies: ['emailFormatter'],
+        priority: 82,
+        autoStart: true
+      });
+    }
+
+    // 17. SlackEventValidator - Focused service for event validation and deduplication
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackEventValidator = new SlackEventValidator({
+        enableDeduplication: true,
+        enableBotMessageFiltering: true,
+        maxEventAge: 300000, // 5 minutes
+        maxProcessedEvents: 1000
+      });
+      serviceManager.registerService('slackEventValidator', slackEventValidator, {
+        priority: 83,
+        autoStart: true
+      });
+    }
+
+    // 18. SlackContextExtractor - Focused service for context extraction
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const { WebClient } = await import('@slack/web-api');
+      const client = new WebClient(ENVIRONMENT.slack.botToken);
+      const slackContextExtractor = new SlackContextExtractor({
+        enableUserInfoFetching: true,
+        enableEmailExtraction: true,
+        maxRetries: 3,
+        retryDelay: 1000
+      }, client);
+      serviceManager.registerService('slackContextExtractor', slackContextExtractor, {
+        priority: 84,
         autoStart: true
       });
     }
