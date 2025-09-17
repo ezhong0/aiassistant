@@ -440,7 +440,7 @@ export class MasterAgent {
         { temperature: 0, maxTokens: 100 }
       );
 
-      const contactExtraction = JSON.parse(contactExtractionResponse);
+      const contactExtraction = this.extractJsonFromResponse(contactExtractionResponse);
       const resolvedContacts: Array<{name: string, email: string}> = [];
       // Add email addresses directly (no resolution needed)
       if (contactExtraction.emails && contactExtraction.emails.length > 0) {
@@ -479,6 +479,54 @@ export class MasterAgent {
         resolvedContacts: [],
         intent: userInput
       };
+    }
+  }
+
+  /**
+   * Extract JSON from OpenAI response, handling markdown code blocks
+   */
+  private extractJsonFromResponse(response: string): any {
+    try {
+      // First, try to parse directly
+      return JSON.parse(response);
+    } catch (error) {
+      // If direct parsing fails, try to extract from markdown code blocks
+      try {
+        // Look for JSON in markdown code blocks
+        const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+        if (jsonMatch && jsonMatch[1]) {
+          return JSON.parse(jsonMatch[1]);
+        }
+        
+        // Look for JSON without code blocks
+        const jsonMatch2 = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch2 && jsonMatch2[0]) {
+          return JSON.parse(jsonMatch2[0]);
+        }
+        
+        // If all else fails, return default structure
+        logger.warn('Failed to parse JSON from OpenAI response', { 
+          response: response.substring(0, 200),
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+        
+        return {
+          needed: false,
+          names: [],
+          emails: []
+        };
+      } catch (extractError) {
+        logger.error('Failed to extract JSON from response', { 
+          response: response.substring(0, 200),
+          extractError: extractError instanceof Error ? extractError.message : 'Unknown error'
+        });
+        
+        return {
+          needed: false,
+          names: [],
+          emails: []
+        };
+      }
     }
   }
 
@@ -693,7 +741,7 @@ Be helpful, professional, and take intelligent action rather than asking for cla
       const toolResultsSummary = toolResults.map(tr => ({
         toolName: tr.toolName,
         success: tr.success,
-        result: tr.result,
+        result: this.truncateToolResultForLLM(tr.result),
         error: tr.error
       }));
 
@@ -720,8 +768,87 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       return response.trim();
     } catch (error) {
       logger.error('Error processing tool results with LLM:', error);
+      
+      // Check if it's a context length error
+      if (error instanceof Error && error.message.includes('maximum context length')) {
+        logger.warn('Context length exceeded, using fallback response');
+        return this.generateFallbackResponse(userInput, toolResults);
+      }
+      
       throw new Error('AI natural language processing failed. Please check your OpenAI configuration.');
     }
+  }
+
+  /**
+   * Truncate tool results to prevent context length issues
+   */
+  private truncateToolResultForLLM(result: any): any {
+    if (!result || typeof result !== 'object') {
+      return result;
+    }
+
+    // Create a copy to avoid modifying the original
+    const truncated = { ...result };
+
+    // Truncate email content specifically
+    if (truncated.emails && Array.isArray(truncated.emails)) {
+      truncated.emails = truncated.emails.map((email: any) => {
+        if (email && typeof email === 'object') {
+          const truncatedEmail = { ...email };
+          
+          // Truncate email body content
+          if (truncatedEmail.body) {
+            if (truncatedEmail.body.text && truncatedEmail.body.text.length > 500) {
+              truncatedEmail.body.text = truncatedEmail.body.text.substring(0, 500) + '...';
+            }
+            if (truncatedEmail.body.html && truncatedEmail.body.html.length > 500) {
+              truncatedEmail.body.html = truncatedEmail.body.html.substring(0, 500) + '...';
+            }
+          }
+          
+          // Truncate snippet
+          if (truncatedEmail.snippet && truncatedEmail.snippet.length > 200) {
+            truncatedEmail.snippet = truncatedEmail.snippet.substring(0, 200) + '...';
+          }
+          
+          return truncatedEmail;
+        }
+        return email;
+      });
+    }
+
+    // Truncate other large text fields
+    if (truncated.message && truncated.message.length > 1000) {
+      truncated.message = truncated.message.substring(0, 1000) + '...';
+    }
+
+    return truncated;
+  }
+
+  /**
+   * Generate fallback response when context length is exceeded
+   */
+  private generateFallbackResponse(userInput: string, toolResults: ToolResult[]): string {
+    const successfulTools = toolResults.filter(tr => tr.success);
+    const failedTools = toolResults.filter(tr => !tr.success);
+
+    if (successfulTools.length === 0) {
+      return "I encountered an issue while processing your request. Please try again or rephrase your question.";
+    }
+
+    // Generate a simple response based on tool results
+    const toolNames = successfulTools.map(tr => tr.toolName).join(', ');
+    
+    if (userInput.toLowerCase().includes('email')) {
+      const emailCount = successfulTools.find(tr => tr.toolName === 'manage_emails')?.result?.count || 0;
+      if (emailCount > 0) {
+        return `I found ${emailCount} email${emailCount === 1 ? '' : 's'} in your inbox. The content was too large to display here, but I can help you with specific questions about these emails.`;
+      } else {
+        return "I searched your emails but didn't find any recent messages matching your criteria.";
+      }
+    }
+
+    return `I completed the requested operation using ${toolNames}. The results were processed successfully, but the response was too large to display in full. Please let me know if you need specific information about the results.`;
   }
 
   /**

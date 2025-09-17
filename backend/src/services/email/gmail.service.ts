@@ -362,8 +362,26 @@ export class GmailService extends BaseService {
         auth: auth
       });
 
+      // Log the raw Gmail API response for debugging
+      this.logDebug('Gmail API raw response', {
+        query,
+        hasMessages: !!response.data.messages,
+        messageCount: response.data.messages?.length || 0,
+        nextPageToken: response.data.nextPageToken,
+        resultSizeEstimate: response.data.resultSizeEstimate,
+        fullResponse: {
+          messages: response.data.messages,
+          nextPageToken: response.data.nextPageToken,
+          resultSizeEstimate: response.data.resultSizeEstimate
+        }
+      });
+
       if (!response.data.messages || response.data.messages.length === 0) {
-        this.logDebug('No emails found', { query });
+        this.logDebug('No emails found', { 
+          query,
+          resultSizeEstimate: response.data.resultSizeEstimate,
+          nextPageToken: response.data.nextPageToken
+        });
         return [];
       }
 
@@ -659,7 +677,7 @@ export class GmailService extends BaseService {
   }
 
   /**
-   * Extract message body from Gmail payload
+   * Extract message body from Gmail payload with aggressive truncation to prevent context length issues
    */
   private extractMessageBody(payload: any): { text?: string; html?: string } {
     if (!payload) return {};
@@ -670,9 +688,9 @@ export class GmailService extends BaseService {
     if (payload.body?.data) {
       const content = Buffer.from(payload.body.data, 'base64').toString('utf-8');
       if (payload.mimeType === 'text/plain') {
-        body.text = content;
+        body.text = this.truncateEmailContent(content, 'text');
       } else if (payload.mimeType === 'text/html') {
-        body.html = content;
+        body.html = this.truncateEmailContent(content, 'html');
       }
       return body;
     }
@@ -681,9 +699,11 @@ export class GmailService extends BaseService {
     if (payload.parts) {
       for (const part of payload.parts) {
         if (part.mimeType === 'text/plain' && part.body?.data) {
-          body.text = Buffer.from(part.body.data, 'base64').toString('utf-8');
+          const content = Buffer.from(part.body.data, 'base64').toString('utf-8');
+          body.text = this.truncateEmailContent(content, 'text');
         } else if (part.mimeType === 'text/html' && part.body?.data) {
-          body.html = Buffer.from(part.body.data, 'base64').toString('utf-8');
+          const content = Buffer.from(part.body.data, 'base64').toString('utf-8');
+          body.html = this.truncateEmailContent(content, 'html');
         }
         // Recursively check nested parts
         else if (part.parts) {
@@ -695,6 +715,53 @@ export class GmailService extends BaseService {
     }
 
     return body;
+  }
+
+  /**
+   * Truncate email content to prevent OpenAI context length issues
+   */
+  private truncateEmailContent(content: string, type: 'text' | 'html'): string {
+    if (!content) return '';
+
+    // Different limits for different content types
+    const limits = {
+      text: 2000,  // 2000 chars for plain text
+      html: 1000   // 1000 chars for HTML (more aggressive due to tags)
+    };
+
+    const maxLength = limits[type];
+    
+    if (content.length <= maxLength) {
+      return content;
+    }
+
+    // For HTML, try to extract meaningful content before truncating
+    if (type === 'html') {
+      // Remove excessive whitespace and normalize
+      let cleaned = content.replace(/\s+/g, ' ').trim();
+      
+      // Try to extract text content from HTML
+      const textMatch = cleaned.match(/<body[^>]*>(.*?)<\/body>/is);
+      if (textMatch) {
+        cleaned = textMatch[1];
+      }
+      
+      // Remove HTML tags for better content extraction
+      const textContent = cleaned.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // Use the shorter of cleaned HTML or extracted text
+      const finalContent = textContent.length < cleaned.length ? textContent : cleaned;
+      
+      if (finalContent.length <= maxLength) {
+        return finalContent;
+      }
+      
+      // Truncate with ellipsis
+      return finalContent.substring(0, maxLength - 3) + '...';
+    }
+
+    // For plain text, simple truncation
+    return content.substring(0, maxLength - 3) + '...';
   }
 
   /**

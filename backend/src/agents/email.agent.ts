@@ -780,8 +780,9 @@ You are a specialized email management agent powered by Gmail API.
    */
   private preprocessEmailQuery(query: string): string {
     let processedQuery = query.toLowerCase().trim();
-
-    // Convert natural language time expressions to Gmail API filters
+    
+    // First, detect and extract time expressions
+    let timeFilter = '';
     const timeConversions = [
       // Recently/recent = last 7 days
       { patterns: ['recently', 'recent'], replacement: 'newer_than:7d' },
@@ -812,48 +813,55 @@ You are a specialized email management agent powered by Gmail API.
     for (const conversion of timeConversions) {
       for (const pattern of conversion.patterns) {
         if (processedQuery.includes(pattern)) {
-          // Remove the natural language time expression
+          timeFilter = conversion.replacement;
           processedQuery = processedQuery.replace(new RegExp(pattern, 'gi'), '').trim();
-
-          // Add Gmail API time filter
-          if (!processedQuery.includes('newer_than:') && !processedQuery.includes('after:')) {
-            processedQuery = processedQuery ? `${conversion.replacement} ${processedQuery}` : conversion.replacement;
-          }
           break;
         }
       }
     }
 
-    // Clean up common natural language phrases that don't translate to Gmail API
+    // Remove all natural language phrases completely
     const cleanupPatterns = [
       'what emails did i get',
       'show me emails',
       'emails from',
       'my emails',
       'emails that',
-      'did i receive'
+      'did i receive',
+      'show me my',
+      'emails',
+      'what',
+      'did',
+      'i',
+      'get',
+      'show',
+      'me',
+      'my'
     ];
 
     for (const pattern of cleanupPatterns) {
       processedQuery = processedQuery.replace(new RegExp(pattern, 'gi'), '').trim();
     }
 
-    // If query is empty after cleanup, default to recent inbox emails
-    if (!processedQuery || processedQuery.length < 2) {
-      processedQuery = 'newer_than:7d in:inbox';
-    } else {
-      // Ensure we're searching inbox by default if no specific mailbox specified
-      if (!processedQuery.includes('in:') && !processedQuery.includes('label:')) {
-        processedQuery += ' in:inbox';
-      }
+    // Build final query
+    let finalQuery = '';
+    if (timeFilter) {
+      finalQuery += timeFilter;
     }
+    
+    // Always add inbox filter
+    finalQuery += ' in:inbox';
+    
+    // Clean up extra spaces and ensure proper formatting
+    finalQuery = finalQuery.replace(/\s+/g, ' ').trim();
 
     logger.info('EmailAgent.preprocessEmailQuery - Query conversion', {
       originalQuery: query,
-      processedQuery: processedQuery
+      processedQuery: finalQuery,
+      timeFilter: timeFilter || 'none'
     });
 
-    return processedQuery;
+    return finalQuery;
   }
 
   /**

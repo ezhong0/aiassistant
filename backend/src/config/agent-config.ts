@@ -308,7 +308,7 @@ Return only the operation name.`;
       
       const detectedOperation = await aiClassificationService.detectOperation(operation, agentName);
       
-      if (detectedOperation === 'read' || detectedOperation === 'search') {
+      if (detectedOperation === 'read' || detectedOperation === 'search' || detectedOperation === 'list') {
         return false;
       }
       

@@ -676,17 +676,25 @@ You are a specialized Slack workspace management agent focused on reading and un
 
     const data = firstResult.data as any;
 
+    // Add defensive checks for data object
+    if (!data) {
+      return {
+        success: false,
+        error: 'No data returned from operation'
+      };
+    }
+
     return {
       success: true,
-      messages: data.messages,
-      count: data.count,
+      messages: data.messages || [],
+      count: data.count || 0,
       summary: data.analysis?.summary,
       keyTopics: data.analysis?.keyTopics,
       actionItems: data.analysis?.actionItems,
       sentiment: data.analysis?.sentiment,
       participantCount: data.analysis?.participantCount,
-      drafts: data.drafts,
-      isConfirmation: data.isConfirmation,
+      drafts: data.drafts || [],
+      isConfirmation: data.isConfirmation || false,
       confirmationType: data.confirmationType
     };
   }
