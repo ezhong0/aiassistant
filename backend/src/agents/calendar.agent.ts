@@ -107,6 +107,60 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
   }
 
   /**
+   * Required method to process incoming requests - routes to appropriate handlers
+   */
+  protected async processQuery(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<any> {
+    this.logger.info('CalendarAgent.processQuery - Starting calendar processing', {
+      action: params.action,
+      hasAccessToken: !!params.accessToken,
+      sessionId: context.sessionId
+    });
+
+    // Ensure services are initialized
+    this.ensureServices();
+
+    this.logger.info('CalendarAgent.processQuery - Services ensured', {
+      hasCalendarEventManager: !!this.calendarEventManager,
+      hasCalendarAvailabilityChecker: !!this.calendarAvailabilityChecker,
+      hasCalendarFormatter: !!this.calendarFormatter,
+      hasCalendarValidator: !!this.calendarValidator
+    });
+
+    // Route to appropriate handler based on action
+    switch (params.action?.toLowerCase()) {
+      case 'create':
+        this.logger.info('CalendarAgent.processQuery - Routing to handleCreateEvent');
+        return await this.handleCreateEvent(params as unknown as ToolParameters, context);
+
+      case 'list':
+        this.logger.info('CalendarAgent.processQuery - Routing to handleListEvents');
+        return await this.handleListEvents(params as unknown as ToolParameters, context);
+
+      case 'update':
+        this.logger.info('CalendarAgent.processQuery - Routing to handleUpdateEvent');
+        return await this.handleUpdateEvent(params as unknown as ToolParameters, context);
+
+      case 'delete':
+        this.logger.info('CalendarAgent.processQuery - Routing to handleDeleteEvent');
+        return await this.handleDeleteEvent(params as unknown as ToolParameters, context);
+
+      case 'check_availability':
+        this.logger.info('CalendarAgent.processQuery - Routing to handleCheckAvailability');
+        return await this.handleCheckAvailability(params as unknown as ToolParameters, context);
+
+      case 'find_slots':
+        this.logger.info('CalendarAgent.processQuery - Routing to handleFindSlots');
+        return await this.handleFindSlots(params as unknown as ToolParameters, context);
+
+      default:
+        this.logger.warn('CalendarAgent.processQuery - Unknown action, defaulting to create', {
+          action: params.action
+        });
+        return await this.handleCreateEvent(params as unknown as ToolParameters, context);
+    }
+  }
+
+  /**
    * Cleanup focused service dependencies
    */
   protected async onDestroy(): Promise<void> {
@@ -229,6 +283,73 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
   }
 
   /**
+   * Generate preview for Calendar operations
+   */
+  protected async generatePreview(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    try {
+      this.logger.info('CalendarAgent.generatePreview - Generating calendar event preview', {
+        action: params.action,
+        summary: params.summary,
+        start: params.start,
+        sessionId: context.sessionId
+      });
+
+      // Create preview data for calendar operations
+      const previewData: CalendarPreviewData = {
+        title: params.summary || 'New Event',
+        startTime: params.start || new Date().toISOString(),
+        endTime: params.end || new Date(Date.now() + 3600000).toISOString(), // 1 hour later
+        duration: '1 hour', // Calculate duration
+        attendees: params.attendees || [],
+        location: params.location,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        attendeeCount: (params.attendees || []).length
+      };
+
+      // Generate action ID for confirmation tracking
+      const actionId = `calendar-${params.action || 'create'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Create action preview
+      const actionPreview: ActionPreview = {
+        actionId,
+        actionType: 'calendar',
+        title: `${params.action || 'create'} Calendar Event`,
+        description: `Calendar ${params.action || 'create'}: ${params.summary || 'New Event'}`,
+        riskAssessment: {
+          level: 'low',
+          factors: ['calendar_modification'],
+          warnings: ['Event can be modified or deleted after creation']
+        },
+        estimatedExecutionTime: '2-3 seconds',
+        reversible: true,
+        requiresConfirmation: true,
+        awaitingConfirmation: true,
+        originalQuery: params.query || `Calendar ${params.action || 'create'} operation`,
+        parameters: params as any,
+        previewData
+      };
+
+      this.logger.info('CalendarAgent.generatePreview - Preview generated successfully', {
+        actionId,
+        actionType: params.action || 'create',
+        eventSummary: params.summary,
+        requiresConfirmation: true
+      });
+
+      return {
+        success: true,
+        preview: actionPreview
+      };
+    } catch (error) {
+      this.logger.error('CalendarAgent.generatePreview - Failed to generate preview', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate calendar preview'
+      };
+    }
+  }
+
+  /**
    * Get system prompt for AI planning
    */
   protected getSystemPrompt(): string {
@@ -308,21 +429,47 @@ Always return structured execution status with event details, scheduling insight
       // Route to appropriate handler based on tool name - Intent-agnostic routing
       // Let OpenAI determine the operation from the parameters
       const operation = (parameters as any).operation;
-      
-      if (operation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CREATE) {
+
+      this.logger.info('CalendarAgent.executeCustomTool - Operation detection', {
+        toolName,
+        operation,
+        hasParameters: !!parameters,
+        parametersKeys: Object.keys(parameters)
+      });
+
+      // If no operation is specified, try to detect from query or parameters
+      let detectedOperation = operation;
+      if (!detectedOperation && parameters.query) {
+        detectedOperation = await this.detectCalendarOperation(parameters.query as string);
+      }
+
+      // Default to create if still no operation detected
+      if (!detectedOperation) {
+        this.logger.info('No operation detected, defaulting to create');
+        detectedOperation = 'create';
+      }
+
+      this.logger.info('CalendarAgent.executeCustomTool - Using operation', {
+        originalOperation: operation,
+        detectedOperation,
+        willExecute: detectedOperation
+      });
+
+      if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CREATE || detectedOperation === 'create') {
         return await this.handleCreateEvent(parameters, context);
-      } else if (operation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.LIST) {
+      } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.LIST || detectedOperation === 'list') {
         return await this.handleListEvents(parameters, context);
-      } else if (operation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.UPDATE) {
+      } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.UPDATE || detectedOperation === 'update') {
         return await this.handleUpdateEvent(parameters, context);
-      } else if (operation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.DELETE) {
+      } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.DELETE || detectedOperation === 'delete') {
         return await this.handleDeleteEvent(parameters, context);
-      } else if (operation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CHECK_AVAILABILITY) {
+      } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CHECK_AVAILABILITY || detectedOperation === 'check_availability') {
         return await this.handleCheckAvailability(parameters, context);
-      } else if (operation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.FIND_SLOTS) {
+      } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.FIND_SLOTS || detectedOperation === 'find_slots') {
         return await this.handleFindSlots(parameters, context);
       } else {
-        throw new Error(`Unknown operation: ${operation}`);
+        this.logger.warn('Unknown operation, defaulting to create', { detectedOperation });
+        return await this.handleCreateEvent(parameters, context);
       }
     } catch (error) {
       this.logger.error(`Error executing calendar tool ${toolName}:`, error);
@@ -841,5 +988,35 @@ Always return structured execution status with event details, scheduling insight
       'Limited to Google Calendar API rate limits',
       'Cannot access private calendar data without user consent'
     ];
+  }
+
+  /**
+   * Detect calendar operation from query text
+   */
+  private async detectCalendarOperation(query: string): Promise<string> {
+    try {
+      const queryLower = query.toLowerCase();
+
+      // Simple keyword-based detection (could be enhanced with AI)
+      if (queryLower.includes('create') || queryLower.includes('schedule') || queryLower.includes('add') || queryLower.includes('book')) {
+        return 'create';
+      } else if (queryLower.includes('list') || queryLower.includes('show') || queryLower.includes('get') || queryLower.includes('what')) {
+        return 'list';
+      } else if (queryLower.includes('update') || queryLower.includes('change') || queryLower.includes('modify') || queryLower.includes('edit')) {
+        return 'update';
+      } else if (queryLower.includes('delete') || queryLower.includes('remove') || queryLower.includes('cancel')) {
+        return 'delete';
+      } else if (queryLower.includes('available') || queryLower.includes('free') || queryLower.includes('busy')) {
+        return 'check_availability';
+      } else if (queryLower.includes('find') && (queryLower.includes('slot') || queryLower.includes('time'))) {
+        return 'find_slots';
+      }
+
+      // Default to create for calendar operations
+      return 'create';
+    } catch (error) {
+      this.logger.warn('Failed to detect calendar operation, defaulting to create', { query, error });
+      return 'create';
+    }
   }
 }

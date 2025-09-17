@@ -126,8 +126,53 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
 
       case 'send':
         logger.info('EmailAgent.processQuery - Routing to handleSendEmail');
+
+        // Validate that we have proper email recipients, not person names
+        if (params.recipientName && !params.contactEmail) {
+          logger.error('EmailAgent.processQuery - Received recipientName without contactEmail', {
+            recipientName: params.recipientName,
+            hasContactEmail: !!params.contactEmail
+          });
+          return {
+            success: false,
+            error: `Cannot send email to "${params.recipientName}" - this appears to be a person's name. The system should resolve contact information first to get the email address. Please ensure the MasterAgent calls ContactAgent before EmailAgent.`,
+            executionTime: 0
+          };
+        }
+
+        // Get recipients from various sources
+        let recipients: string[] = [];
+
+        // First check if we have recipients from MasterAgent parameters
+        if ((params as any).recipients && Array.isArray((params as any).recipients)) {
+          recipients = (params as any).recipients;
+        } else if (params.contactEmail) {
+          recipients = [params.contactEmail];
+        }
+
+        logger.info('EmailAgent.processQuery - Recipient resolution', {
+          hasContactEmail: !!params.contactEmail,
+          hasRecipientsParam: !!((params as any).recipients),
+          resolvedRecipients: recipients,
+          recipientsCount: recipients.length
+        });
+
+        // Validate that we have recipients
+        if (!recipients || recipients.length === 0) {
+          logger.error('EmailAgent.processQuery - No recipients found', {
+            params: Object.keys(params),
+            contactEmail: params.contactEmail,
+            recipientsParam: (params as any).recipients
+          });
+          return {
+            success: false,
+            error: 'No recipient email addresses found. Please provide recipient email addresses.',
+            executionTime: 0
+          };
+        }
+
         return await this.handleSendEmail(params, {
-          recipientName: params.recipientName || '',
+          recipients,
           subject: params.subject || '',
           body: params.body || ''
         });
@@ -290,6 +335,135 @@ You are a specialized email management agent powered by Gmail API.
   }
 
   /**
+   * Detect operation type from email parameters
+   */
+  protected async detectOperation(params: EmailAgentRequest): Promise<string> {
+    // Check if operation is explicitly specified
+    if (params.operation) {
+      return params.operation;
+    }
+
+    // Detect operation from query or parameters
+    if (params.query) {
+      const queryLower = params.query.toLowerCase();
+      if (queryLower.includes('send') || queryLower.includes('email')) {
+        return 'send';
+      } else if (queryLower.includes('search') || queryLower.includes('find')) {
+        return 'search';
+      } else if (queryLower.includes('reply')) {
+        return 'reply';
+      } else if (queryLower.includes('get') || queryLower.includes('read')) {
+        return 'get';
+      }
+    }
+
+    // Check for recipients (indicates send operation)
+    if ((params as any).recipients || params.contactEmail || params.subject || params.body) {
+      return 'send';
+    }
+
+    // Default to send if we have email-related parameters
+    return 'send';
+  }
+
+  /**
+   * Check if operation requires confirmation
+   */
+  protected async operationRequiresConfirmation(operation: string): Promise<boolean> {
+    // Send operations always require confirmation
+    if (operation === 'send' || operation === 'reply') {
+      return true;
+    }
+
+    // Search and get operations don't require confirmation
+    return false;
+  }
+
+  /**
+   * Generate preview for Email operations
+   */
+  protected async generatePreview(params: EmailAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
+    try {
+      logger.info('EmailAgent.generatePreview - Generating email preview', {
+        operation: params.operation,
+        hasRecipients: !!((params as any).recipients),
+        subject: params.subject,
+        sessionId: context.sessionId
+      });
+
+      // Get recipients from various sources
+      let recipients: string[] = [];
+      if ((params as any).recipients && Array.isArray((params as any).recipients)) {
+        recipients = (params as any).recipients;
+      } else if (params.contactEmail) {
+        recipients = [params.contactEmail];
+      }
+
+      // Validate that we have recipients
+      if (!recipients || recipients.length === 0) {
+        return {
+          success: false,
+          error: 'No recipient email addresses found for email preview'
+        };
+      }
+
+      // Create preview data for email operations
+      const previewData: EmailPreviewData = {
+        recipients: {
+          to: recipients,
+          cc: [],
+          bcc: []
+        },
+        subject: params.subject || 'No Subject',
+        contentSummary: params.body || 'No content provided',
+        recipientCount: recipients.length,
+        externalDomains: recipients.map(email => email.split('@')[1]).filter((domain): domain is string => Boolean(domain)).filter((domain, index, self) => self.indexOf(domain) === index)
+      };
+
+      // Generate action ID for confirmation tracking
+      const actionId = `email-${params.operation || 'send'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Create action preview
+      const actionPreview: ActionPreview = {
+        actionId,
+        actionType: 'email',
+        title: `${params.operation || 'Send'} Email`,
+        description: `Send email to ${recipients.join(', ')}: ${params.subject || 'No Subject'}`,
+        riskAssessment: {
+          level: 'medium',
+          factors: ['external_communication', 'email_sending'],
+          warnings: ['Email will be sent to external recipients', 'This action cannot be undone']
+        },
+        estimatedExecutionTime: '2-3 seconds',
+        reversible: false,
+        requiresConfirmation: true,
+        awaitingConfirmation: true,
+        originalQuery: params.query || `Send email operation`,
+        parameters: params as any,
+        previewData
+      };
+
+      logger.info('EmailAgent.generatePreview - Preview generated successfully', {
+        actionId,
+        actionType: 'email',
+        recipientCount: recipients.length,
+        requiresConfirmation: true
+      });
+
+      return {
+        success: true,
+        preview: actionPreview
+      };
+    } catch (error) {
+      logger.error('EmailAgent.generatePreview - Failed to generate preview', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate email preview'
+      };
+    }
+  }
+
+  /**
    * Handle send email operation
    */
   private async handleSendEmail(
@@ -310,6 +484,16 @@ You are a specialized email management agent powered by Gmail API.
       const recipientEmail = Array.isArray(actionParams.recipients) ? actionParams.recipients[0] : actionParams.recipients;
       if (!recipientEmail) {
         throw new Error('No recipient email specified - MasterAgent should resolve contacts before calling EmailAgent');
+      }
+
+      // Check if recipient looks like a person name instead of email address
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(recipientEmail)) {
+        logger.error('EmailAgent received person name instead of email address', {
+          recipient: recipientEmail,
+          isEmail: emailRegex.test(recipientEmail)
+        });
+        throw new Error(`Cannot send email to "${recipientEmail}" - this appears to be a person's name, not an email address. The system should resolve contact information first. Please ensure contact resolution is working properly.`);
       }
 
       // Create send request

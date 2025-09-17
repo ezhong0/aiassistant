@@ -375,6 +375,31 @@ export class MasterAgent {
     // Add agent-specific enhancements based on capabilities
     const enhancedParameters = { ...toolCall.parameters };
 
+    // Fix email parameter mapping: Handle both recipientName and recipients properly
+    logger.info(`Parameter mapping for ${toolName}:`, {
+      original: enhancedParameters,
+      hasRecipientName: !!enhancedParameters.recipientName,
+      hasRecipients: !!enhancedParameters.recipients
+    });
+
+    if (toolName === "manage_emails") {
+      // Handle recipientName -> recipients conversion
+      if (enhancedParameters.recipientName && !enhancedParameters.recipients) {
+        enhancedParameters.recipients = [enhancedParameters.recipientName];
+        delete enhancedParameters.recipientName;
+        logger.info(`Converted recipientName to recipients for ${toolName}:`, {
+          recipients: enhancedParameters.recipients
+        });
+      }
+      // Ensure recipients is always an array
+      if (enhancedParameters.recipients && !Array.isArray(enhancedParameters.recipients)) {
+        enhancedParameters.recipients = [enhancedParameters.recipients];
+        logger.info(`Converted recipients to array for ${toolName}:`, {
+          recipients: enhancedParameters.recipients
+        });
+      }
+    }
+
     // For calendar operations, add conflict detection
     if (toolName === 'manage_calendar') {
       enhancedParameters.enableConflictDetection = true;
@@ -402,13 +427,13 @@ export class MasterAgent {
 
       // Extract contact names that need resolution
       const contactExtractionResponse = await openaiService.generateText(
-        `Extract person names that need contact lookup from: "${userInput}"
+        `Extract person names and email addresses from: "${userInput}"
         
-        Return JSON: {"needed": boolean, "names": ["name1", "name2"]}
+        Return JSON: {"needed": boolean, "names": ["name1", "name2"], "emails": ["email1@example.com"]}
         
         Examples:
         - "Send email to John" → {"needed": true, "names": ["John"]}
-        - "Email john@example.com" → {"needed": false, "names": []}
+        - "Email john@example.com" → {"needed": true, "names": [], "emails": ["john@example.com"]}
         - "Schedule meeting with Sarah" → {"needed": true, "names": ["Sarah"]}
         - "What's on my calendar?" → {"needed": false, "names": []}`,
         'Extract contact names from user requests. Always return valid JSON.',
@@ -417,30 +442,30 @@ export class MasterAgent {
 
       const contactExtraction = JSON.parse(contactExtractionResponse);
       const resolvedContacts: Array<{name: string, email: string}> = [];
+      // Add email addresses directly (no resolution needed)
+      if (contactExtraction.emails && contactExtraction.emails.length > 0) {
+        for (const email of contactExtraction.emails) {
+          resolvedContacts.push({
+            name: email,
+            email: email
+          });
+        }
+      }
 
-      // Resolve contacts if needed
+      // Resolve contacts if needed - but skip during intent parsing since we don't have access token yet
+      // Contact resolution will happen during actual tool execution with proper access token
       if (contactExtraction.needed && contactExtraction.names.length > 0) {
-        const contactAgent = this.getContactAgent();
-        if (contactAgent) {
-          for (const name of contactExtraction.names) {
-            try {
-              const contactResult = await contactAgent.execute({
-                operation: 'search',
-                query: name,
-                accessToken: 'placeholder' // This will be replaced with actual token during execution
-              }, { sessionId: 'intent-parsing', userId: 'system' });
+        logger.info('Contact names detected for later resolution', {
+          names: contactExtraction.names,
+          stage: 'intent-parsing'
+        });
 
-              if (contactResult.success && contactResult.result?.contacts?.length > 0) {
-                const contact = contactResult.result.contacts[0];
-                resolvedContacts.push({
-                  name: contact.name || name,
-                  email: contact.email || ''
-                });
-              }
-            } catch (error) {
-              logger.warn(`Failed to resolve contact: ${name}`, error);
-            }
-          }
+        // Store contact names for resolution during tool execution
+        for (const name of contactExtraction.names) {
+          resolvedContacts.push({
+            name: name,
+            email: '' // Will be resolved during actual execution with proper access token
+          });
         }
       }
 
@@ -489,11 +514,38 @@ ${agentCapabilities.calendarAgent?.capabilities.map((cap: string) => `- ${cap}`)
 ${agentCapabilities.calendarAgent?.limitations.map((lim: string) => `- ${lim}`).join('\n') || 'No limitations available'}
 
 ## Multi-Agent Orchestration Rules
-- When sending emails to person names (not email addresses), ALWAYS call contactAgent first, then emailAgent
-- When creating calendar events with attendee names, ALWAYS call contactAgent first, then calendarAgent
-- Use agent capabilities to determine the best approach for complex requests
-- Consider agent limitations when planning multi-step operations
-- Always call Think tool at the end to verify correct orchestration`;
+
+### Email Operations
+- **DIRECT EMAIL ADDRESSES**: When user provides email addresses (contains @domain.com), call emailAgent DIRECTLY
+  - Example: "send email to john@company.com" → generate ONLY emailAgent call
+  - NO contact resolution needed
+- **PERSON NAMES**: When user provides person names (no @ symbol), use TWO-STEP process:
+  1. First: contactAgent with search operation for the person's name
+  2. Second: emailAgent with the resolved email address from step 1
+  - Example: "send email to John Smith" → generate contactAgent call, then emailAgent call
+
+### Calendar Operations
+- **EMAIL ATTENDEES**: When attendees are email addresses, call calendarAgent DIRECTLY
+- **NAME ATTENDEES**: When attendees are person names, use TWO-STEP process:
+  1. First: contactAgent with search operation for attendee names
+  2. Second: calendarAgent with resolved email addresses from step 1
+
+### General Rules
+- **SMART DETECTION**: Analyze the input to distinguish between email addresses and person names
+- **NO UNNECESSARY STEPS**: Don't call contactAgent when email addresses are already provided
+- **CONFIRMATION REQUIRED**: Both email and calendar operations should require user confirmation
+- Always call Think tool at the end to verify correct orchestration
+
+## Tool Call Generation Rules
+- **"send email to john@company.com"** → Generate emailAgent call ONLY (no contactAgent)
+- **"send email to John Smith"** → Generate contactAgent call first, then emailAgent call
+- **"schedule meeting with john@company.com"** → Generate calendarAgent call ONLY (no contactAgent)
+- **"schedule meeting with John Smith"** → Generate contactAgent call first, then calendarAgent call
+
+## Email Address Detection
+- Pattern: contains @ symbol and domain (e.g., user@domain.com)
+- If detected: Skip contact resolution, go directly to emailAgent
+- If NOT detected: Use contact resolution workflow`;
 
     let contextSection = '';
     if (contextGathered && contextGathered.relevantContext) {
@@ -536,12 +588,14 @@ You are an intelligent personal assistant that uses AI planning to understand us
 - **Respectful of boundaries**: Honor user preferences and maintain appropriate professional boundaries
 
 ## Agent Orchestration Rules
-- When sending emails to person names (not email addresses), ALWAYS call contactAgent first, then emailAgent
-- When creating calendar events with attendee names, ALWAYS call contactAgent first, then calendarAgent
+- **SMART EMAIL ROUTING**: When user provides email addresses (with @ symbol), call emailAgent DIRECTLY - NO contact resolution needed
+- **SMART PERSON ROUTING**: When user provides person names (no @ symbol), call contactAgent first, then emailAgent
+- **CONFIRMATION REQUIRED**: All email and calendar operations require user confirmation before execution
 - **CRITICAL: Use Slack agent proactively** when user requests are ambiguous or lack context - read recent messages first
 - When user asks follow-up questions (like "what about X?" or "other Y?"), ALWAYS check Slack context before responding
 - Use agent capabilities to determine the best approach for complex requests
 - Prefer taking intelligent action over asking for clarification when context provides reasonable clues
+- **DISTINGUISH EMAIL vs NAME**: Analyze input to detect email addresses vs person names automatically
 - Always call Think tool at the end to verify correct orchestration
 
 ## Context Gathering Strategy
