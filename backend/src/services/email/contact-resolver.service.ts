@@ -48,7 +48,7 @@ export class ContactResolver extends BaseService {
       // Get Contact service and cache service from service manager
       const serviceManager = ServiceManager.getInstance();
       this.contactService = serviceManager.getService('contactService') as ContactService;
-      this.contactCacheService = serviceManager.getService('contactCacheService') as unknown as ContactCacheService;
+      this.contactCacheService = serviceManager.getService<ContactCacheService>('contactCacheService') || null;
 
       if (!this.contactService) {
         throw new Error('ContactService not available');

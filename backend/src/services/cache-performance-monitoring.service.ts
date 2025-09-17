@@ -75,10 +75,10 @@ export class CachePerformanceMonitoringService extends BaseService {
     try {
       // Get dependencies from service manager
       const serviceManager = ServiceManager.getInstance();
-      this.cacheService = serviceManager.getService('cacheService') as unknown as CacheService;
-      this.gmailCacheService = serviceManager.getService('gmailCacheService') as unknown as GmailCacheService;
-      this.contactCacheService = serviceManager.getService('contactCacheService') as unknown as ContactCacheService;
-      this.slackCacheService = serviceManager.getService('slackCacheService') as unknown as SlackCacheService;
+      this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
+      this.gmailCacheService = serviceManager.getService<GmailCacheService>('gmailCacheService') || null;
+      this.contactCacheService = serviceManager.getService<ContactCacheService>('contactCacheService') || null;
+      this.slackCacheService = serviceManager.getService<SlackCacheService>('slackCacheService') || null;
 
       this.logInfo('Cache Performance Monitoring Service initialized successfully');
 

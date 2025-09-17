@@ -78,8 +78,8 @@ export class GmailCacheService extends BaseService {
     try {
       // Get dependencies from service manager
       const serviceManager = ServiceManager.getInstance();
-      this.cacheService = serviceManager.getService('cacheService') as unknown as CacheService;
-      this.gmailService = serviceManager.getService('gmailService') as unknown as GmailService;
+      this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
+      this.gmailService = serviceManager.getService<GmailService>('gmailService') || null;
 
       if (!this.cacheService) {
         this.logWarn('CacheService not available - caching disabled');

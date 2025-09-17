@@ -537,7 +537,7 @@ export class SlackInterfaceService extends BaseService {
    */
   private async initializeFocusedServices(): Promise<void> {
     // Initialize SlackEventHandler
-    this.slackEventHandler = serviceManager.getService('slackEventHandler') as unknown as SlackEventHandler;
+    this.slackEventHandler = serviceManager.getService<SlackEventHandler>('slackEventHandler') || null;
     if (!this.slackEventHandler) {
       this.logWarn('SlackEventHandler not available - event processing will use fallback');
     }

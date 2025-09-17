@@ -36,7 +36,7 @@ export class SlackContextExtractor extends BaseService {
       
       // Get Slack cache service from service manager
       const serviceManager = ServiceManager.getInstance();
-      this.slackCacheService = serviceManager.getService('slackCacheService') as unknown as SlackCacheService;
+      this.slackCacheService = serviceManager.getService<SlackCacheService>('slackCacheService') || null;
 
       if (!this.slackCacheService) {
         this.logWarn('SlackCacheService not available - using direct Slack API calls');

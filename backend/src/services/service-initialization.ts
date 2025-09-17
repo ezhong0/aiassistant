@@ -404,7 +404,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 26. GmailCacheService - Smart caching for Gmail API calls
     const gmailCacheService = new GmailCacheService();
-    serviceManager.registerService('gmailCacheService', gmailCacheService as any, {
+    serviceManager.registerService('gmailCacheService', gmailCacheService, {
       dependencies: ['cacheService', 'gmailService'],
       priority: 98,
       autoStart: true
@@ -412,7 +412,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 27. ContactCacheService - Smart caching for contact resolution
     const contactCacheService = new ContactCacheService();
-    serviceManager.registerService('contactCacheService', contactCacheService as any, {
+    serviceManager.registerService('contactCacheService', contactCacheService, {
       dependencies: ['cacheService', 'contactService'],
       priority: 99,
       autoStart: true
@@ -420,7 +420,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 28. SlackCacheService - Smart caching for Slack API calls
     const slackCacheService = new SlackCacheService();
-    serviceManager.registerService('slackCacheService', slackCacheService as any, {
+    serviceManager.registerService('slackCacheService', slackCacheService, {
       dependencies: ['cacheService'],
       priority: 100,
       autoStart: true
@@ -428,7 +428,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 29. CachePerformanceMonitoringService - Monitor all cache performance
     const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
-    serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService as any, {
+    serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService, {
       dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService'],
       priority: 101,
       autoStart: true

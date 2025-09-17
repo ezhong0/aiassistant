@@ -76,7 +76,7 @@ export class SlackCacheService extends BaseService {
     try {
       // Get dependencies from service manager
       const serviceManager = ServiceManager.getInstance();
-      this.cacheService = serviceManager.getService('cacheService') as unknown as CacheService;
+      this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
 
       if (!this.cacheService) {
         this.logWarn('CacheService not available - caching disabled');

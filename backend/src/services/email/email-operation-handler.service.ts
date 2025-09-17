@@ -43,7 +43,7 @@ export class EmailOperationHandler extends BaseService {
       // Get Gmail service and cache service from service manager
       const serviceManager = ServiceManager.getInstance();
       this.gmailService = serviceManager.getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.GMAIL_SERVICE) as GmailService;
-      this.gmailCacheService = serviceManager.getService('gmailCacheService') as unknown as GmailCacheService;
+      this.gmailCacheService = serviceManager.getService<GmailCacheService>('gmailCacheService') || null;
 
       if (!this.gmailService) {
         throw new Error(EMAIL_SERVICE_CONSTANTS.ERRORS.GMAIL_SERVICE_NOT_AVAILABLE);
