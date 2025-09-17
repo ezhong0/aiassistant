@@ -88,11 +88,16 @@ export interface ConversationEntry {
 
 // Specific agent parameter types
 export interface EmailAgentParams {
-  query: string;
+  query?: string;
+  operation?: string;
   contactEmail?: string;
+  recipientName?: string;
   subject?: string;
   body?: string;
   threadId?: string;
+  messageId?: string;
+  emailId?: string;
+  maxResults?: number;
 }
 
 export interface CalendarAgentParams {

@@ -102,6 +102,62 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   }
 
   /**
+   * Required method to process incoming requests - routes to appropriate handlers
+   */
+  protected async processQuery(params: EmailAgentRequest, context: ToolExecutionContext): Promise<any> {
+    logger.info('EmailAgent.processQuery - Starting email processing', {
+      operation: params.operation,
+      hasAccessToken: !!params.accessToken,
+      sessionId: context.sessionId
+    });
+
+    // Ensure services are initialized
+    this.ensureServices();
+
+    logger.info('EmailAgent.processQuery - Services ensured', {
+      hasEmailOps: !!this.emailOps,
+      hasContactResolver: !!this.contactResolver,
+      hasEmailValidator: !!this.emailValidator,
+      hasEmailFormatter: !!this.emailFormatter
+    });
+
+    // Route to appropriate handler based on operation
+    switch (params.operation?.toLowerCase()) {
+      case 'search':
+        logger.info('EmailAgent.processQuery - Routing to handleSearchEmails');
+        return await this.handleSearchEmails(params, {
+          query: params.query || '',
+          maxResults: params.maxResults || 10
+        });
+
+      case 'send':
+        logger.info('EmailAgent.processQuery - Send operation requested but not yet implemented');
+        return {
+          success: false,
+          error: 'Send email operation not yet implemented in EmailAgent',
+          executionTime: 0
+        };
+
+      case 'reply':
+        logger.info('EmailAgent.processQuery - Reply operation requested but not yet implemented');
+        return {
+          success: false,
+          error: 'Reply email operation not yet implemented in EmailAgent',
+          executionTime: 0
+        };
+
+      default:
+        logger.warn('EmailAgent.processQuery - Unknown operation, defaulting to search', {
+          operation: params.operation
+        });
+        return await this.handleSearchEmails(params, {
+          query: params.query || 'in:inbox',
+          maxResults: params.maxResults || 10
+        });
+    }
+  }
+
+  /**
    * Service-specific cleanup
    */
   protected async onDestroy(): Promise<void> {
