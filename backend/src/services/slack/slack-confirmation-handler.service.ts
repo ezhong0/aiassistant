@@ -303,23 +303,85 @@ export class SlackConfirmationHandler extends BaseService {
    */
   private formatConfirmationMessage(data: SlackConfirmationMessageData): string {
     const actionDescription = this.getActionDescription(data.actionType);
-    const confidenceText = data.confidence > 0.8 ? 'high confidence' : 
-                          data.confidence > 0.5 ? 'medium confidence' : 'low confidence';
-    
-    let message = `🤔 **${actionDescription}** (${confidenceText})\n\n`;
-    message += `I understand you want to: ${data.userMessage}\n\n`;
-    
+
+    let message = `🔍 Preview: ${actionDescription}\n\n`;
+
+    // Show detailed preview of what will happen
     if (data.previewResults.length > 0) {
-      message += `**Preview of actions:**\n`;
       data.previewResults.forEach((result, index) => {
-        message += `${index + 1}. ${this.formatToolResult(result)}\n`;
+        message += this.formatDetailedPreview(result);
+        message += '\n';
       });
-      message += '\n';
     }
-    
-    message += `**Please confirm:** Reply with "yes" to proceed or "no" to cancel.`;
-    
+
+    message += `\nConfirm: Reply "yes" to proceed or "no" to cancel.`;
+
     return message;
+  }
+
+  /**
+   * Format detailed preview showing exactly what will happen
+   */
+  private formatDetailedPreview(toolResult: ToolResult): string {
+    const preview = toolResult.result?.preview;
+    if (!preview || !preview.previewData) {
+      return `• ${this.formatToolResult(toolResult)}`;
+    }
+
+    const actionType = preview.actionType;
+    const data = preview.previewData;
+
+    switch (actionType) {
+      case 'email':
+      case 'email_send':
+        return this.formatEmailPreview(data);
+      case 'calendar':
+      case 'calendar_create':
+        return this.formatCalendarPreview(data);
+      default:
+        return `• ${preview.title || this.formatToolResult(toolResult)}`;
+    }
+  }
+
+  /**
+   * Format email preview showing recipients, subject, content
+   */
+  private formatEmailPreview(data: any): string {
+    let preview = `📧 Email Details:\n`;
+    if (data.recipients) {
+      preview += `  To: ${Array.isArray(data.recipients) ? data.recipients.join(', ') : data.recipients}\n`;
+    }
+    if (data.subject) {
+      preview += `  Subject: ${data.subject}\n`;
+    }
+    if (data.body) {
+      const bodyPreview = data.body.length > 100 ? data.body.substring(0, 100) + '...' : data.body;
+      preview += `  Message: ${bodyPreview}\n`;
+    }
+    return preview;
+  }
+
+  /**
+   * Format calendar preview showing event details
+   */
+  private formatCalendarPreview(data: any): string {
+    let preview = `📅 Calendar Event:\n`;
+    if (data.title || data.summary) {
+      preview += `  Title: ${data.title || data.summary}\n`;
+    }
+    if (data.startTime || data.start) {
+      preview += `  Start: ${data.startTime || data.start}\n`;
+    }
+    if (data.endTime || data.end) {
+      preview += `  End: ${data.endTime || data.end}\n`;
+    }
+    if (data.attendees && data.attendees.length > 0) {
+      preview += `  Attendees: ${data.attendees.join(', ')}\n`;
+    }
+    if (data.location) {
+      preview += `  Location: ${data.location}\n`;
+    }
+    return preview;
   }
 
   /**

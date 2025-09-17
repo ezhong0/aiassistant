@@ -1684,19 +1684,19 @@ export class SlackInterface {
     const preview = mainPreview.result.preview;
     
     // Create detailed preview message for Slack
-    let previewText = `🔍 **Action Preview**\n\n`;
-    previewText += `**${preview.title}**\n`;
+    let previewText = `🔍 Action Preview\n\n`;
+    previewText += `${preview.title}\n`;
     previewText += `${preview.description}\n\n`;
 
     // Add risk assessment
-    const riskEmoji = preview.riskAssessment.level === 'high' ? '🔴' : 
+    const riskEmoji = preview.riskAssessment.level === 'high' ? '🔴' :
                      preview.riskAssessment.level === 'medium' ? '🟡' : '🟢';
-    previewText += `${riskEmoji} **Risk Level:** ${preview.riskAssessment.level.toUpperCase()}\n`;
-    previewText += `**Risk Factors:** ${preview.riskAssessment.factors.join(', ')}\n`;
+    previewText += `${riskEmoji} Risk Level: ${preview.riskAssessment.level.toUpperCase()}\n`;
+    previewText += `Risk Factors: ${preview.riskAssessment.factors.join(', ')}\n`;
 
     // Add warnings if any
     if (preview.riskAssessment.warnings) {
-      previewText += `⚠️ **Warnings:**\n`;
+      previewText += `⚠️ Warnings:\n`;
       preview.riskAssessment.warnings.forEach((warning: string) => {
         previewText += `• ${warning}\n`;
       });
@@ -1713,22 +1713,22 @@ export class SlackInterface {
         previewText += `\n${formattedDetails}\n`;
       } else {
         // Fallback to basic preview info if service unavailable
-        previewText += `\n🔧 **Action Details:**\n`;
-        previewText += `• **Type:** ${preview.actionType}\n`;
+        previewText += `\n🔧 Action Details:\n`;
+        previewText += `• Type: ${preview.actionType}\n`;
         if (preview.previewData) {
-          previewText += `• **Parameters:** Available\n`;
+          previewText += `• Parameters: Available\n`;
         }
       }
     } catch (error) {
       logger.warn('Failed to format preview details dynamically:', error);
       // Fallback to basic preview info
-      previewText += `\n🔧 **Action Details:**\n`;
-      previewText += `• **Type:** ${preview.actionType}\n`;
+      previewText += `\n🔧 Action Details:\n`;
+      previewText += `• Type: ${preview.actionType}\n`;
     }
 
-    previewText += `\n**Estimated Execution Time:** ${preview.estimatedExecutionTime}\n`;
-    previewText += `**Reversible:** ${preview.reversible ? 'Yes' : 'No'}\n\n`;
-    previewText += `Do you want to proceed with this action?\nReply with **"yes"** to confirm or **"no"** to cancel.`;
+    previewText += `\nEstimated Execution Time: ${preview.estimatedExecutionTime}\n`;
+    previewText += `Reversible: ${preview.reversible ? 'Yes' : 'No'}\n\n`;
+    previewText += `Do you want to proceed with this action?\nReply with "yes" to confirm or "no" to cancel.`;
 
     // Store pending action for confirmation handling
     const pendingAction = {
@@ -1839,7 +1839,7 @@ export class SlackInterface {
         return {
           success: true,
           response: {
-            text: `❌ **Action Failed**\n\n` +
+            text: `❌ Action Failed\n\n` +
               `Cannot execute ${pendingAction.preview.title} because you need to authenticate with Google first.\n\n` +
               `Please use the OAuth link provided earlier to connect your Google account, then try your request again.`
           },
@@ -1902,7 +1902,7 @@ export class SlackInterface {
       });
 
       if (result.success) {
-        const successMessage = `✅ **Action Completed Successfully!**\n\n` +
+        const successMessage = `✅ Action Completed Successfully!\n\n` +
           `${pendingAction.preview.title} has been executed.\n\n` +
           `${result.result?.message || 'Operation completed successfully.'}`;
 
@@ -1914,7 +1914,7 @@ export class SlackInterface {
           shouldRespond: true
         };
       } else {
-        const errorMessage = `❌ **Action Failed**\n\n` +
+        const errorMessage = `❌ Action Failed\n\n` +
           `Failed to execute ${pendingAction.preview.title}.\n\n` +
           `Error: ${result.error || 'Unknown error occurred'}`;
 
@@ -1933,7 +1933,7 @@ export class SlackInterface {
         error: error instanceof Error ? error.message : error
       });
 
-      const errorMessage = `❌ **Execution Error**\n\n` +
+      const errorMessage = `❌ Execution Error\n\n` +
         `An error occurred while executing ${pendingAction.preview.title}.\n\n` +
         `Please try again or contact support if the issue persists.`;
 
