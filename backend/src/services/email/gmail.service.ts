@@ -742,7 +742,7 @@ export class GmailService extends BaseService {
       
       // Try to extract text content from HTML
       const textMatch = cleaned.match(/<body[^>]*>(.*?)<\/body>/is);
-      if (textMatch) {
+      if (textMatch && textMatch[1]) {
         cleaned = textMatch[1];
       }
       

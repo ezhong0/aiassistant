@@ -41,57 +41,62 @@
 ## 📅 **Focused 4-Week Roadmap**
 
 ### **Phase 0: Agentic Architecture Optimization (Week 0)**
-**Goal**: Implement optimal "Smart MasterAgent + Smart-Enough SubAgents" design
+**Goal**: Complete optimal "Smart MasterAgent + Smart-Enough SubAgents" design
 
-### **Phase 0: Agentic Architecture Optimization (Week 0)**
-**Goal**: Implement optimal "Smart MasterAgent + Smart-Enough SubAgents" design
+#### **Status: Partially Complete (60%)**
 
-#### **Specific Code Changes Required**
+**✅ Completed Changes:**
+- **EmailAgent**: Contact resolution logic removed, now expects pre-resolved recipients
+- **ContactAgent**: `detectContactNeeds()` method removed, focused on pure contact operations
+- **MasterAgent**: Intent parsing added (`parseIntentAndResolveDependencies`)
 
-**1. Remove Cross-Domain Logic from EmailAgent** 
-- **File**: `backend/src/agents/email.agent.ts` (lines 316-332)
-- **Remove**: Contact resolution logic in `handleSendEmail()`
-- **Remove**: `contactResolver` dependency (line 64)
-- **Remove**: Contact resolution from `ensureServices()` (lines 93-95)
-- **Result**: EmailAgent only handles email operations with pre-resolved recipients
+**❌ Remaining Work:**
 
-**2. Remove Intent Detection from ContactAgent**
-- **File**: `backend/src/agents/contact.agent.ts` (lines 203-232)
-- **Remove**: `detectContactNeeds()` method - this belongs in MasterAgent
-- **Keep**: Contact search and management operations only
-- **Result**: ContactAgent becomes pure contact lookup service
+**1. Implement Actual Contact Resolution in MasterAgent**
+- **File**: `backend/src/agents/master.agent.ts` (lines 455-470)
+- **Current Issue**: `parseIntentAndResolveDependencies` only extracts contact names but doesn't resolve them
+- **Required**: Add actual ContactAgent calls to resolve contact names to email addresses
+- **Required**: Pass resolved contacts to EmailAgent in tool call parameters
 
-**3. Enhance MasterAgent Intelligence**
-- **File**: `backend/src/agents/master.agent.ts` (lines 202-284)
-- **Add**: Intent parsing service to extract contact names before calling agents
-- **Add**: Dependency resolution logic to call ContactAgent first when needed
-- **Add**: Parameter extraction to resolve contacts before calling EmailAgent
-- **Result**: MasterAgent handles ALL orchestration and dependency resolution
+**2. Add Dependency Resolution Logic**
+- **File**: `backend/src/agents/master.agent.ts` (enhanceToolCallWithAgentContext method)
+- **Current Issue**: No logic to call ContactAgent first when contact names detected
+- **Required**: Detect when EmailAgent needs contact resolution
+- **Required**: Call ContactAgent first, then pass resolved emails to EmailAgent
+- **Required**: Handle contact resolution failures gracefully
 
-**4. Tighten Tool Access Scoping**
-- **EmailAgent**: Remove `ContactResolver` service dependency
-- **ContactAgent**: Remove `AIClassificationService` dependency  
-- **CalendarAgent**: Remove any cross-domain service dependencies
-- **Result**: Each agent only has access to its domain-specific services
+**3. Complete Orchestration Enhancement**
+- **File**: `backend/src/agents/master.agent.ts` (processUserInput method)
+- **Current Issue**: Tool calls are generated but dependency resolution is incomplete
+- **Required**: Implement proper agent orchestration sequence
+- **Required**: Ensure ContactAgent → EmailAgent flow when needed
+- **Required**: Add error handling for failed contact resolution
 
-**5. Enhance SubAgent Domain Intelligence**
-- **EmailAgent**: Add email-specific parsing (timing, urgency, formatting)
-- **ContactAgent**: Add contact-specific formatting and error handling
-- **CalendarAgent**: Add calendar-specific parsing ("next Tuesday afternoon" → time range)
-- **Result**: SubAgents handle domain-specific intelligence only
+#### **Specific Implementation Needed**
+
+```typescript
+// In MasterAgent.enhanceToolCallWithAgentContext()
+if (toolName === "manage_emails" && hasContactNames) {
+  // 1. Call ContactAgent first to resolve names
+  const contactAgent = this.getContactAgent();
+  const resolvedContacts = await contactAgent.resolveContacts(contactNames);
+  
+  // 2. Update EmailAgent parameters with resolved emails
+  enhancedParameters.recipients = resolvedContacts.map(c => c.email);
+}
+```
 
 #### **Expected File Changes**
-- `backend/src/agents/email.agent.ts`: Remove 20+ lines of contact resolution logic
-- `backend/src/agents/contact.agent.ts`: Remove `detectContactNeeds()` method
-- `backend/src/agents/master.agent.ts`: Add intent parsing and dependency resolution
-- `backend/src/services/email/contact-resolver.service.ts`: Move to MasterAgent usage only
+- `backend/src/agents/master.agent.ts`: Add actual contact resolution logic (50+ lines)
+- `backend/src/agents/master.agent.ts`: Enhance orchestration flow in processUserInput
+- `backend/src/agents/master.agent.ts`: Add error handling for contact resolution failures
 
 **Success Metrics:**
-- Clear responsibility boundaries between agents
-- MasterAgent handles ALL intent recognition and orchestration
-- SubAgents handle domain-specific intelligence only
-- Improved debugging and maintainability
-- Better natural language understanding
+- ✅ Clear responsibility boundaries between agents
+- ❌ MasterAgent handles ALL intent recognition and orchestration (partially complete)
+- ✅ SubAgents handle domain-specific intelligence only
+- ❌ Improved debugging and maintainability (needs completion)
+- ❌ Better natural language understanding (needs contact resolution)
 
 ### **Phase 1: Setup Automation & Performance Foundation (Weeks 1-2)**
 **Goal**: Eliminate setup friction and establish performance foundation
