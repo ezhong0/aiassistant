@@ -1,6 +1,7 @@
 import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { GmailService } from './gmail.service';
+import { GmailCacheService } from './gmail-cache.service';
 import { SendEmailRequest, SearchEmailsRequest, ReplyEmailRequest, GmailMessage } from '../../types/email/gmail.types';
 import { EMAIL_SERVICE_CONSTANTS } from '../../config/email-service-constants';
 import logger from '../../utils/logger';
@@ -26,6 +27,7 @@ export interface EmailOperationResult {
  */
 export class EmailOperationHandler extends BaseService {
   private gmailService: GmailService | null = null;
+  private gmailCacheService: GmailCacheService | null = null;
 
   constructor() {
     super(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER);
@@ -38,12 +40,17 @@ export class EmailOperationHandler extends BaseService {
     try {
       this.logInfo('Initializing EmailOperationHandler...');
 
-      // Get Gmail service from service manager
+      // Get Gmail service and cache service from service manager
       const serviceManager = ServiceManager.getInstance();
       this.gmailService = serviceManager.getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.GMAIL_SERVICE) as GmailService;
+      this.gmailCacheService = serviceManager.getService('gmailCacheService') as unknown as GmailCacheService;
 
       if (!this.gmailService) {
         throw new Error(EMAIL_SERVICE_CONSTANTS.ERRORS.GMAIL_SERVICE_NOT_AVAILABLE);
+      }
+
+      if (!this.gmailCacheService) {
+        this.logWarn('GmailCacheService not available - using direct Gmail API calls');
       }
 
       this.logInfo('EmailOperationHandler initialized successfully');
@@ -144,18 +151,26 @@ export class EmailOperationHandler extends BaseService {
         maxResults: request.maxResults
       });
 
-      // Use the existing GmailService interface
+      // Use cached Gmail service if available, otherwise fallback to direct service
       if (!request.query) {
         throw new Error(EMAIL_SERVICE_CONSTANTS.ERRORS.SEARCH_QUERY_REQUIRED);
       }
 
-      const result = await this.gmailService.searchEmails(
-        accessToken,
-        request.query,
-        {
-          maxResults: request.maxResults || 10
-        }
-      );
+      const result = this.gmailCacheService 
+        ? await this.gmailCacheService.searchEmails(
+            accessToken,
+            request.query,
+            {
+              maxResults: request.maxResults || 10
+            }
+          )
+        : await this.gmailService.searchEmails(
+            accessToken,
+            request.query,
+            {
+              maxResults: request.maxResults || 10
+            }
+          );
 
       // DEBUG: Log detailed result structure
       this.logInfo('Email search completed - DETAILED DEBUG', {
@@ -262,8 +277,10 @@ export class EmailOperationHandler extends BaseService {
 
       this.logInfo('Getting email', { emailId });
 
-      // Use the existing GmailService interface
-      const email = await this.gmailService.getEmail(accessToken, emailId);
+      // Use cached Gmail service if available, otherwise fallback to direct service
+      const email = this.gmailCacheService 
+        ? await this.gmailCacheService.getEmail(accessToken, emailId)
+        : await this.gmailService.getEmail(accessToken, emailId);
       
       this.logInfo('Email retrieved successfully', {
         emailId,

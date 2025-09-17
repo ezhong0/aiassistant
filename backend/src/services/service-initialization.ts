@@ -29,6 +29,10 @@ import { CalendarValidator } from './calendar/calendar-validator.service';
 import { SlackMessageAnalyzer } from './slack/slack-message-analyzer.service';
 import { SlackDraftManager } from './slack/slack-draft-manager.service';
 import { SlackFormatter } from './slack/slack-formatter.service';
+import { GmailCacheService } from './email/gmail-cache.service';
+import { ContactCacheService } from './contact/contact-cache.service';
+import { SlackCacheService } from './slack/slack-cache.service';
+import { CachePerformanceMonitoringService } from './cache-performance-monitoring.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -395,6 +399,38 @@ const registerCoreServices = async (): Promise<void> => {
     const slackFormatter = new SlackFormatter();
     serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER, slackFormatter, {
       priority: 97,
+      autoStart: true
+    });
+
+    // 26. GmailCacheService - Smart caching for Gmail API calls
+    const gmailCacheService = new GmailCacheService();
+    serviceManager.registerService('gmailCacheService', gmailCacheService as any, {
+      dependencies: ['cacheService', 'gmailService'],
+      priority: 98,
+      autoStart: true
+    });
+
+    // 27. ContactCacheService - Smart caching for contact resolution
+    const contactCacheService = new ContactCacheService();
+    serviceManager.registerService('contactCacheService', contactCacheService as any, {
+      dependencies: ['cacheService', 'contactService'],
+      priority: 99,
+      autoStart: true
+    });
+
+    // 28. SlackCacheService - Smart caching for Slack API calls
+    const slackCacheService = new SlackCacheService();
+    serviceManager.registerService('slackCacheService', slackCacheService as any, {
+      dependencies: ['cacheService'],
+      priority: 100,
+      autoStart: true
+    });
+
+    // 29. CachePerformanceMonitoringService - Monitor all cache performance
+    const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
+    serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService as any, {
+      dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService'],
+      priority: 101,
       autoStart: true
     });
 

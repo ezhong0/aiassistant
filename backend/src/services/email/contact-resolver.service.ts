@@ -1,6 +1,7 @@
 import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { ContactService } from '../contact.service';
+import { ContactCacheService } from '../contact/contact-cache.service';
 import { Contact, ContactSearchResult } from '../../types/agents/contact.types';
 import logger from '../../utils/logger';
 
@@ -31,6 +32,7 @@ export interface ContactValidationResult {
  */
 export class ContactResolver extends BaseService {
   private contactService: ContactService | null = null;
+  private contactCacheService: ContactCacheService | null = null;
 
   constructor() {
     super('ContactResolver');
@@ -43,12 +45,17 @@ export class ContactResolver extends BaseService {
     try {
       this.logInfo('Initializing ContactResolver...');
 
-      // Get Contact service from service manager
+      // Get Contact service and cache service from service manager
       const serviceManager = ServiceManager.getInstance();
       this.contactService = serviceManager.getService('contactService') as ContactService;
+      this.contactCacheService = serviceManager.getService('contactCacheService') as unknown as ContactCacheService;
 
       if (!this.contactService) {
         throw new Error('ContactService not available');
+      }
+
+      if (!this.contactCacheService) {
+        this.logWarn('ContactCacheService not available - using direct Contact API calls');
       }
 
       this.logInfo('ContactResolver initialized successfully');
@@ -90,8 +97,10 @@ export class ContactResolver extends BaseService {
         };
       }
 
-      // Search for contact by email using existing ContactService interface
-      const contacts = await this.contactService.searchContactsByEmail(email, accessToken);
+      // Search for contact by email using cached service if available
+      const contacts = this.contactCacheService 
+        ? await this.contactCacheService.searchContacts(email, accessToken, { maxResults: 10 })
+        : await this.contactService.searchContactsByEmail(email, accessToken);
 
       if (contacts.length === 0) {
         return {
@@ -160,8 +169,10 @@ export class ContactResolver extends BaseService {
 
       this.logInfo('Resolving contact by name', { name });
 
-      // Search for contacts by name using existing ContactService interface
-      const searchResult = await this.contactService.searchContacts(name, accessToken);
+      // Search for contacts by name using cached service if available
+      const searchResult = this.contactCacheService 
+        ? { contacts: await this.contactCacheService.searchContacts(name, accessToken, { maxResults: 20 }) }
+        : await this.contactService.searchContacts(name, accessToken);
 
       if (!searchResult.contacts || searchResult.contacts.length === 0) {
         return {

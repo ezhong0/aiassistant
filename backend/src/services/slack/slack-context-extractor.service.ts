@@ -1,5 +1,7 @@
 import { WebClient } from '@slack/web-api';
 import { BaseService } from '../base-service';
+import { SlackCacheService } from './slack-cache.service';
+import { ServiceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 import logger from '../../utils/logger';
 
@@ -17,6 +19,7 @@ export interface SlackContextExtractorConfig {
 export class SlackContextExtractor extends BaseService {
   private config: SlackContextExtractorConfig;
   private client: WebClient;
+  private slackCacheService: SlackCacheService | null = null;
 
   constructor(config: SlackContextExtractorConfig, client: WebClient) {
     super('SlackContextExtractor');
@@ -31,11 +34,20 @@ export class SlackContextExtractor extends BaseService {
     try {
       this.logInfo('Initializing SlackContextExtractor...');
       
+      // Get Slack cache service from service manager
+      const serviceManager = ServiceManager.getInstance();
+      this.slackCacheService = serviceManager.getService('slackCacheService') as unknown as SlackCacheService;
+
+      if (!this.slackCacheService) {
+        this.logWarn('SlackCacheService not available - using direct Slack API calls');
+      }
+      
       this.logInfo('SlackContextExtractor initialized successfully', {
         enableUserInfoFetching: this.config.enableUserInfoFetching,
         enableEmailExtraction: this.config.enableEmailExtraction,
         maxRetries: this.config.maxRetries,
-        retryDelay: this.config.retryDelay
+        retryDelay: this.config.retryDelay,
+        cacheServiceAvailable: !!this.slackCacheService
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -124,7 +136,22 @@ export class SlackContextExtractor extends BaseService {
     
     for (let attempt = 1; attempt <= this.config.maxRetries; attempt++) {
       try {
+        // Try cache first if available
+        if (this.slackCacheService) {
+          const cachedUserInfo = await this.slackCacheService.getCachedUserInfo(userId);
+          if (cachedUserInfo) {
+            return cachedUserInfo;
+          }
+        }
+
+        // Cache miss or no cache service - call Slack API
         const userInfo = await this.client.users.info({ user: userId });
+        
+        // Cache the result if cache service is available
+        if (this.slackCacheService && userInfo.user) {
+          await this.slackCacheService.cacheUserInfo(userId, userInfo.user);
+        }
+        
         return userInfo.user;
       } catch (error) {
         lastError = error as Error;
