@@ -131,12 +131,12 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
         });
 
       case 'send':
-        logger.info('EmailAgent.processQuery - Send operation requested but not yet implemented');
-        return {
-          success: false,
-          error: 'Send email operation not yet implemented in EmailAgent',
-          executionTime: 0
-        };
+        logger.info('EmailAgent.processQuery - Routing to handleSendEmail');
+        return await this.handleSendEmail(params, {
+          recipientName: params.recipientName || '',
+          subject: params.subject || '',
+          body: params.body || ''
+        });
 
       case 'reply':
         logger.info('EmailAgent.processQuery - Reply operation requested but not yet implemented');
@@ -484,6 +484,89 @@ You are a specialized email management agent powered by Gmail API.
       };
     } catch (error) {
       logger.error('Error handling search emails', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        executionTime: Date.now() - startTime
+      };
+    }
+  }
+
+  /**
+   * Handle send email operation
+   */
+  private async handleSendEmail(
+    params: EmailAgentRequest,
+    actionParams: SendEmailActionParams
+  ): Promise<ToolExecutionResult> {
+    const startTime = Date.now();
+
+    try {
+      // Ensure services are initialized
+      this.ensureServices();
+
+      if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
+        throw new Error('Required services not available');
+      }
+
+      // DEBUG: Log send email request
+      logger.info('EmailAgent.handleSendEmail - Send email request debug', {
+        recipientName: actionParams.recipientName,
+        subject: actionParams.subject,
+        hasBody: !!actionParams.body,
+        hasAccessToken: !!params.accessToken
+      });
+
+      // Create send request
+      const sendRequest: SendEmailRequest = {
+        to: [actionParams.recipientName || ''],
+        subject: actionParams.subject || '',
+        body: actionParams.body || ''
+      };
+
+      // Validate request
+      const validation = this.emailValidator.validateSendEmailRequest(sendRequest);
+      if (!validation.isValid) {
+        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+      }
+
+      // Send email
+      const operationResult = await this.emailOps.sendEmail(sendRequest, params.accessToken);
+
+      // DEBUG: Log operation result
+      logger.info('EmailAgent.handleSendEmail - Operation result debug', {
+        success: operationResult.success,
+        hasResult: !!operationResult.result,
+        messageId: operationResult.result?.messageId,
+        threadId: operationResult.result?.threadId,
+        error: operationResult.error,
+        executionTime: operationResult.executionTime
+      });
+
+      if (!operationResult.success) {
+        throw new Error(operationResult.error || 'Email send failed');
+      }
+
+      // Format response
+      const emailResult: EmailResult = {
+        messageId: operationResult.result?.messageId,
+        threadId: operationResult.result?.threadId,
+        recipient: actionParams.recipientName || '',
+        subject: actionParams.subject
+      };
+
+      const formattingResult = this.emailFormatter.formatEmailResult(emailResult);
+
+      return {
+        success: true,
+        result: {
+          message: formattingResult.formattedText || 'Email sent successfully',
+          data: emailResult
+        },
+        executionTime: Date.now() - startTime
+      };
+    } catch (error) {
+      logger.error('Error handling send email', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

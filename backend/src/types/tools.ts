@@ -101,23 +101,30 @@ export interface EmailAgentParams {
 }
 
 export interface CalendarAgentParams {
-  query: string;
+  query?: string;
+  operation?: string;
   title?: string;
   startTime?: string;
   endTime?: string;
+  timeMin?: string;
+  timeMax?: string;
   attendees?: string[];
   description?: string;
+  accessToken?: string;
+  enableConflictDetection?: boolean;
 }
 
 export interface ContactAgentParams {
-  query: string;
+  query?: string;
+  operation?: string;
   name?: string;
   email?: string;
   phone?: string;
+  accessToken?: string;
 }
 
 export interface ThinkParams {
-  query: string;
+  query?: string;
   context?: string;
   previousActions?: ToolCall[];
 }
