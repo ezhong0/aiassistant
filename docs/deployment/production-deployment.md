@@ -1,367 +1,303 @@
-# 🚀 Production Deployment
+# Production Deployment
 
-Complete guide for deploying the AI Assistant Platform to production using Railway, Docker, and other cloud platforms.
+This guide covers deploying the AI Assistant Platform to production using Railway, including environment configuration, monitoring, and troubleshooting.
 
-## 🎯 **Deployment Overview**
+## 🚀 **Railway Deployment**
 
-The platform is designed for **cloud-native deployment** with support for:
-- **Railway** (recommended) - One-click deployment
-- **Docker** - Containerized deployment
-- **Heroku** - Platform-as-a-Service
-- **AWS/GCP/Azure** - Cloud provider deployment
+### **Prerequisites**
 
-## 🚂 **Railway Deployment (Recommended)**
+- **Railway Account**: Sign up at [railway.app](https://railway.app)
+- **Railway CLI**: Install with `npm install -g @railway/cli`
+- **Git Repository**: Code pushed to GitHub/GitLab
+- **API Keys**: OpenAI, Google OAuth, Slack credentials
 
-Railway provides seamless deployment with integrated PostgreSQL and Redis.
-
-### **1. Prerequisites**
-
-- **Railway Account** - [Sign up](https://railway.app/)
-- **GitHub Repository** - Code hosted on GitHub
-- **Domain Name** (optional) - Custom domain for production
-
-### **2. One-Click Deployment**
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template-id)
-
-### **3. Manual Railway Setup**
-
-#### **Connect Repository**
-
-1. Go to [Railway Dashboard](https://railway.app/dashboard)
-2. Click "New Project"
-3. Choose "Deploy from GitHub repo"
-4. Select your repository
-5. Railway will automatically detect the Node.js app
-
-#### **Configure Environment Variables**
-
-In Railway dashboard, go to "Variables" tab and add:
+### **Initial Deployment**
 
 ```bash
-# Core Configuration
+# Login to Railway
+railway login
+
+# Initialize Railway project
+railway init
+
+# Deploy to Railway
+railway up
+```
+
+### **Environment Configuration**
+
+Set environment variables in Railway dashboard or CLI:
+
+```bash
+# Core configuration
 NODE_ENV=production
 PORT=3000
-BASE_URL=https://your-app-name.railway.app
-LOG_LEVEL=warn
+JWT_SECRET=your-secure-jwt-secret-here
 
-# Security
-JWT_SECRET=your-production-jwt-secret-64-chars-minimum
+# OpenAI API
+OPENAI_API_KEY=sk-your-openai-api-key
 
 # Google OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=https://your-app-name.railway.app/auth/callback
-
-# OpenAI
-OPENAI_API_KEY=sk-your-openai-api-key
-
-# Slack (if using)
-SLACK_SIGNING_SECRET=your-slack-signing-secret
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-SLACK_CLIENT_ID=your-slack-client-id
-SLACK_CLIENT_SECRET=your-slack-client-secret
-SLACK_OAUTH_REDIRECT_URI=https://your-app-name.railway.app/auth/slack/callback
-
-# Features
-ENABLE_RATE_LIMITING=true
-ENABLE_REQUEST_LOGGING=false
-CORS_ORIGIN=https://your-app-name.railway.app
-```
-
-#### **Add Database**
-
-1. Click "New" > "Database" > "PostgreSQL"
-2. Railway will automatically provide `DATABASE_URL`
-3. The app will automatically run migrations
-
-#### **Add Redis (Optional)**
-
-1. Click "New" > "Database" > "Redis"
-2. Railway will automatically provide `REDIS_URL`
-
-### **4. Railway Configuration**
-
-#### **Railway Configuration File**
-
-Create `railway.json` in project root:
-
-```json
-{
-  "build": {
-    "builder": "NIXPACKS"
-  },
-  "deploy": {
-    "startCommand": "npm start",
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 100,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}
-```
-
-#### **Procfile**
-
-Create `Procfile` in project root:
-
-```
-web: npm start
-```
-
-### **5. Custom Domain (Optional)**
-
-1. In Railway dashboard, go to "Settings" > "Domains"
-2. Click "Custom Domain"
-3. Enter your domain name
-4. Follow DNS configuration instructions
-5. Update `BASE_URL` and `GOOGLE_REDIRECT_URI` environment variables
-
-## 🐳 **Docker Deployment**
-
-### **1. Dockerfile**
-
-The platform includes a production-ready Dockerfile:
-
-```dockerfile
-FROM node:20-slim
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-COPY backend/package*.json ./backend/
-
-# Install dependencies
-RUN npm install --only=production
-WORKDIR /app/backend
-RUN npm install
-
-# Copy source code
-WORKDIR /app
-COPY . .
-
-# Build the application
-WORKDIR /app/backend
-RUN npm run build
-
-# Expose port
-EXPOSE 3000
-
-# Start command
-CMD ["npm", "start"]
-```
-
-### **2. Docker Compose**
-
-Create `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  app:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:password@db:5432/assistantapp
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - db
-      - redis
-    restart: unless-stopped
-
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=assistantapp
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-```
-
-### **3. Docker Commands**
-
-```bash
-# Build and start
-docker-compose up -d
-
-# View logs
-docker-compose logs -f app
-
-# Stop services
-docker-compose down
-
-# Rebuild after changes
-docker-compose up -d --build
-```
-
-## ☁️ **Cloud Provider Deployment**
-
-### **AWS Deployment**
-
-#### **Using AWS App Runner**
-
-1. **Create App Runner Service**
-   - Go to AWS App Runner console
-   - Create new service
-   - Connect to GitHub repository
-   - Configure build settings
-
-2. **Environment Variables**
-   ```bash
-   NODE_ENV=production
-   PORT=8080
-   DATABASE_URL=postgresql://user:pass@rds-endpoint:5432/db
-   REDIS_URL=redis://elasticache-endpoint:6379
-   ```
-
-3. **RDS Database**
-   - Create PostgreSQL RDS instance
-   - Configure security groups
-   - Update `DATABASE_URL`
-
-4. **ElastiCache Redis**
-   - Create Redis ElastiCache cluster
-   - Configure security groups
-   - Update `REDIS_URL`
-
-#### **Using AWS ECS**
-
-1. **Create ECS Cluster**
-2. **Create Task Definition**
-3. **Create Service**
-4. **Configure Load Balancer**
-
-### **Google Cloud Platform**
-
-#### **Using Cloud Run**
-
-1. **Build Container**
-   ```bash
-   gcloud builds submit --tag gcr.io/PROJECT-ID/assistant-app
-   ```
-
-2. **Deploy to Cloud Run**
-   ```bash
-   gcloud run deploy assistant-app \
-     --image gcr.io/PROJECT-ID/assistant-app \
-     --platform managed \
-     --region us-central1 \
-     --allow-unauthenticated
-   ```
-
-3. **Cloud SQL Database**
-   - Create Cloud SQL PostgreSQL instance
-   - Configure connection
-   - Update `DATABASE_URL`
-
-### **Azure Deployment**
-
-#### **Using Azure Container Instances**
-
-1. **Build and Push**
-   ```bash
-   az acr build --registry myregistry --image assistant-app .
-   ```
-
-2. **Deploy Container**
-   ```bash
-   az container create \
-     --resource-group myResourceGroup \
-     --name assistant-app \
-     --image myregistry.azurecr.io/assistant-app \
-     --ports 3000
-   ```
-
-## 🔧 **Production Configuration**
-
-### **Environment Variables**
-
-#### **Required Production Variables**
-
-```bash
-# Core
-NODE_ENV=production
-PORT=3000
-BASE_URL=https://yourdomain.com
-LOG_LEVEL=warn
-
-# Security
-JWT_SECRET=your-production-jwt-secret-64-chars-minimum
-
-# Google OAuth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=https://yourdomain.com/auth/callback
-
-# OpenAI
-OPENAI_API_KEY=sk-your-openai-api-key
-
-# Database
-DATABASE_URL=postgresql://user:pass@host:5432/db
-
-# Features
-ENABLE_RATE_LIMITING=true
-ENABLE_REQUEST_LOGGING=false
-CORS_ORIGIN=https://yourdomain.com
-```
-
-#### **Optional Production Variables**
-
-```bash
-# Redis Cache
-REDIS_URL=redis://host:6379
+GOOGLE_REDIRECT_URI=https://your-app.railway.app/auth/callback
 
 # Slack Integration
 SLACK_SIGNING_SECRET=your-slack-signing-secret
 SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
 SLACK_CLIENT_ID=your-slack-client-id
 SLACK_CLIENT_SECRET=your-slack-client-secret
+SLACK_OAUTH_REDIRECT_URI=https://your-app.railway.app/auth/slack/callback
 
-# Monitoring
-LOG_FILE_PATH=/var/log/assistant-app/
-LOG_MAX_FILES=30
+# Database (Railway provides this)
+DATABASE_URL=postgresql://username:password@host:port/database
+
+# Redis (Railway provides this)
+REDIS_URL=redis://username:password@host:port
+
+# Feature flags
+ENABLE_OPENAI=true
+ENABLE_RATE_LIMITING=true
+ENABLE_REQUEST_LOGGING=true
+DISABLE_RATE_LIMITING=false
 ```
 
-### **Security Configuration**
+### **Database Setup**
 
-#### **Production Security Checklist**
+Railway automatically provides PostgreSQL. Run migrations:
 
-- [ ] **Strong JWT Secret** - 64+ character random string
-- [ ] **HTTPS Only** - All traffic encrypted
-- [ ] **CORS Restricted** - Only allow your domain
-- [ ] **Rate Limiting Enabled** - Prevent abuse
-- [ ] **Request Logging Disabled** - Reduce log noise
-- [ ] **Environment Variables Secured** - Use secrets management
-- [ ] **Database Encrypted** - At rest and in transit
-- [ ] **Regular Updates** - Keep dependencies updated
+```bash
+# Connect to Railway database
+railway connect
 
-#### **Security Headers**
+# Run migrations
+npm run migrate
 
-The platform automatically includes security headers:
+# Verify database setup
+npm run db:status
+```
 
-```javascript
-// Security middleware
+### **Redis Setup**
+
+Railway automatically provides Redis. Test connection:
+
+```bash
+# Test Redis connection
+npm run test:redis
+
+# Check Redis health
+curl https://your-app.railway.app/health/service/cacheService
+```
+
+## 🔧 **Environment Configuration**
+
+### **Production Environment Variables**
+
+```bash
+# Application
+NODE_ENV=production
+PORT=3000
+LOG_LEVEL=info
+BASE_URL=https://your-app.railway.app
+
+# Security
+JWT_SECRET=your-secure-jwt-secret-minimum-32-characters
+CORS_ORIGIN=https://your-frontend-domain.com
+
+# Database
+DATABASE_URL=postgresql://username:password@host:port/database
+DB_POOL_SIZE=10
+DB_IDLE_TIMEOUT=30000
+DB_CONNECTION_TIMEOUT=10000
+
+# Redis
+REDIS_URL=redis://username:password@host:port
+DISABLE_REDIS=false
+CACHE_TTL_DEFAULT=300
+CACHE_TTL_GMAIL=3600
+CACHE_TTL_CONTACTS=7200
+CACHE_TTL_SLACK=1800
+
+# OpenAI
+OPENAI_API_KEY=sk-your-openai-api-key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_TEMPERATURE=0.1
+OPENAI_MAX_TOKENS=1000
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=https://your-app.railway.app/auth/callback
+
+# Slack
+SLACK_SIGNING_SECRET=your-slack-signing-secret
+SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
+SLACK_CLIENT_ID=your-slack-client-id
+SLACK_CLIENT_SECRET=your-slack-client-secret
+SLACK_OAUTH_REDIRECT_URI=https://your-app.railway.app/auth/slack/callback
+
+# Rate Limiting
+RATE_LIMIT_WINDOW=60000
+RATE_LIMIT_MAX_REQUESTS=100
+RATE_LIMIT_ASSISTANT=50
+RATE_LIMIT_HEAVY=10
+
+# Performance
+REQUEST_TIMEOUT=30000
+SERVICE_INIT_TIMEOUT=30000
+SERVICE_HEALTH_CHECK_INTERVAL=60000
+```
+
+### **Google OAuth Configuration**
+
+Update Google OAuth settings:
+
+1. Go to [Google Cloud Console](https://console.developers.google.com/)
+2. Navigate to APIs & Services > Credentials
+3. Edit your OAuth 2.0 client
+4. Add authorized redirect URIs:
+   - `https://your-app.railway.app/auth/callback`
+   - `https://your-app.railway.app/auth/slack/callback`
+
+### **Slack App Configuration**
+
+Update Slack app settings:
+
+1. Go to [Slack API](https://api.slack.com/apps)
+2. Select your app
+3. Update OAuth & Permissions:
+   - Redirect URLs: `https://your-app.railway.app/auth/slack/callback`
+4. Update Event Subscriptions:
+   - Request URL: `https://your-app.railway.app/slack/events`
+5. Update Interactivity & Shortcuts:
+   - Request URL: `https://your-app.railway.app/slack/interactive`
+
+## 📊 **Monitoring & Logging**
+
+### **Health Monitoring**
+
+Railway provides built-in health monitoring:
+
+```bash
+# Check application health
+curl https://your-app.railway.app/health
+
+# Check specific service health
+curl https://your-app.railway.app/health/service/databaseService
+curl https://your-app.railway.app/health/service/cacheService
+curl https://your-app.railway.app/health/service/openaiService
+```
+
+### **Log Monitoring**
+
+View logs in Railway dashboard or CLI:
+
+```bash
+# View logs
+railway logs
+
+# Follow logs in real-time
+railway logs --follow
+
+# Filter logs by service
+railway logs --grep "EmailService"
+```
+
+### **Performance Monitoring**
+
+Monitor key metrics:
+
+```bash
+# Check cache performance
+curl https://your-app.railway.app/cache/metrics
+
+# Check service dependencies
+curl https://your-app.railway.app/health/dependencies
+
+# Check memory usage
+curl https://your-app.railway.app/health | jq '.metrics.memoryUsage'
+```
+
+### **Custom Monitoring**
+
+Set up custom monitoring endpoints:
+
+```typescript
+// Custom monitoring endpoint
+router.get('/monitoring/performance', async (req, res) => {
+  const performanceMetrics = {
+    timestamp: new Date().toISOString(),
+    memory: process.memoryUsage(),
+    uptime: process.uptime(),
+    cache: await getCacheMetrics(),
+    services: await getServiceMetrics()
+  };
+  
+  res.json(performanceMetrics);
+});
+```
+
+## 🔒 **Security Configuration**
+
+### **HTTPS & SSL**
+
+Railway automatically provides HTTPS. Verify SSL:
+
+```bash
+# Check SSL certificate
+curl -I https://your-app.railway.app/health
+
+# Test SSL configuration
+openssl s_client -connect your-app.railway.app:443
+```
+
+### **CORS Configuration**
+
+Configure CORS for production:
+
+```typescript
+// CORS configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'https://your-frontend-domain.com',
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+```
+
+### **Rate Limiting**
+
+Configure production rate limiting:
+
+```typescript
+// Rate limiting configuration
+const rateLimitConfig = {
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '60000'),
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+  message: 'Too many requests from this IP',
+  standardHeaders: true,
+  legacyHeaders: false
+};
+
+app.use(rateLimit(rateLimitConfig));
+```
+
+### **Security Headers**
+
+Add security headers:
+
+```typescript
+// Security headers
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-    },
+      connectSrc: ["'self'", "https://api.openai.com"]
+    }
   },
   hsts: {
     maxAge: 31536000,
@@ -371,247 +307,272 @@ app.use(helmet({
 }));
 ```
 
-## 📊 **Monitoring & Health Checks**
+## 🚀 **Deployment Strategies**
 
-### **Health Endpoints**
+### **Blue-Green Deployment**
 
-The platform provides comprehensive health monitoring:
+Railway supports blue-green deployments:
 
 ```bash
-# Basic health check
-GET /health
+# Deploy to staging
+railway up --environment staging
 
-# Detailed health status
-GET /healthz
+# Test staging deployment
+curl https://your-app-staging.railway.app/health
 
-# Service-specific health
-GET /api/assistant/status
+# Promote to production
+railway promote --environment production
 ```
 
-### **Health Check Response**
+### **Rolling Deployment**
 
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-12-19T10:30:00.000Z",
-  "uptime": 3600,
-  "memory": {
-    "rss": 45678912,
-    "heapTotal": 20971520,
-    "heapUsed": 15728640,
-    "external": 1024000
+Configure rolling deployments:
+
+```yaml
+# railway.toml
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+```
+
+### **Database Migrations**
+
+Handle database migrations safely:
+
+```bash
+# Run migrations before deployment
+railway run npm run migrate
+
+# Verify migration success
+railway run npm run db:status
+
+# Deploy application
+railway up
+```
+
+## 📈 **Performance Optimization**
+
+### **Caching Strategy**
+
+Optimize caching for production:
+
+```typescript
+// Production cache configuration
+const cacheConfig = {
+  redis: {
+    url: process.env.REDIS_URL,
+    connectTimeout: 10000,
+    lazyConnect: true,
+    retryDelayOnFailover: 100,
+    maxRetriesPerRequest: 3
   },
-  "services": {
-    "database": "healthy",
-    "redis": "healthy",
-    "openai": "healthy",
-    "google": "healthy"
+  ttl: {
+    gmail: parseInt(process.env.CACHE_TTL_GMAIL || '3600'),
+    contacts: parseInt(process.env.CACHE_TTL_CONTACTS || '7200'),
+    slack: parseInt(process.env.CACHE_TTL_SLACK || '1800')
   }
+};
+```
+
+### **Connection Pooling**
+
+Optimize database connections:
+
+```typescript
+// Production database configuration
+const dbConfig = {
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: parseInt(process.env.DB_POOL_SIZE || '10'),
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '10000'),
+  statement_timeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000')
+};
+```
+
+### **Memory Optimization**
+
+Optimize memory usage:
+
+```typescript
+// Memory optimization
+process.on('warning', (warning) => {
+  if (warning.name === 'MaxListenersExceededWarning') {
+    logger.warn('Memory warning', { warning: warning.message });
+  }
+});
+
+// Garbage collection
+if (global.gc) {
+  setInterval(() => {
+    global.gc();
+  }, 300000); // Every 5 minutes
 }
 ```
 
-### **Monitoring Setup**
+## 🔧 **Troubleshooting**
 
-#### **Railway Monitoring**
+### **Common Issues**
 
-Railway provides built-in monitoring:
-- **Metrics Dashboard** - CPU, memory, network usage
-- **Logs** - Real-time application logs
-- **Alerts** - Automated alerts for issues
-
-#### **External Monitoring**
-
-For advanced monitoring, integrate with:
-
-- **Datadog** - Application performance monitoring
-- **New Relic** - Full-stack observability
-- **Sentry** - Error tracking and performance monitoring
-- **Uptime Robot** - Uptime monitoring
-
-## 🔄 **CI/CD Pipeline**
-
-### **GitHub Actions**
-
-Create `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy to Production
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        cache: 'npm'
-    
-    - name: Install dependencies
-      run: |
-        cd backend
-        npm ci
-    
-    - name: Run tests
-      run: |
-        cd backend
-        npm test
-    
-    - name: Build application
-      run: |
-        cd backend
-        npm run build
-    
-    - name: Deploy to Railway
-      uses: railway-app/railway-deploy@v1
-      with:
-        railway-token: ${{ secrets.RAILWAY_TOKEN }}
-```
-
-### **Railway Auto-Deploy**
-
-Railway can automatically deploy on git push:
-
-1. Go to Railway dashboard
-2. Select your project
-3. Go to "Settings" > "Source"
-4. Enable "Auto Deploy"
-
-## 🚨 **Troubleshooting Production Issues**
-
-### **Common Production Issues**
-
-#### **Database Connection Issues**
-
+**1. Service Initialization Failures**
 ```bash
-# Check database connectivity
-curl https://yourdomain.com/health
-
-# Check database logs
-# Railway: View database logs in dashboard
-# Docker: docker-compose logs db
-```
-
-#### **Memory Issues**
-
-```bash
-# Monitor memory usage
-curl https://yourdomain.com/healthz | jq '.memory'
-
-# Check for memory leaks
-# Enable debug logging temporarily
-LOG_LEVEL=debug
-```
-
-#### **Performance Issues**
-
-```bash
-# Check response times
-curl -w "@curl-format.txt" -o /dev/null -s https://yourdomain.com/health
-
-# Monitor CPU usage
-# Railway: Check metrics dashboard
-# Docker: docker stats
-```
-
-### **Debug Mode**
-
-For production debugging:
-
-```bash
-# Enable debug logging (temporarily)
-LOG_LEVEL=debug
-
 # Check service health
-curl https://yourdomain.com/health | jq
+curl https://your-app.railway.app/health
 
-# View application logs
-# Railway: View logs in dashboard
-# Docker: docker-compose logs -f app
+# Check specific service
+curl https://your-app.railway.app/health/service/databaseService
+
+# View service logs
+railway logs --grep "ServiceManager"
 ```
 
-## 📈 **Scaling Considerations**
+**2. Database Connection Issues**
+```bash
+# Test database connection
+railway run npm run test:database
 
-### **Horizontal Scaling**
+# Check database URL
+railway variables | grep DATABASE_URL
 
-The platform is designed for horizontal scaling:
+# Verify database exists
+railway run psql $DATABASE_URL -c "SELECT version();"
+```
 
-- **Stateless Design** - No server-side sessions
-- **Database Connection Pooling** - Efficient database connections
-- **Redis Caching** - Shared cache across instances
-- **Load Balancer Ready** - Works with any load balancer
+**3. Redis Connection Issues**
+```bash
+# Test Redis connection
+railway run npm run test:redis
 
-### **Scaling Strategies**
+# Check Redis URL
+railway variables | grep REDIS_URL
 
-#### **Railway Scaling**
+# Test Redis commands
+railway run redis-cli $REDIS_URL ping
+```
 
-Railway automatically handles scaling:
-- **Auto-scaling** - Based on CPU/memory usage
-- **Manual scaling** - Set minimum/maximum instances
-- **Zero-downtime deployments** - Rolling updates
+**4. OpenAI API Issues**
+```bash
+# Test OpenAI connection
+railway run npm run test:openai
 
-#### **Docker Scaling**
+# Check API key
+railway variables | grep OPENAI_API_KEY
+
+# Test API key validity
+curl -H "Authorization: Bearer $OPENAI_API_KEY" \
+  https://api.openai.com/v1/models
+```
+
+### **Debugging Commands**
 
 ```bash
-# Scale application instances
-docker-compose up -d --scale app=3
+# View all environment variables
+railway variables
 
-# Use Docker Swarm for orchestration
-docker swarm init
-docker stack deploy -c docker-compose.yml assistant-app
+# Check deployment status
+railway status
+
+# View deployment logs
+railway logs --deployment latest
+
+# Connect to running container
+railway shell
+
+# Run commands in container
+railway run npm run test:health
 ```
 
-### **Database Scaling**
+### **Performance Debugging**
 
-For high-traffic applications:
+```bash
+# Check memory usage
+railway run node -e "console.log(process.memoryUsage())"
 
-- **Read Replicas** - Distribute read queries
-- **Connection Pooling** - Efficient connection management
-- **Query Optimization** - Optimize slow queries
-- **Caching Strategy** - Cache frequently accessed data
+# Check CPU usage
+railway run top
 
-## 🔒 **Security Best Practices**
+# Check disk usage
+railway run df -h
 
-### **Production Security**
+# Check network connections
+railway run netstat -an
+```
 
-1. **Environment Variables**
-   - Use secrets management (Railway Variables, AWS Secrets Manager)
-   - Never commit secrets to git
-   - Rotate secrets regularly
+## 📊 **Production Metrics**
 
-2. **Network Security**
-   - Use HTTPS everywhere
-   - Configure proper CORS
-   - Implement rate limiting
-   - Use security headers
+### **Key Performance Indicators**
 
-3. **Application Security**
-   - Input validation and sanitization
-   - SQL injection prevention
-   - XSS protection
-   - CSRF protection
+Monitor these metrics in production:
 
-4. **Monitoring**
-   - Log security events
-   - Monitor for suspicious activity
-   - Set up alerts for security issues
+- **Response Time**: <500ms average
+- **Cache Hit Rate**: >70% for external APIs
+- **Error Rate**: <1% of requests
+- **Uptime**: >99.9%
+- **Memory Usage**: <80% of available memory
+- **Database Connections**: <80% of pool size
 
-## 📚 **Next Steps**
+### **Monitoring Dashboard**
 
-After successful deployment:
+Create a monitoring dashboard:
 
-1. **[Monitoring & Logging](./monitoring-logging.md)** - Set up observability
-2. **[Scaling & Performance](./scaling-performance.md)** - Optimize performance
-3. **[Backup & Recovery](./backup-recovery.md)** - Data protection strategies
-4. **[Troubleshooting](./troubleshooting.md)** - Common issues and solutions
+```typescript
+// Monitoring endpoint
+router.get('/monitoring/dashboard', async (req, res) => {
+  const metrics = {
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    services: await getServiceHealth(),
+    cache: await getCacheMetrics(),
+    database: await getDatabaseMetrics(),
+    performance: await getPerformanceMetrics()
+  };
+  
+  res.json(metrics);
+});
+```
+
+## 🔄 **Backup & Recovery**
+
+### **Database Backups**
+
+Railway provides automatic database backups:
+
+```bash
+# Create manual backup
+railway run pg_dump $DATABASE_URL > backup.sql
+
+# Restore from backup
+railway run psql $DATABASE_URL < backup.sql
+```
+
+### **Configuration Backups**
+
+Backup environment configuration:
+
+```bash
+# Export environment variables
+railway variables --json > env-backup.json
+
+# Restore environment variables
+railway variables --file env-backup.json
+```
+
+### **Disaster Recovery**
+
+Create disaster recovery plan:
+
+1. **Database Recovery**: Restore from latest backup
+2. **Service Recovery**: Redeploy from Git repository
+3. **Configuration Recovery**: Restore environment variables
+4. **Data Recovery**: Restore from cache and database backups
 
 ---
 
-**🚀 Your AI Assistant Platform is now running in production with enterprise-grade reliability and security!**
+**Next**: [Environment Configuration](./deployment/environment-configuration.md) - Environment variables and secrets management

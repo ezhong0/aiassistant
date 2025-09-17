@@ -5,7 +5,6 @@
  * for reading Slack message history with proper error handling and filtering.
  */
 
-// import { SlackMessageReaderService } from '../src/services/slack-message-reader.service';
 import { SlackMessageReaderError, SlackMessageReaderErrorCode } from '../src/types/slack-message-reader.types';
 import { serviceManager } from '../src/services/service-manager';
 

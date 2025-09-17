@@ -320,7 +320,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           actionType: typeof actionId 
         });
 
-        // Handle view results buttons (legacy support)
+        // Handle view results buttons
         if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
           logger.info('Matched view results button pattern');
           const toolName = actionId.replace('view_', '').replace('_results', '');

@@ -20,10 +20,6 @@ process.env.OPENAI_API_KEY = 'test-openai-key';
 // Import service initialization for tests (disabled by default to prevent Redis/DB connection issues)
 let serviceInitialized = false;
 
-// Reduce console output during tests for cleaner output
-const originalError = console.error;
-const originalWarn = console.warn;
-
 beforeAll(async () => {
   // Only initialize services if explicitly requested via environment variable
   if (process.env.INIT_SERVICES === 'true' && !serviceInitialized) {
@@ -37,32 +33,9 @@ beforeAll(async () => {
       // Continue with tests even if services fail to initialize
     }
   }
-
-  // Suppress non-critical console output
-  console.error = (message: any, ...args: any[]) => {
-    // Only show actual test failures and critical errors
-    if (typeof message === 'string' && (
-      message.includes('FAIL') || 
-      message.includes('Error:') ||
-      message.includes('FATAL')
-    )) {
-      originalError(message, ...args);
-    }
-  };
-  
-  console.warn = (message: any, ...args: any[]) => {
-    // Suppress warnings unless they're test-critical
-    if (typeof message === 'string' && message.includes('CRITICAL')) {
-      originalWarn(message, ...args);
-    }
-  };
 });
 
 afterAll(async () => {
-  // Restore console methods
-  console.error = originalError;
-  console.warn = originalWarn;
-  
   // Cleanup services if they were initialized
   if (serviceInitialized) {
     try {

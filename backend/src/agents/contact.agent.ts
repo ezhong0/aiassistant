@@ -469,35 +469,12 @@ You are a specialized contact discovery and management agent.
     };
   }
   
-  /**
-   * Handle contact creation (placeholder - requires additional permissions)
-   */
-  private async handleCreateContact(params: ContactAgentRequest): Promise<ContactResult> {
-    this.logger.info('Contact creation requested (not implemented)', { query: params.query });
-    
-    throw this.createError(
-      'Contact creation not yet implemented. This requires additional Google API permissions.',
-      'NOT_IMPLEMENTED'
-    );
-  }
-  
-  /**
-   * Handle contact updates (placeholder - requires additional permissions)
-   */
-  private async handleUpdateContact(params: ContactAgentRequest): Promise<ContactResult> {
-    this.logger.info('Contact update requested (not implemented)', { query: params.query });
-    
-    throw this.createError(
-      'Contact updates not yet implemented. This requires additional Google API permissions.',
-      'NOT_IMPLEMENTED'
-    );
-  }
   
   /**
    * Determine operation type from query using AI instead of string matching
    * Replaces string includes() calls with AI operation detection
    */
-  private async determineOperation(query: string): Promise<'search' | 'create' | 'update'> {
+  private async determineOperation(query: string): Promise<'search'> {
     try {
       const aiClassificationService = getService<any>('aiClassificationService');
       if (!aiClassificationService) {
@@ -505,20 +482,14 @@ You are a specialized contact discovery and management agent.
       }
       const operation = await aiClassificationService.detectContactOperation(query);
       
-      // Convert AI result to expected format
-      switch (operation) {
-        case 'add':
-          return 'create';
-        case 'update':
-          return 'update';
-        case 'search':
-          return 'search';
-        default:
-          return 'search'; // Default fallback
-      }
+      // Only support search operations - create/update require additional permissions
+      return 'search';
     } catch (error) {
-      this.logger.error('Failed to determine contact operation:', error);
-      throw new Error('AI contact operation detection failed. Please check your OpenAI configuration.');
+      this.logger.warn('Failed to determine contact operation via AI, defaulting to search', { 
+        query, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+      return 'search';
     }
   }
   

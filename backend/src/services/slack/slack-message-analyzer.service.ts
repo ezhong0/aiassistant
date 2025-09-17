@@ -1,6 +1,7 @@
 import { BaseService } from '../base-service';
-import { ServiceManager } from '../service-manager';
+import { ServiceManager, serviceManager } from '../service-manager';
 import { SLACK_SERVICE_CONSTANTS } from '../../config/slack-service-constants';
+import { SlackInterfaceService } from './slack-interface.service';
 import logger from '../../utils/logger';
 
 /**
@@ -18,6 +19,8 @@ export interface SlackMessageReadingResult {
  * Handles reading Slack message history and thread analysis
  */
 export class SlackMessageAnalyzer extends BaseService {
+  private slackInterfaceService: SlackInterfaceService | null = null;
+
   constructor() {
     super(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER);
   }
@@ -28,6 +31,14 @@ export class SlackMessageAnalyzer extends BaseService {
   protected async onInitialize(): Promise<void> {
     try {
       this.logInfo('Initializing SlackMessageAnalyzer...');
+      
+      // Get SlackInterfaceService dependency
+      this.slackInterfaceService = serviceManager.getService<SlackInterfaceService>('slackInterfaceService') || null;
+      
+      if (!this.slackInterfaceService) {
+        throw new Error('SlackInterfaceService not available from service registry');
+      }
+      
       this.logInfo('SlackMessageAnalyzer initialized successfully');
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -47,7 +58,7 @@ export class SlackMessageAnalyzer extends BaseService {
   }
 
   /**
-   * Read message history from a Slack channel (stub implementation)
+   * Read message history from a Slack channel
    */
   async readMessageHistory(
     channelId: string,
@@ -59,16 +70,28 @@ export class SlackMessageAnalyzer extends BaseService {
     } = {}
   ): Promise<SlackMessageReadingResult> {
     try {
-      this.logInfo('Reading Slack message history (stub)', {
+      this.logInfo('Reading Slack message history', {
         channelId,
         limit: options.limit
       });
 
-      // Stub implementation - return empty result
+      if (!this.slackInterfaceService) {
+        this.handleError(new Error('SlackInterfaceService not available'), 'readMessageHistory');
+      }
+
+      // Use the WebClient from SlackInterfaceService to read messages
+      const result = await this.slackInterfaceService.client.conversations.history({
+        channel: channelId,
+        limit: options.limit || 10,
+        oldest: options.oldest,
+        latest: options.latest,
+        include_all_metadata: options.includeAllMetadata || false
+      });
+
       return {
         success: true,
-        messages: [],
-        count: 0
+        messages: result.messages || [],
+        count: result.messages?.length || 0
       };
     } catch (error) {
       this.logError('Error reading Slack message history', error);
@@ -80,7 +103,7 @@ export class SlackMessageAnalyzer extends BaseService {
   }
 
   /**
-   * Read thread messages (stub implementation)
+   * Read thread messages
    */
   async readThreadMessages(
     channelId: string,
@@ -91,17 +114,28 @@ export class SlackMessageAnalyzer extends BaseService {
     } = {}
   ): Promise<SlackMessageReadingResult> {
     try {
-      this.logInfo('Reading Slack thread messages (stub)', {
+      this.logInfo('Reading Slack thread messages', {
         channelId,
         threadTs,
         limit: options.limit
       });
 
-      // Stub implementation - return empty result
+      if (!this.slackInterfaceService) {
+        this.handleError(new Error('SlackInterfaceService not available'), 'readThreadMessages');
+      }
+
+      // Use the WebClient from SlackInterfaceService to read thread messages
+      const result = await this.slackInterfaceService.client.conversations.replies({
+        channel: channelId,
+        ts: threadTs,
+        limit: options.limit || 10,
+        include_all_metadata: options.includeAllMetadata || false
+      });
+
       return {
         success: true,
-        messages: [],
-        count: 0
+        messages: result.messages || [],
+        count: result.messages?.length || 0
       };
     } catch (error) {
       this.logError('Error reading Slack thread messages', error);

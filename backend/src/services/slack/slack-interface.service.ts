@@ -58,7 +58,7 @@ export interface SlackConfig {
  * ```
  */
 export class SlackInterfaceService extends BaseService {
-  private client: WebClient;
+  private webClient: WebClient;
   private config: SlackConfig;
   
   // Focused services for proper separation of concerns
@@ -90,7 +90,14 @@ export class SlackInterfaceService extends BaseService {
   constructor(config: SlackConfig) {
     super('SlackInterfaceService');
     this.config = config;
-    this.client = new WebClient(config.botToken);
+    this.webClient = new WebClient(config.botToken);
+  }
+
+  /**
+   * Get the Slack WebClient for API operations
+   */
+  get client(): WebClient {
+    return this.webClient;
   }
 
   /**

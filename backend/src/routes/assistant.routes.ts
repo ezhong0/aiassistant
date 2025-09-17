@@ -1100,7 +1100,6 @@ const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: To
   }
 };
 
-// Removed generateFallbackConfirmationPrompt - no longer using hardcoded fallbacks
 
 const generateDynamicCompletionMessage = async (toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
