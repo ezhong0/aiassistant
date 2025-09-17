@@ -1,7 +1,7 @@
 import logger from '../utils/logger';
 import { OpenAIService } from '../services/openai.service';
 // Agents are now stateless
-import { ToolCall, ToolResult, MasterAgentConfig } from '../types/tools';
+import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { getService } from '../services/service-manager';
 import { SlackContext } from '../types/slack/slack.types';
@@ -9,56 +9,140 @@ import { SlackMessage } from '../types/slack/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
+import { z } from 'zod';
+import { ContactAgent } from './contact.agent';
+import { AIClassificationService } from '../services/ai-classification.service';
+import { EmailFormatter } from '../services/email/email-formatter.service';
 
-// Agent capabilities interface
+/**
+ * Agent capabilities interface for internal use
+ */
 interface AgentCapability {
+  /** List of capabilities this agent provides */
   capabilities: string[];
+  /** List of limitations or constraints */
   limitations: string[];
+  /** OpenAI function schema for this agent */
   schema: OpenAIFunctionSchema;
 }
 
-export interface MasterAgentResponse {
-  message: string;
-  toolCalls?: ToolCall[] | undefined;
-  toolResults?: ToolResult[] | undefined;
-  needsThinking?: boolean | undefined;
-  proposal?: ProposalResponse | undefined;
-  contextGathered?: ContextGatheringResult | undefined;
-  executionMetadata?: {
-    processingTime?: number | undefined;
-    totalExecutionTime?: number | undefined;
-    toolsExecuted?: number | undefined;
-    successfulTools?: number | undefined;
-    slackContext?: SlackContext | undefined;
-    toolResults?: Array<{
-      toolName: string;
-      success: boolean;
-      executionTime: number;
-      error?: string | undefined;
-      result?: Record<string, unknown> | undefined;
-    }> | undefined;
-    confirmationFlows?: Array<Record<string, unknown>> | undefined;
-    masterAgentResponse?: string | undefined;
-    error?: string | undefined;
-    errorType?: string | undefined;
-    errorContext?: Record<string, unknown> | undefined;
-  } | undefined;
+// ✅ MasterAgent response schema with Zod validation
+export const MasterAgentResponseSchema = z.object({
+  message: z.string(),
+  toolCalls: z.array(ToolCallSchema).optional(),
+  toolResults: z.array(ToolResultSchema).optional(),
+  needsThinking: z.boolean().optional(),
+  proposal: z.object({
+    text: z.string(),
+    actionType: z.string(),
+    confidence: z.number(),
+    requiresConfirmation: z.boolean(),
+    originalToolCalls: z.array(ToolCallSchema),
+  }).optional(),
+  contextGathered: z.any().optional(), // Will be refined with ContextGatheringResultSchema
+  executionMetadata: z.object({
+    processingTime: z.number().optional(),
+    totalExecutionTime: z.number().optional(),
+    toolsExecuted: z.number().optional(),
+    successfulTools: z.number().optional(),
+    slackContext: z.any().optional(), // Will be refined with SlackContextSchema
+    toolResults: z.array(z.object({
+      toolName: z.string(),
+      success: z.boolean(),
+      executionTime: z.number(),
+      error: z.string().optional(),
+      result: z.record(z.any()).optional(),
+    })).optional(),
+    confirmationFlows: z.array(z.record(z.any())).optional(),
+    masterAgentResponse: z.string().optional(),
+    error: z.string().optional(),
+    errorType: z.string().optional(),
+    errorContext: z.record(z.any()).optional(),
+  }).optional(),
+});
+
+export type MasterAgentResponse = z.infer<typeof MasterAgentResponseSchema>;
+
+// ✅ Proposal response schema
+export const ProposalResponseSchema = z.object({
+  text: z.string(),
+  actionType: z.string(),
+  confidence: z.number(),
+  requiresConfirmation: z.boolean(),
+  originalToolCalls: z.array(ToolCallSchema),
+});
+
+export type ProposalResponse = z.infer<typeof ProposalResponseSchema>;
+
+// ✅ Validation helpers for MasterAgent responses
+export function validateMasterAgentResponse(data: unknown): MasterAgentResponse {
+  return MasterAgentResponseSchema.parse(data);
 }
 
-export interface ProposalResponse {
-  text: string;
-  actionType: string;
-  confidence: number;
-  requiresConfirmation: boolean;
-  originalToolCalls: ToolCall[];
+export function validateProposalResponse(data: unknown): ProposalResponse {
+  return ProposalResponseSchema.parse(data);
 }
 
+// ✅ Safe parsing helpers that don't throw
+export function safeParseMasterAgentResponse(data: unknown): { success: true; data: MasterAgentResponse } | { success: false; error: z.ZodError } {
+  const result = MasterAgentResponseSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return { success: false, error: result.error };
+}
+
+/**
+ * MasterAgent - Central orchestrator for AI-powered multi-agent system
+ * 
+ * The MasterAgent serves as the primary interface between users and the specialized
+ * agent ecosystem. It handles user input processing, intent parsing, dependency
+ * resolution, and tool call validation. The agent uses AI-powered planning to
+ * coordinate multiple specialized agents and execute complex workflows.
+ * 
+ * Key Features:
+ * - AI-powered intent analysis and tool call generation
+ * - Context gathering from Slack conversations
+ * - Proposal generation for confirmation workflows
+ * - Comprehensive error handling and logging
+ * - Memory usage monitoring and optimization
+ * 
+ * @example
+ * ```typescript
+ * const masterAgent = new MasterAgent();
+ * 
+ * const response = await masterAgent.processUserInput(
+ *   "Send an email to John about the meeting",
+ *   "session123",
+ *   "user456"
+ * );
+ * 
+ * console.log(response.message); // Human-readable response
+ * console.log(response.toolCalls); // Generated tool calls
+ * ```
+ */
 export class MasterAgent {
   private useOpenAI: boolean = false;
   private systemPrompt: string;
   private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
 
+  /**
+   * Initialize MasterAgent with optional configuration
+   * 
+   * @param config - Optional configuration including OpenAI API key and other settings
+   * 
+   * @example
+   * ```typescript
+   * // Basic initialization
+   * const masterAgent = new MasterAgent();
+   * 
+   * // With OpenAI configuration
+   * const masterAgent = new MasterAgent({
+   *   openaiApiKey: process.env.OPENAI_API_KEY
+   * });
+   * ```
+   */
   constructor(config?: MasterAgentConfig) {
     // Agents are now stateless - no session management needed
     
@@ -161,23 +245,29 @@ export class MasterAgent {
 
   /**
    * Get ContactAgent for contact operations
+   * 
+   * @returns ContactAgent instance or null if not available
    */
-  private getContactAgent(): any {
-    return AgentFactory.getAgent('contactAgent');
+  private getContactAgent(): ContactAgent | null {
+    return AgentFactory.getAgent('contactAgent') as ContactAgent | null;
   }
 
   /**
    * Get AIClassificationService for AI classification operations
+   * 
+   * @returns AIClassificationService instance or null if not available
    */
-  private getAIClassificationService(): any {
-    return getService('aiClassificationService');
+  private getAIClassificationService(): AIClassificationService | null {
+    return getService('aiClassificationService') as AIClassificationService | null;
   }
 
   /**
    * Get EmailFormatter for proposal generation
+   * 
+   * @returns EmailFormatter instance or null if not available
    */
-  private getEmailFormatter(): any {
-    return getService('emailFormatter');
+  private getEmailFormatter(): EmailFormatter | null {
+    return getService('emailFormatter') as EmailFormatter | null;
   }
 
   /**
@@ -197,7 +287,50 @@ export class MasterAgent {
   // Agents are now stateless - no session service needed
 
   /**
-   * Process user input using AI planning with context detection and proposal generation
+   * Process user input using AI-powered analysis with context detection and proposal generation
+   * 
+   * This is the main entry point for processing user requests. It performs a multi-step
+   * analysis including context detection, intent parsing, dependency resolution, and
+   * tool call generation. The method coordinates with specialized services to provide
+   * intelligent responses and action proposals.
+   * 
+   * Processing Steps:
+   * 1. Context Detection - Determines if Slack context is needed
+   * 2. Context Gathering - Retrieves relevant conversation history
+   * 3. Intent Analysis - Parses user intent and resolves dependencies
+   * 4. Tool Generation - Creates appropriate tool calls using AI
+   * 5. Proposal Creation - Generates confirmation proposals if needed
+   * 
+   * @param userInput - Natural language user request to process
+   * @param sessionId - Unique session identifier for tracking and logging
+   * @param userId - Optional user identifier for personalization
+   * @param slackContext - Optional Slack context for enhanced processing
+   * @returns Promise resolving to MasterAgentResponse with tool calls and metadata
+   * 
+   * @example
+   * ```typescript
+   * // Basic usage
+   * const response = await masterAgent.processUserInput(
+   *   "Send email to john@example.com about project update",
+   *   "session-123"
+   * );
+   * 
+   * // With Slack context for enhanced processing
+   * const response = await masterAgent.processUserInput(
+   *   "Send that email we discussed",
+   *   "session-123",
+   *   "user-456",
+   *   slackContext
+   * );
+   * 
+   * console.log(response.message); // Human-readable response
+   * console.log(response.toolCalls); // Generated tool calls
+   * console.log(response.proposal); // Confirmation proposal if needed
+   * ```
+   * 
+   * @throws {Error} When OpenAI service is not available
+   * @throws {Error} When context detection or gathering fails
+   * @throws {Error} When intent analysis or tool generation fails
    */
   async processUserInput(
     userInput: string, 
@@ -219,6 +352,9 @@ export class MasterAgent {
 
       // Step 1: Detect if context is needed (delegate to AIClassificationService)
       const aiClassificationService = this.getAIClassificationService();
+      if (!aiClassificationService) {
+        throw new Error('AIClassificationService is required but not available');
+      }
       const contextDetection = await aiClassificationService.detectContextNeeds(userInput, slackContext);
       logger.info('Context detection result:', contextDetection);
 
@@ -262,12 +398,15 @@ export class MasterAgent {
       const message = response.message;
 
       // Step 5: Validate tool calls against available agents
-      const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput);
+      const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput, intentAnalysis);
 
       logger.info(`MasterAgent determined ${validatedToolCalls.length} tool calls:`, validatedToolCalls.map(tc => tc.name));
 
       // Step 5: Generate conversational proposal if appropriate (delegate to EmailFormatter)
       const emailFormatter = this.getEmailFormatter();
+      if (!emailFormatter) {
+        throw new Error('EmailFormatter is required for proposal generation but not available');
+      }
       const proposal = await emailFormatter.generateProposal(userInput, validatedToolCalls, contextGathered, slackContext);
       
       const result = {
@@ -331,7 +470,11 @@ export class MasterAgent {
   /**
    * Validate and enhance tool calls using agent capabilities
    */
-  private async validateAndEnhanceToolCalls(toolCalls: ToolCall[], userInput: string): Promise<ToolCall[]> {
+  private async validateAndEnhanceToolCalls(
+    toolCalls: ToolCall[], 
+    userInput: string, 
+    intentAnalysis: {resolvedContacts: Array<{name: string, email: string}>, intent: string}
+  ): Promise<ToolCall[]> {
     const enhancedToolCalls: ToolCall[] = [];
     
     for (const toolCall of toolCalls) {
@@ -342,8 +485,8 @@ export class MasterAgent {
         continue;
       }
 
-      // Enhance tool call with agent-specific parameters
-      const enhancedCall = await this.enhanceToolCallWithAgentContext(toolCall, userInput);
+      // Enhance tool call with agent-specific parameters and resolved contacts
+      const enhancedCall = await this.enhanceToolCallWithAgentContext(toolCall, userInput, intentAnalysis);
       enhancedToolCalls.push(enhancedCall);
     }
 
@@ -353,7 +496,11 @@ export class MasterAgent {
   /**
    * Enhance tool call with agent-specific context and parameters
    */
-  private async enhanceToolCallWithAgentContext(toolCall: ToolCall, userInput: string): Promise<ToolCall> {
+  private async enhanceToolCallWithAgentContext(
+    toolCall: ToolCall, 
+    userInput: string, 
+    intentAnalysis: {resolvedContacts: Array<{name: string, email: string}>, intent: string}
+  ): Promise<ToolCall> {
     const toolName = toolCall.name;
     
     // Map tool names to agent names for capability lookup
@@ -382,7 +529,7 @@ export class MasterAgent {
       hasRecipients: !!enhancedParameters.recipients
     });
 
-    if (toolName === "manage_emails") {
+    if (toolName === "manage_emails" || toolName === "send_email") {
       // Handle recipientName -> recipients conversion
       if (enhancedParameters.recipientName && !enhancedParameters.recipients) {
         enhancedParameters.recipients = [enhancedParameters.recipientName];
@@ -398,6 +545,32 @@ export class MasterAgent {
           recipients: enhancedParameters.recipients
         });
       }
+
+      // Check if we need to resolve contact names to email addresses
+      const needsContactResolution = this.needsContactResolution(enhancedParameters.recipients);
+      if (needsContactResolution) {
+        logger.info(`Contact resolution needed for ${toolName}`, {
+          recipients: enhancedParameters.recipients,
+          resolvedContacts: intentAnalysis.resolvedContacts
+        });
+        
+        try {
+          // Use pre-resolved contacts from intent analysis if available
+          const resolvedRecipients = await this.resolveContactNamesWithIntent(
+            enhancedParameters.recipients, 
+            intentAnalysis.resolvedContacts
+          );
+          enhancedParameters.recipients = resolvedRecipients;
+          
+          logger.info(`Contact resolution completed for ${toolName}:`, {
+            originalRecipients: enhancedParameters.recipients,
+            resolvedRecipients: resolvedRecipients
+          });
+        } catch (error) {
+          logger.error(`Contact resolution failed for ${toolName}:`, error);
+          // Keep original recipients and let EmailAgent handle the error
+        }
+      }
     }
 
     // For calendar operations, add conflict detection
@@ -411,6 +584,162 @@ export class MasterAgent {
     };
   }
 
+  /**
+   * Check if recipients need contact resolution (contain person names instead of email addresses)
+   */
+  private needsContactResolution(recipients: string[]): boolean {
+    if (!recipients || recipients.length === 0) {
+      return false;
+    }
+
+    // Check if any recipient looks like a person name instead of an email address
+    return recipients.some(recipient => {
+      // Simple heuristic: if it doesn't contain @ and doesn't look like an email, it's probably a name
+      return !recipient.includes('@') && !recipient.includes('.') && recipient.length > 0;
+    });
+  }
+
+  /**
+   * Resolve contact names to email addresses using ContactAgent
+   */
+  private async resolveContactNames(recipients: string[]): Promise<string[]> {
+    const resolvedRecipients: string[] = [];
+    
+    for (const recipient of recipients) {
+      // If it's already an email address, keep it as is
+      if (recipient.includes('@')) {
+        resolvedRecipients.push(recipient);
+        continue;
+      }
+
+      try {
+        // Call ContactAgent to resolve the contact name
+        const contactAgent = this.getContactAgent();
+        if (!contactAgent) {
+          logger.warn(`ContactAgent not available for resolving "${recipient}"`);
+          resolvedRecipients.push(recipient); // Keep original, let EmailAgent handle the error
+          continue;
+        }
+
+        // Create a mock context for the contact resolution
+        const mockContext: ToolExecutionContext = {
+          sessionId: `contact-resolution-${Date.now()}`,
+          userId: 'system',
+          timestamp: new Date()
+        };
+
+        // Call ContactAgent to search for the contact
+        const contactResult = await contactAgent.execute({
+          query: `Find contact information for ${recipient}`,
+          operation: 'search',
+          name: recipient,
+          accessToken: 'system-token' // Use system token for contact resolution
+        }, mockContext);
+
+        if (contactResult.success && contactResult.result) {
+          const contacts = (contactResult.result as any).contacts || [];
+          if (contacts.length > 0) {
+            // Use the first contact's email address
+            const email = contacts[0].email || contacts[0].emailAddress;
+            if (email) {
+              resolvedRecipients.push(email);
+              logger.info(`Resolved contact "${recipient}" to email "${email}"`);
+              continue;
+            }
+          }
+        }
+
+        // If resolution failed, keep the original recipient
+        logger.warn(`Failed to resolve contact "${recipient}", keeping original`);
+        resolvedRecipients.push(recipient);
+
+      } catch (error) {
+        logger.error(`Error resolving contact "${recipient}":`, error);
+        // Keep original recipient on error
+        resolvedRecipients.push(recipient);
+      }
+    }
+
+    return resolvedRecipients;
+  }
+
+  /**
+   * Resolve contact names using pre-resolved contacts from intent analysis
+   */
+  private async resolveContactNamesWithIntent(
+    recipients: string[], 
+    resolvedContacts: Array<{name: string, email: string}>
+  ): Promise<string[]> {
+    const resolvedRecipients: string[] = [];
+    
+    for (const recipient of recipients) {
+      // If it's already an email address, keep it as is
+      if (recipient.includes('@')) {
+        resolvedRecipients.push(recipient);
+        continue;
+      }
+
+      // Look for this recipient in the pre-resolved contacts
+      const resolvedContact = resolvedContacts.find(contact => 
+        contact.name.toLowerCase() === recipient.toLowerCase()
+      );
+
+      if (resolvedContact && resolvedContact.email) {
+        resolvedRecipients.push(resolvedContact.email);
+        logger.info(`Used pre-resolved contact "${recipient}" -> "${resolvedContact.email}"`);
+        continue;
+      }
+
+      // If not found in pre-resolved contacts, try to resolve using ContactAgent
+      try {
+        const contactAgent = this.getContactAgent();
+        if (!contactAgent) {
+          logger.warn(`ContactAgent not available for resolving "${recipient}"`);
+          resolvedRecipients.push(recipient); // Keep original, let EmailAgent handle the error
+          continue;
+        }
+
+        // Create a mock context for the contact resolution
+        const mockContext: ToolExecutionContext = {
+          sessionId: `contact-resolution-${Date.now()}`,
+          userId: 'system',
+          timestamp: new Date()
+        };
+
+        // Call ContactAgent to search for the contact
+        const contactResult = await contactAgent.execute({
+          query: `Find contact information for ${recipient}`,
+          operation: 'search',
+          name: recipient,
+          accessToken: 'system-token' // Use system token for contact resolution
+        }, mockContext);
+
+        if (contactResult.success && contactResult.result) {
+          const contacts = (contactResult.result as any).contacts || [];
+          if (contacts.length > 0) {
+            // Use the first contact's email address
+            const email = contacts[0].email || contacts[0].emailAddress;
+            if (email) {
+              resolvedRecipients.push(email);
+              logger.info(`Resolved contact "${recipient}" to email "${email}"`);
+              continue;
+            }
+          }
+        }
+
+        // If resolution failed, keep the original recipient
+        logger.warn(`Failed to resolve contact "${recipient}", keeping original`);
+        resolvedRecipients.push(recipient);
+
+      } catch (error) {
+        logger.error(`Error resolving contact "${recipient}":`, error);
+        // Keep original recipient on error
+        resolvedRecipients.push(recipient);
+      }
+    }
+
+    return resolvedRecipients;
+  }
 
   /**
    * Parse user intent and resolve dependencies (like contact names)
@@ -442,6 +771,7 @@ export class MasterAgent {
 
       const contactExtraction = this.extractJsonFromResponse(contactExtractionResponse);
       const resolvedContacts: Array<{name: string, email: string}> = [];
+      
       // Add email addresses directly (no resolution needed)
       if (contactExtraction.emails && contactExtraction.emails.length > 0) {
         for (const email of contactExtraction.emails) {
@@ -452,19 +782,19 @@ export class MasterAgent {
         }
       }
 
-      // Resolve contacts if needed - but skip during intent parsing since we don't have access token yet
-      // Contact resolution will happen during actual tool execution with proper access token
+      // Store contact names for resolution during tool execution
+      // Note: We don't resolve here because we don't have access token yet
+      // Resolution will happen in enhanceToolCallWithAgentContext when we have proper context
       if (contactExtraction.needed && contactExtraction.names.length > 0) {
-        logger.info('Contact names detected for later resolution', {
+        logger.info('Contact names detected for resolution during tool execution', {
           names: contactExtraction.names,
           stage: 'intent-parsing'
         });
 
-        // Store contact names for resolution during tool execution
         for (const name of contactExtraction.names) {
           resolvedContacts.push({
             name: name,
-            email: '' // Will be resolved during actual execution with proper access token
+            email: '' // Will be resolved during tool execution with proper access token
           });
         }
       }

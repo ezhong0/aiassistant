@@ -3,20 +3,51 @@ import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
 import logger from '../utils/logger';
 
+/**
+ * Authenticated user interface for request context
+ */
 export interface AuthenticatedUser {
+  /** Unique user identifier */
   userId: string;
+  /** User's email address */
   email: string;
+  /** User's display name */
   name: string;
+  /** Optional user profile picture URL */
   picture?: string;
 }
 
+/**
+ * Extended Express request interface with authentication context
+ */
 export interface AuthenticatedRequest extends Request {
+  /** Authenticated user information */
   user?: AuthenticatedUser;
+  /** JWT token used for authentication */
   token?: string;
 }
 
 /**
- * Middleware to authenticate JWT tokens from Authorization header
+ * Authentication middleware for JWT token validation
+ * 
+ * This middleware validates JWT tokens from the Authorization header and
+ * attaches user information to the request object. It provides comprehensive
+ * error handling and logging for authentication failures.
+ * 
+ * @param req - Express request object with authentication context
+ * @param res - Express response object
+ * @param next - Express next function
+ * 
+ * @example
+ * ```typescript
+ * // Apply to protected routes
+ * app.get('/protected', authenticateToken, (req: AuthenticatedRequest, res) => {
+ *   console.log('User:', req.user?.email);
+ *   res.json({ message: 'Access granted' });
+ * });
+ * ```
+ * 
+ * @throws {Error} When auth service is not available
  */
 export const authenticateToken = (
   req: AuthenticatedRequest,

@@ -3,96 +3,67 @@
  * Ensures consistent response structure across all endpoints
  */
 
-/**
- * Standard API response structure for all endpoints
- */
-export interface StandardAPIResponse<T = any> {
-  /** Whether the operation was successful */
-  success: boolean;
-  
-  /** Response type for client handling */
-  type: 'response' | 'action_completed' | 'confirmation_required' | 'error' | 'session_data' | 'partial_success';
-  
-  /** Human-readable message describing the result */
-  message: string;
-  
-  /** Response data (optional) */
-  data?: T | undefined;
-  
-  /** Error code for failed operations (optional) */
-  error?: string | undefined;
-  
-  /** Response metadata */
-  metadata: ResponseMetadata;
+import { z } from 'zod';
+
+// ✅ Core API response schemas with Zod validation
+export const ResponseMetadataSchema = z.object({
+  timestamp: z.string(),
+  requestId: z.string().optional(),
+  sessionId: z.string().optional(),
+  userId: z.string().optional(),
+  executionTime: z.number().optional(),
+  version: z.string().optional(),
+}).catchall(z.any()); // Allow additional metadata fields
+
+export const StandardAPIResponseSchema = z.object({
+  success: z.boolean(),
+  type: z.enum(['response', 'action_completed', 'confirmation_required', 'error', 'session_data', 'partial_success']),
+  message: z.string(),
+  data: z.any().optional(),
+  error: z.string().optional(),
+  metadata: ResponseMetadataSchema,
+});
+
+export const ErrorDetailsSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.record(z.any()).optional(),
+  stack: z.string().optional(),
+  suggestions: z.array(z.string()).optional(),
+});
+
+export const PaginationMetadataSchema = z.object({
+  page: z.number(),
+  limit: z.number(),
+  total: z.number(),
+  totalPages: z.number(),
+  hasNext: z.boolean(),
+  hasPrev: z.boolean(),
+});
+
+// ✅ Export inferred types
+export type ResponseMetadata = z.infer<typeof ResponseMetadataSchema>;
+export type StandardAPIResponse<T = any> = z.infer<typeof StandardAPIResponseSchema> & {
+  data?: T;
+};
+export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+export type PaginationMetadata = z.infer<typeof PaginationMetadataSchema>;
+
+// ✅ Validation helpers
+export function validateStandardAPIResponse(data: unknown): StandardAPIResponse {
+  return StandardAPIResponseSchema.parse(data);
 }
 
-/**
- * Response metadata included in all API responses
- */
-export interface ResponseMetadata {
-  /** Request timestamp */
-  timestamp: string;
-  
-  /** Request ID for tracking */
-  requestId?: string | undefined;
-  
-  /** Session ID if applicable */
-  sessionId?: string | undefined;
-  
-  /** User ID if authenticated */
-  userId?: string | undefined;
-  
-  /** Execution time in milliseconds */
-  executionTime?: number | undefined;
-  
-  /** API version */
-  version?: string | undefined;
-  
-  /** Additional context-specific metadata */
-  [key: string]: any;
+export function validateResponseMetadata(data: unknown): ResponseMetadata {
+  return ResponseMetadataSchema.parse(data);
 }
 
-/**
- * Error details for failed responses
- */
-export interface ErrorDetails {
-  /** Error code */
-  code: string;
-  
-  /** Error message */
-  message: string;
-  
-  /** Additional error context */
-  details?: Record<string, any>;
-  
-  /** Stack trace (development only) */
-  stack?: string;
-  
-  /** Suggestions for resolution */
-  suggestions?: string[];
-}
-
-/**
- * Pagination metadata for list responses
- */
-export interface PaginationMetadata {
-  /** Current page number */
-  page: number;
-  
-  /** Number of items per page */
-  limit: number;
-  
-  /** Total number of items */
-  total: number;
-  
-  /** Total number of pages */
-  totalPages: number;
-  
-  /** Whether there are more pages */
-  hasNext: boolean;
-  
-  /** Whether there are previous pages */
-  hasPrev: boolean;
+export function safeParseStandardAPIResponse(data: unknown): { success: true; data: StandardAPIResponse } | { success: false; error: z.ZodError } {
+  const result = StandardAPIResponseSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return { success: false, error: result.error };
 }
 
 /**

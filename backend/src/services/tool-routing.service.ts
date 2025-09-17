@@ -4,6 +4,7 @@ import { OpenAIService } from './openai.service';
 import { AgentFactory } from '../framework/agent-factory';
 import { ToolCall, ToolExecutionContext } from '../types/tools';
 import logger from '../utils/logger';
+import { z } from 'zod';
 
 /**
  * Agent Capability Metadata
@@ -222,21 +223,17 @@ Return JSON with:
         confidence: number;
         reasoning: string;
         requiresConfirmation: boolean;
-        suggestedParameters: any;
+        suggestedParameters?: any;
       }>(
         userQuery,
         selectionPrompt,
-        {
-          type: 'object',
-          properties: {
-            selectedAgent: { type: 'string' },
-            confidence: { type: 'number', minimum: 0, maximum: 1 },
-            reasoning: { type: 'string' },
-            requiresConfirmation: { type: 'boolean' },
-            suggestedParameters: { type: 'object' }
-          },
-          required: ['selectedAgent', 'confidence', 'reasoning', 'requiresConfirmation']
-        },
+        z.object({
+          selectedAgent: z.string(),
+          confidence: z.number().min(0).max(1),
+          reasoning: z.string(),
+          requiresConfirmation: z.boolean(),
+          suggestedParameters: z.any().optional()
+        }),
         { temperature: 0.2, maxTokens: 500 }
       );
 
@@ -330,16 +327,12 @@ Return JSON with:
       const response = await this.openaiService.generateStructuredData<ConfirmationMessage>(
         userQuery,
         confirmationPrompt,
-        {
-          type: 'object',
-          properties: {
-            message: { type: 'string' },
-            prompt: { type: 'string' },
-            riskLevel: { type: 'string', enum: ['low', 'medium', 'high'] },
-            contextualDetails: { type: 'array', items: { type: 'string' } }
-          },
-          required: ['message', 'prompt', 'riskLevel']
-        },
+        z.object({
+          message: z.string(),
+          prompt: z.string(),
+          riskLevel: z.enum(['low', 'medium', 'high']),
+          contextualDetails: z.array(z.string())
+        }),
         { temperature: 0.3, maxTokens: 400 }
       );
 

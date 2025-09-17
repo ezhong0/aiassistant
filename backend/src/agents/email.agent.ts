@@ -31,20 +31,29 @@ import logger from '../utils/logger';
  * No hardcoded action strings - result content determines formatting
  */
 export interface EmailResult {
+  /** Gmail message ID for sent emails */
   messageId?: string;
+  /** Gmail thread ID for email threads */
   threadId?: string;
+  /** Array of Gmail messages for search results */
   emails?: GmailMessage[];
+  /** Email draft for draft operations */
   draft?: EmailDraft;
+  /** Count of emails for summary operations */
   count?: number;
+  /** Recipient email address */
   recipient?: string;
+  /** Email subject line */
   subject?: string;
 }
 
 /**
- * Email agent parameters with access token
+ * Email agent parameters with access token and optional contacts
  */
 export interface EmailAgentRequest extends EmailAgentParams {
+  /** OAuth access token for Gmail API access */
   accessToken: string;
+  /** Optional contact information for enhanced processing */
   contacts?: Array<{
     name: string;
     email: string;
@@ -53,8 +62,39 @@ export interface EmailAgentRequest extends EmailAgentParams {
 }
 
 /**
- * Refactored EmailAgent using focused services
- * Coordinates between specialized services for email operations
+ * EmailAgent - Specialized agent for all email operations via Gmail API
+ * 
+ * The EmailAgent handles email sending, searching, drafting, and management
+ * operations through the Gmail API. It coordinates with specialized services
+ * for validation, formatting, and operation handling to provide a clean,
+ * type-safe interface for email operations.
+ * 
+ * Key Features:
+ * - Email sending with validation and formatting
+ * - Email search with advanced query support
+ * - Draft creation and management
+ * - AI-powered operation planning
+ * - Comprehensive error handling and logging
+ * 
+ * Supported Operations:
+ * - send: Send emails with validation
+ * - search: Search emails with Gmail queries
+ * - draft: Create and manage email drafts
+ * - reply: Reply to existing emails (planned)
+ * 
+ * @example
+ * ```typescript
+ * const emailAgent = new EmailAgent();
+ * 
+ * // Send an email
+ * const result = await emailAgent.execute({
+ *   operation: 'send',
+ *   query: 'Send email to john@example.com about meeting',
+ *   accessToken: 'oauth_token_here'
+ * });
+ * 
+ * console.log(result.messageId); // Gmail message ID
+ * ```
  */
 export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   
@@ -63,6 +103,19 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   private emailValidator: EmailValidator | null = null;
   private emailFormatter: EmailFormatter | null = null;
 
+  /**
+   * Initialize EmailAgent with AI planning capabilities
+   * 
+   * Sets up the agent with specialized configuration for email operations,
+   * including AI planning, timeout settings, and retry policies optimized
+   * for Gmail API interactions.
+   * 
+   * @example
+   * ```typescript
+   * const emailAgent = new EmailAgent();
+   * await emailAgent.initialize();
+   * ```
+   */
   constructor() {
     super({
       name: EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER,

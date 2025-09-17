@@ -1,4 +1,11 @@
-import { ToolCall, ToolResult, ToolExecutionContext } from '../types/tools';
+import { 
+  ToolCall, 
+  ToolResult, 
+  ToolExecutionContext, 
+  validateToolCall, 
+  validateToolExecutionContext,
+  safeParseToolCall 
+} from '../types/tools';
 import { TIMEOUTS, EXECUTION_CONFIG } from '../config/app-config';
 import { AgentFactory } from '../framework/agent-factory';
 import { BaseService } from './base-service';
@@ -43,7 +50,21 @@ export class ToolExecutorService extends BaseService {
   }
 
   /**
-   * Execute a single tool call
+   * Execute a single tool call with comprehensive validation and error handling
+   * 
+   * @param toolCall - The tool call to execute, validated against ToolCallSchema
+   * @param context - Execution context including session, user, and Slack context
+   * @param accessToken - OAuth token for external API access
+   * @param mode - Execution mode (preview vs actual execution)
+   * @returns Promise resolving to validated ToolResult
+   * 
+   * @example
+   * ```typescript
+   * const result = await toolExecutor.executeTool(
+   *   { name: 'send_email', parameters: { to: 'user@example.com' } },
+   *   { sessionId: 'abc123', userId: 'user456', timestamp: new Date() }
+   * );
+   * ```
    */
   async executeTool(
     toolCall: ToolCall, 
@@ -53,12 +74,16 @@ export class ToolExecutorService extends BaseService {
   ): Promise<ToolResult> {
     this.assertReady();
     
+    // ✅ Validate input at service boundary
+    const validatedToolCall = validateToolCall(toolCall);
+    const validatedContext = validateToolExecutionContext(context);
+    
     const startTime = Date.now();
     
     try {
-        this.logInfo(`Executing tool: ${toolCall.name}`, { 
-          toolName: toolCall.name, 
-          sessionId: context.sessionId 
+        this.logInfo(`Executing tool: ${validatedToolCall.name}`, { 
+          toolName: validatedToolCall.name, 
+          sessionId: validatedContext.sessionId 
           });
 
       let result: unknown;
@@ -66,38 +91,38 @@ export class ToolExecutorService extends BaseService {
       let error: string | undefined;
 
       // Determine if this tool needs confirmation using AI-powered operation detection
-      const needsConfirmation = await this.toolNeedsConfirmation(toolCall.name, toolCall);
+      const needsConfirmation = await this.toolNeedsConfirmation(validatedToolCall.name, validatedToolCall);
       
-      this.logInfo(`Tool ${toolCall.name} confirmation check`, { 
+      this.logInfo(`Tool ${validatedToolCall.name} confirmation check`, { 
         needsConfirmation, 
         isPreviewMode: mode.preview,
         willExecutePreview: mode.preview && needsConfirmation,
         toolCall: {
-          name: toolCall.name,
-          hasQuery: !!toolCall.parameters.query,
-          hasAction: !!toolCall.parameters.action
+          name: validatedToolCall.name,
+          hasQuery: !!validatedToolCall.parameters.query,
+          hasAction: !!validatedToolCall.parameters.action
         }
       });
       
       if (mode.preview) {
         // In preview mode - check if tool needs confirmation and handle accordingly
         if (needsConfirmation) {
-            this.logInfo(`Tool ${toolCall.name} requires confirmation, executing in preview mode`);
-          const agent = AgentFactory.getAgentByToolName(toolCall.name);
+            this.logInfo(`Tool ${validatedToolCall.name} requires confirmation, executing in preview mode`);
+          const agent = AgentFactory.getAgentByToolName(validatedToolCall.name);
           
           if (agent && typeof (agent as any).executePreview === 'function') {
             // Add access token to parameters if provided
             const executionParameters = accessToken 
-              ? { ...toolCall.parameters, accessToken }
-              : toolCall.parameters;
+              ? { ...validatedToolCall.parameters, accessToken }
+              : validatedToolCall.parameters;
             
             // Execute agent in preview mode
-            result = await (agent as any).executePreview(executionParameters, context);
+            result = await (agent as any).executePreview(executionParameters, validatedContext);
 
             // Check if preview failed due to auth requirements
             if (result && typeof result === 'object' && 'authRequired' in result && result.authRequired) {
               const authResult = result as any; // Cast to avoid TypeScript issues
-              this.logInfo(`Preview failed due to auth requirements for ${toolCall.name}`, {
+              this.logInfo(`Preview failed due to auth requirements for ${validatedToolCall.name}`, {
                 authReason: authResult.authReason,
                 hasMessage: !!authResult.fallbackMessage
               });
@@ -116,25 +141,25 @@ export class ToolExecutorService extends BaseService {
             }
           } else {
             // Fallback for agents that don't support preview mode yet
-            this.logWarn(`Agent ${toolCall.name} does not support preview mode, using fallback`);
+            this.logWarn(`Agent ${validatedToolCall.name} does not support preview mode, using fallback`);
             result = { 
               success: true, 
               awaitingConfirmation: true,
-              message: `Confirmation required for ${toolCall.name}`,
+              message: `Confirmation required for ${validatedToolCall.name}`,
               actionId: `preview-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              parameters: toolCall.parameters,
-              originalQuery: toolCall.parameters.query
+              parameters: validatedToolCall.parameters,
+              originalQuery: validatedToolCall.parameters.query
             };
           }
         } else {
           // Tool doesn't need confirmation - execute directly without preview mode
-          this.logInfo(`Tool ${toolCall.name} doesn't require confirmation, executing directly`);
-          result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context, accessToken);
+          this.logInfo(`Tool ${validatedToolCall.name} doesn't require confirmation, executing directly`);
+          result = await AgentFactory.executeAgent(validatedToolCall.name, validatedToolCall.parameters, validatedContext, accessToken);
           // Don't add wasPreviewExecution flag for non-confirmation tools
         }
       } else {
         // Execute the tool using AgentFactory normally (not preview mode)
-        result = await AgentFactory.executeAgent(toolCall.name, toolCall.parameters, context, accessToken);
+        result = await AgentFactory.executeAgent(validatedToolCall.name, validatedToolCall.parameters, validatedContext, accessToken);
       }
 
       // Check if the tool execution was successful
@@ -149,15 +174,15 @@ export class ToolExecutorService extends BaseService {
       const executionTime = Date.now() - startTime;
 
       const toolResult: ToolResult = {
-        toolName: toolCall.name,
+        toolName: validatedToolCall.name,
         result,
         success,
         error,
         executionTime
       };
 
-        this.logInfo(`Tool execution completed: ${toolCall.name}`, { 
-          toolName: toolCall.name,
+        this.logInfo(`Tool execution completed: ${validatedToolCall.name}`, { 
+          toolName: validatedToolCall.name,
             success, 
           executionTime,
           hasError: !!error 
@@ -169,14 +194,14 @@ export class ToolExecutorService extends BaseService {
       const executionTime = Date.now() - startTime;
       const errorMessage = err instanceof Error ? err.message : String(err);
       
-      this.logError(`Tool execution failed: ${toolCall.name}`, err, {
-        toolName: toolCall.name,
+      this.logError(`Tool execution failed: ${validatedToolCall.name}`, err, {
+        toolName: validatedToolCall.name,
         sessionId: context.sessionId,
         executionTime
       });
 
       return {
-        toolName: toolCall.name,
+        toolName: validatedToolCall.name,
         result: null,
         success: false,
         error: errorMessage,

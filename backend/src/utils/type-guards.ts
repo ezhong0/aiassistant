@@ -3,6 +3,7 @@
  * Provides safe type checking at runtime to prevent type errors
  */
 
+import { z } from 'zod';
 import {
   SlackContext,
   SlackMessage,
@@ -14,7 +15,7 @@ import {
   SlackSlashCommandPayload,
   SlackInteractivePayload
 } from '../types/slack/slack.types';
-import { ToolCall, ToolResult } from '../types/tools';
+import { ToolCall, ToolResult, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
 
 /**
@@ -233,6 +234,43 @@ export function isToolResult(value: unknown): value is ToolResult {
   );
 }
 
+// ✅ Enhanced Zod-based type guards for better validation
+/**
+ * Zod-based type guard for ToolCall with comprehensive validation
+ */
+export function isValidToolCall(value: unknown): value is ToolCall {
+  return ToolCallSchema.safeParse(value).success;
+}
+
+/**
+ * Zod-based type guard for ToolResult with comprehensive validation
+ */
+export function isValidToolResult(value: unknown): value is ToolResult {
+  return ToolResultSchema.safeParse(value).success;
+}
+
+/**
+ * Zod-based validation for ToolCall with detailed error information
+ */
+export function validateToolCallWithZod(value: unknown): { success: true; data: ToolCall } | { success: false; error: z.ZodError } {
+  const result = ToolCallSchema.safeParse(value);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return { success: false, error: result.error };
+}
+
+/**
+ * Zod-based validation for ToolResult with detailed error information
+ */
+export function validateToolResultWithZod(value: unknown): { success: true; data: ToolResult } | { success: false; error: z.ZodError } {
+  const result = ToolResultSchema.safeParse(value);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return { success: false, error: result.error };
+}
+
 /**
  * Type guard for OpenAIFunctionSchema
  */
@@ -362,4 +400,80 @@ export function safeGetProperty<T>(
   if (!isObject(obj)) return undefined;
   const value = (obj as Record<string, unknown>)[property];
   return validator(value) ? value : undefined;
+}
+
+// ✅ Additional Zod-based validation utilities
+/**
+ * Validate multiple values against a Zod schema
+ */
+export function validateMultipleWithZod<T>(
+  values: unknown[],
+  schema: z.ZodSchema<T>
+): { success: true; data: T[] } | { success: false; errors: z.ZodError[] } {
+  const results: T[] = [];
+  const errors: z.ZodError[] = [];
+
+  for (const value of values) {
+    const result = schema.safeParse(value);
+    if (result.success) {
+      results.push(result.data);
+    } else {
+      errors.push(result.error);
+    }
+  }
+
+  if (errors.length === 0) {
+    return { success: true, data: results };
+  }
+  return { success: false, errors };
+}
+
+/**
+ * Validate object properties against Zod schemas
+ */
+export function validateObjectProperties<T extends Record<string, unknown>>(
+  obj: unknown,
+  schemas: { [K in keyof T]: z.ZodSchema<T[K]> }
+): { success: true; data: T } | { success: false; errors: Record<string, z.ZodError> } {
+  if (!isObject(obj)) {
+    return { success: false, errors: { root: new z.ZodError([{ code: 'invalid_type', expected: 'object', received: typeof obj, path: [], message: `Expected object, received ${typeof obj}` }]) } };
+  }
+
+  const errors: Record<string, z.ZodError> = {};
+  const result = {} as T;
+
+  for (const [key, schema] of Object.entries(schemas)) {
+    const value = (obj as Record<string, unknown>)[key];
+    const validation = schema.safeParse(value);
+    
+    if (validation.success) {
+      result[key as keyof T] = validation.data;
+    } else {
+      errors[key] = validation.error;
+    }
+  }
+
+  if (Object.keys(errors).length === 0) {
+    return { success: true, data: result };
+  }
+  return { success: false, errors };
+}
+
+/**
+ * Create a type guard from a Zod schema
+ */
+export function createTypeGuard<T>(schema: z.ZodSchema<T>): (value: unknown) => value is T {
+  return (value: unknown): value is T => schema.safeParse(value).success;
+}
+
+/**
+ * Validate with fallback value
+ */
+export function validateWithFallback<T>(
+  value: unknown,
+  schema: z.ZodSchema<T>,
+  fallback: T
+): T {
+  const result = schema.safeParse(value);
+  return result.success ? result.data : fallback;
 }

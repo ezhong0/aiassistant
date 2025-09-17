@@ -11,23 +11,51 @@ import { SlackContextExtractor } from './slack-context-extractor.service';
 import { 
   SlackContext, 
   SlackEventType, 
-  SlackResponse 
+  SlackResponse,
+  SlackEvent
 } from '../../types/slack/slack.types';
 import { serviceManager } from '../service-manager';
 import logger from '../../utils/logger';
 
+/**
+ * Configuration interface for Slack service initialization
+ */
 export interface SlackConfig {
+  /** Slack app signing secret for request verification */
   signingSecret: string;
+  /** Bot token for Slack API access */
   botToken: string;
+  /** OAuth client ID for authentication flows */
   clientId: string;
+  /** OAuth client secret for authentication flows */
   clientSecret: string;
+  /** OAuth redirect URI for authentication flows */
   redirectUri: string;
+  /** Development mode flag for enhanced logging */
   development: boolean;
 }
 
 /**
- * SlackInterface Service - Refactored coordinator for Slack event processing
- * Now delegates to focused services for proper separation of concerns
+ * SlackInterface Service - Central coordinator for all Slack operations
+ * 
+ * This service acts as the main interface between the application and Slack,
+ * coordinating specialized services for event processing, OAuth management,
+ * message processing, and response formatting. It provides a clean API
+ * while delegating complex operations to focused services.
+ * 
+ * @example
+ * ```typescript
+ * const slackService = new SlackInterfaceService({
+ *   signingSecret: process.env.SLACK_SIGNING_SECRET,
+ *   botToken: process.env.SLACK_BOT_TOKEN,
+ *   clientId: process.env.SLACK_CLIENT_ID,
+ *   clientSecret: process.env.SLACK_CLIENT_SECRET,
+ *   redirectUri: process.env.SLACK_REDIRECT_URI,
+ *   development: process.env.NODE_ENV === 'development'
+ * });
+ * 
+ * await slackService.initialize();
+ * ```
  */
 export class SlackInterfaceService extends BaseService {
   private client: WebClient;
@@ -42,6 +70,23 @@ export class SlackInterfaceService extends BaseService {
   private slackEventValidator: SlackEventValidator | null = null;
   private slackContextExtractor: SlackContextExtractor | null = null;
 
+  /**
+   * Initialize SlackInterface service with configuration
+   * 
+   * @param config - Slack configuration including tokens, secrets, and OAuth settings
+   * 
+   * @example
+   * ```typescript
+   * const slackService = new SlackInterfaceService({
+   *   signingSecret: process.env.SLACK_SIGNING_SECRET,
+   *   botToken: process.env.SLACK_BOT_TOKEN,
+   *   clientId: process.env.SLACK_CLIENT_ID,
+   *   clientSecret: process.env.SLACK_CLIENT_SECRET,
+   *   redirectUri: process.env.SLACK_REDIRECT_URI,
+   *   development: process.env.NODE_ENV === 'development'
+   * });
+   * ```
+   */
   constructor(config: SlackConfig) {
     super('SlackInterfaceService');
     this.config = config;
@@ -132,10 +177,17 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Main entry point for handling Slack events
-   * Now delegates to focused services for proper separation of concerns
+   * Handle incoming Slack events with proper type safety
+   * 
+   * @param event - Slack event object with proper typing
+   * @param teamId - Slack team identifier
+   * 
+   * @example
+   * ```typescript
+   * await slackService.handleEvent(slackEvent, 'T1234567890');
+   * ```
    */
-  async handleEvent(event: any, teamId: string): Promise<void> {
+  async handleEvent(event: SlackEvent, teamId: string): Promise<void> {
     this.assertReady();
 
     try {
@@ -157,7 +209,7 @@ export class SlackInterfaceService extends BaseService {
         // Route to appropriate handler based on event type
         const eventType = this.determineEventType(event);
         if (!eventType) {
-          this.logWarn('Unsupported event type', { eventType: event.type });
+          this.logWarn('Unsupported event type', { eventType: this.getEventType(event) });
           return;
         }
 
@@ -180,9 +232,91 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Basic event handling when SlackEventHandler is not available
+   * Get event type safely from any Slack event
+   * 
+   * @param event - Slack event object
+   * @returns Event type string or 'unknown'
    */
-  private async handleEventBasic(event: any, teamId: string): Promise<void> {
+  private getEventType(event: SlackEvent): string {
+    if ('type' in event) {
+      return event.type;
+    }
+    return 'unknown';
+  }
+
+  /**
+   * Get event text safely from any Slack event
+   * 
+   * @param event - Slack event object
+   * @returns Event text or empty string
+   */
+  private getEventText(event: SlackEvent): string {
+    if ('text' in event) {
+      return event.text || '';
+    }
+    return '';
+  }
+
+  /**
+   * Get event user safely from any Slack event
+   * 
+   * @param event - Slack event object
+   * @returns User ID or empty string
+   */
+  private getEventUser(event: SlackEvent): string {
+    if ('user' in event) {
+      const user = event.user;
+      return typeof user === 'string' ? user : user?.id || '';
+    }
+    return '';
+  }
+
+  /**
+   * Get event channel safely from any Slack event
+   * 
+   * @param event - Slack event object
+   * @returns Channel ID or empty string
+   */
+  private getEventChannel(event: SlackEvent): string {
+    if ('channel' in event) {
+      const channel = event.channel;
+      return typeof channel === 'string' ? channel : channel?.id || '';
+    }
+    return '';
+  }
+
+  /**
+   * Get event thread timestamp safely from any Slack event
+   * 
+   * @param event - Slack event object
+   * @returns Thread timestamp or undefined
+   */
+  private getEventThreadTs(event: SlackEvent): string | undefined {
+    if ('thread_ts' in event) {
+      return event.thread_ts;
+    }
+    return undefined;
+  }
+
+  /**
+   * Get event channel type safely from any Slack event
+   * 
+   * @param event - Slack event object
+   * @returns Channel type or undefined
+   */
+  private getEventChannelType(event: SlackEvent): string | undefined {
+    if ('channel_type' in event) {
+      return event.channel_type;
+    }
+    return undefined;
+  }
+  /**
+   * Basic event handling fallback when specialized services are unavailable
+   * 
+   * @param event - Slack event object
+   * @param teamId - Slack team identifier
+   */
+  private async handleEventBasic(event: SlackEvent, teamId: string): Promise<void> {
     // Throw error instead of providing fallback handling
     throw new Error('SlackEventHandler is required for event processing');
   }
@@ -190,12 +324,19 @@ export class SlackInterfaceService extends BaseService {
   /**
    * Route event to appropriate handler based on type and context
    */
+  /**
+   * Route events to appropriate handlers based on event type
+   * 
+   * @param event - Slack event object
+   * @param context - Extracted Slack context
+   * @param eventType - Determined event type
+   */
   private async routeEvent(
-    event: any, 
+    event: SlackEvent, 
     context: SlackContext, 
     eventType: SlackEventType
   ): Promise<void> {
-    const message = this.cleanMessage(event.text || '');
+    const message = this.cleanMessage(this.getEventText(event));
     
     // Validate message
     if (!message || message.trim().length === 0) {
@@ -233,17 +374,24 @@ export class SlackInterfaceService extends BaseService {
   /**
    * Extract Slack context from raw event
    */
-  private async extractSlackContext(event: any, teamId: string): Promise<SlackContext> {
+  /**
+   * Extract Slack context from event with proper typing
+   * 
+   * @param event - Slack event object
+   * @param teamId - Slack team identifier
+   * @returns Extracted Slack context
+   */
+  private async extractSlackContext(event: SlackEvent, teamId: string): Promise<SlackContext> {
     if (this.slackContextExtractor) {
       return await this.slackContextExtractor.extractSlackContext(event, teamId);
     } else {
       // Fallback to basic context extraction
       return {
-        userId: event.user || 'unknown',
-        channelId: event.channel || 'unknown',
+        userId: this.getEventUser(event) || 'unknown',
+        channelId: this.getEventChannel(event) || 'unknown',
         teamId: teamId,
-        threadTs: event.thread_ts,
-        isDirectMessage: event.channel_type === 'im'
+        threadTs: this.getEventThreadTs(event),
+        isDirectMessage: this.getEventChannelType(event) === 'im'
       };
     }
   }
@@ -269,8 +417,15 @@ export class SlackInterfaceService extends BaseService {
   /**
    * Determine event type from raw event
    */
-  private determineEventType(event: any): SlackEventType | null {
-    switch (event.type) {
+  /**
+   * Determine event type from Slack event with proper typing
+   * 
+   * @param event - Slack event object
+   * @returns Determined event type or null if unsupported
+   */
+  private determineEventType(event: SlackEvent): SlackEventType | null {
+    const eventType = this.getEventType(event);
+    switch (eventType) {
       case 'app_mention':
         return 'app_mention';
       case 'message':
@@ -322,6 +477,13 @@ export class SlackInterfaceService extends BaseService {
 
   /**
    * Send formatted message with blocks to Slack
+   */
+  /**
+   * Send formatted message using Slack blocks with proper typing
+   * 
+   * @param channelId - Slack channel identifier
+   * @param blocks - Array of Slack block elements
+   * @param options - Optional message options including fallback text
    */
   private async sendFormattedMessage(
     channelId: string, 
