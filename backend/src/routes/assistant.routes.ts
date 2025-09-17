@@ -26,6 +26,16 @@ import {
   SendEmailRequestSchema,
   SearchEmailRequestSchema
 } from '../schemas/email.schemas';
+import { 
+  validateAndSendResponse,
+  sendSuccessResponse,
+  sendErrorResponse
+} from '../utils/response-validation.util';
+import { 
+  SuccessResponseSchema,
+  ErrorResponseSchema,
+  ToolExecutionResultSchema
+} from '../schemas/api.schemas';
 
 // Type definitions for better type safety
 type PendingAction = {
@@ -482,20 +492,26 @@ router.post('/email/send',
       accessToken
     );
 
-    return res.json({
+    // ✅ Validate response with Zod schema
+    const responseData = {
       success: result.success,
       message: result.result?.message || 'Email operation completed',
       data: result.result?.data,
       error: result.error,
       executionTime: result.executionTime
-    });
+    };
+    
+    validateAndSendResponse(res, SuccessResponseSchema, responseData);
+    return;
 
   } catch (error) {
     logger.error('Direct email send error:', error);
-    return res.status(500).json({
+    const errorData = {
       success: false,
-      error: 'Failed to send email'
-    });
+      error: 'Failed to send email',
+      timestamp: new Date().toISOString()
+    };
+    validateAndSendResponse(res, ErrorResponseSchema, errorData, 500);
   }
 });
 

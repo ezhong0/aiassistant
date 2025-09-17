@@ -55,9 +55,24 @@ export interface CalendarAgentResponse {
 }
 
 /**
- * Calendar Agent - Manages calendar events and scheduling
- * Integrates with Google Calendar API for comprehensive calendar management with AI planning
- * Refactored to use focused services for better separation of concerns
+ * CalendarAgent - Specialized agent for calendar operations via Google Calendar API
+ * 
+ * Handles calendar event creation, management, availability checking, and scheduling
+ * operations through the Google Calendar API. Provides intelligent event processing
+ * and conflict detection with AI-powered planning capabilities.
+ * 
+ * @example
+ * ```typescript
+ * const calendarAgent = new CalendarAgent();
+ * const result = await calendarAgent.execute({
+ *   action: 'create',
+ *   summary: 'Team Meeting',
+ *   start: '2024-01-15T10:00:00Z',
+ *   end: '2024-01-15T11:00:00Z',
+ *   attendees: ['john@example.com'],
+ *   accessToken: 'oauth_token'
+ * });
+ * ```
  */
 export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentResponse> {
   

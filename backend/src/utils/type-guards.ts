@@ -13,7 +13,7 @@ import {
   SlackMessageEvent,
   SlackAppMentionEvent,
   SlackSlashCommandPayload,
-  SlackInteractivePayload
+  SlackInteractiveComponentPayload
 } from '../types/slack/slack.types';
 import { ToolCall, ToolResult, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
@@ -173,9 +173,9 @@ export function isSlackSlashCommandPayload(value: unknown): value is SlackSlashC
 }
 
 /**
- * Type guard for SlackInteractivePayload
+ * Type guard for SlackInteractiveComponentPayload
  */
-export function isSlackInteractivePayload(value: unknown): value is SlackInteractivePayload {
+export function isSlackInteractivePayload(value: unknown): value is SlackInteractiveComponentPayload {
   if (!isObject(value)) return false;
 
   return (

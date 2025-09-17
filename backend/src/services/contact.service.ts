@@ -2,6 +2,13 @@ import { google } from 'googleapis';
 import { Contact, ContactSearchResult, ContactServiceError } from '../types/agents/contact.types';
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
+import { z } from 'zod';
+
+// ✅ Zod schema for contact search validation
+const ContactSearchRequestSchema = z.object({
+  query: z.string().min(1, 'Search query is required').max(100, 'Search query too long'),
+  accessToken: z.string().min(1, 'Access token is required')
+});
 
 interface GooglePerson {
   resourceName: string;
@@ -67,8 +74,17 @@ export class ContactService extends BaseService {
   async searchContacts(query: string, accessToken: string): Promise<ContactSearchResult> {
     this.assertReady();
     
+    // ✅ Validate input parameters with Zod
+    const validatedRequest = ContactSearchRequestSchema.parse({
+      query,
+      accessToken
+    });
+    
     try {
-      this.logDebug('Searching contacts', { query, queryLength: query.length });
+      this.logDebug('Searching contacts', { 
+        query: validatedRequest.query, 
+        queryLength: validatedRequest.query.length 
+      });
 
       const response = await this.peopleService.people.searchDirectoryPeople({
         query,

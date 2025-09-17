@@ -10,8 +10,8 @@ import {
   AuthenticatedRequest 
 } from '../middleware/auth.middleware';
 import { Permission } from '../types/auth.types';
-import { ProfileResponseSchema, AdminUsersResponseSchema, SuccessResponseSchema } from '../schemas/api.schemas';
-import { validateAndSendResponse } from '../utils/response-validation.util';
+import { ProfileResponseSchema, AdminUsersResponseSchema, SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
+import { validateAndSendResponse, sendSuccessResponse, sendErrorResponse } from '../utils/response-validation.util';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -286,22 +286,27 @@ router.post('/api-heavy',
       
       // Simulate heavy processing
       (globalThis as any).setTimeout(() => {
-        res.json({
+        const responseData = {
           success: true,
           data: {
             result: 'Heavy operation completed',
             processedBy: user.userId,
             timestamp: new Date().toISOString()
           }
-        });
+        };
+        
+        // ✅ Validate response with Zod schema
+        validateAndSendResponse(res, SuccessResponseSchema, responseData);
       }, 1000);
       
     } catch (error) {
       logger.error('Heavy API operation error:', error);
-      res.status(500).json({
+      const errorData = {
         success: false,
-        error: 'Internal server error'
-      });
+        error: 'Internal server error',
+        timestamp: new Date().toISOString()
+      };
+      validateAndSendResponse(res, ErrorResponseSchema, errorData, 500);
     }
   }
 );

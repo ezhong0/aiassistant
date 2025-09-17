@@ -1,98 +1,116 @@
 /**
- * Gmail Message Types
+ * Gmail Message Types with Zod validation
  */
 
-export interface GmailMessage {
-  id: string;
-  threadId: string;
-  messageId: string;
-  subject: string;
-  from: string;
-  to: string;
-  cc?: string | undefined;
-  bcc?: string | undefined;
-  date: string;
-  body: string;
-  snippet: string;
-  labelIds: string[];
-  attachments: EmailAttachment[];
-  isUnread: boolean;
-  historyId: string;
-  internalDate: string;
-  sizeEstimate: number;
-}
+import { z } from 'zod';
 
-export interface GmailThread {
-  id: string;
-  historyId: string;
-  messages: GmailMessage[];
-  snippet?: string | undefined;
-}
+// ✅ Zod schemas for Gmail types
+export const EmailAttachmentSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  mimeType: z.string(),
+  size: z.number(),
+  data: z.string().optional() // Base64 encoded data when downloading
+});
 
-export interface EmailAttachment {
-  id: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  data?: string; // Base64 encoded data when downloading
-}
+export const GmailMessageSchema = z.object({
+  id: z.string(),
+  threadId: z.string(),
+  messageId: z.string(),
+  subject: z.string(),
+  from: z.string(),
+  to: z.string(),
+  cc: z.string().optional(),
+  bcc: z.string().optional(),
+  date: z.string(),
+  body: z.string(),
+  snippet: z.string(),
+  labelIds: z.array(z.string()),
+  attachments: z.array(EmailAttachmentSchema),
+  isUnread: z.boolean(),
+  historyId: z.string(),
+  internalDate: z.string(),
+  sizeEstimate: z.number()
+});
+
+export const GmailThreadSchema = z.object({
+  id: z.string(),
+  historyId: z.string(),
+  messages: z.array(GmailMessageSchema),
+  snippet: z.string().optional()
+});
+
+export const SendEmailRequestSchema = z.object({
+  to: z.union([z.string(), z.array(z.string())]),
+  cc: z.union([z.string(), z.array(z.string())]).optional(),
+  bcc: z.union([z.string(), z.array(z.string())]).optional(),
+  subject: z.string(),
+  body: z.string(),
+  replyTo: z.string().optional(),
+  attachments: z.array(EmailAttachmentSchema).optional(),
+  htmlBody: z.string().optional(),
+  threadId: z.string().optional()
+});
+
+export const ReplyEmailRequestSchema = z.object({
+  messageId: z.string(),
+  threadId: z.string(),
+  to: z.string().optional(),
+  cc: z.union([z.string(), z.array(z.string())]).optional(),
+  body: z.string(),
+  attachments: z.array(EmailAttachmentSchema).optional()
+});
+
+export const SearchEmailsRequestSchema = z.object({
+  query: z.string().optional(),
+  maxResults: z.number().optional(),
+  pageToken: z.string().optional(),
+  labelIds: z.array(z.string()).optional(),
+  includeSpamTrash: z.boolean().optional()
+});
+
+export const EmailOperationResultSchema = z.object({
+  success: z.boolean(),
+  messageId: z.string().optional(),
+  threadId: z.string().optional(),
+  error: z.string().optional(),
+  operation: z.string(),
+  timestamp: z.string()
+});
+
+export const SendEmailResponseSchema = z.object({
+  success: z.boolean(),
+  message: GmailMessageSchema.optional(),
+  error: z.string().optional()
+});
+
+export const GetEmailsResponseSchema = z.object({
+  success: z.boolean(),
+  messages: z.array(GmailMessageSchema).optional(),
+  nextPageToken: z.string().optional(),
+  error: z.string().optional()
+});
+
+export const GetThreadResponseSchema = z.object({
+  success: z.boolean(),
+  thread: GmailThreadSchema.optional(),
+  error: z.string().optional()
+});
+
+// Type inference from schemas
+export type EmailAttachment = z.infer<typeof EmailAttachmentSchema>;
+export type GmailMessage = z.infer<typeof GmailMessageSchema>;
+export type GmailThread = z.infer<typeof GmailThreadSchema>;
+export type SendEmailRequest = z.infer<typeof SendEmailRequestSchema>;
+export type ReplyEmailRequest = z.infer<typeof ReplyEmailRequestSchema>;
+export type SearchEmailsRequest = z.infer<typeof SearchEmailsRequestSchema>;
+export type EmailOperationResult = z.infer<typeof EmailOperationResultSchema>;
+export type SendEmailResponse = z.infer<typeof SendEmailResponseSchema>;
+export type GetEmailsResponse = z.infer<typeof GetEmailsResponseSchema>;
+export type GetThreadResponse = z.infer<typeof GetThreadResponseSchema>;
 
 /**
- * Request Types
- */
-
-export interface SendEmailRequest {
-  to: string | string[];
-  cc?: string | string[] | undefined;
-  bcc?: string | string[] | undefined;
-  subject: string;
-  body: string;
-  replyTo?: string | undefined;
-  attachments?: EmailAttachment[] | undefined;
-}
-
-export interface ReplyEmailRequest {
-  messageId: string;
-  threadId: string;
-  to?: string;
-  cc?: string | string[];
-  body: string;
-  attachments?: EmailAttachment[];
-}
-
-export interface SearchEmailsRequest {
-  query?: string;
-  maxResults?: number;
-  pageToken?: string;
-  labelIds?: string[];
-  includeSpamTrash?: boolean;
-}
-
-/**
- * Response Types
- */
-
-export interface SendEmailResponse {
-  success: boolean;
-  message?: GmailMessage;
-  error?: string;
-}
-
-export interface GetEmailsResponse {
-  success: boolean;
-  messages?: GmailMessage[];
-  nextPageToken?: string;
-  error?: string;
-}
-
-export interface GetThreadResponse {
-  success: boolean;
-  thread?: GmailThread;
-  error?: string;
-}
-
-/**
- * Parsed Email Types for easier processing
+ * Additional interfaces that don't need Zod validation yet
  */
 
 export interface ParsedEmail {
@@ -126,10 +144,6 @@ export interface EmailContact {
   email: string;
   name?: string | undefined;
 }
-
-/**
- * Gmail Labels and Filters
- */
 
 export interface GmailLabel {
   id: string;
@@ -167,10 +181,6 @@ export interface GmailFilter {
   };
 }
 
-/**
- * Gmail API Options
- */
-
 export interface GmailApiOptions {
   format?: 'minimal' | 'full' | 'raw' | 'metadata';
   includeSpamTrash?: boolean;
@@ -178,10 +188,6 @@ export interface GmailApiOptions {
   pageToken?: string;
   q?: string; // Search query
 }
-
-/**
- * Email Templates
- */
 
 export interface EmailTemplate {
   id: string;
@@ -201,10 +207,6 @@ export interface EmailTemplateVariable {
   description?: string;
 }
 
-/**
- * Draft Management
- */
-
 export interface EmailDraft {
   id?: string;
   message: {
@@ -218,10 +220,6 @@ export interface EmailDraft {
   createdAt?: Date;
   updatedAt?: Date;
 }
-
-/**
- * Email Analytics
- */
 
 export interface EmailAnalytics {
   totalSent: number;
@@ -245,10 +243,6 @@ export interface EmailAnalytics {
     received: number;
   }>;
 }
-
-/**
- * Error Types
- */
 
 export class GmailServiceError extends Error {
   public readonly code: string;
@@ -284,10 +278,6 @@ export enum GmailErrorCode {
   QUOTA_EXCEEDED = 'QUOTA_EXCEEDED'
 }
 
-/**
- * Email Parsing Utilities
- */
-
 export interface EmailParsingOptions {
   extractPlainText?: boolean;
   extractHtml?: boolean;
@@ -306,10 +296,6 @@ export interface EmailMetadata {
   deliveredTo?: string | undefined;
   returnPath?: string | undefined;
 }
-
-/**
- * Thread Management
- */
 
 export interface ThreadSummary {
   id: string;
@@ -331,10 +317,6 @@ export interface ThreadUpdateRequest {
   markAsImportant?: boolean;
 }
 
-/**
- * Batch Operations
- */
-
 export interface BatchEmailOperation {
   messageIds: string[];
   operation: 'markAsRead' | 'markAsUnread' | 'delete' | 'addLabel' | 'removeLabel' | 'archive';
@@ -350,10 +332,6 @@ export interface BatchOperationResult {
     error: string;
   }>;
 }
-
-/**
- * Search and Filtering
- */
 
 export interface AdvancedSearchOptions {
   from?: string;
@@ -382,10 +360,7 @@ export interface EmailSearchResult {
   executionTime: number;
 }
 
-/**
- * Type Guards
- */
-
+// Type Guards
 export const isGmailMessage = (obj: any): obj is GmailMessage => {
   return obj && typeof obj.id === 'string' && typeof obj.threadId === 'string';
 }
@@ -402,10 +377,7 @@ export const isGmailServiceError = (error: any): error is GmailServiceError => {
   return error instanceof GmailServiceError;
 }
 
-/**
- * Utility Types
- */
-
+// Utility Types
 export type EmailDirection = 'sent' | 'received';
 export type EmailPriority = 'high' | 'normal' | 'low';
 export type EmailStatus = 'draft' | 'sent' | 'failed' | 'scheduled';

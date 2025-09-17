@@ -37,13 +37,38 @@ export interface ContactAgentRequest extends ContactAgentParams {
   operation?: 'search' | 'create' | 'update';
 }
 
-  /**
-   * Enhanced ContactAgent using AIAgent framework
-   * Handles contact search and management using Google Contacts API with AI planning
-   */
-  export class ContactAgent extends AIAgent<ContactAgentRequest, ContactResult> {
+/**
+ * ContactAgent - Specialized agent for contact operations via Google Contacts API
+ * 
+ * Handles contact search, creation, and management operations through the
+ * Google Contacts API. Provides intelligent contact resolution and validation
+ * with AI-powered planning capabilities.
+ * 
+ * @example
+ * ```typescript
+ * const contactAgent = new ContactAgent();
+ * const result = await contactAgent.execute({
+ *   operation: 'search',
+ *   query: 'Find John Smith',
+ *   accessToken: 'oauth_token'
+ * });
+ * ```
+ */
+export class ContactAgent extends AIAgent<ContactAgentRequest, ContactResult> {
 
-    constructor() {
+  /**
+   * Initialize ContactAgent with AI planning capabilities
+   * 
+   * Sets up the agent with comprehensive contact management capabilities
+   * including search, creation, and update operations.
+   * 
+   * @example
+   * ```typescript
+   * const contactAgent = new ContactAgent();
+   * // Agent is ready to handle contact operations
+   * ```
+   */
+  constructor() {
       super({
         name: 'contactAgent',
         description: 'Search and manage contacts from Google Contacts and email history',
@@ -225,7 +250,25 @@ You are a specialized contact discovery and management agent.
   }
 
   /**
-   * Execute contact-specific tools during AI planning
+   * Execute contact-specific tool operations with AI planning
+   * 
+   * Handles contact search, creation, and update operations through the
+   * Google Contacts API with intelligent parameter processing and validation.
+   * 
+   * @param toolName - The name of the tool to execute (e.g., 'contactagent', 'search_contacts')
+   * @param parameters - Tool parameters including query, operation type, and contact data
+   * @param context - Execution context with session and user information
+   * @returns Promise resolving to tool execution result with contact data
+   * 
+   * @example
+   * ```typescript
+   * const result = await contactAgent.executeCustomTool('search_contacts', {
+   *   query: 'John Smith',
+   *   operation: 'search'
+   * }, context);
+   * ```
+   * 
+   * @throws {Error} When contact service is unavailable or API call fails
    */
   protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
     this.logger.debug(`Executing contact tool: ${toolName}`, {

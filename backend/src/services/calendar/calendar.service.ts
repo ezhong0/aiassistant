@@ -1,6 +1,8 @@
 import { google, calendar_v3 } from 'googleapis';
 import { BaseService } from '../base-service';
 import logger from '../../utils/logger';
+import { CreateEventRequestSchema, UpdateEventRequestSchema, ListEventsRequestSchema } from '../../types/calendar/index';
+import { z } from 'zod';
 
 interface ConferenceData {
   conferenceId?: string;
@@ -103,17 +105,19 @@ export class CalendarService extends BaseService {
   ): Promise<calendar_v3.Schema$Event> {
     this.assertReady();
 
+    // ✅ Validate input parameters with Zod
+    const validatedRequest = CreateEventRequestSchema.parse({
+      summary: calendarEvent.summary,
+      description: calendarEvent.description,
+      start: calendarEvent.start,
+      end: calendarEvent.end,
+      attendees: calendarEvent.attendees,
+      location: calendarEvent.location,
+      recurrence: calendarEvent.recurrence
+    });
+
     try {
-      // Validate required parameters
-      if (!calendarEvent.summary) {
-        throw new Error('Calendar event summary is required');
-      }
-      if (!calendarEvent.start?.dateTime) {
-        throw new Error('Calendar event start time is required');
-      }
-      if (!calendarEvent.end?.dateTime) {
-        throw new Error('Calendar event end time is required');
-      }
+      // Additional access token validation
       if (!accessToken) {
         throw new Error('Access token is required');
       }

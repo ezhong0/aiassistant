@@ -121,7 +121,7 @@ export class AIServiceCircuitBreaker implements IService {
     if (this.circuitState === CircuitState.OPEN) {
       if (Date.now() - this.lastFailureTime < this.config.recoveryTimeout) {
         throw new AIServiceUnavailableError(
-          'AI service is temporarily unavailable. Please try again in a few moments.',
+          '🤖 AI service is temporarily unavailable. Please try again in a few moments.',
           'CIRCUIT_OPEN'
         );
       } else {
@@ -135,7 +135,7 @@ export class AIServiceCircuitBreaker implements IService {
     if (!this.openaiService || !this.openaiService.isReady()) {
       this.recordFailure();
       throw new AIServiceUnavailableError(
-        'AI service is not available. Please check your configuration.',
+        '🤖 AI service is not available. Please check your configuration.',
         'SERVICE_NOT_READY'
       );
     }
@@ -158,7 +158,7 @@ export class AIServiceCircuitBreaker implements IService {
       
       // Convert other errors to user-friendly messages
       throw new AIServiceUnavailableError(
-        'I\'m having trouble processing your request right now. Please try again.',
+        '🤖 I\'m having trouble processing your request right now. Please try again.',
         'AI_SERVICE_ERROR',
         error instanceof Error ? error : new Error(String(error))
       );
@@ -212,7 +212,7 @@ export class AIServiceCircuitBreaker implements IService {
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
         reject(new AIServiceUnavailableError(
-          'Request timed out. Please try again.',
+          '🤖 Request timed out. Please try again.',
           'TIMEOUT'
         ));
       }, timeoutMs);

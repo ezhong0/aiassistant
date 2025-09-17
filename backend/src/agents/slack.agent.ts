@@ -105,9 +105,22 @@ export interface SlackAgentRequest extends SlackAgentParams {
 }
 
 /**
- * Enhanced SlackAgent using AIAgent framework
- * Handles Slack message reading, draft management, and confirmation handling using AI planning
- * Refactored to use focused services for better separation of concerns
+ * SlackAgent - Specialized agent for Slack operations and context gathering
+ * 
+ * Handles Slack message reading, context gathering, and message analysis operations
+ * through the Slack API. Provides intelligent context extraction and message
+ * processing with AI-powered analysis capabilities.
+ * 
+ * @example
+ * ```typescript
+ * const slackAgent = new SlackAgent();
+ * const result = await slackAgent.execute({
+ *   operation: 'read_messages',
+ *   channelId: 'C1234567890',
+ *   limit: 10,
+ *   accessToken: 'slack_token'
+ * });
+ * ```
  */
 export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
 

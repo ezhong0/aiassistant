@@ -1,5 +1,6 @@
 import { SlackEventMiddlewareArgs } from '@slack/bolt';
 import { WebClient } from '@slack/web-api';
+import { z } from 'zod';
 
 /**
  * Slack-specific context for agent interactions
@@ -14,79 +15,108 @@ export interface SlackContext {
   userEmail?: string | undefined;
 }
 
-/**
- * Slack event types we handle
- */
-export type SlackEventType = 'app_mention' | 'message' | 'slash_command' | 'interactive_component';
+// ✅ Zod schemas for Slack types
+export const SlackContextSchema = z.object({
+  userId: z.string(),
+  channelId: z.string(),
+  teamId: z.string(),
+  threadTs: z.string().optional(),
+  isDirectMessage: z.boolean(),
+  userName: z.string().optional(),
+  userEmail: z.string().email().optional()
+});
 
-/**
- * Slack message event
- */
-export interface SlackMessageEvent {
-  type: 'message';
-  channel: string;
-  user: string;
-  text: string;
-  ts: string;
-  thread_ts?: string;
-  channel_type?: string;
-}
+export const SlackEventTypeSchema = z.enum(['app_mention', 'message', 'slash_command', 'interactive_component']);
 
-/**
- * Slack app mention event
- */
-export interface SlackAppMentionEvent {
-  type: 'app_mention';
-  channel: string;
-  user: string;
-  text: string;
-  ts: string;
-  thread_ts?: string;
-}
+export const SlackMessageEventSchema = z.object({
+  type: z.literal('message'),
+  channel: z.string(),
+  user: z.string(),
+  text: z.string(),
+  ts: z.string(),
+  thread_ts: z.string().optional(),
+  channel_type: z.string().optional()
+});
 
-/**
- * Slack slash command payload
- */
-export interface SlackSlashCommandPayload {
-  token: string;
-  team_id: string;
-  team_domain: string;
-  channel_id: string;
-  channel_name: string;
-  user_id: string;
-  user_name: string;
-  command: string;
-  text: string;
-  response_url: string;
-  trigger_id: string;
-}
+export const SlackAppMentionEventSchema = z.object({
+  type: z.literal('app_mention'),
+  channel: z.string(),
+  user: z.string(),
+  text: z.string(),
+  ts: z.string(),
+  thread_ts: z.string().optional()
+});
 
-/**
- * Slack interactive component payload
- */
-export interface SlackInteractivePayload {
-  type: string;
-  user: {
-    id: string;
-    name: string;
-  };
-  channel: {
-    id: string;
-    name: string;
-  };
-  team: {
-    id: string;
-    domain: string;
-  };
-  actions: Array<{
-    action_id: string;
-    value?: string;
-    type: string;
-  }>;
-  trigger_id: string;
-  response_url: string;
-  message?: any;
-}
+export const SlackSlashCommandPayloadSchema = z.object({
+  token: z.string(),
+  team_id: z.string(),
+  team_domain: z.string(),
+  channel_id: z.string(),
+  channel_name: z.string(),
+  user_id: z.string(),
+  user_name: z.string(),
+  command: z.string(),
+  text: z.string(),
+  response_url: z.string(),
+  trigger_id: z.string()
+});
+
+export const SlackInteractiveComponentPayloadSchema = z.object({
+  type: z.string(),
+  user: z.object({
+    id: z.string(),
+    username: z.string(),
+    name: z.string()
+  }),
+  api_app_id: z.string(),
+  token: z.string(),
+  container: z.object({
+    type: z.string(),
+    message_ts: z.string(),
+    channel_id: z.string(),
+    is_ephemeral: z.boolean()
+  }),
+  trigger_id: z.string(),
+  team: z.object({
+    id: z.string(),
+    domain: z.string()
+  }),
+  enterprise: z.any().optional(),
+  is_enterprise_install: z.boolean(),
+  channel: z.object({
+    id: z.string(),
+    name: z.string()
+  }),
+  response_url: z.string(),
+  actions: z.array(z.object({
+    action_id: z.string(),
+    block_id: z.string(),
+    text: z.object({
+      type: z.string(),
+      text: z.string(),
+      emoji: z.boolean().optional()
+    }),
+    value: z.string(),
+    type: z.string(),
+    action_ts: z.string()
+  }))
+});
+
+// Union type for all Slack events
+export const SlackEventSchema = z.union([
+  SlackMessageEventSchema,
+  SlackAppMentionEventSchema,
+  SlackSlashCommandPayloadSchema,
+  SlackInteractiveComponentPayloadSchema
+]);
+
+// Type inference from schemas
+export type SlackEventType = z.infer<typeof SlackEventTypeSchema>;
+export type SlackMessageEvent = z.infer<typeof SlackMessageEventSchema>;
+export type SlackAppMentionEvent = z.infer<typeof SlackAppMentionEventSchema>;
+export type SlackSlashCommandPayload = z.infer<typeof SlackSlashCommandPayloadSchema>;
+export type SlackInteractiveComponentPayload = z.infer<typeof SlackInteractiveComponentPayloadSchema>;
+export type SlackEvent = z.infer<typeof SlackEventSchema>;
 
 /**
  * Slack Block Kit elements - flexible interface for various block types
@@ -160,11 +190,6 @@ export interface SlackMessage {
 }
 
 /**
- * Slack event union type
- */
-export type SlackEvent = SlackMessageEvent | SlackAppMentionEvent | SlackSlashCommandPayload | SlackInteractivePayload;
-
-/**
  * Slack respond function interface
  */
 export interface SlackRespondFunction {
@@ -209,7 +234,6 @@ export interface SlackResponse {
   attachments?: any[];
   response_type?: 'in_channel' | 'ephemeral';
   replace_original?: boolean;
-  
 }
 
 /**

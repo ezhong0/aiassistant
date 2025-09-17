@@ -347,7 +347,7 @@ export class MasterAgent {
       // AI-first execution - no fallback routing
       const openaiService = this.getOpenAIService();
       if (!this.useOpenAI || !openaiService) {
-        throw new Error('OpenAI service is required but not available. Please check OpenAI configuration.');
+        throw new Error('🤖 AI service is required but not available. Please check OpenAI configuration.');
       }
 
       // Step 1: Detect if context is needed (delegate to AIClassificationService)
@@ -1101,11 +1101,11 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       
       // Check if it's a context length error
       if (error instanceof Error && error.message.includes('maximum context length')) {
-        logger.warn('Context length exceeded, using fallback response');
-        return this.generateFallbackResponse(userInput, toolResults);
+        logger.warn('Context length exceeded - AI processing failed');
+        throw new Error('🤖 AI service encountered a context length limit. Please try with a simpler request or break it into smaller parts.');
       }
       
-      throw new Error('AI natural language processing failed. Please check your OpenAI configuration.');
+      throw new Error('🤖 AI natural language processing failed. Please check your OpenAI configuration.');
     }
   }
 
@@ -1155,31 +1155,6 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     return truncated;
   }
 
-  /**
-   * Generate fallback response when context length is exceeded
-   */
-  private generateFallbackResponse(userInput: string, toolResults: ToolResult[]): string {
-    const successfulTools = toolResults.filter(tr => tr.success);
-    const failedTools = toolResults.filter(tr => !tr.success);
-
-    if (successfulTools.length === 0) {
-      return "I encountered an issue while processing your request. Please try again or rephrase your question.";
-    }
-
-    // Generate a simple response based on tool results
-    const toolNames = successfulTools.map(tr => tr.toolName).join(', ');
-    
-    if (userInput.toLowerCase().includes('email')) {
-      const emailCount = successfulTools.find(tr => tr.toolName === 'manage_emails')?.result?.count || 0;
-      if (emailCount > 0) {
-        return `I found ${emailCount} email${emailCount === 1 ? '' : 's'} in your inbox. The content was too large to display here, but I can help you with specific questions about these emails.`;
-      } else {
-        return "I searched your emails but didn't find any recent messages matching your criteria.";
-      }
-    }
-
-    return `I completed the requested operation using ${toolNames}. The results were processed successfully, but the response was too large to display in full. Please let me know if you need specific information about the results.`;
-  }
 
   /**
    * Cleanup resources and memory

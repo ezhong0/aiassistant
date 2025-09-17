@@ -388,7 +388,7 @@ Return JSON with:
   async formatPreviewDetails(actionType: string, previewData: any): Promise<string> {
     try {
       if (!this.openaiService) {
-        return this.getFallbackPreviewFormat(actionType, previewData);
+        throw new Error(`🤖 AI preview formatting is unavailable. Please try again when AI service is restored.`);
       }
 
       const formatPrompt = `Format this ${actionType} preview for a user to review before confirming:
@@ -403,73 +403,14 @@ Show the key details they need to know in a clean, readable format.`;
         { temperature: 0.1, maxTokens: 300 }
       );
 
-      return formattedDetails || this.getFallbackPreviewFormat(actionType, previewData);
+      return formattedDetails || `🤖 AI preview formatting is unavailable. Please try again when AI service is restored.`;
 
     } catch (error) {
       logger.warn('Failed to generate AI preview formatting:', error);
-      return this.getFallbackPreviewFormat(actionType, previewData);
+      throw new Error(`🤖 AI preview formatting failed. Please try again when AI service is restored.`);
     }
   }
 
-  /**
-   * Fallback preview formatting when AI is unavailable
-   */
-  private getFallbackPreviewFormat(actionType: string, previewData: any): string {
-    const emoji = this.getActionEmoji(actionType);
-    let details = `${emoji} **${actionType.charAt(0).toUpperCase() + actionType.slice(1)} Details:**\n`;
-
-    try {
-      // Handle common action types with fallback formatting
-      if (actionType === 'email' && previewData) {
-        if (previewData.recipients?.to) {
-          details += `• **To:** ${previewData.recipients.to.join(', ')}\n`;
-        }
-        if (previewData.recipients?.cc?.length > 0) {
-          details += `• **CC:** ${previewData.recipients.cc.join(', ')}\n`;
-        }
-        if (previewData.subject) {
-          details += `• **Subject:** ${previewData.subject}\n`;
-        }
-        if (previewData.recipientCount) {
-          details += `• **Recipients:** ${previewData.recipientCount}\n`;
-        }
-        if (previewData.externalDomains?.length > 0) {
-          details += `• **External Domains:** ${previewData.externalDomains.join(', ')}\n`;
-        }
-      } else if (actionType === 'calendar' && previewData) {
-        if (previewData.title) {
-          details += `• **Title:** ${previewData.title}\n`;
-        }
-        if (previewData.startTime) {
-          details += `• **Start:** ${new Date(previewData.startTime).toLocaleString()}\n`;
-        }
-        if (previewData.duration) {
-          details += `• **Duration:** ${previewData.duration}\n`;
-        }
-        if (previewData.attendees?.length > 0) {
-          details += `• **Attendees:** ${previewData.attendees.join(', ')}\n`;
-        }
-        if (previewData.location) {
-          details += `• **Location:** ${previewData.location}\n`;
-        }
-        if (previewData.conflicts?.length > 0) {
-          details += `⚠️ **Conflicts:** ${previewData.conflicts.length} detected\n`;
-        }
-      } else {
-        // Generic fallback for unknown action types
-        details += `• **Type:** ${actionType}\n`;
-        if (typeof previewData === 'object' && previewData !== null) {
-          const keyCount = Object.keys(previewData).length;
-          details += `• **Parameters:** ${keyCount} configuration items\n`;
-        }
-      }
-    } catch (error) {
-      logger.warn('Error in fallback preview formatting:', error);
-      details += `• **Action:** ${actionType}\n• **Status:** Preview available\n`;
-    }
-
-    return details;
-  }
 
   /**
    * Get appropriate emoji for action type

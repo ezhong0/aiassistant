@@ -1,7 +1,8 @@
 import { google } from 'googleapis';
-import { GmailServiceError } from '../../types/email/gmail.types';
+import { GmailServiceError, SendEmailRequestSchema, SearchEmailsRequestSchema } from '../../types/email/gmail.types';
 import { BaseService } from '../base-service';
 import logger from '../../utils/logger';
+import { z } from 'zod';
 
 interface GmailHeader {
   name: string;
@@ -89,11 +90,28 @@ export class GmailService extends BaseService {
   ): Promise<{ messageId: string; threadId: string }> {
     this.assertReady();
     
+    // ✅ Validate input parameters with Zod
+    const validatedRequest = SendEmailRequestSchema.parse({
+      to,
+      subject,
+      body,
+      cc: options.cc,
+      bcc: options.bcc,
+      replyTo: options.replyTo,
+      attachments: options.attachments?.map(att => ({
+        id: '', // Will be generated
+        filename: att.filename,
+        mimeType: att.contentType,
+        size: att.content.length,
+        data: att.content
+      }))
+    });
+    
     try {
       this.logDebug('Sending email', { 
-        to, 
-        subject, 
-        hasAttachments: !!(options.attachments?.length) 
+        to: validatedRequest.to, 
+        subject: validatedRequest.subject, 
+        hasAttachments: !!(validatedRequest.attachments?.length) 
       });
 
       const emailOptions: {
@@ -341,10 +359,17 @@ export class GmailService extends BaseService {
   ): Promise<any[]> {
     this.assertReady();
     
+    // ✅ Validate input parameters with Zod
+    const validatedRequest = SearchEmailsRequestSchema.parse({
+      query,
+      maxResults: options.maxResults,
+      includeSpamTrash: options.includeSpamTrash
+    });
+    
     try {
       this.logDebug('Searching emails', { 
-        query, 
-        maxResults: options.maxResults || 10 
+        query: validatedRequest.query, 
+        maxResults: validatedRequest.maxResults || 10 
       });
 
       // Create OAuth2 client with access token
