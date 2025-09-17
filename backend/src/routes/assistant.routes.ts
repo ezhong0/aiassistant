@@ -133,6 +133,14 @@ router.post('/text-command',
     RATE_LIMITS.assistant.textCommand.maxRequests, 
     RATE_LIMITS.assistant.textCommand.windowMs
   ),
+  (req, res, next) => {
+    logger.info('Text command request received', {
+      body: req.body,
+      bodyKeys: Object.keys(req.body || {}),
+      contentType: req.get('Content-Type')
+    });
+    next();
+  },
   validateRequest({ body: textCommandSchema }),
   async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -720,34 +728,9 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
       }
     } catch (error) {
       logger.warn('AI confirmation generation failed, using fallback', { error });
+      // Throw error instead of using hardcoded fallbacks
+      throw new Error(`AI confirmation generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    // Fallback to basic confirmation messages if AI generation fails
-    const fallbackMessages: Record<string, { message: string; prompt: string }> = {
-      'emailAgent': {
-        message: 'I\'m about to send an email. Would you like me to proceed?',
-        prompt: 'Reply with "yes" to send the email or "no" to cancel.'
-      },
-      'calendarAgent': {
-        message: 'I\'m about to create a calendar event. Would you like me to proceed?',
-        prompt: 'Reply with "yes" to create the event or "no" to cancel.'
-      }
-    };
-
-    const fallback = fallbackMessages[operation?.name || 'unknown'] || {
-      message: `I'm about to execute a ${operation?.name || 'unknown'} operation. Would you like me to proceed?`,
-      prompt: 'Reply with "yes" to continue or "no" to cancel.'
-    };
-
-    return {
-      message: fallback.message,
-      prompt: fallback.prompt,
-      action: {
-        name: operation?.name || 'unknown',
-        parameters: operation?.parameters || {},
-        ...(operation as any) // Include any additional properties
-      }
-    };
   }
 
   return null;
@@ -1068,16 +1051,12 @@ const generateFallbackDynamicConfirmationPrompt = async (toolCalls: ToolCall[], 
     }
   } catch (error) {
     logger.error('Failed to generate dynamic confirmation prompt', { error });
+    // Throw error instead of using hardcoded fallback messages
+    throw new Error(`Failed to generate confirmation prompt: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
   
-  // Final fallback to static messages
-  const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
-  if (mainAction?.name === 'emailAgent') {
-    return 'Reply with "yes" to send the email or "no" to cancel.';
-  } else if (mainAction?.name === 'calendarAgent') {
-    return 'Reply with "yes" to create the event or "no" to cancel.';
-  }
-  return 'Reply with "yes" to proceed or "no" to cancel.';
+  // This should never be reached due to the throw above, but TypeScript needs it
+  throw new Error('OpenAI service not available for confirmation generation');
 }
 
 const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[]): Promise<string> => {
@@ -1086,7 +1065,7 @@ const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: To
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
     
     if (!mainAction) {
-      return 'Would you like me to proceed with this action?';
+      throw new Error('No valid action found for confirmation');
     }
 
     if (toolRoutingService) {
@@ -1097,28 +1076,15 @@ const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: To
       );
       return confirmationResult.message;
     } else {
-      return generateFallbackConfirmationPrompt(toolCalls, toolResults);
+      throw new Error('Tool routing service not available for confirmation generation');
     }
   } catch (error) {
     logger.warn('Failed to generate AI confirmation prompt:', error);
-    return generateFallbackConfirmationPrompt(toolCalls, toolResults);
+    throw new Error(`Failed to generate confirmation prompt: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 
-const generateFallbackConfirmationPrompt = (toolCalls: ToolCall[], toolResults: ToolResult[]): string => {
-  const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent');
-  if (!mainAction) {
-    return 'Would you like me to proceed with this action?';
-  }
-  
-  if (mainAction.name === 'emailAgent') {
-    return 'I\'m about to send an email. Would you like me to proceed?';
-  } else if (mainAction.name === 'calendarAgent') {
-    return 'I\'m about to create a calendar event. Would you like me to proceed?';
-  }
-  
-  return 'Would you like me to proceed with this action?';
-}
+// Removed generateFallbackConfirmationPrompt - no longer using hardcoded fallbacks
 
 const generateDynamicCompletionMessage = async (toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {

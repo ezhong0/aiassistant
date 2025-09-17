@@ -3,7 +3,7 @@ import { AIAgent } from '../framework/ai-agent';
 import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { CalendarService, CalendarEvent } from '../services/calendar/calendar.service';
 import { resolveCalendarService } from '../services/service-resolver';
-import { getService } from '../services/service-manager';
+import { getService, serviceManager } from '../services/service-manager';
 import { TokenManager } from '../services/token-manager';
 import { APP_CONSTANTS } from '../config/constants';
 import { CALENDAR_SERVICE_CONSTANTS } from '../config/calendar-service-constants';
@@ -89,29 +89,20 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
   }
 
   /**
-   * Initialize focused service dependencies
+   * Lazy initialization of calendar services
    */
-  protected async onInitialize(): Promise<void> {
-    try {
-      this.logger.info('Initializing CalendarAgent with focused services...');
-      
-      const serviceManager = getService('serviceManager') as any;
-      
-      // Get focused services
+  private ensureServices(): void {
+    if (!this.calendarEventManager) {
       this.calendarEventManager = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_EVENT_MANAGER) as CalendarEventManager;
+    }
+    if (!this.calendarAvailabilityChecker) {
       this.calendarAvailabilityChecker = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_AVAILABILITY_CHECKER) as CalendarAvailabilityChecker;
+    }
+    if (!this.calendarFormatter) {
       this.calendarFormatter = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_FORMATTER) as CalendarFormatter;
+    }
+    if (!this.calendarValidator) {
       this.calendarValidator = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_VALIDATOR) as CalendarValidator;
-
-      if (!this.calendarEventManager || !this.calendarAvailabilityChecker || 
-          !this.calendarFormatter || !this.calendarValidator) {
-        throw new Error('Required calendar services not available');
-      }
-
-      this.logger.info('CalendarAgent initialized successfully with focused services');
-    } catch (error) {
-      this.logger.error('Error initializing CalendarAgent', error);
-      throw error;
     }
   }
 

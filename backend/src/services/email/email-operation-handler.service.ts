@@ -156,10 +156,24 @@ export class EmailOperationHandler extends BaseService {
           maxResults: request.maxResults || 10
         }
       );
-      
-      this.logInfo('Email search completed', {
+
+      // DEBUG: Log detailed result structure
+      this.logInfo('Email search completed - DETAILED DEBUG', {
         resultCount: result.length,
-        executionTime: Date.now() - startTime
+        resultType: typeof result,
+        resultIsArray: Array.isArray(result),
+        executionTime: Date.now() - startTime,
+        firstEmailKeys: result.length > 0 ? Object.keys(result[0]) : [],
+        firstEmailSample: result.length > 0 ? {
+          id: result[0].id,
+          subject: result[0].subject,
+          snippet: result[0].snippet,
+          from: result[0].from,
+          to: result[0].to,
+          date: result[0].date,
+          hasBody: !!result[0].body
+        } : null,
+        rawResultSample: JSON.stringify(result.slice(0, 1), null, 2)
       });
 
       return {

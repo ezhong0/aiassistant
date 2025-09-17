@@ -99,9 +99,14 @@ export function validateRequest(options: ValidationOptions) {
 
       if (!validationResult.success) {
         logger.warn('Validation failed', {
-          errors: validationResult.errors,
+          errors: JSON.stringify(validationResult.errors),
           path: req.path,
           method: req.method,
+          body: JSON.stringify(req.body),
+          query: JSON.stringify(req.query),
+          params: JSON.stringify(req.params),
+          headers: JSON.stringify(req.headers),
+          timestamp: new Date().toISOString()
         });
 
         res.status(400).json({
@@ -115,7 +120,14 @@ export function validateRequest(options: ValidationOptions) {
 
       next();
     } catch (error) {
-      logger.error('Validation middleware error', { error });
+      logger.error('Validation middleware error', { 
+        error: error instanceof Error ? error.message : JSON.stringify(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method,
+        body: JSON.stringify(req.body),
+        timestamp: new Date().toISOString()
+      });
       res.status(500).json({
         success: false,
         error: 'Internal validation error',

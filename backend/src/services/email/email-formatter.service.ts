@@ -56,6 +56,15 @@ export class EmailFormatter extends BaseService {
     try {
       let formattedText = '';
 
+      this.logInfo('Formatting email result', {
+        hasMessageId: !!result.messageId,
+        hasEmails: !!(result.emails?.length),
+        emailsLength: result.emails?.length || 0,
+        hasDraft: !!result.draft,
+        count: result.count,
+        emailsData: JSON.stringify(result.emails?.slice(0, 2) || [])
+      });
+
       // Format based on result content, not hardcoded action strings
       if (result.messageId && result.threadId) {
         // Email was sent/replied - format as success message
@@ -132,36 +141,92 @@ export class EmailFormatter extends BaseService {
     const count = result.count || 0;
     const emails = result.emails || [];
 
+    // DEBUG: Log detailed input data
+    this.logInfo('EmailFormatter.formatEmailSearchResult - DEBUG INPUT', {
+      count,
+      emailsLength: emails.length,
+      emailsIsArray: Array.isArray(emails),
+      emailsType: typeof emails,
+      firstEmailKeys: emails.length > 0 && emails[0] ? Object.keys(emails[0]) : [],
+      firstEmailSample: emails.length > 0 && emails[0] ? {
+        id: emails[0]?.id,
+        subject: emails[0]?.subject,
+        from: emails[0]?.from,
+        to: emails[0]?.to,
+        date: emails[0]?.date,
+        snippet: emails[0]?.snippet,
+        hasBody: !!(emails[0]?.body),
+        bodyType: typeof emails[0]?.body,
+        bodyKeys: emails[0]?.body ? Object.keys(emails[0].body) : []
+      } : null,
+      rawEmailsSample: JSON.stringify(emails.slice(0, 1), null, 2)
+    });
+
     if (count === 0) {
+      this.logInfo('EmailFormatter.formatEmailSearchResult - No emails found, returning empty message');
       return EMAIL_SERVICE_CONSTANTS.FORMATTING.NO_EMAILS_FOUND;
     }
 
     const parts = [`🔍 **Found ${count} email${count === 1 ? '' : 's'}**`];
-    
+
     if (emails.length > 0) {
       parts.push(`\n${EMAIL_SERVICE_CONSTANTS.FORMATTING.RECENT_EMAILS}`);
-      
+
       // Show up to 5 most recent emails
       const recentEmails = emails.slice(0, EMAIL_SERVICE_CONSTANTS.LIMITS.MAX_DISPLAY_EMAILS);
+
+      this.logInfo('EmailFormatter.formatEmailSearchResult - Processing emails for display', {
+        totalEmails: emails.length,
+        recentEmailsCount: recentEmails.length,
+        maxDisplayEmails: EMAIL_SERVICE_CONSTANTS.LIMITS.MAX_DISPLAY_EMAILS
+      });
+
       recentEmails.forEach((email, index) => {
         if (email) {
           const from = this.extractSender(email);
           const subject = this.extractSubject(email);
           const date = this.formatEmailDate(email);
-          
+
+          // DEBUG: Log each email extraction
+          this.logInfo(`EmailFormatter.formatEmailSearchResult - Processing email ${index + 1}`, {
+            emailId: email.id,
+            extractedFrom: from,
+            extractedSubject: subject,
+            extractedDate: date,
+            originalFrom: email.from,
+            originalSubject: email.subject,
+            originalDate: email.date
+          });
+
           parts.push(`${index + 1}. **${subject}**`);
           parts.push(`   From: ${from}`);
           parts.push(`   Date: ${date}`);
           parts.push('');
+        } else {
+          this.logWarn(`EmailFormatter.formatEmailSearchResult - Email ${index + 1} is null/undefined`);
         }
       });
 
       if (count > EMAIL_SERVICE_CONSTANTS.LIMITS.MAX_DISPLAY_EMAILS) {
         parts.push(`... and ${count - EMAIL_SERVICE_CONSTANTS.LIMITS.MAX_DISPLAY_EMAILS} more emails`);
       }
+    } else {
+      this.logWarn('EmailFormatter.formatEmailSearchResult - Count > 0 but emails array is empty', {
+        count,
+        emailsLength: emails.length
+      });
     }
 
-    return parts.join('\n');
+    const finalResult = parts.join('\n');
+
+    // DEBUG: Log final formatted result
+    this.logInfo('EmailFormatter.formatEmailSearchResult - Final formatted result', {
+      resultLength: finalResult.length,
+      partsCount: parts.length,
+      finalResult: finalResult.substring(0, 500) // First 500 chars
+    });
+
+    return finalResult;
   }
 
   /**
@@ -237,9 +302,9 @@ export class EmailFormatter extends BaseService {
    */
   private extractSubject(email: GmailMessage): string {
     try {
-      return email.subject || EMAIL_SERVICE_CONSTANTS.DEFAULTS.NO_SUBJECT_FALLBACK;
+      return email.subject || EMAIL_SERVICE_CONSTANTS.DEFAULTS.NO_SUBJECT;
     } catch (error) {
-      return EMAIL_SERVICE_CONSTANTS.DEFAULTS.NO_SUBJECT_FALLBACK;
+      return EMAIL_SERVICE_CONSTANTS.DEFAULTS.NO_SUBJECT;
     }
   }
 
@@ -273,9 +338,10 @@ export class EmailFormatter extends BaseService {
         return this.truncateText(email.snippet, EMAIL_SERVICE_CONSTANTS.LIMITS.MAX_TEXT_TRUNCATE);
       }
       
-      return EMAIL_SERVICE_CONSTANTS.DEFAULTS.NO_CONTENT;
+      // Throw error instead of returning hardcoded fallback
+      throw new Error('No email content available');
     } catch (error) {
-      return EMAIL_SERVICE_CONSTANTS.DEFAULTS.ERROR_EXTRACTING_CONTENT;
+      throw new Error('Error extracting email content');
     }
   }
 
@@ -431,7 +497,7 @@ Examples:
    * Get OpenAI service for proposal generation
    */
   private getOpenAIService(): any {
-    const { getService } = require('./service-manager');
+    const { getService } = require('../service-manager');
     return getService('openaiService');
   }
 }

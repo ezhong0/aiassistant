@@ -32,6 +32,7 @@ import { SlackFormatter } from './slack/slack-formatter.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
+import { SLACK_SERVICE_CONSTANTS } from '../config/slack-service-constants';
 import logger from '../utils/logger';
 
 /**
@@ -378,21 +379,21 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 23. SlackMessageAnalyzer - Focused service for Slack message analysis
     const slackMessageAnalyzer = new SlackMessageAnalyzer();
-    serviceManager.registerService('slackMessageAnalyzer', slackMessageAnalyzer, {
+    serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER, slackMessageAnalyzer, {
       priority: 95,
       autoStart: true
     });
 
     // 24. SlackDraftManager - Focused service for Slack draft management
     const slackDraftManager = new SlackDraftManager();
-    serviceManager.registerService('slackDraftManager', slackDraftManager, {
+    serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER, slackDraftManager, {
       priority: 96,
       autoStart: true
     });
 
     // 25. SlackFormatter - Focused service for Slack response formatting
     const slackFormatter = new SlackFormatter();
-    serviceManager.registerService('slackFormatter', slackFormatter, {
+    serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER, slackFormatter, {
       priority: 97,
       autoStart: true
     });

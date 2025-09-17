@@ -180,38 +180,11 @@ export class SlackInterfaceService extends BaseService {
   }
 
   /**
-   * Basic event handling fallback when SlackEventHandler is not available
+   * Basic event handling when SlackEventHandler is not available
    */
   private async handleEventBasic(event: any, teamId: string): Promise<void> {
-    try {
-      // Basic validation
-      if (!event || !event.type || !event.ts) {
-        this.logWarn('Invalid event structure', { event });
-        return;
-      }
-
-      // Skip bot messages
-      if (event.bot_id || event.subtype === 'bot_message') {
-        this.logDebug('Bot message detected, skipping', { eventId: event.ts });
-        return;
-      }
-
-      // Extract Slack context
-      const slackContext = await this.extractSlackContext(event, teamId);
-      
-      // Determine event type
-      const eventType = this.determineEventType(event);
-      if (!eventType) {
-        this.logWarn('Unsupported event type', { eventType: event.type });
-        return;
-      }
-
-      // Route to appropriate handler
-      await this.routeEvent(event, slackContext, eventType);
-
-    } catch (error) {
-      this.logError('Error in basic event handling', error);
-    }
+    // Throw error instead of providing fallback handling
+    throw new Error('SlackEventHandler is required for event processing');
   }
 
   /**

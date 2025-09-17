@@ -162,7 +162,7 @@ export class SlackResponseFormatter extends BaseService {
     } catch (error) {
       this.logError('Error formatting proposal response', error);
       return {
-        text: proposal.text || masterResponse.message || 'I processed your request successfully.'
+        text: proposal.text || masterResponse.message || 'Response processing failed'
       };
     }
   }
@@ -172,44 +172,8 @@ export class SlackResponseFormatter extends BaseService {
    * Shows user-friendly messages instead of tool execution details
    */
   private createFallbackResponse(masterResponse: any, slackContext: SlackContext): SlackResponse {
-    // Start with master agent's natural message
-    let responseText = masterResponse.message || 'I processed your request successfully.';
-
-    // Replace technical tool details with natural language success messages
-    if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
-      const successfulResults = masterResponse.toolResults.filter((tr: any) => tr.success);
-      const failedResults = masterResponse.toolResults.filter((tr: any) => !tr.success);
-
-      // Only generate success message if we don't already have a natural language response from Master Agent LLM
-      if (successfulResults.length > 0 && 
-          (masterResponse.message === 'I processed your request successfully.' || 
-           !masterResponse.message || 
-           masterResponse.message.trim() === '')) {
-        // Generate natural success message based on what was accomplished
-        responseText = this.generateSuccessMessage(successfulResults, masterResponse);
-      }
-
-      if (failedResults.length > 0) {
-        const oauthFailures = failedResults.filter((fr: any) => 
-          fr.error?.includes('OAuth authentication required')
-        );
-        
-        if (oauthFailures.length > 0) {
-          responseText += '\n\n🔐 Some features require Gmail authentication. Please connect your account to use email functionality.';
-        } else {
-          responseText += '\n\n⚠️ I encountered some issues completing your request. Please try again.';
-        }
-      }
-    }
-
-    // Add context information if available
-    if (masterResponse.contextGathered && masterResponse.contextGathered.relevantContext) {
-      responseText += '\n\n📝 I used context from our recent conversation to better understand your request.';
-    }
-
-    return {
-      text: responseText
-    };
+    // Throw error instead of creating hardcoded fallback responses
+    throw new Error(`Failed to format response: ${masterResponse.message || 'Unknown error'}`);
   }
 
   /**

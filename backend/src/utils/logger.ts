@@ -3,8 +3,9 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 
 const { combine, timestamp, errors, printf, colorize, json } = winston.format;
 
-const logFormat = printf(({ level, message, timestamp, stack }) => {
-  return `${timestamp} ${level}: ${stack || message}`;
+const logFormat = printf(({ level, message, timestamp, stack, ...meta }) => {
+  const metaStr = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
+  return `${timestamp} ${level}: ${stack || message}${metaStr}`;
 });
 
 const logger = winston.createLogger({

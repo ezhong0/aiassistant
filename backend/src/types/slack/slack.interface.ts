@@ -2157,31 +2157,17 @@ export class SlackInterface {
       });
       
       // Only send fallback if the error indicates message wasn't sent
-      const errorCode = (error as any).code;
-      if (errorCode !== 'channel_not_found' && errorCode !== 'not_in_channel') {
-        try {
-          await this.sendFallbackTextMessage(channelId, 'I encountered an error sending a formatted response. Please try again.');
-        } catch (fallbackError) {
-          logger.error('Fallback message also failed:', fallbackError);
-        }
-      } else {
-        logger.error('Channel access issue, not sending fallback message', { errorCode });
-      }
+      // Throw error instead of sending fallback message
+      throw error;
     }
   }
 
   /**
-   * Send simple text message as fallback
+   * Send simple text message (removed fallback functionality)
    */
   private async sendFallbackTextMessage(channelId: string, text: string): Promise<void> {
-    try {
-      await this.client.chat.postMessage({
-        channel: channelId,
-        text: text
-      });
-    } catch (error) {
-      logger.error('Error sending fallback text message:', error);
-    }
+    // This method is kept for compatibility but no longer used as fallback
+    throw new Error('Fallback text message sending is disabled');
   }
 
   /**

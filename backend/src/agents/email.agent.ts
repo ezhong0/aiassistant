@@ -84,27 +84,20 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   }
 
   /**
-   * Service-specific initialization
+   * Lazy initialization of email services
    */
-  protected async onInitialize(): Promise<void> {
-    try {
-      logger.info('Initializing refactored EmailAgent...');
-
-      // Get focused component services
-      const serviceManager = ServiceManager.getInstance();
-      this.emailOps = serviceManager.getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER) as EmailOperationHandler;
-      this.contactResolver = serviceManager.getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.CONTACT_RESOLVER) as ContactResolver;
-      this.emailValidator = serviceManager.getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_VALIDATOR) as EmailValidator;
-      this.emailFormatter = serviceManager.getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_FORMATTER) as EmailFormatter;
-
-      logger.info('EmailAgent initialized with focused components', {
-        hasEmailOps: !!this.emailOps,
-        hasContactResolver: !!this.contactResolver,
-        hasEmailValidator: !!this.emailValidator,
-        hasEmailFormatter: !!this.emailFormatter
-      });
-    } catch (error) {
-      logger.error('Error initializing EmailAgent', error);
+  private ensureServices(): void {
+    if (!this.emailOps) {
+      this.emailOps = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER) as EmailOperationHandler;
+    }
+    if (!this.contactResolver) {
+      this.contactResolver = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.CONTACT_RESOLVER) as ContactResolver;
+    }
+    if (!this.emailValidator) {
+      this.emailValidator = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_VALIDATOR) as EmailValidator;
+    }
+    if (!this.emailFormatter) {
+      this.emailFormatter = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_FORMATTER) as EmailFormatter;
     }
   }
 
@@ -257,6 +250,9 @@ You are a specialized email management agent powered by Gmail API.
     const startTime = Date.now();
 
     try {
+      // Ensure services are initialized
+      this.ensureServices();
+
       if (!this.emailOps || !this.contactResolver || !this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
@@ -343,6 +339,9 @@ You are a specialized email management agent powered by Gmail API.
     const startTime = Date.now();
 
     try {
+      // Ensure services are initialized
+      this.ensureServices();
+
       if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
@@ -359,9 +358,33 @@ You are a specialized email management agent powered by Gmail API.
         throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
       }
 
+      // DEBUG: Log search request
+      logger.info('EmailAgent.handleSearchEmails - Search request debug', {
+        searchQuery: searchRequest.query,
+        maxResults: searchRequest.maxResults,
+        hasAccessToken: !!params.accessToken
+      });
+
       // Search emails
       const operationResult = await this.emailOps.searchEmails(searchRequest, params.accessToken);
-      
+
+      // DEBUG: Log operation result
+      logger.info('EmailAgent.handleSearchEmails - Operation result debug', {
+        success: operationResult.success,
+        hasResult: !!operationResult.result,
+        hasEmails: !!(operationResult.result?.emails),
+        emailsLength: operationResult.result?.emails?.length || 0,
+        count: operationResult.result?.count,
+        error: operationResult.error,
+        executionTime: operationResult.executionTime,
+        resultKeys: operationResult.result ? Object.keys(operationResult.result) : [],
+        emailsSample: operationResult.result?.emails?.length && operationResult.result.emails.length > 0 ? {
+          id: operationResult.result.emails[0]?.id,
+          subject: operationResult.result.emails[0]?.subject,
+          from: operationResult.result.emails[0]?.from
+        } : null
+      });
+
       if (!operationResult.success) {
         throw new Error(operationResult.error || 'Email search failed');
       }
@@ -372,7 +395,28 @@ You are a specialized email management agent powered by Gmail API.
         count: operationResult.result?.count
       };
 
+      // DEBUG: Log email result construction
+      logger.info('EmailAgent.handleSearchEmails - EmailResult construction debug', {
+        emailResultEmails: emailResult.emails?.length || 0,
+        emailResultCount: emailResult.count,
+        emailResultKeys: Object.keys(emailResult),
+        firstEmailFromResult: emailResult.emails?.[0] ? {
+          id: emailResult.emails[0].id,
+          subject: emailResult.emails[0].subject,
+          from: emailResult.emails[0].from
+        } : null
+      });
+
       const formattingResult = this.emailFormatter.formatEmailResult(emailResult);
+
+      // DEBUG: Log formatting result
+      logger.info('EmailAgent.handleSearchEmails - Formatting result debug', {
+        formattingSuccess: formattingResult.success,
+        hasFormattedText: !!formattingResult.formattedText,
+        formattedTextLength: formattingResult.formattedText?.length || 0,
+        formattedTextPreview: formattingResult.formattedText?.substring(0, 200),
+        formattingError: formattingResult.error
+      });
       
       return {
         success: true,
@@ -402,6 +446,9 @@ You are a specialized email management agent powered by Gmail API.
     const startTime = Date.now();
 
     try {
+      // Ensure services are initialized
+      this.ensureServices();
+
       if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
@@ -462,6 +509,9 @@ You are a specialized email management agent powered by Gmail API.
     const startTime = Date.now();
 
     try {
+      // Ensure services are initialized
+      this.ensureServices();
+
       if (!this.emailOps || !this.emailFormatter) {
         throw new Error('Required services not available');
       }

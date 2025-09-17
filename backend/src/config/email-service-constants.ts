@@ -90,14 +90,11 @@ export const EMAIL_SERVICE_CONSTANTS = {
     GMAIL_COMPOSE: 'gmail.compose'
   },
 
-  // Default Values
+  // Default Values - Removed hardcoded fallbacks
   DEFAULTS: {
     NO_SUBJECT: 'No Subject',
     UNKNOWN_SENDER: 'Unknown Sender',
-    NO_SUBJECT_FALLBACK: 'No Subject',
     UNKNOWN_DATE: 'Unknown Date',
-    NO_CONTENT: 'No content available',
-    ERROR_EXTRACTING_CONTENT: 'Error extracting content',
     EMAIL_OPERATION_COMPLETED: 'Email operation completed'
   },
 

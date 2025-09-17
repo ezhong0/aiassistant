@@ -186,11 +186,24 @@ export const SlackWebhookEventSchema = z.object({
   type: z.string(),
   event_id: z.string(),
   event_time: z.number(),
-  authorizations: z.array(z.object({
-    user_id: z.string(),
-    is_bot: z.boolean(),
-    is_enterprise_install: z.boolean(),
-  })),
+  authorizations: z.union([
+    z.array(z.object({
+      user_id: z.string(),
+      is_bot: z.boolean(),
+      is_enterprise_install: z.boolean(),
+    })),
+    z.record(z.string(), z.object({
+      user_id: z.string(),
+      is_bot: z.boolean(),
+      is_enterprise_install: z.boolean(),
+    }))
+  ]).transform((auth) => {
+    // Convert object format to array format if needed
+    if (Array.isArray(auth)) {
+      return auth;
+    }
+    return Object.values(auth);
+  }),
   is_ext_shared_channel: z.boolean(),
   event_context: z.string(),
 });

@@ -7,14 +7,14 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().regex(/^\d+$/).transform(Number).default('3000'),
   
-  // Google OAuth
-  GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID is required'),
-  GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
-  GOOGLE_REDIRECT_URI: z.string().url('GOOGLE_REDIRECT_URI must be a valid URL'),
+  // Google OAuth (optional in development)
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
   GOOGLE_WEB_CLIENT_ID: z.string().optional(),
   
   // JWT Configuration
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters for security'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters for security').default('development_jwt_secret_key_at_least_32_characters_long_for_security'),
   JWT_EXPIRES_IN: z.string().default('24h'),
   JWT_ISSUER: z.string().default('assistantapp'),
   JWT_AUDIENCE: z.string().default('assistantapp-client'),
@@ -124,9 +124,9 @@ export class ConfigService extends BaseService {
   get isTest(): boolean { return this.config.NODE_ENV === 'test'; }
   
   // Google OAuth
-  get googleClientId(): string { return this.config.GOOGLE_CLIENT_ID; }
-  get googleClientSecret(): string { return this.config.GOOGLE_CLIENT_SECRET; }
-  get googleRedirectUri(): string { return this.config.GOOGLE_REDIRECT_URI; }
+  get googleClientId(): string | undefined { return this.config.GOOGLE_CLIENT_ID; }
+  get googleClientSecret(): string | undefined { return this.config.GOOGLE_CLIENT_SECRET; }
+  get googleRedirectUri(): string | undefined { return this.config.GOOGLE_REDIRECT_URI; }
   get googleWebClientId(): string | undefined { return this.config.GOOGLE_WEB_CLIENT_ID; }
   
   // JWT

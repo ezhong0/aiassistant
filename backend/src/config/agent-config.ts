@@ -265,13 +265,10 @@ Return only the operation name.`;
         return operation;
       }
       
-      // Default fallback - still no string matching
-      return 'read'; // Most requests are read operations
-      
+      // Throw error instead of using hardcoded fallback
+      throw new Error(`AI operation detection failed: Unknown error`);
     } catch (error) {
-      // If AI fails, provide graceful degradation without string matching
-      logger.warn('AI operation detection failed:', error);
-      return 'read'; // Safe default - most operations are reads
+      throw new Error(`AI operation detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -288,7 +285,8 @@ Return only the operation name.`;
       return await aiClassificationService.validateOperation(operation, agentName);
     } catch (error) {
       logger.warn('AI operation validation failed:', error);
-      return true; // Default to valid if AI fails
+      // Throw error instead of defaulting to valid
+      throw new Error(`AI operation validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 

@@ -38,12 +38,16 @@ export class AuthService extends BaseService {
       throw new Error('ConfigService not available from service registry');
     }
     
-    // Configuration is already validated in ConfigService constructor
-    this.oauth2Client = new OAuth2Client(
-      this.config.googleClientId,
-      this.config.googleClientSecret,
-      this.config.googleRedirectUri
-    );
+    // Initialize OAuth2Client only if Google OAuth is configured
+    if (this.config.googleClientId && this.config.googleClientSecret && this.config.googleRedirectUri) {
+      this.oauth2Client = new OAuth2Client(
+        this.config.googleClientId,
+        this.config.googleClientSecret,
+        this.config.googleRedirectUri
+      );
+    } else {
+      this.logWarn('Google OAuth not configured - OAuth functionality will be disabled');
+    }
 
     this.logInfo('Auth service initialized successfully', {
       environment: this.config.nodeEnv,
@@ -82,6 +86,10 @@ export class AuthService extends BaseService {
   ], state?: string): string {
     this.assertReady();
     
+    if (!this.oauth2Client) {
+      throw new Error('Google OAuth not configured - cannot generate auth URL');
+    }
+    
     try {
       const config = this.assertConfig();
       const authOptions: any = {
@@ -110,14 +118,18 @@ export class AuthService extends BaseService {
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
     this.assertReady();
     
+    if (!this.oauth2Client) {
+      throw new Error('Google OAuth not configured - cannot exchange authorization code');
+    }
+    
     try {
       const config = this.assertConfig();
       this.logDebug('Exchanging authorization code for tokens', {
         codeLength: code.length,
         codePrefix: code.substring(0, 20) + '...',
         clientConfig: {
-          clientId: config.googleClientId.substring(0, 20) + '...',
-          redirectUri: config.googleRedirectUri,
+          clientId: config.googleClientId ? config.googleClientId.substring(0, 20) + '...' : 'not_set',
+          redirectUri: config.googleRedirectUri || 'not_set',
           hasClientSecret: !!config.googleClientSecret
         }
       });

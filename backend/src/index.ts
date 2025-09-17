@@ -80,6 +80,19 @@ app.use(requestLogger);
 // Apply comprehensive validation middleware
 app.use(applyComprehensiveValidation());
 
+// Log all incoming requests
+app.use((req, res, next) => {
+  logger.info('Incoming request', {
+    method: req.method,
+    path: req.path,
+    query: JSON.stringify(req.query),
+    body: JSON.stringify(req.body),
+    headers: JSON.stringify(req.headers),
+    timestamp: new Date().toISOString()
+  });
+  next();
+});
+
 // Rate limiting (apply to all routes)
 app.use(apiRateLimit);
 

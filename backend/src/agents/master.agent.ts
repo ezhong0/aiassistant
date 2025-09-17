@@ -601,6 +601,13 @@ You are an intelligent personal assistant that uses AI planning to understand us
         error: tr.error
       }));
 
+      logger.info('Processing tool results with LLM', {
+        userInput,
+        toolResultsCount: toolResults.length,
+        toolResultsSummary: JSON.stringify(toolResultsSummary, null, 2),
+        sessionId
+      });
+
       const prompt = `Based on the user's request and the tool execution results, provide a natural, conversational response.
 
 User Request: "${userInput}"
@@ -608,12 +615,14 @@ User Request: "${userInput}"
 Tool Results:
 ${JSON.stringify(toolResultsSummary, null, 2)}
 
+CRITICAL: You MUST use ONLY the actual data provided in the tool results above. Do NOT generate, invent, or create any fake data. If the tool results contain real email data, use that exact data. If the tool results are empty or contain no emails, say so explicitly.
+
 IMPORTANT: Be proactive and intelligent in your response. If the user asked a follow-up or ambiguous question, provide the most helpful information available rather than asking for clarification.
 
 Provide a natural language response that:
 1. **Takes intelligent action**: If the user said "what about my other emails?" or similar, show additional emails, unread emails, or expand the email list
 2. **Uses conversational tone**: Professional but friendly and approachable
-3. **Includes relevant details**: From tool results with proper formatting
+3. **Includes relevant details**: From tool results with proper formatting - ONLY use actual data from tool results
 4. **Organizes information clearly**: Use bullet points, numbers, or sections for multiple items
 5. **Suggests relevant next steps**: When helpful, but don't overwhelm
 6. **Doesn't mention technical details**: Like tool names or execution times
@@ -626,11 +635,12 @@ Special handling for follow-up questions:
 Guidelines:
 - **Be specific and actionable** rather than vague
 - **Use proper formatting** for readability (bullet points, bold text, etc.)
-- **Include important details** like dates, names, counts, subject lines
+- **Include important details** like dates, names, counts, subject lines - ONLY from actual tool results
 - **Avoid asking for clarification** - take intelligent action instead
-- **For email results**: Include subject, sender, date, and brief content preview when available
-- **For calendar results**: Include time, title, attendees, and location when available
+- **For email results**: Include subject, sender, date, and brief content preview when available - ONLY from actual tool results
+- **For calendar results**: Include time, title, attendees, and location when available - ONLY from actual tool results
 - **Show enthusiasm** when providing helpful information
+- **NEVER generate fake data** - if no real data is available, say so explicitly
 
 Response:`;
 

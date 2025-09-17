@@ -2,7 +2,7 @@ import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, SlackAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveSlackService } from '../services/service-resolver';
-import { getService } from '../services/service-manager';
+import { getService, serviceManager } from '../services/service-manager';
 import { SlackInterfaceService } from '../services/slack/slack-interface.service';
 import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack/slack.types';
 import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack/slack-message-reader.types';
@@ -135,27 +135,17 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
   }
 
   /**
-   * Initialize focused service dependencies
+   * Lazy initialization of Slack services
    */
-  protected async onInitialize(): Promise<void> {
-    try {
-      this.logger.info('Initializing SlackAgent with focused services...');
-      
-      const serviceManager = getService('serviceManager') as any;
-      
-      // Get focused services
+  private ensureServices(): void {
+    if (!this.slackMessageAnalyzer) {
       this.slackMessageAnalyzer = serviceManager.getService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER) as SlackMessageAnalyzer;
+    }
+    if (!this.slackDraftManager) {
       this.slackDraftManager = serviceManager.getService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER) as SlackDraftManager;
+    }
+    if (!this.slackFormatter) {
       this.slackFormatter = serviceManager.getService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER) as SlackFormatter;
-
-      if (!this.slackMessageAnalyzer || !this.slackDraftManager || !this.slackFormatter) {
-        throw new Error('Required Slack services not available');
-      }
-
-      this.logger.info('SlackAgent initialized successfully with focused services');
-    } catch (error) {
-      this.logger.error('Error initializing SlackAgent', error);
-      throw error;
     }
   }
 
@@ -706,11 +696,14 @@ You are a specialized Slack workspace management agent focused on reading and un
    * This method is called by MasterAgent to delegate context gathering
    */
   async gatherContext(
-    userInput: string, 
-    contextDetection: ContextDetectionResult, 
+    userInput: string,
+    contextDetection: ContextDetectionResult,
     slackContext: SlackContext
   ): Promise<ContextGatheringResult> {
     try {
+      // Ensure services are initialized
+      this.ensureServices();
+
       if (!this.slackMessageAnalyzer) {
         throw new Error('SlackMessageAnalyzer not available');
       }

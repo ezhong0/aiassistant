@@ -46,35 +46,64 @@ export const CommonValidationSchemas = {
  */
 export function validateCommonRoutes() {
   return (req: Request, res: Response, next: NextFunction): void => {
-    // Apply common validations based on route patterns
-    const validations: ValidationOptions = {};
+    try {
+      logger.debug('Starting common route validation', {
+        path: req.path,
+        method: req.method,
+        body: JSON.stringify(req.body),
+        query: JSON.stringify(req.query),
+        params: JSON.stringify(req.params)
+      });
 
-    // Add query validation for pagination/sorting routes
-    if (req.path.includes('/list') || req.path.includes('/search')) {
-      validations.query = CommonValidationSchemas.pagination.merge(CommonValidationSchemas.sorting);
-    }
+      // Apply common validations based on route patterns
+      const validations: ValidationOptions = {};
 
-    // Add ID validation for resource routes
-    if (req.params.id) {
-      validations.params = CommonValidationSchemas.idParam;
-    }
-
-    // Add timestamp validation for time-based routes
-    if (req.path.includes('/events') || req.path.includes('/messages')) {
-      const timestampSchema = CommonValidationSchemas.timestamp;
-      if (validations.query) {
-        // Type assertion for merging schemas
-        validations.query = (validations.query as any).merge(timestampSchema);
-      } else {
-        validations.query = timestampSchema;
+      // Add query validation for pagination/sorting routes
+      if (req.path.includes('/list') || req.path.includes('/search')) {
+        validations.query = CommonValidationSchemas.pagination.merge(CommonValidationSchemas.sorting);
+        logger.debug('Added pagination/sorting validation', { path: req.path });
       }
-    }
 
-    if (Object.keys(validations).length > 0) {
-      return validateRequest(validations)(req, res, next);
-    }
+      // Add ID validation for resource routes
+      if (req.params.id) {
+        validations.params = CommonValidationSchemas.idParam;
+        logger.debug('Added ID validation', { path: req.path, id: req.params.id });
+      }
 
-    next();
+      // Add timestamp validation for time-based routes
+      if (req.path.includes('/events') || req.path.includes('/messages')) {
+        const timestampSchema = CommonValidationSchemas.timestamp;
+        if (validations.query) {
+          // Type assertion for merging schemas
+          validations.query = (validations.query as any).merge(timestampSchema);
+        } else {
+          validations.query = timestampSchema;
+        }
+        logger.debug('Added timestamp validation', { path: req.path });
+      }
+
+      if (Object.keys(validations).length > 0) {
+        logger.debug('Applying validations', { validations: Object.keys(validations) });
+        return validateRequest(validations)(req, res, next);
+      }
+
+      logger.debug('No validations needed, proceeding', { path: req.path });
+      next();
+    } catch (error) {
+      logger.error('Common route validation error', { 
+        error: error instanceof Error ? error.message : JSON.stringify(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        path: req.path,
+        method: req.method,
+        body: JSON.stringify(req.body),
+        timestamp: new Date().toISOString()
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Internal validation error',
+        code: 'INTERNAL_ERROR',
+      });
+    }
   };
 }
 
@@ -232,6 +261,12 @@ export const RouteValidation = {
  */
 export function applyComprehensiveValidation() {
   return (req: Request, res: Response, next: NextFunction): void => {
+    // Skip validation for routes that have their own validation
+    if (req.path.startsWith('/api/assistant/') || req.path.startsWith('/slack/')) {
+      logger.debug('Skipping comprehensive validation for route', { path: req.path });
+      return next();
+    }
+
     // Log validation attempts in development
     if (process.env.NODE_ENV === 'development') {
       logger.debug('Validating request', {

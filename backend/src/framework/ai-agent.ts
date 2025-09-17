@@ -777,52 +777,8 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    * Override this method to customize error messages for specific agents
    */
   protected createUserFriendlyErrorMessage(error: Error, params: TParams): string {
-    const errorCode = (error as any).code;
-
-    // Level 1: Simple, user-friendly messages with immediate next steps
-    switch (errorCode) {
-      case 'AI_PLANNING_FAILED':
-        return this.createProgressiveErrorMessage(
-          "I couldn't understand your request clearly.",
-          "Try rephrasing your request with more specific details.",
-          `AI Planning Error: ${error.message}`
-        );
-
-      case 'SERVICE_UNAVAILABLE':
-        return this.createProgressiveErrorMessage(
-          "The service I need isn't available right now.",
-          "Please wait a moment and try again. If this continues, check your internet connection.",
-          `Service Error: ${error.message}`
-        );
-
-      case 'TIMEOUT':
-        return this.createProgressiveErrorMessage(
-          "Your request is taking longer than expected.",
-          "Try breaking it into smaller parts or try again in a few minutes.",
-          `Timeout Error: Request exceeded ${this.config.timeout}ms limit`
-        );
-
-      case 'AUTHENTICATION_FAILED':
-        return this.createProgressiveErrorMessage(
-          "I need to verify your access to continue.",
-          "Please check your login status and permissions, then try again.",
-          `Authentication Error: ${error.message}`
-        );
-
-      case 'INVALID_PARAMETERS':
-        return this.createProgressiveErrorMessage(
-          "I need more information to complete your request.",
-          "Please provide more specific details or check the required fields.",
-          `Validation Error: ${error.message}`
-        );
-
-      default:
-        return this.createProgressiveErrorMessage(
-          "Something unexpected happened.",
-          "Please try again. If the problem continues, let me know what you were trying to do.",
-          `Unexpected Error: ${error.message}`
-        );
-    }
+    // Throw error instead of creating hardcoded user-friendly messages
+    throw error;
   }
 
   /**

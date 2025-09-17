@@ -353,6 +353,7 @@ export class GmailService extends BaseService {
         access_token: accessToken
       });
 
+      // First, get the message IDs
       const response = await this.gmailService.users.messages.list({
         userId: 'me',
         q: query,
@@ -361,19 +362,46 @@ export class GmailService extends BaseService {
         auth: auth
       });
 
-      if (!response.data.messages) {
+      if (!response.data.messages || response.data.messages.length === 0) {
         this.logDebug('No emails found', { query });
         return [];
       }
 
-      this.logInfo('Email search completed', { 
+      this.logInfo('Found message IDs', { 
         query, 
-        foundCount: response.data.messages.length 
+        messageCount: response.data.messages.length 
       });
 
-      return response.data.messages;
+      // Now fetch the actual email content for each message
+      const emailPromises = response.data.messages.map(async (message: any) => {
+        try {
+          this.logDebug('Fetching email details', { messageId: message.id });
+          const emailData = await this.getFullMessage(accessToken, message.id);
+          this.logDebug('Email details fetched', { 
+            messageId: message.id, 
+            hasEmailData: !!emailData,
+            emailDataKeys: emailData ? Object.keys(emailData) : []
+          });
+          return emailData;
+        } catch (error) {
+          this.logError('Error fetching email details', { messageId: message.id, error });
+          return null;
+        }
+      });
+
+      const emails = await Promise.all(emailPromises);
+      const validEmails = emails.filter(email => email !== null);
+
+      this.logInfo('Email search completed', { 
+        query, 
+        foundCount: validEmails.length,
+        requestedCount: response.data.messages.length
+      });
+
+      return validEmails;
     } catch (error) {
       this.handleError(error, 'searchEmails');
+      return [];
     }
   }
 
@@ -440,7 +468,7 @@ export class GmailService extends BaseService {
 
           const message = messageResponse.data;
           const headers = message.payload?.headers || [];
-          const getHeader = (name: string) => headers.find((h: GmailHeader) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+          const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
           
           const subject = getHeader('Subject');
           const from = getHeader('From');
@@ -508,7 +536,7 @@ export class GmailService extends BaseService {
       size: number;
       attachmentId: string;
     }>;
-  }> {
+  } | null> {
     this.assertReady();
     
     try {
@@ -534,7 +562,7 @@ export class GmailService extends BaseService {
 
       // Extract headers
       const headers = message.payload?.headers || [];
-      const getHeader = (name: string) => headers.find((h: GmailHeader) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+      const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
       
       const subject = getHeader('Subject');
       const from = getHeader('From');
@@ -543,8 +571,29 @@ export class GmailService extends BaseService {
       const bcc = getHeader('Bcc').split(',').map((t: string) => t.trim()).filter((t: string) => t);
       const dateStr = getHeader('Date');
 
+      // DEBUG: Log header extraction
+      this.logInfo('GmailService.getFullMessage - Header extraction debug', {
+        messageId,
+        headersCount: headers.length,
+        availableHeaders: headers.map((h: any) => h.name),
+        extractedSubject: subject,
+        extractedFrom: from,
+        extractedTo: to,
+        extractedDate: dateStr
+      });
+
       // Extract body content
       const body = this.extractMessageBody(message.payload);
+
+      // DEBUG: Log body extraction
+      this.logInfo('GmailService.getFullMessage - Body extraction debug', {
+        messageId,
+        hasPayload: !!message.payload,
+        bodyTextLength: body.text?.length || 0,
+        bodyHtmlLength: body.html?.length || 0,
+        bodyTextPreview: body.text?.substring(0, 100),
+        bodyHtmlPreview: body.html?.substring(0, 100)
+      });
 
       // Extract attachments
       const attachments = this.extractAttachments(message.payload);
@@ -578,23 +627,34 @@ export class GmailService extends BaseService {
         snippet: message.snippet || '',
         labels: message.labelIds || []
       };
-      
+
       if (cc.length > 0) fullMessage.cc = cc;
       if (bcc.length > 0) fullMessage.bcc = bcc;
       if (attachments.length > 0) fullMessage.attachments = attachments;
 
-      this.logInfo('Full message retrieved successfully', { 
-        messageId, 
+      // DEBUG: Log final constructed message
+      this.logInfo('GmailService.getFullMessage - Final message constructed', {
+        messageId,
         subject: subject.substring(0, 50),
         hasTextBody: !!body.text,
         hasHtmlBody: !!body.html,
-        attachmentCount: attachments.length
+        attachmentCount: attachments.length,
+        finalMessageKeys: Object.keys(fullMessage),
+        fullMessageSample: {
+          id: fullMessage.id,
+          subject: fullMessage.subject,
+          from: fullMessage.from,
+          to: fullMessage.to,
+          hasBody: !!(fullMessage.body.text || fullMessage.body.html),
+          snippet: fullMessage.snippet?.substring(0, 50)
+        }
       });
 
       return fullMessage;
 
     } catch (error) {
       this.handleError(error, 'getFullMessage');
+      return null;
     }
   }
 

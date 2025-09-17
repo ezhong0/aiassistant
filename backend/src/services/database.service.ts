@@ -135,6 +135,14 @@ export class DatabaseService extends BaseService {
       
     } catch (error) {
       this.logError('Failed to initialize database service:', error);
+      
+      // In development mode, allow the service to start without database
+      if (process.env.NODE_ENV === 'development') {
+        this.logWarn('Database service starting in degraded mode - database operations will be disabled');
+        this.pool = null;
+        return;
+      }
+      
       throw error;
     }
   }
@@ -254,7 +262,7 @@ export class DatabaseService extends BaseService {
    */
   private async getClient(): Promise<PoolClient> {
     if (!this.pool) {
-      throw new Error('Database pool not initialized');
+      throw new Error('Database service is running in degraded mode - database operations are disabled');
     }
     return await this.pool.connect();
   }

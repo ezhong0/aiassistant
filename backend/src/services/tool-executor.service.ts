@@ -108,7 +108,7 @@ export class ToolExecutorService extends BaseService {
                 needsReauth: true,
                 reauth_reason: authResult.authReason,
                 error: authResult.error || 'Authentication required',
-                message: authResult.fallbackMessage || 'Authentication required to proceed'
+                message: authResult.error || 'Authentication required'
               };
             } else if (result && typeof result === 'object' && 'result' in result) {
               // Extract the actual result data which should contain awaitingConfirmation
