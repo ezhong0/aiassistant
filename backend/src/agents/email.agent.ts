@@ -189,8 +189,9 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
         logger.warn('EmailAgent.processQuery - Unknown operation, defaulting to search', {
           operation: params.operation
         });
+        const preprocessedQuery = this.preprocessEmailQuery(params.query || 'in:inbox');
         return await this.handleSearchEmails(params, {
-          query: params.query || 'in:inbox',
+          query: preprocessedQuery,
           maxResults: params.maxResults || 10
         });
     }
@@ -563,9 +564,12 @@ You are a specialized email management agent powered by Gmail API.
         throw new Error('Required services not available');
       }
 
+      // Preprocess query to convert natural language to Gmail API syntax
+      const processedQuery = this.preprocessEmailQuery(actionParams.query || '');
+
       // Create search request
       const searchRequest: SearchEmailsRequest = {
-        query: actionParams.query || '',
+        query: processedQuery,
         maxResults: actionParams.maxResults || 10
       };
 
@@ -769,6 +773,99 @@ You are a specialized email management agent powered by Gmail API.
         executionTime: Date.now() - startTime
       };
     }
+  }
+
+  /**
+   * Preprocess email query to convert natural language time expressions to Gmail API syntax
+   */
+  private preprocessEmailQuery(query: string): string {
+    let processedQuery = query.toLowerCase().trim();
+
+    // Convert natural language time expressions to Gmail API filters
+    const timeConversions = [
+      // Recently/recent = last 7 days
+      { patterns: ['recently', 'recent'], replacement: 'newer_than:7d' },
+
+      // Today
+      { patterns: ['today', 'this morning', 'this afternoon'], replacement: 'newer_than:1d' },
+
+      // Yesterday
+      { patterns: ['yesterday'], replacement: `after:${this.getDateString(-1)} before:${this.getDateString(0)}` },
+
+      // This week
+      { patterns: ['this week', 'past week'], replacement: 'newer_than:7d' },
+
+      // Last week
+      { patterns: ['last week'], replacement: `after:${this.getDateString(-14)} before:${this.getDateString(-7)}` },
+
+      // This month
+      { patterns: ['this month', 'past month'], replacement: 'newer_than:30d' },
+
+      // Last few days
+      { patterns: ['last few days', 'past few days'], replacement: 'newer_than:3d' },
+
+      // Last 24 hours
+      { patterns: ['last 24 hours', 'past 24 hours'], replacement: 'newer_than:1d' }
+    ];
+
+    // Apply time conversions
+    for (const conversion of timeConversions) {
+      for (const pattern of conversion.patterns) {
+        if (processedQuery.includes(pattern)) {
+          // Remove the natural language time expression
+          processedQuery = processedQuery.replace(new RegExp(pattern, 'gi'), '').trim();
+
+          // Add Gmail API time filter
+          if (!processedQuery.includes('newer_than:') && !processedQuery.includes('after:')) {
+            processedQuery = processedQuery ? `${conversion.replacement} ${processedQuery}` : conversion.replacement;
+          }
+          break;
+        }
+      }
+    }
+
+    // Clean up common natural language phrases that don't translate to Gmail API
+    const cleanupPatterns = [
+      'what emails did i get',
+      'show me emails',
+      'emails from',
+      'my emails',
+      'emails that',
+      'did i receive'
+    ];
+
+    for (const pattern of cleanupPatterns) {
+      processedQuery = processedQuery.replace(new RegExp(pattern, 'gi'), '').trim();
+    }
+
+    // If query is empty after cleanup, default to recent inbox emails
+    if (!processedQuery || processedQuery.length < 2) {
+      processedQuery = 'newer_than:7d in:inbox';
+    } else {
+      // Ensure we're searching inbox by default if no specific mailbox specified
+      if (!processedQuery.includes('in:') && !processedQuery.includes('label:')) {
+        processedQuery += ' in:inbox';
+      }
+    }
+
+    logger.info('EmailAgent.preprocessEmailQuery - Query conversion', {
+      originalQuery: query,
+      processedQuery: processedQuery
+    });
+
+    return processedQuery;
+  }
+
+  /**
+   * Get date string for Gmail API (YYYY/MM/DD format) relative to today
+   */
+  private getDateString(daysOffset: number): string {
+    const date = new Date();
+    date.setDate(date.getDate() + daysOffset);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}/${month}/${day}`;
   }
 
   /**
