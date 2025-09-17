@@ -704,7 +704,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     try {
       const response = await openaiService.generateText(
         parameters.query || 'Analyze the current situation',
-        'You are an analytical AI assistant. Provide thoughtful analysis and insights based on the given context.',
+        'Think through this carefully and provide helpful insights.',
         { temperature: 0.3, maxTokens: 500 }
       );
 
@@ -1205,35 +1205,13 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
     const toolNames = tools.map(tool => tool.name).join(', ');
 
-    return `You are an AI planning assistant for the ${this.config.name} agent.
+    return `You're helping plan how to handle a user request for the ${this.config.name} agent.
 
-AVAILABLE TOOLS (you MUST ONLY use these exact tool names):
+Available tools: ${toolNames}
+
 ${toolDescriptions}
 
-CRITICAL CONSTRAINTS:
-- You MUST ONLY use tools from this list: ${toolNames}
-- NEVER invent or hallucinate tool names like "functions.extract_data" or similar
-- Each step.tool field must exactly match one of the available tool names above
-- If you need functionality not available in the listed tools, use the "think" tool to analyze the situation
-
-Your task is to create an execution plan that breaks down complex user requests into individual tool steps using ONLY the available tools.
-Each step should specify:
-- id: unique identifier
-- tool: which tool to use
-- description: what this step accomplishes
-- parameters: tool parameters
-- dependencies: which steps must complete first (optional)
-- estimatedTime: execution time in milliseconds (optional)
-- requiresConfirmation: whether user confirmation is needed
-
-Guidelines:
-- Prefer simpler plans when possible
-- Consider dependencies between steps
-- Include confirmation for destructive actions
-- Provide clear reasoning for your approach
-- Set realistic confidence levels (0.0 to 1.0)
-
-Return a JSON object matching the AIPlan schema.`;
+Create a smart execution plan using only these tools. Think about what a good assistant would do, then return a JSON plan with the steps needed.`;
   }
 
   /**

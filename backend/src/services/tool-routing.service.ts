@@ -398,24 +398,11 @@ Return JSON with:
         return this.getFallbackPreviewFormat(actionType, previewData);
       }
 
-      const formatPrompt = `You are formatting preview details for a ${actionType} action in a Slack interface.
+      const formatPrompt = `Format this ${actionType} preview for a user to review before confirming:
 
-Action Type: ${actionType}
-Preview Data: ${JSON.stringify(previewData, null, 2)}
+${JSON.stringify(previewData, null, 2)}
 
-Create a well-formatted, user-friendly preview section that:
-1. Uses appropriate emojis for the action type
-2. Shows key details in a bulleted list format
-3. Highlights important information like recipients, dates, external domains
-4. Uses Slack markdown formatting (**bold**, _italic_)
-5. Is concise but informative
-
-Format as:
-**📧 Action Details:** (use appropriate emoji for action type)
-• **Key Field:** Value
-• **Another Field:** Value
-
-Focus on the most important details that a user would want to review before confirming the action.`;
+Show the key details they need to know in a clean, readable format.`;
 
       const formattedDetails = await this.openaiService.generateText(
         JSON.stringify(previewData),

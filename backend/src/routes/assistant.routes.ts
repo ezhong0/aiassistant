@@ -989,7 +989,7 @@ const generateDynamicConfirmationMessage = async (toolCalls: ToolCall[], toolRes
       const messages = [
         {
           role: 'system' as const,
-          content: 'You are a helpful assistant. Generate a natural confirmation message asking the user if they want to proceed with an action. Keep it concise and friendly. Do not use quotes.'
+          content: 'Ask if the user wants to proceed with this action. Be natural and friendly.'
         },
         {
           role: 'user' as const,
@@ -1038,7 +1038,7 @@ const generateFallbackDynamicConfirmationPrompt = async (toolCalls: ToolCall[], 
       const messages = [
         {
           role: 'system' as const,
-          content: 'You are a helpful assistant. Generate a brief instruction for the user on how to confirm or cancel an action. Keep it concise. Do not use quotes.'
+          content: 'Tell the user how to confirm or cancel. Keep it brief.'
         },
         {
           role: 'user' as const,
@@ -1098,7 +1098,7 @@ const generateDynamicCompletionMessage = async (toolResults: ToolResult[], userC
       const messages = [
         {
           role: 'system' as const,
-          content: 'You are a helpful assistant. Generate a natural completion message summarizing what was accomplished. Keep it concise and positive. Do not use quotes.'
+          content: 'Summarize what was accomplished. Be positive and concise.'
         },
         {
           role: 'user' as const,
@@ -1125,7 +1125,7 @@ const generateDynamicCancelMessage = async (actionId: string): Promise<string> =
       const messages = [
         {
           role: 'system' as const,
-          content: 'You are a helpful assistant. Generate a brief, natural message confirming an action was cancelled. Keep it concise and reassuring. Do not use quotes.'
+          content: 'Confirm the action was cancelled. Be reassuring and brief.'
         },
         {
           role: 'user' as const,

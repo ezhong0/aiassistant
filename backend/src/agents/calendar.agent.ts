@@ -126,8 +126,18 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       hasCalendarValidator: !!this.calendarValidator
     });
 
-    // Route to appropriate handler based on action
-    switch (params.action?.toLowerCase()) {
+    // First detect the operation
+    const operation = await this.detectOperation(params);
+
+    this.logger.info('CalendarAgent.processQuery - Operation detected', {
+      detectedOperation: operation,
+      hasAction: !!params.action,
+      hasOperation: !!(params as any).operation,
+      sessionId: context.sessionId
+    });
+
+    // Route to appropriate handler based on detected operation
+    switch (operation.toLowerCase()) {
       case 'create':
         this.logger.info('CalendarAgent.processQuery - Routing to handleCreateEvent');
         return await this.handleCreateEvent(params as unknown as ToolParameters, context);
@@ -153,7 +163,8 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         return await this.handleFindSlots(params as unknown as ToolParameters, context);
 
       default:
-        this.logger.warn('CalendarAgent.processQuery - Unknown action, defaulting to create', {
+        this.logger.warn('CalendarAgent.processQuery - Unknown operation, defaulting to create', {
+          detectedOperation: operation,
           action: params.action
         });
         return await this.handleCreateEvent(params as unknown as ToolParameters, context);
@@ -280,6 +291,65 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         required: ['startDate', 'endDate', 'durationMinutes']
       }
     });
+  }
+
+  /**
+   * Detect operation type from calendar parameters
+   */
+  protected async detectOperation(params: CalendarAgentRequest): Promise<string> {
+    // Check if operation is explicitly specified
+    if ((params as any).operation) {
+      return (params as any).operation;
+    }
+
+    // Check if action is specified (alternative parameter name)
+    if (params.action) {
+      return params.action;
+    }
+
+    // Detect operation from query or parameters
+    if (params.query) {
+      const queryLower = params.query.toLowerCase();
+      if (queryLower.includes('list') || queryLower.includes('show') || queryLower.includes('what') || queryLower.includes('events')) {
+        return 'list';
+      } else if (queryLower.includes('create') || queryLower.includes('schedule') || queryLower.includes('add') || queryLower.includes('book')) {
+        return 'create';
+      } else if (queryLower.includes('update') || queryLower.includes('change') || queryLower.includes('modify') || queryLower.includes('edit')) {
+        return 'update';
+      } else if (queryLower.includes('delete') || queryLower.includes('remove') || queryLower.includes('cancel')) {
+        return 'delete';
+      } else if (queryLower.includes('available') || queryLower.includes('free') || queryLower.includes('busy')) {
+        return 'check_availability';
+      } else if (queryLower.includes('find') && (queryLower.includes('slot') || queryLower.includes('time'))) {
+        return 'find_slots';
+      }
+    }
+
+    // Check for list operation indicators
+    if ((params as any).timeMin || (params as any).timeMax || (params as any).maxResults) {
+      return 'list';
+    }
+
+    // Check for create operation indicators
+    if (params.summary || params.start || params.end) {
+      return 'create';
+    }
+
+    // Default to list for calendar operations (safer than create)
+    return 'list';
+  }
+
+  /**
+   * Check if operation requires confirmation
+   */
+  protected async operationRequiresConfirmation(operation: string): Promise<boolean> {
+    // Create, update, and delete operations require confirmation
+    if (operation === 'create' || operation === 'update' || operation === 'delete') {
+      return true;
+    }
+
+    // List, search, and availability operations don't require confirmation
+    return false;
   }
 
   /**

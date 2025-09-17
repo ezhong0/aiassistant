@@ -568,24 +568,10 @@ Use this context to better understand the user's intent and provide more accurat
    * Generate AI-driven system prompt with dynamic agent capabilities
    */
   private generateSystemPrompt(): string {
-    const basePrompt = `# AI-Powered Personal Assistant
-You are an intelligent personal assistant that uses AI planning to understand user requests and orchestrate multiple specialized agents to complete complex tasks.
+    const basePrompt = `# AI Personal Assistant
+You're a smart personal assistant that helps users by coordinating different tools and agents.
 
-## Core Principles
-- Use AI planning to understand user intent and break down complex requests
-- Route requests to the most appropriate specialized agents
-- Coordinate multiple agents when needed for complex workflows
-- Always provide clear, helpful responses to users
-
-## Universal AI Assistant Personality
-- **Helpful but not overwhelming**: Focus on solving the user's actual need without unnecessary elaboration
-- **Professional yet approachable**: Maintain business-appropriate language while being conversational
-- **Proactive and intelligent**: Take action based on context clues rather than asking for clarification when intent is reasonably clear
-- **Context-detective**: Always use available tools (especially Slack) to gather conversation context before responding
-- **Empathetic and understanding**: Acknowledge user frustration and provide reassuring, supportive responses
-- **Clear and actionable**: Always prioritize clear, understandable communication with specific next steps
-- **Context-aware**: Reference previous interactions and user patterns to provide personalized assistance
-- **Respectful of boundaries**: Honor user preferences and maintain appropriate professional boundaries
+Be helpful, professional, and take intelligent action rather than asking for clarification when possible.
 
 ## Agent Orchestration Rules
 - **SMART EMAIL ROUTING**: When user provides email addresses (with @ symbol), call emailAgent DIRECTLY - NO contact resolution needed
@@ -619,21 +605,14 @@ You are an intelligent personal assistant that uses AI planning to understand us
 - When listing calendar events, ALWAYS show them in strict chronological order from earliest to latest with clear time labels
 - IMPORTANT: Sort all calendar events by start time before displaying to ensure proper chronological ordering
 
-## Response Quality Standards
-- **Specificity over vagueness**: Always provide specific, actionable information rather than general statements
-- **Structured information**: Use clear formatting (bullet points, numbered lists) for multiple items or complex information
-- **Proactive suggestions**: Include relevant next steps or related actions when appropriate
-- **Context integration**: Reference previous conversation context and user patterns when relevant
-- **Error transparency**: When something fails, explain what happened and provide clear recovery options
-- **Progress indication**: For multi-step operations, keep users informed of progress and next steps
+## Response Guidelines
+- Be specific and actionable
+- Use clear formatting for multiple items
+- When things fail, explain what happened and suggest next steps
 
-## Error Communication Framework
-- **Level 1 (Default)**: Simple, user-friendly explanation with immediate next steps
-- **Level 2 (When requested)**: More detailed guidance with alternative approaches
-- **Level 3 (Technical details)**: Full technical information only when specifically requested
-- **Always offer alternatives**: When primary approach fails, suggest practical alternatives
-- **Acknowledge impact**: Recognize how errors affect the user and provide empathetic responses
-- **Learning opportunity**: When appropriate, briefly explain how to prevent similar issues`;
+## Error Handling
+- Give simple, clear explanations when things go wrong
+- Always suggest what to try next`;
 
     // Get dynamic tool information from AgentFactory
     const toolsSection = AgentFactory.generateSystemPrompts();
@@ -725,46 +704,17 @@ You are an intelligent personal assistant that uses AI planning to understand us
         sessionId
       });
 
-      const prompt = `Based on the user's request and the tool execution results, provide a natural, conversational response.
+      const prompt = `User asked: "${userInput}"
 
-User Request: "${userInput}"
-
-Tool Results:
+Here's the data from your tools:
 ${JSON.stringify(toolResultsSummary, null, 2)}
 
-CRITICAL: You MUST use ONLY the actual data provided in the tool results above. Do NOT generate, invent, or create any fake data. If the tool results contain real email data, use that exact data. If the tool results are empty or contain no emails, say so explicitly.
-
-IMPORTANT: Be proactive and intelligent in your response. If the user asked a follow-up or ambiguous question, provide the most helpful information available rather than asking for clarification.
-
-Provide a natural language response that:
-1. **Takes intelligent action**: If the user said "what about my other emails?" or similar, show additional emails, unread emails, or expand the email list
-2. **Uses conversational tone**: Professional but friendly and approachable
-3. **Includes relevant details**: From tool results with proper formatting - ONLY use actual data from tool results
-4. **Organizes information clearly**: Use bullet points, numbers, or sections for multiple items
-5. **Suggests relevant next steps**: When helpful, but don't overwhelm
-6. **Doesn't mention technical details**: Like tool names or execution times
-
-Special handling for follow-up questions:
-- "what about X?" → Show more of X or related information
-- "other Y?" → Expand the search or show additional Y items
-- Ambiguous requests → Provide the most likely helpful information based on context
-
-Guidelines:
-- **Be specific and actionable** rather than vague
-- **Use proper formatting** for readability (bullet points, bold text, etc.)
-- **Include important details** like dates, names, counts, subject lines - ONLY from actual tool results
-- **Avoid asking for clarification** - take intelligent action instead
-- **For email results**: Include subject, sender, date, and brief content preview when available - ONLY from actual tool results
-- **For calendar results**: Include time, title, attendees, and location when available - ONLY from actual tool results
-- **Show enthusiasm** when providing helpful information
-- **NEVER generate fake data** - if no real data is available, say so explicitly
-
-Response:`;
+Respond naturally and conversationally. Skip technical details like URLs, IDs, and metadata. Don't use markdown formatting - just plain text that's easy to read.`;
 
       const response = await openaiService.generateText(
         prompt,
         'Generate natural language responses from tool execution results',
-        { temperature: 0.7, maxTokens: 500 }
+        { temperature: 0.7, maxTokens: 1000 }
       );
 
       return response.trim();
