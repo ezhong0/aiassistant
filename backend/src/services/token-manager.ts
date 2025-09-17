@@ -185,11 +185,11 @@ export class TokenManager extends BaseService {
     
     // Handle both expiry_date (number) and expires_at (Date)
     let expiryTime: number | null = null;
-    if (token.expiry_date) {
-      expiryTime = typeof token.expiry_date === 'number' ? token.expiry_date : new Date(token.expiry_date).getTime();
-    } else if (token.expires_at) {
+    if (token.expires_at) {
       const expiresAtDate = this.ensureDate(token.expires_at);
       expiryTime = expiresAtDate ? expiresAtDate.getTime() : null;
+    } else if (token.expiry_date) {
+      expiryTime = typeof token.expiry_date === 'number' ? token.expiry_date : new Date(token.expiry_date).getTime();
     }
     
     // If we have expiry information, validate it

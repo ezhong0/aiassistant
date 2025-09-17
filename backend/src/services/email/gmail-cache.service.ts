@@ -129,7 +129,7 @@ export class GmailCacheService extends BaseService {
       const cached = await this.cacheService.get<CachedEmailSearch>(cacheKey);
       if (cached && this.isSearchCacheValid(cached)) {
         this.recordCacheHit();
-        this.logDebug('Gmail search cache hit', { 
+        this.logInfo('Gmail search cache hit', { 
           query, 
           maxResults,
           hitRate: this.metrics.hitRate 
@@ -139,7 +139,7 @@ export class GmailCacheService extends BaseService {
 
       // Cache miss - call Gmail API
       this.recordCacheMiss();
-      this.logDebug('Gmail search cache miss', { query, maxResults });
+      this.logInfo('Gmail search cache miss', { query, maxResults });
 
       const emails = await this.gmailService.searchEmails(accessToken, query, options);
 
@@ -153,7 +153,7 @@ export class GmailCacheService extends BaseService {
 
       await this.cacheService.set(cacheKey, cacheData, this.SEARCH_CACHE_TTL);
 
-      this.logDebug('Gmail search cached', { 
+      this.logInfo('Gmail search cached', { 
         query, 
         resultCount: emails.length,
         ttl: this.SEARCH_CACHE_TTL 

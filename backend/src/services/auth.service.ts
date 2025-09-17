@@ -146,7 +146,7 @@ export class AuthService extends BaseService {
         expires_in: 3600, // Default to 1 hour (Google OAuth tokens typically expire in 1 hour)
         token_type: tokens.token_type || 'Bearer',
         scope: tokens.scope || '',
-        expiry_date: Date.now() + (3600 * 1000) // Calculate expiry date (1 hour from now)
+        expires_at: new Date(Date.now() + (3600 * 1000)) // Calculate expiry date (1 hour from now)
       };
 
       this.logInfo('Successfully exchanged code for tokens', {
@@ -297,7 +297,8 @@ export class AuthService extends BaseService {
         refresh_token: credentials.refresh_token || refreshToken,
         expires_in: 3600, // Default to 1 hour
         token_type: credentials.token_type || 'Bearer',
-        scope: credentials.scope || ''
+        scope: credentials.scope || '',
+        expires_at: credentials.expiry_date ? new Date(credentials.expiry_date) : new Date(Date.now() + (3600 * 1000))
       };
 
       this.logInfo('Successfully refreshed Google tokens', {
