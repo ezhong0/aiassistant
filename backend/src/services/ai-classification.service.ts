@@ -718,12 +718,19 @@ Examples:
       const response = await this.openaiService.generateStructuredData(
         userInput,
         contextDetectionPrompt,
-        z.object({
-          needsContext: z.boolean(),
-          contextType: z.enum(['recent_messages', 'thread_history', 'search_results', 'none']),
-          confidence: z.number().min(0).max(1),
-          reasoning: z.string()
-        }),
+        {
+          type: 'object',
+          properties: {
+            needsContext: { type: 'boolean' },
+            contextType: { 
+              type: 'string', 
+              enum: ['recent_messages', 'thread_history', 'search_results', 'none'] 
+            },
+            confidence: { type: 'number', minimum: 0, maximum: 1 },
+            reasoning: { type: 'string' }
+          },
+          required: ['needsContext', 'contextType', 'confidence', 'reasoning']
+        },
         { temperature: 0.1, maxTokens: 200 }
       );
 

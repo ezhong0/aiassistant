@@ -338,7 +338,7 @@ export class OpenAIService extends BaseService {
   async generateStructuredData<T extends object>(
     userInput: string,
     systemPrompt: string,
-    schema: z.ZodSchema<T>,
+    schema: z.ZodSchema<T> | any, // Accept both Zod schemas and plain objects
     options: {
       temperature?: number;
       maxTokens?: number;
@@ -390,8 +390,15 @@ export class OpenAIService extends BaseService {
 
       const extractedData = JSON.parse((toolCall as any).function?.arguments || '{}');
       
-      // Validate the extracted data against the Zod schema
-      const validatedData = schema.parse(extractedData);
+      // Validate the extracted data - handle both Zod schemas and plain objects
+      let validatedData: T;
+      if (schema && typeof schema.parse === 'function') {
+        // It's a Zod schema
+        validatedData = schema.parse(extractedData);
+      } else {
+        // It's a plain object schema - just return the extracted data
+        validatedData = extractedData as T;
+      }
       
       this.logDebug('Structured data generated successfully', { 
         dataKeys: Object.keys(validatedData)
@@ -551,12 +558,93 @@ export class OpenAIService extends BaseService {
    * @private
    */
   private convertZodToOpenAISchema(zodDef: any): any {
-    // For now, return a basic schema structure
-    // This is a simplified conversion - in production, you'd want more comprehensive mapping
+    // Handle both Zod schemas and plain objects
+    if (!zodDef) {
+      return {
+        type: 'object',
+        properties: {},
+        required: []
+      };
+    }
+
+    // If it's already a plain object schema, return it
+    if (zodDef.type === 'object' && zodDef.properties) {
+      return zodDef;
+    }
+
+    // If it's a Zod schema, extract the shape
+    const shape = zodDef.shape || zodDef._def?.shape;
+    if (!shape) {
+      this.logWarn('Could not extract shape from Zod schema, using empty schema', { zodDef });
+      return {
+        type: 'object',
+        properties: {},
+        required: []
+      };
+    }
+
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    // Convert Zod object schema to OpenAI schema
+    for (const [key, value] of Object.entries(shape)) {
+      const fieldDef = value as any;
+      
+      // Determine field type
+      let fieldType = 'string';
+      if (fieldDef._def) {
+        switch (fieldDef._def.typeName) {
+          case 'ZodString':
+            fieldType = 'string';
+            break;
+          case 'ZodNumber':
+            fieldType = 'number';
+            break;
+          case 'ZodBoolean':
+            fieldType = 'boolean';
+            break;
+          case 'ZodArray':
+            fieldType = 'array';
+            break;
+          case 'ZodEnum':
+            fieldType = 'string';
+            break;
+          default:
+            fieldType = 'string';
+        }
+      }
+
+      properties[key] = {
+        type: fieldType,
+        description: fieldDef.description || `Field: ${key}`
+      };
+
+      // Add enum values if it's an enum
+      if (fieldDef._def && fieldDef._def.typeName === 'ZodEnum') {
+        properties[key].enum = fieldDef._def.values;
+      }
+
+      // Check if field is required (Zod schemas are required by default unless marked optional)
+      const isOptional = fieldDef._def?.typeName === 'ZodOptional' || 
+                        fieldDef._def?.typeName === 'ZodNullable' ||
+                        fieldDef.isOptional?.() === true;
+      
+      if (!isOptional) {
+        required.push(key);
+      }
+    }
+
+    this.logDebug('Converted Zod schema to OpenAI schema', {
+      propertiesCount: Object.keys(properties).length,
+      requiredCount: required.length,
+      properties: Object.keys(properties),
+      required
+    });
+
     return {
       type: 'object',
-      properties: {},
-      required: []
+      properties,
+      required
     };
   }
 }
