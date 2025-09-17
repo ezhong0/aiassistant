@@ -244,8 +244,12 @@ export class MasterAgent {
         }
       }
 
-      // Step 3: Enhanced AI planning with context
-      const enhancedSystemPrompt = await this.generateEnhancedSystemPrompt(contextGathered);
+      // Step 3: Parse intent and resolve dependencies
+      const intentAnalysis = await this.parseIntentAndResolveDependencies(userInput, contextGathered);
+      logger.info('Intent analysis result:', intentAnalysis);
+
+      // Step 4: Enhanced AI planning with context and resolved dependencies
+      const enhancedSystemPrompt = await this.generateEnhancedSystemPrompt(contextGathered, intentAnalysis);
       
       // Use enhanced system prompt with agent capabilities and context
       const response = await openaiService.generateToolCalls(
@@ -257,7 +261,7 @@ export class MasterAgent {
       const toolCalls = response.toolCalls;
       const message = response.message;
 
-      // Step 4: Validate tool calls against available agents
+      // Step 5: Validate tool calls against available agents
       const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput);
 
       logger.info(`MasterAgent determined ${validatedToolCalls.length} tool calls:`, validatedToolCalls.map(tc => tc.name));
@@ -371,17 +375,6 @@ export class MasterAgent {
     // Add agent-specific enhancements based on capabilities
     const enhancedParameters = { ...toolCall.parameters };
 
-    // For email operations, ensure we have contact context if needed (delegate to ContactAgent)
-    if (toolName === 'send_email') {
-      const contactAgent = this.getContactAgent();
-      const contactLookup = await contactAgent.detectContactNeeds(userInput);
-      if (contactLookup.needed) {
-        // This will be handled by the MasterAgent's orchestration logic
-        enhancedParameters.requiresContactLookup = true;
-        enhancedParameters.contactNames = contactLookup.names;
-      }
-    }
-
     // For calendar operations, add conflict detection
     if (toolName === 'manage_calendar') {
       enhancedParameters.enableConflictDetection = true;
@@ -395,9 +388,79 @@ export class MasterAgent {
 
 
   /**
+   * Parse user intent and resolve dependencies (like contact names)
+   */
+  private async parseIntentAndResolveDependencies(
+    userInput: string, 
+    contextGathered?: ContextGatheringResult
+  ): Promise<{resolvedContacts: Array<{name: string, email: string}>, intent: string}> {
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        throw new Error('OpenAI service is required for intent parsing');
+      }
+
+      // Extract contact names that need resolution
+      const contactExtractionResponse = await openaiService.generateText(
+        `Extract person names that need contact lookup from: "${userInput}"
+        
+        Return JSON: {"needed": boolean, "names": ["name1", "name2"]}
+        
+        Examples:
+        - "Send email to John" → {"needed": true, "names": ["John"]}
+        - "Email john@example.com" → {"needed": false, "names": []}
+        - "Schedule meeting with Sarah" → {"needed": true, "names": ["Sarah"]}
+        - "What's on my calendar?" → {"needed": false, "names": []}`,
+        'Extract contact names from user requests. Always return valid JSON.',
+        { temperature: 0, maxTokens: 100 }
+      );
+
+      const contactExtraction = JSON.parse(contactExtractionResponse);
+      const resolvedContacts: Array<{name: string, email: string}> = [];
+
+      // Resolve contacts if needed
+      if (contactExtraction.needed && contactExtraction.names.length > 0) {
+        const contactAgent = this.getContactAgent();
+        if (contactAgent) {
+          for (const name of contactExtraction.names) {
+            try {
+              const contactResult = await contactAgent.execute({
+                operation: 'search',
+                query: name,
+                accessToken: 'placeholder' // This will be replaced with actual token during execution
+              }, { sessionId: 'intent-parsing', userId: 'system' });
+
+              if (contactResult.success && contactResult.result?.contacts?.length > 0) {
+                const contact = contactResult.result.contacts[0];
+                resolvedContacts.push({
+                  name: contact.name || name,
+                  email: contact.email || ''
+                });
+              }
+            } catch (error) {
+              logger.warn(`Failed to resolve contact: ${name}`, error);
+            }
+          }
+        }
+      }
+
+      return {
+        resolvedContacts,
+        intent: userInput
+      };
+    } catch (error) {
+      logger.error('Failed to parse intent and resolve dependencies:', error);
+      return {
+        resolvedContacts: [],
+        intent: userInput
+      };
+    }
+  }
+
+  /**
    * Generate enhanced system prompt with agent capabilities and context
    */
-  private async generateEnhancedSystemPrompt(contextGathered?: ContextGatheringResult): Promise<string> {
+  private async generateEnhancedSystemPrompt(contextGathered?: ContextGatheringResult, intentAnalysis?: any): Promise<string> {
     const basePrompt = this.generateSystemPrompt();
     const agentCapabilities = await this.getAgentCapabilities();
     

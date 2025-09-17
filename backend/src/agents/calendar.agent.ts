@@ -301,6 +301,9 @@ Always return structured execution status with event details, scheduling insight
       };
     }
 
+    // Ensure services are initialized
+    this.ensureServices();
+
     try {
       // Route to appropriate handler based on tool name - Intent-agnostic routing
       // Let OpenAI determine the operation from the parameters

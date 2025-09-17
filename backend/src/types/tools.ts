@@ -101,17 +101,12 @@ export interface EmailAgentParams {
 }
 
 export interface CalendarAgentParams {
-  query?: string;
-  operation?: string;
+  query: string;
   title?: string;
   startTime?: string;
   endTime?: string;
-  timeMin?: string;
-  timeMax?: string;
   attendees?: string[];
   description?: string;
-  accessToken?: string;
-  enableConflictDetection?: boolean;
 }
 
 export interface ContactAgentParams {

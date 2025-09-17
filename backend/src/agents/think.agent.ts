@@ -208,24 +208,24 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
 
     // If no previous actions to analyze, provide general guidance
     if (previousActions.length === 0) {
-      return await this.analyzeQueryWithoutActions(query);
+      return await this.analyzeQueryWithoutActions(query || '');
     }
 
     // Analyze each tool call
     const toolAnalysis = await Promise.all(
       previousActions
         .filter(action => action.name !== 'Think') // Don't analyze Think calls
-        .map(action => this.analyzeIndividualTool(action, query, context))
+        .map(action => this.analyzeIndividualTool(action, query || '', context))
     );
 
     // Determine overall verification status
     const verificationStatus = this.determineOverallStatus(toolAnalysis);
 
     // Generate reasoning
-    const reasoning = this.generateReasoning(query, toolAnalysis, context);
+    const reasoning = this.generateReasoning(query || '', toolAnalysis, context);
 
     // Generate suggestions if needed
-    const suggestions = await this.generateSuggestions(toolAnalysis, query);
+    const suggestions = await this.generateSuggestions(toolAnalysis, query || '');
 
     // Create overall assessment
     const overallAssessment = this.generateOverallAssessment(verificationStatus, toolAnalysis.length);

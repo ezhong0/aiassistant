@@ -40,6 +40,59 @@
 
 ## 📅 **Focused 4-Week Roadmap**
 
+### **Phase 0: Agentic Architecture Optimization (Week 0)**
+**Goal**: Implement optimal "Smart MasterAgent + Smart-Enough SubAgents" design
+
+### **Phase 0: Agentic Architecture Optimization (Week 0)**
+**Goal**: Implement optimal "Smart MasterAgent + Smart-Enough SubAgents" design
+
+#### **Specific Code Changes Required**
+
+**1. Remove Cross-Domain Logic from EmailAgent** 
+- **File**: `backend/src/agents/email.agent.ts` (lines 316-332)
+- **Remove**: Contact resolution logic in `handleSendEmail()`
+- **Remove**: `contactResolver` dependency (line 64)
+- **Remove**: Contact resolution from `ensureServices()` (lines 93-95)
+- **Result**: EmailAgent only handles email operations with pre-resolved recipients
+
+**2. Remove Intent Detection from ContactAgent**
+- **File**: `backend/src/agents/contact.agent.ts` (lines 203-232)
+- **Remove**: `detectContactNeeds()` method - this belongs in MasterAgent
+- **Keep**: Contact search and management operations only
+- **Result**: ContactAgent becomes pure contact lookup service
+
+**3. Enhance MasterAgent Intelligence**
+- **File**: `backend/src/agents/master.agent.ts` (lines 202-284)
+- **Add**: Intent parsing service to extract contact names before calling agents
+- **Add**: Dependency resolution logic to call ContactAgent first when needed
+- **Add**: Parameter extraction to resolve contacts before calling EmailAgent
+- **Result**: MasterAgent handles ALL orchestration and dependency resolution
+
+**4. Tighten Tool Access Scoping**
+- **EmailAgent**: Remove `ContactResolver` service dependency
+- **ContactAgent**: Remove `AIClassificationService` dependency  
+- **CalendarAgent**: Remove any cross-domain service dependencies
+- **Result**: Each agent only has access to its domain-specific services
+
+**5. Enhance SubAgent Domain Intelligence**
+- **EmailAgent**: Add email-specific parsing (timing, urgency, formatting)
+- **ContactAgent**: Add contact-specific formatting and error handling
+- **CalendarAgent**: Add calendar-specific parsing ("next Tuesday afternoon" → time range)
+- **Result**: SubAgents handle domain-specific intelligence only
+
+#### **Expected File Changes**
+- `backend/src/agents/email.agent.ts`: Remove 20+ lines of contact resolution logic
+- `backend/src/agents/contact.agent.ts`: Remove `detectContactNeeds()` method
+- `backend/src/agents/master.agent.ts`: Add intent parsing and dependency resolution
+- `backend/src/services/email/contact-resolver.service.ts`: Move to MasterAgent usage only
+
+**Success Metrics:**
+- Clear responsibility boundaries between agents
+- MasterAgent handles ALL intent recognition and orchestration
+- SubAgents handle domain-specific intelligence only
+- Improved debugging and maintainability
+- Better natural language understanding
+
 ### **Phase 1: Setup Automation & Performance Foundation (Weeks 1-2)**
 **Goal**: Eliminate setup friction and establish performance foundation
 

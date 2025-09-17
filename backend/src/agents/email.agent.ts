@@ -3,7 +3,6 @@ import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { ServiceManager } from '../services/service-manager';
 import { EmailOperationHandler } from '../services/email/email-operation-handler.service';
-import { ContactResolver } from '../services/email/contact-resolver.service';
 import { EmailValidator } from '../services/email/email-validator.service';
 import { EmailFormatter } from '../services/email/email-formatter.service';
 import {
@@ -61,7 +60,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   
   // Focused component services
   private emailOps: EmailOperationHandler | null = null;
-  private contactResolver: ContactResolver | null = null;
   private emailValidator: EmailValidator | null = null;
   private emailFormatter: EmailFormatter | null = null;
 
@@ -90,9 +88,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
     if (!this.emailOps) {
       this.emailOps = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER) as EmailOperationHandler;
     }
-    if (!this.contactResolver) {
-      this.contactResolver = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.CONTACT_RESOLVER) as ContactResolver;
-    }
     if (!this.emailValidator) {
       this.emailValidator = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_VALIDATOR) as EmailValidator;
     }
@@ -116,7 +111,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
 
     logger.info('EmailAgent.processQuery - Services ensured', {
       hasEmailOps: !!this.emailOps,
-      hasContactResolver: !!this.contactResolver,
       hasEmailValidator: !!this.emailValidator,
       hasEmailFormatter: !!this.emailFormatter
     });
@@ -163,7 +157,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   protected async onDestroy(): Promise<void> {
     try {
       this.emailOps = null;
-      this.contactResolver = null;
       this.emailValidator = null;
       this.emailFormatter = null;
       logger.info('EmailAgent destroyed successfully');
@@ -309,30 +302,14 @@ You are a specialized email management agent powered by Gmail API.
       // Ensure services are initialized
       this.ensureServices();
 
-      if (!this.emailOps || !this.contactResolver || !this.emailValidator || !this.emailFormatter) {
+      if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
 
-      // Resolve contact if needed
-      let recipientEmail = Array.isArray(actionParams.recipients) ? actionParams.recipients[0] : actionParams.recipients;
-      if (!recipientEmail && actionParams.recipientName) {
-        const contactResolution = await this.contactResolver.resolveByName(
-          actionParams.recipientName as string,
-          params.accessToken
-        );
-        
-        if (!contactResolution.success || !contactResolution.contact) {
-          throw new Error(`Could not find contact: ${actionParams.recipientName}`);
-        }
-        
-        recipientEmail = contactResolution.contact.email;
-        if (!recipientEmail) {
-          throw new Error(`Contact ${actionParams.recipientName} has no email address`);
-        }
-      }
-
+      // Expect pre-resolved recipient email from MasterAgent
+      const recipientEmail = Array.isArray(actionParams.recipients) ? actionParams.recipients[0] : actionParams.recipients;
       if (!recipientEmail) {
-        throw new Error('No recipient email specified');
+        throw new Error('No recipient email specified - MasterAgent should resolve contacts before calling EmailAgent');
       }
 
       // Create send request
@@ -484,89 +461,6 @@ You are a specialized email management agent powered by Gmail API.
       };
     } catch (error) {
       logger.error('Error handling search emails', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        executionTime: Date.now() - startTime
-      };
-    }
-  }
-
-  /**
-   * Handle send email operation
-   */
-  private async handleSendEmail(
-    params: EmailAgentRequest,
-    actionParams: SendEmailActionParams
-  ): Promise<ToolExecutionResult> {
-    const startTime = Date.now();
-
-    try {
-      // Ensure services are initialized
-      this.ensureServices();
-
-      if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
-        throw new Error('Required services not available');
-      }
-
-      // DEBUG: Log send email request
-      logger.info('EmailAgent.handleSendEmail - Send email request debug', {
-        recipientName: actionParams.recipientName,
-        subject: actionParams.subject,
-        hasBody: !!actionParams.body,
-        hasAccessToken: !!params.accessToken
-      });
-
-      // Create send request
-      const sendRequest: SendEmailRequest = {
-        to: [actionParams.recipientName || ''],
-        subject: actionParams.subject || '',
-        body: actionParams.body || ''
-      };
-
-      // Validate request
-      const validation = this.emailValidator.validateSendEmailRequest(sendRequest);
-      if (!validation.isValid) {
-        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
-      }
-
-      // Send email
-      const operationResult = await this.emailOps.sendEmail(sendRequest, params.accessToken);
-
-      // DEBUG: Log operation result
-      logger.info('EmailAgent.handleSendEmail - Operation result debug', {
-        success: operationResult.success,
-        hasResult: !!operationResult.result,
-        messageId: operationResult.result?.messageId,
-        threadId: operationResult.result?.threadId,
-        error: operationResult.error,
-        executionTime: operationResult.executionTime
-      });
-
-      if (!operationResult.success) {
-        throw new Error(operationResult.error || 'Email send failed');
-      }
-
-      // Format response
-      const emailResult: EmailResult = {
-        messageId: operationResult.result?.messageId,
-        threadId: operationResult.result?.threadId,
-        recipient: actionParams.recipientName || '',
-        subject: actionParams.subject
-      };
-
-      const formattingResult = this.emailFormatter.formatEmailResult(emailResult);
-
-      return {
-        success: true,
-        result: {
-          message: formattingResult.formattedText || 'Email sent successfully',
-          data: emailResult
-        },
-        executionTime: Date.now() - startTime
-      };
-    } catch (error) {
-      logger.error('Error handling send email', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -807,14 +701,12 @@ You are a specialized email management agent powered by Gmail API.
   getAgentStats(): {
     agentName: string;
     hasEmailOps: boolean;
-    hasContactResolver: boolean;
     hasEmailValidator: boolean;
     hasEmailFormatter: boolean;
   } {
     return {
       agentName: EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER,
       hasEmailOps: !!this.emailOps,
-      hasContactResolver: !!this.contactResolver,
       hasEmailValidator: !!this.emailValidator,
       hasEmailFormatter: !!this.emailFormatter
     };

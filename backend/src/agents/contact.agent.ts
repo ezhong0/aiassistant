@@ -4,7 +4,6 @@ import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveContactService } from '../services/service-resolver';
 import { getService } from '../services/service-manager';
 import { ContactService } from '../services/contact.service';
-import { AIClassificationService } from '../services/ai-classification.service';
 import {
   Contact as ContactType,
   ContactSearchRequest
@@ -196,40 +195,6 @@ You are a specialized contact discovery and management agent.
       ];
     }
 
-    /**
-     * Detect if user input requires contact lookup using AI entity extraction
-     * Delegated from MasterAgent for proper separation of concerns
-     */
-    async detectContactNeeds(userInput: string): Promise<{needed: boolean, names: string[]}> {
-      try {
-        const openaiService = this.getOpenAIService();
-        if (!openaiService) {
-          throw new Error('OpenAI service is not available. AI contact lookup detection is required for this operation.');
-        }
-
-        const response = await openaiService.generateText(
-          `Extract person names that need contact lookup: "${userInput}"
-          
-          Return JSON: {"needed": boolean, "names": ["name1", "name2"]}
-          
-          Examples:
-          - "Send email to John" → {"needed": true, "names": ["John"]}
-          - "Email john@example.com" → {"needed": false, "names": []}
-          - "What's on my calendar?" → {"needed": false, "names": []}`,
-          'Extract contact names from user requests. Always return valid JSON.',
-          { temperature: 0, maxTokens: 100 }
-        );
-
-        const result = JSON.parse(response);
-        return {
-          needed: Boolean(result.needed),
-          names: Array.isArray(result.names) ? result.names : []
-        };
-      } catch (error) {
-        this.logger.error('Failed to extract contact names:', error);
-        throw new Error('AI contact lookup detection failed. Please check your OpenAI configuration.');
-      }
-    }
 
     /**
      * Get agent description for AI routing
@@ -412,7 +377,7 @@ You are a specialized contact discovery and management agent.
    */
   protected sanitizeForLogging(params: ContactAgentRequest): Record<string, unknown> {
     return {
-      query: params.query?.substring(0, 100) + (params.query?.length > 100 ? '...' : ''),
+      query: params.query?.substring(0, 100) + ((params.query?.length || 0) > 100 ? '...' : ''),
       accessToken: '[REDACTED]',
       operation: params.operation,
       name: params.name,
@@ -428,10 +393,10 @@ You are a specialized contact discovery and management agent.
    */
   private async handleSearchContacts(params: ContactAgentRequest): Promise<ContactResult> {
     // Extract search parameters from query
-    const searchParams = await this.extractSearchParameters(params.query);
+    const searchParams = await this.extractSearchParameters(params.query || '');
     
     const searchRequest: ContactSearchRequest = {
-      query: searchParams.searchTerm,
+      query: searchParams.searchTerm || '',
       maxResults: Math.min(
         searchParams.maxResults || CONTACT_CONSTANTS.DEFAULT_SEARCH_RESULTS,
         CONTACT_CONSTANTS.MAX_SEARCH_RESULTS
@@ -491,7 +456,7 @@ You are a specialized contact discovery and management agent.
    */
   private async determineOperation(query: string): Promise<'search' | 'create' | 'update'> {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      const aiClassificationService = getService<any>('aiClassificationService');
       if (!aiClassificationService) {
         throw new Error('AI Classification Service is not available. AI operation detection is required for this operation.');
       }
@@ -523,7 +488,7 @@ You are a specialized contact discovery and management agent.
     maxResults?: number;
   }> {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
+      const aiClassificationService = getService<any>('aiClassificationService');
       if (!aiClassificationService) {
         throw new Error('AI Classification Service is not available. AI search parameter extraction is required for this operation.');
       }

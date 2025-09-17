@@ -259,14 +259,9 @@ Return only the operation name.`;
 
       const operation = response.trim().toLowerCase();
       
-      // Validate the response using AI instead of hardcoded arrays
-      const isValid = await AGENT_HELPERS.validateOperation(operation, agentName);
-      if (isValid) {
-        return operation;
-      }
-      
-      // Throw error instead of using hardcoded fallback
-      throw new Error(`AI operation detection failed: Unknown error`);
+      // Return the operation directly - MasterAgent already did intelligent routing
+      // No need for redundant AI validation
+      return operation;
     } catch (error) {
       throw new Error(`AI operation detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
