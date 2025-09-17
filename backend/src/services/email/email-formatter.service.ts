@@ -141,7 +141,6 @@ export class EmailFormatter extends BaseService {
     const count = result.count || 0;
     const emails = result.emails || [];
 
-    // DEBUG: Log detailed input data
     this.logInfo('EmailFormatter.formatEmailSearchResult - DEBUG INPUT', {
       count,
       emailsLength: emails.length,
@@ -187,7 +186,6 @@ export class EmailFormatter extends BaseService {
           const subject = this.extractSubject(email);
           const date = this.formatEmailDate(email);
 
-          // DEBUG: Log each email extraction
           this.logInfo(`EmailFormatter.formatEmailSearchResult - Processing email ${index + 1}`, {
             emailId: email.id,
             extractedFrom: from,
@@ -219,7 +217,6 @@ export class EmailFormatter extends BaseService {
 
     const finalResult = parts.join('\n');
 
-    // DEBUG: Log final formatted result
     this.logInfo('EmailFormatter.formatEmailSearchResult - Final formatted result', {
       resultLength: finalResult.length,
       partsCount: parts.length,

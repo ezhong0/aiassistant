@@ -22,6 +22,14 @@ interface ConferenceData {
   };
 }
 
+/**
+ * Calendar Event interface for Google Calendar API integration
+ * 
+ * Represents a calendar event with all standard Google Calendar fields
+ * including timing, attendees, location, and conference data.
+ * 
+ * @interface CalendarEvent
+ */
 export interface CalendarEvent {
   id?: string | null | undefined;
   summary?: string | null | undefined;
@@ -44,6 +52,14 @@ export interface CalendarEvent {
   conferenceData?: ConferenceData | undefined;
 }
 
+/**
+ * Calendar query options for filtering and pagination
+ * 
+ * Provides options for querying calendar events with time ranges,
+ * result limits, and other filtering criteria.
+ * 
+ * @interface CalendarQueryOptions
+ */
 export interface CalendarQueryOptions {
   timeMin?: string | undefined;
   timeMax?: string | undefined;
@@ -52,6 +68,15 @@ export interface CalendarQueryOptions {
   orderBy?: 'startTime' | 'updated' | undefined;
 }
 
+/**
+ * Calendar Service Error class for enhanced error handling
+ * 
+ * Extends the standard Error class to provide additional context
+ * about calendar operation failures.
+ * 
+ * @class CalendarServiceError
+ * @extends Error
+ */
 export interface CalendarServiceError extends Error {
   code?: string;
   status?: number;
@@ -113,7 +138,7 @@ export class CalendarService extends BaseService {
       end: calendarEvent.end,
       attendees: calendarEvent.attendees,
       location: calendarEvent.location,
-      recurrence: calendarEvent.recurrence
+      recurrence: (calendarEvent as any).recurrence || undefined
     });
 
     try {
@@ -124,16 +149,16 @@ export class CalendarService extends BaseService {
 
       this.logDebug('Creating calendar event', {
         summary: calendarEvent.summary,
-        start: calendarEvent.start.dateTime,
-        end: calendarEvent.end.dateTime,
+        start: calendarEvent.start?.dateTime,
+        end: calendarEvent.end?.dateTime,
         calendarId: calendarId
       });
       
       this.logInfo('Creating calendar event', { 
         summary: calendarEvent.summary,
-        start: calendarEvent.start.dateTime,
-        end: calendarEvent.end.dateTime,
-        timeZone: calendarEvent.start.timeZone,
+        start: calendarEvent.start?.dateTime,
+        end: calendarEvent.end?.dateTime,
+        timeZone: calendarEvent.start?.timeZone,
         calendarId,
         hasAttendees: !!calendarEvent.attendees,
         attendeeCount: calendarEvent.attendees?.length || 0

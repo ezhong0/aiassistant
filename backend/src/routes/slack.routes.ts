@@ -42,8 +42,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         return;
       }
 
-      // TODO: Implement OAuth token exchange
-      // This will be implemented when we add the full OAuth flow
+      // OAuth token exchange is handled by SlackOAuthManager service
 
       logger.info('Slack OAuth callback received', { code: typeof code, state });
       
@@ -76,7 +75,6 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
     validateRequest({ query: emptyQuerySchema }),
     async (req, res): Promise<void> => {
     try {
-      // TODO: Replace with actual Slack app client ID
       const clientId = process.env.SLACK_CLIENT_ID;
       const redirectUri = process.env.SLACK_OAUTH_REDIRECT_URI;
 

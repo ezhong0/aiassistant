@@ -22,17 +22,67 @@
  */
 
 import { z } from 'zod';
-import { SlackContext } from './slack/slack.types';
+import { SlackContext, SlackContextSchema } from './slack/slack.types';
+
+// ✅ Specific parameter schemas for type safety
+export const EmailToolParametersSchema = z.object({
+  query: z.string().optional(),
+  operation: z.enum(['send', 'search', 'read', 'reply', 'forward']).optional(),
+  contactEmail: z.string().email().optional(),
+  recipientName: z.string().optional(),
+  subject: z.string().optional(),
+  body: z.string().optional(),
+  threadId: z.string().optional(),
+  messageId: z.string().optional(),
+  emailId: z.string().optional(),
+  maxResults: z.number().int().positive().optional(),
+  cc: z.array(z.string().email()).optional(),
+  bcc: z.array(z.string().email()).optional(),
+});
+
+export const CalendarToolParametersSchema = z.object({
+  query: z.string(),
+  action: z.enum(['create', 'list', 'update', 'delete', 'check_availability', 'find_slots']).optional(),
+  title: z.string().optional(),
+  summary: z.string().optional(),
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
+  start: z.string().datetime().optional(),
+  end: z.string().datetime().optional(),
+  attendees: z.array(z.string().email()).optional(),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  eventId: z.string().optional(),
+  calendarId: z.string().optional(),
+});
+
+export const ContactToolParametersSchema = z.object({
+  query: z.string().optional(),
+  operation: z.enum(['search', 'create', 'update', 'delete']).optional(),
+  name: z.string().optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  accessToken: z.string().optional(),
+});
+
+export const SlackToolParametersSchema = z.object({
+  query: z.string(),
+  channelId: z.string().optional(),
+  threadTs: z.string().optional(),
+  limit: z.number().int().positive().optional(),
+  includeReactions: z.boolean().optional(),
+  includeAttachments: z.boolean().optional(),
+});
 
 // ✅ Core Zod schemas for type safety and validation
 export const ToolCallSchema = z.object({
   name: z.string(),
-  parameters: z.record(z.any()),
+  parameters: z.record(z.any()), // Keep original for compatibility
 });
 
 export const ToolResultSchema = z.object({
   toolName: z.string(),
-  result: z.any(),
+  result: z.any(), // Keep original for compatibility
   success: z.boolean(),
   error: z.string().optional(),
   executionTime: z.number(),
@@ -43,8 +93,8 @@ export const ToolExecutionContextSchema = z.object({
   userId: z.string().optional(),
   timestamp: z.date(),
   previousResults: z.array(z.lazy(() => ToolResultSchema)).optional(),
-  slackContext: z.any().optional(), // Will be refined with SlackContextSchema
-  metadata: z.record(z.any()).optional(),
+  slackContext: SlackContextSchema.optional(), // Now properly typed
+  metadata: z.record(z.any()).optional(), // Keep original for compatibility
 });
 
 // ✅ Export inferred types
@@ -182,13 +232,13 @@ export function safeParseToolResult(data: unknown): { success: true; data: ToolR
 export interface Tool {
   name: string;
   description: string;
-  execute(parameters: any, context: ToolExecutionContext): Promise<ToolResult>;
+  execute(parameters: unknown, context: ToolExecutionContext): Promise<ToolResult>;
 }
 
 // ✅ Agent response schema
 export const AgentResponseSchema = z.object({
   message: z.string(),
-  data: z.any().optional(),
+  data: z.unknown().optional(), // Better than z.any() - requires type checking
   success: z.boolean(),
   error: z.string().optional(),
 });
@@ -216,8 +266,8 @@ export const SessionContextSchema = z.object({
   conversationHistory: z.array(ConversationEntrySchema),
   toolCalls: z.array(ToolCallSchema),
   toolResults: z.array(ToolResultSchema),
-  pendingActions: z.array(z.any()).optional(),
-  conversationContext: z.any().optional(),
+  pendingActions: z.array(z.unknown()).optional(), // Better than z.any()
+  conversationContext: z.unknown().optional(), // Better than z.any()
   expiresAt: z.date(),
   oauthTokens: z.object({
     google: z.object({
@@ -237,7 +287,7 @@ export const SessionContextSchema = z.object({
   conversations: z.record(z.record(z.object({
     lastActivity: z.date(),
     messageCount: z.number(),
-    context: z.any().optional(),
+    context: z.unknown().optional(), // Better than z.any()
   }))).optional(),
 });
 
@@ -311,7 +361,7 @@ export class ToolExecutionError extends Error {
   constructor(
     public toolName: string,
     public originalError: Error,
-    public parameters?: any
+    public parameters?: unknown
   ) {
     super(`Tool ${toolName} execution failed: ${originalError.message}`);
     this.name = 'ToolExecutionError';

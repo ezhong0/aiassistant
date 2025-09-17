@@ -444,7 +444,7 @@ router.post('/confirm-action',
 router.post('/email/send', 
   authenticateToken,
   validateRequest({ body: SendEmailRequestSchema }),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { to, subject, body, cc, bcc } = req.validatedBody as z.infer<typeof SendEmailRequestSchema>;
     const user = req.user!;
@@ -454,11 +454,12 @@ router.post('/email/send',
     // Get access token
     const accessToken = req.headers.authorization?.replace('Bearer ', '');
     if (!accessToken) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: 'Google access token required',
         requiresAuth: true
       });
+      return;
     }
 
     logger.info('Direct email send request', { 
@@ -502,7 +503,6 @@ router.post('/email/send',
     };
     
     validateAndSendResponse(res, SuccessResponseSchema, responseData);
-    return;
 
   } catch (error) {
     logger.error('Direct email send error:', error);

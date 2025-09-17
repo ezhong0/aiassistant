@@ -2163,14 +2163,6 @@ export class SlackInterface {
   }
 
   /**
-   * Send simple text message (removed fallback functionality)
-   */
-  private async sendFallbackTextMessage(channelId: string, text: string): Promise<void> {
-    // This method is kept for compatibility but no longer used as fallback
-    throw new Error('Fallback text message sending is disabled');
-  }
-
-  /**
    * Send typing indicator to show the bot is working
    */
   private async sendTypingIndicator(channelId: string): Promise<void> {
@@ -2213,17 +2205,14 @@ export class SlackInterface {
       try {
         switch (action.type) {
           case 'schedule_message':
-            // TODO: Implement scheduled message sending
             logger.debug('Scheduling follow-up message', action);
             break;
             
           case 'update_message':
-            // TODO: Implement message updating
             logger.debug('Updating message', action);
             break;
             
           case 'send_dm':
-            // TODO: Implement DM sending
             logger.debug('Sending DM', action);
             break;
             

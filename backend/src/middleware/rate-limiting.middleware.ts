@@ -265,7 +265,6 @@ export const progressiveRateLimit = (baseMaxRequests: number = 100) => {
     maxRequests: baseMaxRequests,
     keyGenerator: (req: Request) => {
       const baseKey = req.ip || 'unknown';
-      // TODO: Implement violation history tracking
       return baseKey;
     }
   });

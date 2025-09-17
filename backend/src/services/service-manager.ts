@@ -2,52 +2,142 @@ import logger from '../utils/logger';
 import { setTimeout as delay } from 'timers/promises';
 
 /**
- * Service lifecycle states
+ * Service lifecycle states for dependency injection and lifecycle management
+ * 
+ * Services progress through these states during their lifecycle:
+ * - INITIALIZING: Service is being set up and dependencies are being resolved
+ * - READY: Service is fully initialized and ready to handle requests
+ * - ERROR: Service failed to initialize or encountered a critical error
+ * - SHUTTING_DOWN: Service is being gracefully shut down
+ * - DESTROYED: Service has been completely cleaned up and is no longer available
+ * 
+ * @enum {string}
  */
 export enum ServiceState {
+  /** Service is being initialized and dependencies are being resolved */
   INITIALIZING = 'initializing',
+  /** Service is fully initialized and ready to handle requests */
   READY = 'ready',
+  /** Service failed to initialize or encountered a critical error */
   ERROR = 'error',
+  /** Service is being gracefully shut down */
   SHUTTING_DOWN = 'shutting_down',
+  /** Service has been completely cleaned up and is no longer available */
   DESTROYED = 'destroyed'
 }
 
 /**
- * Service interface that all services must implement
+ * Service interface that all services must implement for dependency injection
+ * 
+ * This interface defines the contract for all services in the application,
+ * ensuring consistent lifecycle management, health monitoring, and
+ * dependency resolution across the service-oriented architecture.
+ * 
+ * @interface IService
  */
 export interface IService {
-  /** Service name for identification */
+  /** 
+   * Unique service name for identification and dependency resolution
+   * @readonly
+   */
   readonly name: string;
   
-  /** Current service state */
+  /** 
+   * Current service state in the lifecycle
+   * @readonly
+   */
   readonly state: ServiceState;
   
-  /** Initialize the service */
+  /** 
+   * Initialize the service and resolve dependencies
+   * @returns Promise that resolves when service is ready
+   * @throws Error if initialization fails
+   */
   initialize(): Promise<void>;
   
-  /** Check if service is ready */
+  /** 
+   * Check if service is ready to handle requests
+   * @returns true if service is ready, false otherwise
+   */
   isReady(): boolean;
   
-  /** Cleanup and destroy the service */
+  /** 
+   * Cleanup and destroy the service gracefully
+   * @returns Promise that resolves when cleanup is complete
+   * @throws Error if cleanup fails
+   */
   destroy(): Promise<void>;
   
-  /** Get service health status */
+  /** 
+   * Get service health status for monitoring
+   * @returns Health status with details about service state
+   */
   getHealth(): { healthy: boolean; details?: any };
 }
 
 /**
- * Service registration information
+ * Service registration information for dependency injection container
+ * 
+ * Contains all metadata needed to register and manage a service
+ * within the ServiceManager's dependency injection system.
+ * 
+ * @interface ServiceRegistration
  */
 export interface ServiceRegistration {
+  /** The service instance implementing IService */
   service: IService;
+  
+  /** 
+   * Array of service names that this service depends on
+   * Services will be initialized in dependency order
+   */
   dependencies: string[];
-  priority: number; // Lower numbers = higher priority
+  
+  /** 
+   * Priority for initialization order (lower numbers = higher priority)
+   * Services with lower priority numbers are initialized first
+   */
+  priority: number;
+  
+  /** 
+   * Whether to automatically start this service during system initialization
+   * If false, service must be manually started
+   */
   autoStart: boolean;
 }
 
 /**
  * Enhanced service manager for dependency injection and lifecycle management
- * Handles service registration, dependency resolution, initialization, and graceful shutdown
+ * 
+ * The ServiceManager is the central dependency injection container that handles:
+ * - Service registration with dependency metadata
+ * - Automatic dependency resolution and topological sorting
+ * - Service lifecycle management (initialization, health monitoring, graceful shutdown)
+ * - Service discovery and retrieval
+ * - Graceful shutdown with proper cleanup order
+ * 
+ * This implements a sophisticated service-oriented architecture pattern where
+ * services are registered with their dependencies and automatically initialized
+ * in the correct order. The manager handles 26+ services with complex dependency
+ * graphs and ensures proper initialization and cleanup.
+ * 
+ * @example
+ * ```typescript
+ * const serviceManager = ServiceManager.getInstance();
+ * 
+ * // Register a service with dependencies
+ * serviceManager.registerService('myService', new MyService(), {
+ *   dependencies: ['databaseService', 'cacheService'],
+ *   priority: 10,
+ *   autoStart: true
+ * });
+ * 
+ * // Initialize all services
+ * await serviceManager.initializeAllServices();
+ * 
+ * // Get a service instance
+ * const myService = serviceManager.getService<MyService>('myService');
+ * ```
  */
 export class ServiceManager {
   private static instance: ServiceManager;
@@ -61,6 +151,19 @@ export class ServiceManager {
     this.setupGracefulShutdown();
   }
 
+  /**
+   * Get the singleton instance of ServiceManager
+   * 
+   * ServiceManager uses the singleton pattern to ensure there's only one
+   * dependency injection container throughout the application lifecycle.
+   * 
+   * @returns The singleton ServiceManager instance
+   * 
+   * @example
+   * ```typescript
+   * const serviceManager = ServiceManager.getInstance();
+   * ```
+   */
   static getInstance(): ServiceManager {
     if (!ServiceManager.instance) {
       ServiceManager.instance = new ServiceManager();
@@ -70,6 +173,35 @@ export class ServiceManager {
 
   /**
    * Register a service with dependency injection support
+   * 
+   * Registers a service with the dependency injection container, including
+   * metadata about dependencies, initialization priority, and auto-start behavior.
+   * Services are automatically initialized in dependency order during system startup.
+   * 
+   * @param name - Unique name for the service (used for dependency resolution)
+   * @param service - Service instance implementing IService interface
+   * @param options - Registration options including dependencies and priority
+   * @param options.dependencies - Array of service names this service depends on
+   * @param options.priority - Initialization priority (lower = higher priority)
+   * @param options.autoStart - Whether to auto-start during system initialization
+   * 
+   * @throws Error if service registration fails or dependencies are invalid
+   * 
+   * @example
+   * ```typescript
+   * // Register a service with dependencies
+   * serviceManager.registerService('emailService', new EmailService(), {
+   *   dependencies: ['databaseService', 'cacheService'],
+   *   priority: 20,
+   *   autoStart: true
+   * });
+   * 
+   * // Register a high-priority core service
+   * serviceManager.registerService('configService', new ConfigService(), {
+   *   priority: 1,
+   *   autoStart: true
+   * });
+   * ```
    */
   registerService(
     name: string, 

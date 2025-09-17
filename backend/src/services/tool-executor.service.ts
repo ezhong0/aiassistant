@@ -13,18 +13,100 @@ import { getService } from './service-manager';
 import { AGENT_HELPERS } from '../config/agent-config';
 import logger from '../utils/logger';
 
+/**
+ * Configuration interface for ToolExecutorService
+ * 
+ * Defines the configuration options for tool execution including
+ * timeout settings and retry behavior.
+ * 
+ * @interface ToolExecutorConfig
+ */
 export interface ToolExecutorConfig {
+  /** 
+   * Timeout in milliseconds for individual tool execution
+   * @default TIMEOUTS.toolExecution
+   */
   timeout?: number;
+  
+  /** 
+   * Number of retry attempts for failed tool executions
+   * @default EXECUTION_CONFIG.toolExecution.defaultRetryCount
+   */
   retryCount?: number;
 }
 
+/**
+ * Execution mode configuration for tool execution
+ * 
+ * Controls how tools are executed, including preview mode
+ * for testing and validation.
+ * 
+ * @interface ExecutionMode
+ */
 export interface ExecutionMode {
-  preview: boolean; // If true, prepare action but don't execute
+  /** 
+   * If true, prepare action but don't execute (preview mode)
+   * Useful for testing and validation without side effects
+   */
+  preview: boolean;
 }
 
+/**
+ * Tool Executor Service - Centralized tool execution and orchestration
+ * 
+ * This service provides a unified interface for executing tools across the
+ * multi-agent system. It handles tool validation, execution orchestration,
+ * error handling, retry logic, and performance monitoring.
+ * 
+ * Key Features:
+ * - Centralized tool execution with consistent error handling
+ * - Automatic retry logic with exponential backoff
+ * - Tool validation and safety checks
+ * - Performance monitoring and execution metrics
+ * - Preview mode for testing without side effects
+ * - Integration with AgentFactory for tool discovery
+ * 
+ * The service acts as the bridge between the MasterAgent's tool call
+ * generation and the actual execution of specialized agent tools.
+ * 
+ * @example
+ * ```typescript
+ * const toolExecutor = new ToolExecutorService({
+ *   timeout: 30000,
+ *   retryCount: 3
+ * });
+ * 
+ * await toolExecutor.initialize();
+ * 
+ * // Execute a tool call
+ * const result = await toolExecutor.executeToolCall(toolCall, context);
+ * 
+ * // Execute multiple tools in sequence
+ * const results = await toolExecutor.executeToolCalls(toolCalls, context);
+ * ```
+ */
 export class ToolExecutorService extends BaseService {
   private config: ToolExecutorConfig;
 
+  /**
+   * Create a new ToolExecutorService instance
+   * 
+   * @param config - Configuration options for tool execution
+   * @param config.timeout - Timeout in milliseconds for tool execution
+   * @param config.retryCount - Number of retry attempts for failed executions
+   * 
+   * @example
+   * ```typescript
+   * // Default configuration
+   * const toolExecutor = new ToolExecutorService();
+   * 
+   * // Custom configuration
+   * const toolExecutor = new ToolExecutorService({
+   *   timeout: 60000,
+   *   retryCount: 5
+   * });
+   * ```
+   */
   constructor(config: ToolExecutorConfig = {}) {
     super('ToolExecutorService');
     this.config = {

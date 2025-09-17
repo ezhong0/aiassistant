@@ -3,7 +3,42 @@ import logger from '../utils/logger';
 
 /**
  * Base service class that provides common functionality and lifecycle management
- * All services should extend this class to ensure consistency
+ * 
+ * All services in the application should extend this class to ensure consistency
+ * in lifecycle management, error handling, logging, and health monitoring.
+ * 
+ * This abstract class implements the IService interface and provides:
+ * - Standardized initialization and cleanup lifecycle
+ * - State management with proper state transitions
+ * - Error handling and logging integration
+ * - Health monitoring capabilities
+ * - Protection against double initialization/destruction
+ * 
+ * Services extending this class must implement:
+ * - `onInitialize()`: Service-specific initialization logic
+ * - `onDestroy()`: Service-specific cleanup logic
+ * 
+ * @abstract
+ * @implements {IService}
+ * 
+ * @example
+ * ```typescript
+ * export class MyService extends BaseService {
+ *   constructor() {
+ *     super('myService');
+ *   }
+ * 
+ *   protected async onInitialize(): Promise<void> {
+ *     // Service-specific initialization
+ *     this.logInfo('MyService initialized');
+ *   }
+ * 
+ *   protected async onDestroy(): Promise<void> {
+ *     // Service-specific cleanup
+ *     this.logInfo('MyService destroyed');
+ *   }
+ * }
+ * ```
  */
 export abstract class BaseService implements IService {
   public readonly name: string;
@@ -11,19 +46,52 @@ export abstract class BaseService implements IService {
   public initialized = false;
   public destroyed = false;
 
+  /**
+   * Create a new BaseService instance
+   * 
+   * @param name - Unique name for the service (used for identification and logging)
+   * 
+   * @example
+   * ```typescript
+   * constructor() {
+   *   super('myService');
+   * }
+   * ```
+   */
   constructor(name: string) {
     this.name = name;
   }
 
   /**
    * Get current service state
+   * 
+   * @returns Current service state in the lifecycle
+   * 
+   * @example
+   * ```typescript
+   * if (this.state === ServiceState.READY) {
+   *   // Service is ready to handle requests
+   * }
+   * ```
    */
   get state(): ServiceState {
     return this._state;
   }
 
   /**
-   * Check if service is ready
+   * Check if service is ready to handle requests
+   * 
+   * A service is considered ready when it's in the READY state,
+   * has been initialized, and hasn't been destroyed.
+   * 
+   * @returns true if service is ready, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * if (this.isReady()) {
+   *   // Safe to call service methods
+   * }
+   * ```
    */
   isReady(): boolean {
     return this._state === ServiceState.READY && this.initialized && !this.destroyed;
@@ -90,7 +158,7 @@ export abstract class BaseService implements IService {
   /**
    * Get service health status
    */
-  getHealth(): { healthy: boolean; details?: any } {
+  getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     const healthy = this.isReady();
     const details = {
       state: this._state,
@@ -135,7 +203,7 @@ export abstract class BaseService implements IService {
   /**
    * Helper method for consistent error handling
    */
-  protected handleError(error: any, operation: string): never {
+  protected handleError(error: Error | unknown, operation: string): never {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const fullMessage = `Error in ${this.name}.${operation}: ${errorMessage}`;
     
@@ -152,28 +220,28 @@ export abstract class BaseService implements IService {
   /**
    * Helper method for consistent logging
    */
-  protected logInfo(message: string, meta?: any): void {
+  protected logInfo(message: string, meta?: Record<string, unknown>): void {
     logger.info(message, { service: this.name, ...meta });
   }
 
   /**
    * Helper method for consistent debug logging
    */
-  protected logDebug(message: string, meta?: any): void {
+  protected logDebug(message: string, meta?: Record<string, unknown>): void {
     logger.debug(message, { service: this.name, ...meta });
   }
 
   /**
    * Helper method for consistent warning logging
    */
-  protected logWarn(message: string, meta?: any): void {
+  protected logWarn(message: string, meta?: Record<string, unknown>): void {
     logger.warn(message, { service: this.name, ...meta });
   }
 
   /**
    * Helper method for consistent error logging
    */
-  protected logError(message: string, error?: any, meta?: any): void {
+  protected logError(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void {
     logger.error(message, { 
       service: this.name, 
       error: error instanceof Error ? error.stack : error,

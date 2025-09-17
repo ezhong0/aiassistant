@@ -4,7 +4,7 @@ import { OpenAIService } from '../services/openai.service';
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
 import { getService } from '../services/service-manager';
-import { SlackContext } from '../types/slack/slack.types';
+import { SlackContext, SlackContextSchema } from '../types/slack/slack.types';
 import { SlackMessage } from '../types/slack/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
@@ -39,25 +39,25 @@ export const MasterAgentResponseSchema = z.object({
     requiresConfirmation: z.boolean(),
     originalToolCalls: z.array(ToolCallSchema),
   }).optional(),
-  contextGathered: z.any().optional(), // Will be refined with ContextGatheringResultSchema
+  contextGathered: z.unknown().optional(), // Will be refined with ContextGatheringResultSchema
   executionMetadata: z.object({
     processingTime: z.number().optional(),
     totalExecutionTime: z.number().optional(),
     toolsExecuted: z.number().optional(),
     successfulTools: z.number().optional(),
-    slackContext: z.any().optional(), // Will be refined with SlackContextSchema
+    slackContext: SlackContextSchema.optional(), // Now properly typed
     toolResults: z.array(z.object({
       toolName: z.string(),
       success: z.boolean(),
       executionTime: z.number(),
       error: z.string().optional(),
-      result: z.record(z.any()).optional(),
+      result: z.record(z.unknown()).optional(), // Better than z.any()
     })).optional(),
-    confirmationFlows: z.array(z.record(z.any())).optional(),
+    confirmationFlows: z.array(z.record(z.unknown())).optional(), // Better than z.any()
     masterAgentResponse: z.string().optional(),
     error: z.string().optional(),
     errorType: z.string().optional(),
-    errorContext: z.record(z.any()).optional(),
+    errorContext: z.record(z.unknown()).optional(), // Better than z.any()
   }).optional(),
 });
 

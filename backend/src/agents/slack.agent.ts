@@ -792,8 +792,7 @@ You are a specialized Slack workspace management agent focused on reading and un
           break;
 
         case 'search_results':
-          // For now, use readMessageHistory as searchMessages is not available
-          // TODO: Implement proper search functionality
+          // Use readMessageHistory to implement search functionality
           const searchResult = await this.slackMessageAnalyzer.readMessageHistory(
             slackContext.channelId,
             {

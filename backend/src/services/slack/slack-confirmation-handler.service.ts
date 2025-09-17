@@ -501,7 +501,7 @@ export class SlackConfirmationHandler extends BaseService {
       this.aiClassificationService = serviceManager.getService('aiClassificationService') as AIClassificationService;
       this.toolExecutorService = serviceManager.getService('toolExecutorService') as ToolExecutorService;
     } catch (error) {
-      this.logWarn('Some dependencies not available during initialization', error);
+      this.logWarn('Some dependencies not available during initialization', { error });
     }
   }
 

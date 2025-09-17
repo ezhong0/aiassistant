@@ -346,7 +346,7 @@ export class SlackOAuthManager extends BaseService {
       // Get AIClassificationService from service registry
       this.aiClassificationService = serviceManager.getService('aiClassificationService') as AIClassificationService;
     } catch (error) {
-      this.logWarn('Some dependencies not available during initialization', error);
+      this.logWarn('Some dependencies not available during initialization', { error });
     }
   }
 

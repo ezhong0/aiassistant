@@ -13,13 +13,13 @@ export const ResponseMetadataSchema = z.object({
   userId: z.string().optional(),
   executionTime: z.number().optional(),
   version: z.string().optional(),
-}).catchall(z.any()); // Allow additional metadata fields
+}).catchall(z.unknown()); // Allow additional metadata fields
 
 export const StandardAPIResponseSchema = z.object({
   success: z.boolean(),
   type: z.enum(['response', 'action_completed', 'confirmation_required', 'error', 'session_data', 'partial_success']),
   message: z.string(),
-  data: z.any().optional(),
+  data: z.unknown().optional(), // Better than z.any() - requires type checking
   error: z.string().optional(),
   metadata: ResponseMetadataSchema,
 });
@@ -27,7 +27,7 @@ export const StandardAPIResponseSchema = z.object({
 export const ErrorDetailsSchema = z.object({
   code: z.string(),
   message: z.string(),
-  details: z.record(z.any()).optional(),
+  details: z.record(z.unknown()).optional(), // Better than z.any()
   stack: z.string().optional(),
   suggestions: z.array(z.string()).optional(),
 });
@@ -43,7 +43,7 @@ export const PaginationMetadataSchema = z.object({
 
 // ✅ Export inferred types
 export type ResponseMetadata = z.infer<typeof ResponseMetadataSchema>;
-export type StandardAPIResponse<T = any> = z.infer<typeof StandardAPIResponseSchema> & {
+export type StandardAPIResponse<T = unknown> = z.infer<typeof StandardAPIResponseSchema> & {
   data?: T;
 };
 export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
@@ -93,9 +93,9 @@ export interface AuthenticationResponse extends StandardAPIResponse {
 export interface AssistantResponse extends StandardAPIResponse {
   data?: {
     sessionId: string;
-    toolResults?: any[];
-    pendingActions?: any[];
-    conversationContext?: any;
+    toolResults?: unknown[];
+    pendingActions?: unknown[];
+    conversationContext?: unknown;
     executionStats?: {
       successful: number;
       failed: number;
@@ -115,9 +115,9 @@ export interface SessionResponse extends StandardAPIResponse {
       expiresAt: string;
       isActive: boolean;
     };
-    conversationHistory: any[];
-    recentToolResults: any[];
-    statistics: any;
+    conversationHistory: unknown[];
+    recentToolResults: unknown[];
+    statistics: unknown;
   };
 }
 
@@ -126,16 +126,16 @@ export interface EmailResponse extends StandardAPIResponse {
   data?: {
     emailId?: string;
     threadId?: string;
-    emails?: any[];
+    emails?: unknown[];
     count?: number;
-    draft?: any;
+    draft?: unknown;
   };
 }
 
 /** Contact search response */
 export interface ContactResponse extends StandardAPIResponse {
   data?: {
-    contacts: any[];
+    contacts: unknown[];
     totalCount: number;
     pagination?: PaginationMetadata;
   };
@@ -183,7 +183,7 @@ export class ResponseBuilder {
     message: string,
     errorCode: string,
     statusCode: number = 500,
-    details?: any,
+    details?: unknown,
     metadata: Partial<ResponseMetadata> = {}
   ): StandardAPIResponse {
     return {

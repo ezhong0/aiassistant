@@ -39,9 +39,61 @@ interface GmailAttachment {
   attachmentId: string;
 }
 
+/**
+ * Gmail Service - Google Gmail API integration and email management
+ * 
+ * This service provides comprehensive Gmail integration capabilities including
+ * sending emails, searching email history, managing drafts, and handling
+ * attachments. It implements the Gmail API with proper authentication,
+ * error handling, and rate limiting.
+ * 
+ * Key Features:
+ * - Send emails with rich formatting and attachments
+ * - Search emails with advanced query capabilities
+ * - Draft management and editing
+ * - Attachment handling and processing
+ * - OAuth 2.0 authentication integration
+ * - Rate limiting and error handling
+ * - Comprehensive logging and monitoring
+ * 
+ * The service integrates with the Google Workspace ecosystem and provides
+ * a clean interface for email operations within the multi-agent system.
+ * 
+ * @example
+ * ```typescript
+ * const gmailService = new GmailService();
+ * await gmailService.initialize();
+ * 
+ * // Send an email
+ * const result = await gmailService.sendEmail({
+ *   to: 'john@example.com',
+ *   subject: 'Meeting Reminder',
+ *   body: 'Don\'t forget about our meeting tomorrow at 2 PM.'
+ * });
+ * 
+ * // Search emails
+ * const emails = await gmailService.searchEmails({
+ *   query: 'from:important@company.com',
+ *   maxResults: 10
+ * });
+ * ```
+ */
 export class GmailService extends BaseService {
   private gmailService: any;
 
+  /**
+   * Create a new GmailService instance
+   * 
+   * The service will be initialized with Google Gmail API integration
+   * and OAuth 2.0 authentication. It requires proper Google Cloud
+   * credentials to be configured.
+   * 
+   * @example
+   * ```typescript
+   * const gmailService = new GmailService();
+   * await gmailService.initialize();
+   * ```
+   */
   constructor() {
     super('GmailService');
   }
@@ -614,7 +666,6 @@ export class GmailService extends BaseService {
       const bcc = getHeader('Bcc').split(',').map((t: string) => t.trim()).filter((t: string) => t);
       const dateStr = getHeader('Date');
 
-      // DEBUG: Log header extraction
       this.logInfo('GmailService.getFullMessage - Header extraction debug', {
         messageId,
         headersCount: headers.length,
@@ -628,7 +679,6 @@ export class GmailService extends BaseService {
       // Extract body content
       const body = this.extractMessageBody(message.payload);
 
-      // DEBUG: Log body extraction
       this.logInfo('GmailService.getFullMessage - Body extraction debug', {
         messageId,
         hasPayload: !!message.payload,
@@ -675,7 +725,6 @@ export class GmailService extends BaseService {
       if (bcc.length > 0) fullMessage.bcc = bcc;
       if (attachments.length > 0) fullMessage.attachments = attachments;
 
-      // DEBUG: Log final constructed message
       this.logInfo('GmailService.getFullMessage - Final message constructed', {
         messageId,
         subject: subject.substring(0, 50),

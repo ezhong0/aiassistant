@@ -341,7 +341,7 @@ export class SlackEventHandler extends BaseService {
       this.botUserId = authTest.user_id as string;
       this.logDebug('Bot user ID initialized', { botUserId: this.botUserId });
     } catch (error) {
-      this.logWarn('Could not initialize bot user ID', error);
+      this.logWarn('Could not initialize bot user ID', { error });
     }
   }
 

@@ -91,6 +91,46 @@ export interface AIPlanningResult {
  * This abstract class provides intelligent, AI-driven execution that can understand 
  * user queries, plan multi-step operations, and orchestrate multiple tools automatically
  * while maintaining all BaseAgent patterns and providing manual fallbacks.
+ * 
+ * Key Features:
+ * - AI-powered planning and tool selection
+ * - Intelligent multi-step operation orchestration
+ * - Comprehensive caching system for performance
+ * - Automatic tool registration and discovery
+ * - Error handling with graceful fallbacks
+ * - Memory usage monitoring and optimization
+ * - Integration with OpenAI service for intelligent decision making
+ * 
+ * The AIAgent implements a sophisticated AI-first architecture where agents
+ * can understand complex user requests, break them down into executable steps,
+ * and coordinate multiple tools to achieve the desired outcome.
+ * 
+ * @abstract
+ * @template TParams - Type of parameters accepted by the agent
+ * @template TResult - Type of result returned by the agent
+ * 
+ * @example
+ * ```typescript
+ * export class MyAgent extends AIAgent<MyParams, MyResult> {
+ *   constructor() {
+ *     super({
+ *       name: 'myAgent',
+ *       description: 'Handles specific operations',
+ *       capabilities: ['operation1', 'operation2'],
+ *       limitations: ['cannot handle X'],
+ *       aiPlanning: {
+ *         enableAIPlanning: true,
+ *         maxPlanningSteps: 5
+ *       }
+ *     });
+ *   }
+ * 
+ *   protected async processQuery(params: MyParams, context: ToolExecutionContext): Promise<MyResult> {
+ *     // Agent-specific logic here
+ *     return await this.executeAIPlanning(params, context);
+ *   }
+ * }
+ * ```
  */
 export abstract class AIAgent<TParams = any, TResult = any> {
   protected logger: Logger;
@@ -103,6 +143,36 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   protected readonly cacheExpiryMs: number = 10 * 60 * 1000; // Reduced to 10 minutes
   private cacheCleanupInterval?: NodeJS.Timeout;
   
+  /**
+   * Create a new AIAgent instance with AI planning capabilities
+   * 
+   * Initializes the agent with comprehensive AI planning support, tool registry,
+   * caching system, and OpenAI integration. The agent is configured with
+   * intelligent planning capabilities and automatic tool discovery.
+   * 
+   * @param config - Agent configuration including name, capabilities, and AI settings
+   * @param config.name - Unique name for the agent
+   * @param config.description - Human-readable description of agent capabilities
+   * @param config.capabilities - Array of capabilities this agent provides
+   * @param config.limitations - Array of limitations or constraints
+   * @param config.aiPlanning - AI planning configuration options
+   * 
+   * @example
+   * ```typescript
+   * constructor() {
+   *   super({
+   *     name: 'emailAgent',
+   *     description: 'Handles email operations',
+   *     capabilities: ['send', 'search', 'reply'],
+   *     limitations: ['requires authentication'],
+   *     aiPlanning: {
+   *       enableAIPlanning: true,
+   *       maxPlanningSteps: 10
+   *     }
+   *   });
+   * }
+   * ```
+   */
   constructor(config: AgentConfig & { aiPlanning?: AIPlanningConfig }) {
     this.config = config;
     this.logger = logger.child({ agent: config.name });
