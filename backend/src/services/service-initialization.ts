@@ -29,6 +29,7 @@ import { CalendarValidator } from './calendar/calendar-validator.service';
 import { SlackMessageAnalyzer } from './slack/slack-message-analyzer.service';
 import { SlackDraftManager } from './slack/slack-draft-manager.service';
 import { SlackFormatter } from './slack/slack-formatter.service';
+import { SlackInterfaceService } from './slack/slack-interface.service';
 import { GmailCacheService } from './email/gmail-cache.service';
 import { ContactCacheService } from './contact/contact-cache.service';
 import { SlackCacheService } from './slack/slack-cache.service';
@@ -381,28 +382,45 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 23. SlackMessageAnalyzer - Focused service for Slack message analysis
+    // 23. SlackInterfaceService - Central coordinator for all Slack operations
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackInterfaceService = new SlackInterfaceService({
+        signingSecret: ENVIRONMENT.slack.signingSecret,
+        botToken: ENVIRONMENT.slack.botToken,
+        clientId: ENVIRONMENT.slack.clientId,
+        clientSecret: ENVIRONMENT.slack.clientSecret,
+        redirectUri: ENVIRONMENT.slack.redirectUri,
+        development: ENVIRONMENT.nodeEnv === 'development'
+      });
+      serviceManager.registerService('slackInterfaceService', slackInterfaceService, {
+        priority: 94,
+        autoStart: true
+      });
+    }
+
+    // 24. SlackMessageAnalyzer - Focused service for Slack message analysis
     const slackMessageAnalyzer = new SlackMessageAnalyzer();
     serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER, slackMessageAnalyzer, {
+      dependencies: ['slackInterfaceService'],
       priority: 95,
       autoStart: true
     });
 
-    // 24. SlackDraftManager - Focused service for Slack draft management
+    // 25. SlackDraftManager - Focused service for Slack draft management
     const slackDraftManager = new SlackDraftManager();
     serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER, slackDraftManager, {
       priority: 96,
       autoStart: true
     });
 
-    // 25. SlackFormatter - Focused service for Slack response formatting
+    // 26. SlackFormatter - Focused service for Slack response formatting
     const slackFormatter = new SlackFormatter();
     serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER, slackFormatter, {
       priority: 97,
       autoStart: true
     });
 
-    // 26. GmailCacheService - Smart caching for Gmail API calls
+    // 27. GmailCacheService - Smart caching for Gmail API calls
     const gmailCacheService = new GmailCacheService();
     serviceManager.registerService('gmailCacheService', gmailCacheService, {
       dependencies: ['cacheService', 'gmailService'],
@@ -410,7 +428,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 27. ContactCacheService - Smart caching for contact resolution
+    // 28. ContactCacheService - Smart caching for contact resolution
     const contactCacheService = new ContactCacheService();
     serviceManager.registerService('contactCacheService', contactCacheService, {
       dependencies: ['cacheService', 'contactService'],
@@ -418,7 +436,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 28. SlackCacheService - Smart caching for Slack API calls
+    // 29. SlackCacheService - Smart caching for Slack API calls
     const slackCacheService = new SlackCacheService();
     serviceManager.registerService('slackCacheService', slackCacheService, {
       dependencies: ['cacheService'],
@@ -426,7 +444,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 29. CachePerformanceMonitoringService - Monitor all cache performance
+    // 30. CachePerformanceMonitoringService - Monitor all cache performance
     const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
     serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService, {
       dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService'],
