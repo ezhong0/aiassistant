@@ -143,10 +143,10 @@ export class AuthService extends BaseService {
       const googleTokens: GoogleTokens = {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token || undefined,
-        expires_in: 3600, // Default to 1 hour (Google OAuth tokens typically expire in 1 hour)
+        expires_in: 3600, // Default to 1 hour (Google converts expires_in to expiry_date)
         token_type: tokens.token_type || 'Bearer',
         scope: tokens.scope || '',
-        expires_at: new Date(Date.now() + (3600 * 1000)) // Calculate expiry date (1 hour from now)
+        expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + (3600 * 1000)) // Use Google's actual expiry_date or default to 1 hour
       };
 
       this.logInfo('Successfully exchanged code for tokens', {
@@ -295,10 +295,10 @@ export class AuthService extends BaseService {
       const googleTokens: GoogleTokens = {
         access_token: credentials.access_token,
         refresh_token: credentials.refresh_token || refreshToken,
-        expires_in: 3600, // Default to 1 hour
+        expires_in: 3600, // Default to 1 hour (Google converts expires_in to expiry_date)
         token_type: credentials.token_type || 'Bearer',
         scope: credentials.scope || '',
-        expires_at: credentials.expiry_date ? new Date(credentials.expiry_date) : new Date(Date.now() + (3600 * 1000))
+        expires_at: credentials.expiry_date ? new Date(credentials.expiry_date) : new Date(Date.now() + (3600 * 1000)) // Use Google's actual expiry_date or default to 1 hour
       };
 
       this.logInfo('Successfully refreshed Google tokens', {
