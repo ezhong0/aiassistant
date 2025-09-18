@@ -14,26 +14,9 @@ import {
   SlackResponse,
   SlackEvent
 } from '../../types/slack/slack.types';
+import { SlackConfig } from '../../types/slack/slack-config.types';
 import { serviceManager } from '../service-manager';
 import logger from '../../utils/logger';
-
-/**
- * Configuration interface for Slack service initialization
- */
-export interface SlackConfig {
-  /** Slack app signing secret for request verification */
-  signingSecret: string;
-  /** Bot token for Slack API access */
-  botToken: string;
-  /** OAuth client ID for authentication flows */
-  clientId: string;
-  /** OAuth client secret for authentication flows */
-  clientSecret: string;
-  /** OAuth redirect URI for authentication flows */
-  redirectUri: string;
-  /** Development mode flag for enhanced logging */
-  development: boolean;
-}
 
 /**
  * SlackInterface Service - Central coordinator for all Slack operations

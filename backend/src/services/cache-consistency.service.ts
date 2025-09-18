@@ -672,7 +672,7 @@ export class CacheConsistencyService extends BaseService {
     };
 
     if (this.cacheService) {
-      await this.cacheService.set('cache_consistency_metrics', this.metrics, 86400);
+      await this.cacheService.set('cache_consistency_metrics', this.metrics as unknown as Record<string, unknown>, 86400);
     }
 
     this.logInfo('Cache consistency metrics reset');
@@ -688,7 +688,7 @@ export class CacheConsistencyService extends BaseService {
       const cached = await this.cacheService.get<ConsistencyMetrics>('cache_consistency_metrics');
       if (cached) {
         this.metrics = cached;
-        this.logDebug('Cache consistency metrics loaded', this.metrics);
+        this.logDebug('Cache consistency metrics loaded', this.metrics as unknown as Record<string, unknown>);
       }
     } catch (error) {
       this.logWarn('Failed to load cache consistency metrics', { error });
@@ -735,7 +735,7 @@ export class CacheConsistencyService extends BaseService {
   protected async onDestroy(): Promise<void> {
     if (this.cacheService) {
       await Promise.all([
-        this.cacheService.set('cache_consistency_metrics', this.metrics, 86400),
+        this.cacheService.set('cache_consistency_metrics', this.metrics as unknown as Record<string, unknown>, 86400),
         this.saveDataPatterns()
       ]);
     }
@@ -751,7 +751,7 @@ export class CacheConsistencyService extends BaseService {
         cacheServiceAvailable: !!this.cacheService,
         rulesCount: Object.keys(this.consistencyRules).length,
         patternsCount: this.dataPatterns.size,
-        metrics: this.metrics,
+        metrics: this.metrics as unknown as Record<string, unknown>,
         consistencyViolationRate: this.metrics.consistencyViolations /
           (Object.values(this.metrics.operationsByLevel).reduce((a, b) => a + b, 0) || 1)
       }

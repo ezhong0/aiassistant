@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
-import { getEnhancedServiceManager, getServiceHealthReport } from '../services/enhanced-service-initialization';
+import { getEnhancedServiceManager, getServiceHealthReport } from '../services/service-initialization';
 import { ServiceHealth } from '../services/service-dependency-manager';
 import logger from '../utils/logger';
 

@@ -614,7 +614,7 @@ export class CacheWarmingService extends BaseService {
       case 'business_hours_start':
         return trigger === 'scheduled' && this.isNearBusinessHours();
       case 'pattern_detected':
-        return userActivity && this.hasDetectedPatterns(userActivity, rule);
+        return !!(userActivity && this.hasDetectedPatterns(userActivity, rule));
       case 'meeting_scheduled':
         return trigger === 'meeting_scheduled';
       default:
@@ -775,7 +775,7 @@ export class CacheWarmingService extends BaseService {
       const cached = await this.cacheService.get<WarmingMetrics>('cache_warming_metrics');
       if (cached) {
         this.metrics = cached;
-        this.logDebug('Cache warming metrics loaded', this.metrics);
+        this.logDebug('Cache warming metrics loaded', this.metrics as unknown as Record<string, unknown>);
       }
     } catch (error) {
       this.logWarn('Failed to load cache warming metrics', { error });
@@ -821,7 +821,7 @@ export class CacheWarmingService extends BaseService {
 
     try {
       await Promise.all([
-        this.cacheService.set('cache_warming_metrics', this.metrics, 86400),
+        this.cacheService.set('cache_warming_metrics', this.metrics as unknown as Record<string, unknown>, 86400),
         this.cacheService.set('cache_warming_user_activities',
           Array.from(this.userActivities.values()), 86400),
         this.cacheService.set('cache_warming_pending_tasks',
@@ -853,13 +853,13 @@ export class CacheWarmingService extends BaseService {
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     return {
-      healthy: true,
+      healthy: true as boolean,
       details: {
         cacheServiceAvailable: !!this.cacheService,
         schedulerRunning: !!this.warmingInterval,
         pendingTasks: this.warmingTasks.size,
         userActivities: this.userActivities.size,
-        metrics: this.metrics,
+        metrics: this.metrics as unknown as Record<string, unknown>,
         availableServices: {
           gmail: !!this.gmailCacheService,
           contact: !!this.contactCacheService,

@@ -1,4 +1,5 @@
 import { serviceManager } from './service-manager';
+import { serviceDependencyManager, ServiceHealth } from './service-dependency-manager';
 import { TokenStorageService } from './token-storage.service';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
@@ -34,6 +35,10 @@ import { GmailCacheService } from './email/gmail-cache.service';
 import { ContactCacheService } from './contact/contact-cache.service';
 import { SlackCacheService } from './slack/slack-cache.service';
 import { CachePerformanceMonitoringService } from './cache-performance-monitoring.service';
+import { CalendarCacheService } from './calendar/calendar-cache.service';
+import { CacheInvalidationService } from './cache-invalidation.service';
+import { CacheConsistencyService } from './cache-consistency.service';
+import { CacheWarmingService } from './cache-warming.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -62,7 +67,41 @@ export const initializeAllCoreServices = async (): Promise<void> => {
     // Connect circuit breaker to OpenAI service after initialization
     await setupCircuitBreakerConnections();
 
-    logger.info('All services initialized successfully');
+    // Enhanced health monitoring and logging
+    try {
+      const healthCheck = await serviceDependencyManager.healthCheck();
+      
+      logger.info('All services initialized successfully', {
+        overall: healthCheck.overall,
+        summary: healthCheck.summary,
+        environment: process.env.NODE_ENV
+      });
+
+      // Log degraded services for awareness
+      const degradedServices = Object.entries(healthCheck.services)
+        .filter(([, health]) => health.health === ServiceHealth.DEGRADED)
+        .map(([name, health]) => ({
+          name,
+          capabilities: health.capabilities,
+          limitations: health.limitations
+        }));
+
+      if (degradedServices.length > 0) {
+        logger.warn('Services running in degraded mode', { degradedServices });
+      }
+
+      // Log disabled services
+      const disabledServices = Object.entries(healthCheck.services)
+        .filter(([, health]) => health.health === ServiceHealth.DISABLED)
+        .map(([name]) => name);
+
+      if (disabledServices.length > 0) {
+        logger.info('Disabled services', { disabledServices });
+      }
+    } catch (healthError) {
+      logger.warn('Could not retrieve enhanced health information:', healthError);
+      logger.info('All services initialized successfully');
+    }
   } catch (error) {
     logger.error('Failed to initialize core services:', error);
     throw error;
@@ -396,29 +435,29 @@ const registerCoreServices = async (): Promise<void> => {
         priority: 94,
         autoStart: true
       });
+
+      // 24. SlackMessageAnalyzer - Focused service for Slack message analysis (requires SlackInterfaceService)
+      const slackMessageAnalyzer = new SlackMessageAnalyzer();
+      serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER, slackMessageAnalyzer, {
+        dependencies: ['slackInterfaceService'],
+        priority: 95,
+        autoStart: true
+      });
+
+      // 25. SlackDraftManager - Focused service for Slack draft management
+      const slackDraftManager = new SlackDraftManager();
+      serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER, slackDraftManager, {
+        priority: 96,
+        autoStart: true
+      });
+
+      // 26. SlackFormatter - Focused service for Slack response formatting
+      const slackFormatter = new SlackFormatter();
+      serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER, slackFormatter, {
+        priority: 97,
+        autoStart: true
+      });
     }
-
-    // 24. SlackMessageAnalyzer - Focused service for Slack message analysis
-    const slackMessageAnalyzer = new SlackMessageAnalyzer();
-    serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER, slackMessageAnalyzer, {
-      dependencies: ['slackInterfaceService'],
-      priority: 95,
-      autoStart: true
-    });
-
-    // 25. SlackDraftManager - Focused service for Slack draft management
-    const slackDraftManager = new SlackDraftManager();
-    serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER, slackDraftManager, {
-      priority: 96,
-      autoStart: true
-    });
-
-    // 26. SlackFormatter - Focused service for Slack response formatting
-    const slackFormatter = new SlackFormatter();
-    serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER, slackFormatter, {
-      priority: 97,
-      autoStart: true
-    });
 
     // 27. GmailCacheService - Smart caching for Gmail API calls
     const gmailCacheService = new GmailCacheService();
@@ -444,11 +483,43 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 30. CachePerformanceMonitoringService - Monitor all cache performance
+    // 30. CalendarCacheService - Smart caching for Calendar API calls
+    const calendarCacheService = new CalendarCacheService();
+    serviceManager.registerService('calendarCacheService', calendarCacheService, {
+      dependencies: ['cacheService', 'calendarService'],
+      priority: 101,
+      autoStart: true
+    });
+
+    // 31. CacheInvalidationService - Event-based cache invalidation
+    const cacheInvalidationService = new CacheInvalidationService();
+    serviceManager.registerService('cacheInvalidationService', cacheInvalidationService, {
+      dependencies: ['cacheService', 'gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService'],
+      priority: 102,
+      autoStart: true
+    });
+
+    // 32. CacheConsistencyService - Cache consistency level management
+    const cacheConsistencyService = new CacheConsistencyService();
+    serviceManager.registerService('cacheConsistencyService', cacheConsistencyService, {
+      dependencies: ['cacheService'],
+      priority: 103,
+      autoStart: true
+    });
+
+    // 33. CacheWarmingService - Proactive cache warming
+    const cacheWarmingService = new CacheWarmingService();
+    serviceManager.registerService('cacheWarmingService', cacheWarmingService, {
+      dependencies: ['cacheService', 'gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService', 'tokenStorageService'],
+      priority: 104,
+      autoStart: true
+    });
+
+    // 34. CachePerformanceMonitoringService - Monitor all cache performance (Enhanced)
     const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
     serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService, {
-      dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService'],
-      priority: 101,
+      dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService', 'cacheInvalidationService', 'cacheConsistencyService', 'cacheWarmingService'],
+      priority: 105,
       autoStart: true
     });
 
@@ -486,4 +557,55 @@ const setupCircuitBreakerConnections = async (): Promise<void> => {
     logger.error('Failed to setup circuit breaker connections:', error);
     throw error;
   }
+}
+
+/**
+ * Get service health report with enhanced monitoring
+ */
+export async function getServiceHealthReport(): Promise<{
+  timestamp: string;
+  environment: string;
+  overall: ServiceHealth;
+  services: Record<string, any>;
+  capabilities: Record<string, string[]>;
+  recommendations: string[];
+}> {
+  const healthCheck = await serviceDependencyManager.healthCheck();
+
+  // Generate capability map
+  const capabilities: Record<string, string[]> = {};
+  for (const [serviceName] of Object.entries(healthCheck.services)) {
+    capabilities[serviceName] = serviceDependencyManager.getServiceCapabilities(serviceName);
+  }
+
+  // Generate recommendations
+  const recommendations: string[] = [];
+
+  if (healthCheck.summary.degraded > 0) {
+    recommendations.push(`${healthCheck.summary.degraded} service(s) running in degraded mode - check dependencies`);
+  }
+
+  if (healthCheck.summary.unhealthy > 0) {
+    recommendations.push(`${healthCheck.summary.unhealthy} service(s) unhealthy - immediate attention required`);
+  }
+
+  if (process.env.NODE_ENV === 'production' && healthCheck.overall !== ServiceHealth.HEALTHY) {
+    recommendations.push('Production environment has non-healthy services - review configuration');
+  }
+
+  return {
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    overall: healthCheck.overall,
+    services: healthCheck.services,
+    capabilities,
+    recommendations
+  };
+}
+
+/**
+ * Get enhanced service manager for advanced operations
+ */
+export function getEnhancedServiceManager() {
+  return serviceDependencyManager;
 }

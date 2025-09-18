@@ -4,7 +4,7 @@ import { HealthCheckResponse, ServiceStatus } from '../types/api/api.types';
 import { rateLimitStore } from '../middleware/rate-limiting.middleware';
 import { HealthCheckSchema } from '../schemas/api.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
-import { getEnhancedServiceManager, getServiceHealthReport } from '../services/enhanced-service-initialization';
+import { getEnhancedServiceManager, getServiceHealthReport } from '../services/service-initialization';
 import { ServiceHealth } from '../services/service-dependency-manager';
 import logger from '../utils/logger';
 

@@ -612,7 +612,7 @@ export class CacheInvalidationService extends BaseService {
     };
 
     if (this.cacheService) {
-      await this.cacheService.set('cache_invalidation_metrics', this.metrics, 86400);
+      await this.cacheService.set('cache_invalidation_metrics', this.metrics as unknown as Record<string, unknown>, 86400);
     }
 
     this.logInfo('Cache invalidation metrics reset');
@@ -642,7 +642,7 @@ export class CacheInvalidationService extends BaseService {
       const cached = await this.cacheService.get<InvalidationMetrics>('cache_invalidation_metrics');
       if (cached) {
         this.metrics = cached;
-        this.logDebug('Cache invalidation metrics loaded', this.metrics);
+        this.logDebug('Cache invalidation metrics loaded', this.metrics as unknown as Record<string, unknown>);
       }
     } catch (error) {
       this.logWarn('Failed to load cache invalidation metrics', { error });
@@ -656,7 +656,7 @@ export class CacheInvalidationService extends BaseService {
     if (!this.cacheService) return;
 
     try {
-      await this.cacheService.set('cache_invalidation_metrics', this.metrics, 86400);
+      await this.cacheService.set('cache_invalidation_metrics', this.metrics as unknown as Record<string, unknown>, 86400);
     } catch (error) {
       this.logWarn('Failed to save cache invalidation metrics', { error });
     }
@@ -680,7 +680,7 @@ export class CacheInvalidationService extends BaseService {
       details: {
         cacheServiceAvailable: !!this.cacheService,
         invalidationRulesCount: this.invalidationRules.length,
-        metrics: this.metrics,
+        metrics: this.metrics as unknown as Record<string, unknown>,
         availableServices: {
           gmail: !!this.gmailCacheService,
           contact: !!this.contactCacheService,

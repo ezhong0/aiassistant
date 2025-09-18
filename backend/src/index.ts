@@ -10,7 +10,7 @@ import express, { Request, Response } from 'express';
 import { configService } from './config/config.service';
 import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
-import { initializeAllCoreServicesEnhanced } from './services/enhanced-service-initialization';
+import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 
@@ -22,10 +22,6 @@ import {
   requestTimeout,
   sanitizeRequest
 } from './middleware/security.middleware';
-import { 
-  applyComprehensiveValidation,
-  handleValidationErrors 
-} from './middleware/comprehensive-validation.middleware';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
@@ -43,7 +39,7 @@ let globalInterfaces: InterfaceManager | null = null;
 const initializeApplication = async (): Promise<void> => {
   try {
     // Initialize all core services with enhanced dependency management
-    await initializeAllCoreServicesEnhanced();
+    await initializeAllCoreServices();
 
     // Initialize AgentFactory after services
     initializeAgentFactory();
@@ -77,9 +73,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request processing middleware
 app.use(sanitizeRequest);
 app.use(requestLogger);
-
-// Apply comprehensive validation middleware
-app.use(applyComprehensiveValidation());
 
 // Log all incoming requests
 app.use((req, res, next) => {
@@ -154,7 +147,6 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Error handling middleware (must be last)
-app.use(handleValidationErrors);
 app.use(notFoundHandler);
 app.use(errorHandler);
 

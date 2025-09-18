@@ -24,7 +24,7 @@ import {
   validateGoogleCallback,
   validateTokenRefresh,
   validateMobileTokenExchange,
-} from '../middleware/validation.middleware';
+} from '../middleware/enhanced-validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
 import logger from '../utils/logger';
 
@@ -179,7 +179,7 @@ router.get('/debug/test-oauth-url',
     // Also test the Slack interface OAuth URL generation
     let slackOAuthUrl = 'Not available';
     try {
-      const { SlackInterface } = await import('../types/slack/slack.interface');
+      const { SlackInterfaceService } = await import('../services/slack/slack-interface.service');
       const mockSlackContext = {
         teamId: 'test_team',
         userId: 'test_user',
@@ -187,9 +187,19 @@ router.get('/debug/test-oauth-url',
         isDirectMessage: false
       };
       
-      // Create a mock SlackInterface instance to test OAuth URL generation
-      const mockSlackInterface = new SlackInterface({} as any, {} as any);
-      slackOAuthUrl = await mockSlackInterface['generateOAuthUrl'](mockSlackContext);
+      // Create a mock SlackInterfaceService instance to test OAuth URL generation
+      const mockSlackInterface = new SlackInterfaceService({} as any);
+      await mockSlackInterface.initialize();
+      const oauthManager = mockSlackInterface['slackOAuthManager'];
+      if (oauthManager) {
+        const authResult = await oauthManager.generateAuthorizationUrl({
+          teamId: mockSlackContext.teamId,
+          userId: mockSlackContext.userId
+        });
+        slackOAuthUrl = authResult.authorizationUrl || 'No authorization URL generated';
+      } else {
+        slackOAuthUrl = 'OAuth manager not available';
+      }
     } catch (slackError: unknown) {
       const errorMessage = slackError instanceof Error ? slackError.message : 'Unknown error';
       slackOAuthUrl = `Error: ${errorMessage}`;

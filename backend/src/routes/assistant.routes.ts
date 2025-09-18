@@ -11,7 +11,7 @@ import {
   ERROR_CODES 
 } from '../types/api/api-response.types';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
-import { sanitizeString } from '../middleware/validation.middleware';
+import { sanitizeString } from '../utils/validation.utils';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';

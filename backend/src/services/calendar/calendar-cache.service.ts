@@ -489,7 +489,7 @@ export class CalendarCacheService extends BaseService {
     this.responseTimes = [];
 
     if (this.cacheService) {
-      await this.cacheService.set('calendar_cache_metrics', this.metrics, 86400); // 24 hours
+      await this.cacheService.set('calendar_cache_metrics', this.metrics as unknown as Record<string, unknown>, 86400); // 24 hours
     }
 
     this.logInfo('Calendar cache metrics reset');
@@ -630,7 +630,7 @@ export class CalendarCacheService extends BaseService {
     if (!this.cacheService) return;
 
     try {
-      await this.cacheService.set('calendar_cache_metrics', this.metrics, 86400); // 24 hours
+      await this.cacheService.set('calendar_cache_metrics', this.metrics as unknown as Record<string, unknown>, 86400); // 24 hours
     } catch (error) {
       this.logWarn('Failed to save Calendar cache metrics', { error });
     }

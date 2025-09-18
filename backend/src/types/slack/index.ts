@@ -1,10 +1,11 @@
 import { ServiceManager } from '../../services/service-manager';
-import { SlackInterface, SlackConfig } from './slack.interface';
+import { SlackInterfaceService } from '../../services/slack/slack-interface.service';
+import { SlackConfig } from './slack-config.types';
 import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
 import logger from '../../utils/logger';
 
 export interface InterfaceManager {
-  slackInterface?: SlackInterface;
+  slackInterface?: SlackInterfaceService;
   start(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -19,12 +20,12 @@ export const initializeInterfaces = async (
   const interfaces: InterfaceManager = {
     async start() {
       if (this.slackInterface) {
-        await this.slackInterface.start();
+        await this.slackInterface.initialize();
       }
     },
     async stop() {
       if (this.slackInterface) {
-        await this.slackInterface.stop();
+        await this.slackInterface.destroy();
       }
     }
   };
@@ -41,7 +42,8 @@ export const initializeInterfaces = async (
         development: !ENV_VALIDATION.isProduction()
       };
 
-      interfaces.slackInterface = new SlackInterface(slackConfig, serviceManager);
+      interfaces.slackInterface = new SlackInterfaceService(slackConfig);
+      await interfaces.slackInterface.initialize();
       logger.debug('Slack interface initialized');
     } else {
       logger.info('Slack interface not configured');
@@ -62,7 +64,7 @@ export const initializeInterfaces = async (
 export const startInterfaces = async (interfaces: InterfaceManager): Promise<void> => {
   try {
     if (interfaces.slackInterface) {
-      await interfaces.slackInterface.start();
+      await interfaces.slackInterface.initialize();
     }
     
     logger.debug('All interfaces started');
@@ -78,7 +80,7 @@ export const startInterfaces = async (interfaces: InterfaceManager): Promise<voi
 export const stopInterfaces = async (interfaces: InterfaceManager): Promise<void> => {
   try {
     if (interfaces.slackInterface) {
-      await interfaces.slackInterface.stop();
+      await interfaces.slackInterface.destroy();
     }
     
     logger.info('All interfaces stopped successfully');
@@ -89,5 +91,5 @@ export const stopInterfaces = async (interfaces: InterfaceManager): Promise<void
 };
 
 // Export individual interfaces for direct use
-export { SlackInterface } from './slack.interface';
-export type { SlackConfig } from './slack.interface';
+export { SlackInterfaceService } from '../../services/slack/slack-interface.service';
+export type { SlackConfig } from './slack-config.types';

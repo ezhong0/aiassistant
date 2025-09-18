@@ -263,3 +263,57 @@ export async function validateAsync<T>(
     throw error;
   }
 }
+
+/**
+ * Auth-specific validation schemas and functions
+ */
+export const authSchemas = {
+  googleCallback: z.object({
+    code: z.string().min(1, 'Authorization code is required'),
+    state: z.string().optional(),
+    error: z.string().optional(),
+    error_description: z.string().optional()
+  }),
+  
+  tokenRefresh: z.object({
+    refresh_token: z.string().min(1, 'Refresh token is required')
+  }),
+  
+  mobileTokenExchange: z.object({
+    access_token: z.string().min(1, 'Access token is required'),
+    refresh_token: z.string().optional(),
+    id_token: z.string().optional(),
+    platform: z.enum(['web', 'slack'])
+  }),
+  
+  logout: z.object({
+    access_token: z.string().optional(),
+    everywhere: z.boolean().optional().default(false)
+  }),
+  
+  userId: z.object({
+    userId: z.string().min(1, 'User ID is required')
+  }),
+  
+  profileUpdate: z.object({
+    name: z.string().optional(),
+    email: z.string().email().optional(),
+    preferences: z.record(z.any()).optional()
+  }),
+  
+  pagination: z.object({
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(10)
+  })
+};
+
+/**
+ * Auth validation middleware functions
+ */
+export const validateGoogleCallback = validateRequest({ query: authSchemas.googleCallback });
+export const validateTokenRefresh = validateRequest({ body: authSchemas.tokenRefresh });
+export const validateMobileTokenExchange = validateRequest({ body: authSchemas.mobileTokenExchange });
+export const validateLogout = validateRequest({ body: authSchemas.logout });
+export const validateUserId = validateRequest({ params: authSchemas.userId });
+export const validateProfileUpdate = validateRequest({ body: authSchemas.profileUpdate });
+export const validatePagination = validateRequest({ query: authSchemas.pagination });
