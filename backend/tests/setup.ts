@@ -111,6 +111,9 @@ afterEach(async () => {
   return serviceManager;
 };
 
+// Store original console.error to avoid jest overrides
+const originalError = console.error;
+
 // Handle unhandled promise rejections in tests
 process.on('unhandledRejection', (reason, promise) => {
   originalError('Unhandled Rejection at:', promise, 'reason:', reason);

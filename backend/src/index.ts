@@ -10,7 +10,7 @@ import express, { Request, Response } from 'express';
 import { configService } from './config/config.service';
 import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
-import { initializeAllCoreServices } from './services/service-initialization';
+import { initializeAllCoreServicesEnhanced } from './services/enhanced-service-initialization';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { 
@@ -30,6 +30,7 @@ import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
+import enhancedHealthRoutes from './routes/enhanced-health.routes';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
@@ -41,8 +42,8 @@ let globalInterfaces: InterfaceManager | null = null;
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
   try {
-    // Initialize all core services (includes service registration and initialization)
-    await initializeAllCoreServices();
+    // Initialize all core services with enhanced dependency management
+    await initializeAllCoreServicesEnhanced();
 
     // Initialize AgentFactory after services
     initializeAgentFactory();
@@ -96,8 +97,9 @@ app.use((req, res, next) => {
 // Rate limiting (apply to all routes)
 app.use(apiRateLimit);
 
-// Health check (before other routes)
+// Health check routes (before other routes)
 app.use('/health', healthRoutes);
+app.use('/health', enhancedHealthRoutes);
 
 // API Routes
 app.use('/auth', authRoutes);

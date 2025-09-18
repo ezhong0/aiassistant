@@ -4,6 +4,8 @@ import { HealthCheckResponse, ServiceStatus } from '../types/api/api.types';
 import { rateLimitStore } from '../middleware/rate-limiting.middleware';
 import { HealthCheckSchema } from '../schemas/api.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
+import { getEnhancedServiceManager, getServiceHealthReport } from '../services/enhanced-service-initialization';
+import { ServiceHealth } from '../services/service-dependency-manager';
 import logger from '../utils/logger';
 
 const router = express.Router();
@@ -34,6 +36,9 @@ const checkServiceHealth = async (serviceName: string, checkFunction: () => Prom
 
 router.get('/', validateRequest({ query: z.object({}) }), async (req: Request, res: Response) => {
   try {
+    // Get enhanced service health report
+    const serviceHealthReport = await getServiceHealthReport();
+
     // Get memory usage with more details
     const memoryUsage = process.memoryUsage();
     const memory = {
@@ -43,40 +48,61 @@ router.get('/', validateRequest({ query: z.object({}) }), async (req: Request, r
       external: Math.round((memoryUsage.external / 1024 / 1024) * 100) / 100
     };
 
-    // Check individual service health
+    // Convert enhanced service health to legacy format
+    const createServiceStatus = (serviceName: string): ServiceStatus => {
+      const serviceHealth = serviceHealthReport.services[serviceName];
+      if (!serviceHealth) {
+        return {
+          status: 'unhealthy',
+          lastCheck: new Date().toISOString(),
+          error: 'Service not found'
+        };
+      }
+
+      let status: 'healthy' | 'degraded' | 'unhealthy';
+      switch (serviceHealth.health) {
+        case ServiceHealth.HEALTHY:
+          status = 'healthy';
+          break;
+        case ServiceHealth.DEGRADED:
+          status = 'degraded';
+          break;
+        case ServiceHealth.UNHEALTHY:
+        case ServiceHealth.DISABLED:
+        default:
+          status = 'unhealthy';
+          break;
+      }
+
+      return {
+        status,
+        lastCheck: serviceHealth.lastHealthCheck.toISOString()
+      };
+    };
+
     const services = {
-      masterAgent: await checkServiceHealth('masterAgent', async () => {
-        // Simple health check - just verify the service exists
-        // In a real app, you might ping the service or check dependencies
-      }),
-      
-      toolExecutor: await checkServiceHealth('toolExecutor', async () => {
-        // Check if tool executor service is responsive
-      }),
-      
-      emailAgent: await checkServiceHealth('emailAgent', async () => {
-        // Check if email agent can be instantiated
-      }),
-      
-      sessionService: await checkServiceHealth('sessionService', async () => {
-        // Check if session service is working
-      })
+      database: createServiceStatus('databaseService'),
+      masterAgent: createServiceStatus('masterAgent'),
+      toolExecutor: createServiceStatus('toolExecutor'),
+      emailAgent: createServiceStatus('emailAgent'),
+      sessionService: createServiceStatus('sessionService')
     };
 
     // Get rate limiting stats
     const rateLimitingStats = rateLimitStore.getStats();
 
-    // Determine overall health status
-    const serviceStatuses = Object.values(services);
-    const unhealthyServices = serviceStatuses.filter(s => s.status === 'unhealthy');
-    const degradedServices = serviceStatuses.filter(s => s.status === 'degraded');
-    
-    let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
-    
-    if (unhealthyServices.length > 0) {
-      overallStatus = 'unhealthy';
-    } else if (degradedServices.length > 0) {
-      overallStatus = 'degraded';
+    // Map ServiceHealth enum to legacy status
+    let overallStatus: 'healthy' | 'degraded' | 'unhealthy';
+    switch (serviceHealthReport.overall) {
+      case ServiceHealth.HEALTHY:
+        overallStatus = 'healthy';
+        break;
+      case ServiceHealth.DEGRADED:
+        overallStatus = 'degraded';
+        break;
+      default:
+        overallStatus = 'unhealthy';
+        break;
     }
 
     // Check memory pressure (warn if using > 80% of heap)
@@ -87,9 +113,9 @@ router.get('/', validateRequest({ query: z.object({}) }), async (req: Request, r
 
     const healthCheck: HealthCheckResponse = {
       status: overallStatus,
-      timestamp: new Date().toISOString(),
+      timestamp: serviceHealthReport.timestamp,
       uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
+      environment: serviceHealthReport.environment,
       version: process.env.npm_package_version || '1.0.0',
       memory,
       services,
@@ -102,17 +128,18 @@ router.get('/', validateRequest({ query: z.object({}) }), async (req: Request, r
     };
 
     // Set appropriate HTTP status based on health
-    const httpStatus = overallStatus === 'healthy' ? 200 : 
+    const httpStatus = overallStatus === 'healthy' ? 200 :
                       overallStatus === 'degraded' ? 200 : 503;
 
-    logger.info('Health check completed', {
+    logger.info('Enhanced health check completed', {
       status: overallStatus,
       responseTime: Date.now() - (req.startTime || Date.now()),
       memoryUsedMB: memory.used,
-      services: Object.keys(services).reduce((acc, key) => {
-        acc[key] = services[key as keyof typeof services].status;
-        return acc;
-      }, {} as Record<string, string>)
+      servicesCount: Object.keys(services).length,
+      healthyServices: Object.values(services).filter(s => s.status === 'healthy').length,
+      degradedServices: Object.values(services).filter(s => s.status === 'degraded').length,
+      unhealthyServices: Object.values(services).filter(s => s.status === 'unhealthy').length,
+      recommendations: serviceHealthReport.recommendations.length
     });
 
     res.status(httpStatus).json(healthCheck);
