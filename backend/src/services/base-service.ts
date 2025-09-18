@@ -1,4 +1,6 @@
 import { ServiceState, IService } from './service-manager';
+import { BaseError, ServiceError, ServiceDependencyError, ErrorFactory, ErrorCategory } from '../errors/error-types';
+import { retryManager, RetryConfig } from '../errors/retry-manager';
 import logger from '../utils/logger';
 
 /**
@@ -201,20 +203,140 @@ export abstract class BaseService implements IService {
   }
 
   /**
-   * Helper method for consistent error handling
+   * Enhanced error handling with structured error classification
    */
   protected handleError(error: Error | unknown, operation: string): never {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const fullMessage = `Error in ${this.name}.${operation}: ${errorMessage}`;
-    
-    logger.error(fullMessage, {
-      service: this.name,
-      operation,
-      error: error instanceof Error ? error.stack : error,
-      state: this._state
-    });
+    let structuredError: BaseError;
 
-    throw new Error(fullMessage);
+    if (error instanceof BaseError) {
+      structuredError = error;
+    } else {
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      structuredError = ErrorFactory.wrapError(errorInstance, ErrorCategory.SERVICE, this.name, operation);
+    }
+
+    // Set context
+    structuredError.setContext(this.name, operation);
+
+    // Log with appropriate severity
+    this.logStructuredError(structuredError);
+
+    throw structuredError;
+  }
+
+  /**
+   * Handle non-fatal errors with graceful degradation
+   */
+  protected handleNonFatalError(error: Error | unknown, operation: string): BaseError {
+    let structuredError: BaseError;
+
+    if (error instanceof BaseError) {
+      structuredError = error;
+    } else {
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      structuredError = ErrorFactory.wrapError(errorInstance, ErrorCategory.SERVICE, this.name, operation);
+    }
+
+    structuredError.setContext(this.name, operation);
+    this.logStructuredError(structuredError);
+
+    return structuredError;
+  }
+
+  /**
+   * Execute operation with retry logic
+   */
+  protected async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    retryConfig?: Partial<RetryConfig>
+  ): Promise<T> {
+    const result = await retryManager.execute(
+      operation,
+      retryConfig,
+      { service: this.name, operation: operationName }
+    );
+
+    if (!result.success) {
+      const error = this.handleNonFatalError(result.error!, operationName);
+      error.addDetails('attempts', result.attempts);
+      error.addDetails('totalTime', result.totalTime);
+      throw error;
+    }
+
+    return result.result!;
+  }
+
+  /**
+   * Execute operation with fallback
+   */
+  protected async executeWithFallback<T>(
+    primaryOperation: () => Promise<T>,
+    fallbackOperation: () => Promise<T>,
+    operationName: string,
+    retryConfig?: Partial<RetryConfig>
+  ): Promise<T> {
+    const result = await retryManager.executeWithFallback(
+      primaryOperation,
+      fallbackOperation,
+      retryConfig,
+      { service: this.name, operation: operationName }
+    );
+
+    if (!result.success) {
+      const error = this.handleNonFatalError(result.error!, operationName);
+      error.addDetails('attempts', result.attempts);
+      error.addDetails('totalTime', result.totalTime);
+      throw error;
+    }
+
+    return result.result!;
+  }
+
+  /**
+   * Check if dependency service is available
+   */
+  protected checkDependency(serviceName: string, required: boolean = true): boolean {
+    // This would integrate with service manager to check dependencies
+    // For now, we'll implement a basic check
+    try {
+      const service = require('./service-manager').serviceManager.getService(serviceName);
+      return service !== null && service !== undefined;
+    } catch {
+      if (required) {
+        const error = new ServiceDependencyError(`Required dependency '${serviceName}' is not available`);
+        error.setContext(this.name, 'checkDependency');
+        throw error;
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Log structured error with appropriate level
+   */
+  private logStructuredError(error: BaseError): void {
+    const logData = {
+      ...error.toJSON(),
+      serviceState: this._state
+    };
+
+    switch (error.severity) {
+      case 'critical':
+        logger.error('CRITICAL SERVICE ERROR', logData);
+        break;
+      case 'high':
+        logger.error('HIGH SEVERITY SERVICE ERROR', logData);
+        break;
+      case 'medium':
+        logger.warn('MEDIUM SEVERITY SERVICE ERROR', logData);
+        break;
+      case 'low':
+        logger.info('LOW SEVERITY SERVICE ERROR', logData);
+        break;
+      default:
+        logger.debug('SERVICE ERROR', logData);
+    }
   }
 
   /**

@@ -2,6 +2,7 @@ import { BaseService } from '../base-service';
 import { ServiceManager, serviceManager } from '../service-manager';
 import { SLACK_SERVICE_CONSTANTS } from '../../config/slack-service-constants';
 import { SlackInterfaceService } from './slack-interface.service';
+import { ServiceDependencyError } from '../../errors/error-types';
 import logger from '../../utils/logger';
 
 /**
@@ -29,19 +30,18 @@ export class SlackMessageAnalyzer extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    try {
-      this.logInfo('Initializing SlackMessageAnalyzer...');
-      
-      // Get SlackInterfaceService dependency
-      this.slackInterfaceService = serviceManager.getService<SlackInterfaceService>('slackInterfaceService') || null;
-      
-      if (!this.slackInterfaceService) {
-        throw new Error('SlackInterfaceService not available from service registry');
-      }
-      
-      this.logInfo('SlackMessageAnalyzer initialized successfully');
-    } catch (error) {
-      this.handleError(error, 'onInitialize');
+    this.logInfo('Initializing SlackMessageAnalyzer...');
+
+    // Get SlackInterfaceService dependency - allow graceful degradation
+    this.slackInterfaceService = serviceManager.getService<SlackInterfaceService>('slackInterfaceService') || null;
+
+    if (!this.slackInterfaceService) {
+      // Log warning but don't fail initialization - operate in degraded mode
+      this.logWarn('SlackInterfaceService not available - SlackMessageAnalyzer will operate in degraded mode', {
+        availableServices: serviceManager.getRegisteredServices()
+      });
+    } else {
+      this.logInfo('SlackMessageAnalyzer initialized successfully with SlackInterfaceService dependency');
     }
   }
 
@@ -76,7 +76,15 @@ export class SlackMessageAnalyzer extends BaseService {
       });
 
       if (!this.slackInterfaceService) {
-        this.handleError(new Error('SlackInterfaceService not available'), 'readMessageHistory');
+        const error = new ServiceDependencyError('SlackInterfaceService not available - service operating in degraded mode');
+        this.logWarn('Cannot read message history - SlackInterfaceService dependency unavailable', {
+          channelId,
+          operation: 'readMessageHistory'
+        });
+        return {
+          success: false,
+          error: error.getUserMessage()
+        };
       }
 
       // Use the WebClient from SlackInterfaceService to read messages
@@ -121,7 +129,16 @@ export class SlackMessageAnalyzer extends BaseService {
       });
 
       if (!this.slackInterfaceService) {
-        this.handleError(new Error('SlackInterfaceService not available'), 'readThreadMessages');
+        const error = new ServiceDependencyError('SlackInterfaceService not available - service operating in degraded mode');
+        this.logWarn('Cannot read thread messages - SlackInterfaceService dependency unavailable', {
+          channelId,
+          threadTs,
+          operation: 'readThreadMessages'
+        });
+        return {
+          success: false,
+          error: error.getUserMessage()
+        };
       }
 
       // Use the WebClient from SlackInterfaceService to read thread messages
