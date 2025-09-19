@@ -279,8 +279,10 @@ export class JobQueueService extends BaseService {
       throw new Error('SlackMessageProcessor not available for AI request');
     }
 
-    // Process through the existing pipeline
-    const result = await (slackMessageProcessor as any).processMessage(message, context, eventType);
+    // IMPORTANT: Use internal sync processing to avoid infinite loop
+    // Jobs are already queued for async processing, so we should process them synchronously
+    // to avoid creating new async jobs
+    const result = await (slackMessageProcessor as any).processMessageInternal(message, context, eventType);
 
     return result;
   }
@@ -380,26 +382,33 @@ export class JobQueueService extends BaseService {
    */
   private async updateJobStatus(jobId: string, status: string, additionalData: any = {}): Promise<void> {
     try {
-      const existing = await this.cacheService!.get<string>(`job:${jobId}`);
+      const existing = await this.cacheService!.get<any>(`job:${jobId}`);
       if (existing) {
         let jobData: any;
 
-        try {
-          jobData = JSON.parse(existing);
-        } catch (parseError) {
-          // If existing data is corrupted, create a new job object
-          this.logWarn('Corrupted job data found, creating new job object', {
-            jobId,
-            existing: existing.substring(0, 100),
-            parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
-          });
+        // The cache service already parses JSON, so existing is already an object
+        if (typeof existing === 'object' && existing !== null) {
+          jobData = existing;
+        } else {
+          // If existing is not an object (shouldn't happen with current cache implementation), 
+          // try to parse it as JSON string
+          try {
+            jobData = typeof existing === 'string' ? JSON.parse(existing) : existing;
+          } catch (parseError) {
+            // If existing data is corrupted, create a new job object
+            this.logWarn('Corrupted job data found, creating new job object', {
+              jobId,
+              existing: this.safeStringify(existing),
+              parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+            });
 
-          jobData = {
-            id: jobId,
-            status: 'unknown',
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-          };
+            jobData = {
+              id: jobId,
+              status: 'unknown',
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            };
+          }
         }
 
         jobData.status = status;
@@ -413,6 +422,24 @@ export class JobQueueService extends BaseService {
       }
     } catch (error) {
       this.logError('Failed to update job status', error, { jobId, status });
+    }
+  }
+
+  /**
+   * Safely convert any value to a string for logging purposes
+   */
+  private safeStringify(data: any): string {
+    try {
+      if (typeof data === 'string') {
+        return data.length > 100 ? data.substring(0, 100) + '...' : data;
+      }
+      if (data === null || data === undefined) {
+        return String(data);
+      }
+      const str = JSON.stringify(data);
+      return str.length > 100 ? str.substring(0, 100) + '...' : str;
+    } catch (error) {
+      return `[Unstringifiable object: ${typeof data}]`;
     }
   }
 
@@ -476,12 +503,9 @@ export class JobQueueService extends BaseService {
   }
 
   /**
-   * Notify job completion (placeholder for WebSocket integration)
+   * Notify job completion and send Slack response
    */
   private async notifyJobCompletion(job: Job, result: JobResult): Promise<void> {
-    // TODO: Integrate with WebSocket service when available
-    // For now, we can use Slack notifications for immediate benefit
-
     if (job.userId && job.sessionId) {
       this.logInfo('Job completion notification', {
         jobId: job.id,
@@ -491,20 +515,76 @@ export class JobQueueService extends BaseService {
         processingTime: result.processingTime
       });
 
-      // If this is a Slack-related job, we could send a Slack message
-      if (job.data.context?.channel && job.data.context?.ts) {
+      // If this is a Slack-related job, send the result back to Slack
+      if (job.data.slackChannelId && job.data.slackUserId) {
         try {
-          // For now, just log that we would send a notification
-          // TODO: Implement Slack notification when WebSocket service is available
-          this.logInfo('Would send Slack notification', {
-            jobId: job.id,
-            channel: job.data.context.channel,
-            success: result.success
-          });
+          await this.sendSlackCompletionNotification(job, result);
         } catch (error) {
           this.logError('Failed to send Slack completion notification', error);
         }
       }
+    }
+  }
+
+  /**
+   * Send job completion result back to Slack
+   */
+  private async sendSlackCompletionNotification(job: Job, result: JobResult): Promise<void> {
+    try {
+      const slackInterface = serviceManager.getService('slackInterface');
+      if (!slackInterface) {
+        this.logWarn('SlackInterface not available for completion notification');
+        return;
+      }
+
+      // Extract Slack context from job data
+      const channelId = job.data.slackChannelId;
+      const userId = job.data.slackUserId;
+      const context = job.data.context; // Full SlackContext for thread_ts
+
+      if (!channelId || !userId) {
+        this.logWarn('Missing Slack context for completion notification', {
+          jobId: job.id,
+          hasChannelId: !!channelId,
+          hasUserId: !!userId
+        });
+        return;
+      }
+
+      // Format the response message
+      let responseText: string;
+      if (result.success && result.result) {
+        // Extract the formatted message from the result
+        if (result.result.message) {
+          responseText = result.result.message;
+        } else if (result.result.text) {
+          responseText = result.result.text;
+        } else {
+          responseText = '✅ Your request has been completed successfully!';
+        }
+      } else {
+        responseText = '❌ Sorry, I encountered an issue processing your request. Please try again.';
+      }
+
+      // Send the response back to Slack
+      await (slackInterface as any).sendSlackMessage(channelId, {
+        text: responseText,
+        thread_ts: context?.ts // Reply in thread if available
+      });
+
+      this.logInfo('Slack completion notification sent', {
+        jobId: job.id,
+        channelId,
+        userId,
+        success: result.success,
+        messageLength: responseText.length
+      });
+
+    } catch (error) {
+      this.logError('Error sending Slack completion notification', error, {
+        jobId: job.id,
+        hasContext: !!job.data.context
+      });
     }
   }
 
@@ -533,8 +613,8 @@ export class JobQueueService extends BaseService {
    */
   async getJobStatus(jobId: string): Promise<any> {
     try {
-      const jobData = await this.cacheService!.get<string>(`job:${jobId}`);
-      return jobData ? JSON.parse(jobData) : null;
+      const jobData = await this.cacheService!.get<any>(`job:${jobId}`);
+      return jobData; // Cache service already parses JSON
     } catch (error) {
       this.logError('Failed to get job status', error, { jobId });
       return null;
@@ -546,8 +626,8 @@ export class JobQueueService extends BaseService {
    */
   async getJobResult(jobId: string): Promise<JobResult | null> {
     try {
-      const resultData = await this.cacheService!.get<string>(`result:${jobId}`);
-      return resultData ? JSON.parse(resultData) : null;
+      const resultData = await this.cacheService!.get<JobResult>(`result:${jobId}`);
+      return resultData; // Cache service already parses JSON
     } catch (error) {
       this.logError('Failed to get job result', error, { jobId });
       return null;
