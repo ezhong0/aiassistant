@@ -89,19 +89,22 @@ export class JobQueueService extends BaseService {
     };
 
     try {
-      // Add to appropriate priority queue
+      // Add to appropriate priority queue (sanitize job data)
       const queueName = `jobs:${type}:${job.priority}`;
-      await this.cacheService!.lpush(queueName, JSON.stringify(job));
+      const safeJob = this.sanitizeForJSON(job);
+      await this.cacheService!.lpush(queueName, JSON.stringify(safeJob));
 
-      // Store job details for status tracking
+      // Store job details for status tracking (sanitize data for JSON)
+      const safeJobData = this.sanitizeForJSON({
+        ...job,
+        status: 'queued',
+        queuedAt: Date.now()
+      });
+
       await this.cacheService!.setex(
         `job:${job.id}`,
         300, // 5 minutes TTL
-        JSON.stringify({
-          ...job,
-          status: 'queued',
-          queuedAt: Date.now()
-        })
+        JSON.stringify(safeJobData)
       );
 
       this.logInfo('Job added to queue', {
@@ -379,9 +382,29 @@ export class JobQueueService extends BaseService {
     try {
       const existing = await this.cacheService!.get<string>(`job:${jobId}`);
       if (existing) {
-        const jobData = JSON.parse(existing);
+        let jobData: any;
+
+        try {
+          jobData = JSON.parse(existing);
+        } catch (parseError) {
+          // If existing data is corrupted, create a new job object
+          this.logWarn('Corrupted job data found, creating new job object', {
+            jobId,
+            existing: existing.substring(0, 100),
+            parseError: parseError instanceof Error ? parseError.message : 'Unknown parse error'
+          });
+
+          jobData = {
+            id: jobId,
+            status: 'unknown',
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+        }
+
         jobData.status = status;
         jobData.updatedAt = Date.now();
+
         // Safely serialize additionalData to avoid JSON.stringify errors
         const safeAdditionalData = this.sanitizeForJSON(additionalData);
         Object.assign(jobData, safeAdditionalData);
