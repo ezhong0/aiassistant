@@ -32,6 +32,12 @@ export class JobQueueService extends BaseService {
   private readonly PROCESSING_INTERVAL = 1000; // Process jobs every 1 second
   private readonly JOB_TIMEOUT = 30000; // 30 seconds max per job
 
+  // In-memory fallback for when Redis is unavailable
+  private useMemoryFallback = false;
+  private memoryQueues: Map<string, Job[]> = new Map();
+  private memoryJobs: Map<string, any> = new Map();
+  private memoryResults: Map<string, JobResult> = new Map();
+
   constructor() {
     super('JobQueueService');
   }
@@ -40,8 +46,13 @@ export class JobQueueService extends BaseService {
     // Get cache service (Redis) for job storage
     this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
 
-    if (!this.cacheService) {
-      throw new Error('CacheService is required for JobQueueService');
+    // Check if we should use in-memory fallback
+    if (!this.cacheService || !await this.checkCacheServiceAvailability()) {
+      this.useMemoryFallback = true;
+      this.logWarn('Redis unavailable, using in-memory job queue fallback', {
+        hasCacheService: !!this.cacheService,
+        fallbackMode: true
+      });
     }
 
     // Start job processing
@@ -49,8 +60,26 @@ export class JobQueueService extends BaseService {
 
     this.logInfo('JobQueueService initialized successfully', {
       processingInterval: this.PROCESSING_INTERVAL,
-      jobTimeout: this.JOB_TIMEOUT
+      jobTimeout: this.JOB_TIMEOUT,
+      useMemoryFallback: this.useMemoryFallback
     });
+  }
+
+  /**
+   * Check if cache service is actually available
+   */
+  private async checkCacheServiceAvailability(): Promise<boolean> {
+    if (!this.cacheService) return false;
+
+    try {
+      // Try a simple operation to test connectivity
+      await this.cacheService.set('health-check', 'ok', 1);
+      await this.cacheService.del('health-check');
+      return true;
+    } catch (error) {
+      this.logWarn('Cache service connectivity test failed', { error: error instanceof Error ? error.message : 'Unknown error' });
+      return false;
+    }
   }
 
   protected async onDestroy(): Promise<void> {
@@ -89,6 +118,10 @@ export class JobQueueService extends BaseService {
     };
 
     try {
+      if (this.useMemoryFallback) {
+        return await this.addJobToMemory(job);
+      }
+
       // Add to appropriate priority queue (sanitize job data)
       const queueName = `jobs:${type}:${job.priority}`;
       const safeJob = this.sanitizeForJSON(job);
@@ -161,27 +194,36 @@ export class JobQueueService extends BaseService {
     this.isProcessing = true;
 
     try {
-      // Try to get jobs in priority order
-      const queueNames = [
-        'jobs:confirmation_response:1',
-        'jobs:ai_request:2',
-        'jobs:send_email:3',
-        'jobs:calendar_event:4'
-      ];
-
       let job: Job | null = null;
       let queueName: string | null = null;
 
-      // Check each queue in priority order
-      for (const queue of queueNames) {
-        const jobData = await this.cacheService!.brpop(queue, 0.1); // 100ms timeout
+      if (this.useMemoryFallback) {
+        // Use memory fallback
+        const jobData = this.getNextJobFromMemory();
         if (jobData) {
-          try {
-            job = JSON.parse(jobData);
-            queueName = queue;
-            break;
-          } catch (parseError) {
-            this.logError('Failed to parse job data', parseError, { queue, jobData });
+          job = jobData.job;
+          queueName = jobData.queueName;
+        }
+      } else {
+        // Use Redis queues
+        const queueNames = [
+          'jobs:confirmation_response:1',
+          'jobs:ai_request:2',
+          'jobs:send_email:3',
+          'jobs:calendar_event:4'
+        ];
+
+        // Check each queue in priority order
+        for (const queue of queueNames) {
+          const jobData = await this.cacheService!.brpop(queue, 0.1); // 100ms timeout
+          if (jobData) {
+            try {
+              job = JSON.parse(jobData);
+              queueName = queue;
+              break;
+            } catch (parseError) {
+              this.logError('Failed to parse job data', parseError, { queue, jobData });
+            }
           }
         }
       }
@@ -382,6 +424,11 @@ export class JobQueueService extends BaseService {
    */
   private async updateJobStatus(jobId: string, status: string, additionalData: any = {}): Promise<void> {
     try {
+      if (this.useMemoryFallback) {
+        this.updateJobStatusInMemory(jobId, status, additionalData);
+        return;
+      }
+
       const existing = await this.cacheService!.get<any>(`job:${jobId}`);
       if (existing) {
         let jobData: any;
@@ -492,6 +539,11 @@ export class JobQueueService extends BaseService {
    */
   private async storeJobResult(result: JobResult): Promise<void> {
     try {
+      if (this.useMemoryFallback) {
+        this.storeJobResultInMemory(result);
+        return;
+      }
+
       await this.cacheService!.setex(
         `result:${result.jobId}`,
         600, // 10 minutes TTL
@@ -613,6 +665,10 @@ export class JobQueueService extends BaseService {
    */
   async getJobStatus(jobId: string): Promise<any> {
     try {
+      if (this.useMemoryFallback) {
+        return this.memoryJobs.get(jobId) || null;
+      }
+
       const jobData = await this.cacheService!.get<any>(`job:${jobId}`);
       return jobData; // Cache service already parses JSON
     } catch (error) {
@@ -626,6 +682,10 @@ export class JobQueueService extends BaseService {
    */
   async getJobResult(jobId: string): Promise<JobResult | null> {
     try {
+      if (this.useMemoryFallback) {
+        return this.memoryResults.get(jobId) || null;
+      }
+
       const resultData = await this.cacheService!.get<JobResult>(`result:${jobId}`);
       return resultData; // Cache service already parses JSON
     } catch (error) {
@@ -642,7 +702,8 @@ export class JobQueueService extends BaseService {
       const stats: any = {
         queues: {},
         totalPending: 0,
-        processing: this.isProcessing
+        processing: this.isProcessing,
+        useMemoryFallback: this.useMemoryFallback
       };
 
       const queueNames = [
@@ -652,10 +713,18 @@ export class JobQueueService extends BaseService {
         'jobs:calendar_event:4'
       ];
 
-      for (const queue of queueNames) {
-        const length = await this.cacheService!.llen(queue);
-        stats.queues[queue] = length;
-        stats.totalPending += length;
+      if (this.useMemoryFallback) {
+        for (const queue of queueNames) {
+          const length = this.memoryQueues.get(queue)?.length || 0;
+          stats.queues[queue] = length;
+          stats.totalPending += length;
+        }
+      } else {
+        for (const queue of queueNames) {
+          const length = await this.cacheService!.llen(queue);
+          stats.queues[queue] = length;
+          stats.totalPending += length;
+        }
       }
 
       return stats;
@@ -663,5 +732,85 @@ export class JobQueueService extends BaseService {
       this.logError('Failed to get queue stats', error);
       return { error: 'Failed to get stats' };
     }
+  }
+
+  // ===============================
+  // MEMORY FALLBACK METHODS
+  // ===============================
+
+  /**
+   * Add job to in-memory queue
+   */
+  private async addJobToMemory(job: Job): Promise<string> {
+    const queueName = `jobs:${job.type}:${job.priority}`;
+
+    if (!this.memoryQueues.has(queueName)) {
+      this.memoryQueues.set(queueName, []);
+    }
+
+    this.memoryQueues.get(queueName)!.push(job);
+
+    // Store job status
+    this.memoryJobs.set(job.id, {
+      ...job,
+      status: 'queued',
+      queuedAt: Date.now()
+    });
+
+    this.logInfo('Job added to memory queue', {
+      jobId: job.id,
+      type: job.type,
+      priority: job.priority,
+      queueName,
+      userId: job.userId,
+      sessionId: job.sessionId,
+      memoryMode: true
+    });
+
+    return job.id;
+  }
+
+  /**
+   * Get next job from memory queues
+   */
+  private getNextJobFromMemory(): { job: Job; queueName: string } | null {
+    const queueNames = [
+      'jobs:confirmation_response:1',
+      'jobs:ai_request:2',
+      'jobs:send_email:3',
+      'jobs:calendar_event:4'
+    ];
+
+    for (const queueName of queueNames) {
+      const queue = this.memoryQueues.get(queueName);
+      if (queue && queue.length > 0) {
+        const job = queue.shift()!;
+        return { job, queueName };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Update job status in memory
+   */
+  private updateJobStatusInMemory(jobId: string, status: string, additionalData: any = {}): void {
+    const existing = this.memoryJobs.get(jobId);
+    if (existing) {
+      this.memoryJobs.set(jobId, {
+        ...existing,
+        status,
+        updatedAt: Date.now(),
+        ...additionalData
+      });
+    }
+  }
+
+  /**
+   * Store job result in memory
+   */
+  private storeJobResultInMemory(result: JobResult): void {
+    this.memoryResults.set(result.jobId, result);
   }
 }
