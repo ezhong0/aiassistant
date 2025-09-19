@@ -296,10 +296,11 @@ const registerCoreServices = async (): Promise<void> => {
       const slackMessageProcessor = new SlackMessageProcessor({
         enableOAuthDetection: true,
         enableConfirmationDetection: true,
-        enableDMOnlyMode: true
+        enableDMOnlyMode: true,
+        enableAsyncProcessing: true
       });
       serviceManager.registerService('slackMessageProcessor', slackMessageProcessor, {
-        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService'],
+        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService', 'slackAsyncHandlerService'],
         priority: 81,
         autoStart: true
       });
@@ -517,6 +518,24 @@ const registerCoreServices = async (): Promise<void> => {
     serviceManager.registerService('responsePersonalityService', responsePersonalityService, {
       dependencies: ['openaiService', 'cacheService'],
       priority: 70, // Before response formatting services
+      autoStart: true
+    });
+
+    // 36. AsyncRequestClassifierService - LLM-based async request classification
+    const { AsyncRequestClassifierService } = await import('./async-request-classifier.service');
+    const asyncRequestClassifierService = new AsyncRequestClassifierService();
+    serviceManager.registerService('asyncRequestClassifierService', asyncRequestClassifierService, {
+      dependencies: ['openaiService', 'aiConfigService'],
+      priority: 60, // Before job processing
+      autoStart: true
+    });
+
+    // 37. SlackAsyncHandlerService - Slack async processing integration
+    const { SlackAsyncHandlerService } = await import('./slack/slack-async-handler.service');
+    const slackAsyncHandlerService = new SlackAsyncHandlerService();
+    serviceManager.registerService('slackAsyncHandlerService', slackAsyncHandlerService, {
+      dependencies: ['asyncRequestClassifierService', 'jobQueueService', 'responsePersonalityService'],
+      priority: 65, // After classifier but before interfaces
       autoStart: true
     });
 
