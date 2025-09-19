@@ -382,12 +382,58 @@ export class JobQueueService extends BaseService {
         const jobData = JSON.parse(existing);
         jobData.status = status;
         jobData.updatedAt = Date.now();
-        Object.assign(jobData, additionalData);
+        // Safely serialize additionalData to avoid JSON.stringify errors
+        const safeAdditionalData = this.sanitizeForJSON(additionalData);
+        Object.assign(jobData, safeAdditionalData);
 
         await this.cacheService!.setex(`job:${jobId}`, 300, JSON.stringify(jobData));
       }
     } catch (error) {
       this.logError('Failed to update job status', error, { jobId, status });
+    }
+  }
+
+  /**
+   * Sanitize data for JSON serialization to avoid "[object Object]" errors
+   */
+  private sanitizeForJSON(data: any): any {
+    try {
+      // Test if the data can be safely stringified
+      JSON.stringify(data);
+      return data;
+    } catch (error) {
+      // If serialization fails, create a safe version
+      if (data === null || data === undefined) return data;
+
+      if (typeof data === 'object') {
+        if (Array.isArray(data)) {
+          return data.map(item => this.sanitizeForJSON(item));
+        }
+
+        const safe: any = {};
+        for (const key in data) {
+          if (data.hasOwnProperty(key)) {
+            try {
+              // Test if this specific property can be serialized
+              JSON.stringify(data[key]);
+              safe[key] = data[key];
+            } catch {
+              // If property can't be serialized, convert to string or skip
+              if (typeof data[key] === 'function') {
+                safe[key] = '[Function]';
+              } else if (data[key] instanceof Error) {
+                safe[key] = data[key].message;
+              } else {
+                safe[key] = String(data[key]);
+              }
+            }
+          }
+        }
+        return safe;
+      }
+
+      // For primitives that somehow failed, convert to string
+      return String(data);
     }
   }
 
