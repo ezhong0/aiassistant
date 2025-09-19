@@ -34,10 +34,13 @@ import { GmailCacheService } from './email/gmail-cache.service';
 import { ContactCacheService } from './contact/contact-cache.service';
 import { SlackCacheService } from './slack/slack-cache.service';
 import { CachePerformanceMonitoringService } from './cache-performance-monitoring.service';
+import { JobQueueService } from './job-queue.service';
 import { CalendarCacheService } from './calendar/calendar-cache.service';
 import { CacheInvalidationService } from './cache-invalidation.service';
 import { CacheConsistencyService } from './cache-consistency.service';
 import { CacheWarmingService } from './cache-warming.service';
+import { ResponsePersonalityService } from './response-personality.service';
+import { getPersonalityConfig } from '../config/personality.config';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -500,7 +503,24 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 34. CachePerformanceMonitoringService - Monitor all cache performance (Enhanced)
+    // 34. JobQueueService - Async job processing for better response times
+    const jobQueueService = new JobQueueService();
+    serviceManager.registerService('jobQueueService', jobQueueService, {
+      dependencies: ['cacheService'],
+      priority: 85, // High priority for job processing
+      autoStart: true
+    });
+
+    // 35. ResponsePersonalityService - Dynamic LLM-generated responses
+    const personalityConfig = getPersonalityConfig();
+    const responsePersonalityService = new ResponsePersonalityService(personalityConfig);
+    serviceManager.registerService('responsePersonalityService', responsePersonalityService, {
+      dependencies: ['openaiService', 'cacheService'],
+      priority: 70, // Before response formatting services
+      autoStart: true
+    });
+
+    // 36. CachePerformanceMonitoringService - Monitor all cache performance (Enhanced)
     const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
     serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService, {
       dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService', 'cacheInvalidationService', 'cacheConsistencyService', 'cacheWarmingService'],

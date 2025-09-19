@@ -21,7 +21,6 @@ export const ENV_VARS = {
   
   // API keys
   OPENAI_API_KEY: 'OPENAI_API_KEY',
-  TAVILY_API_KEY: 'TAVILY_API_KEY',
   
   // Slack configuration
   SLACK_SIGNING_SECRET: 'SLACK_SIGNING_SECRET',
@@ -80,8 +79,7 @@ export const ENVIRONMENT = {
    * External API keys
    */
   apiKeys: {
-    openai: process.env[ENV_VARS.OPENAI_API_KEY] || '',
-    tavily: process.env[ENV_VARS.TAVILY_API_KEY] || ''
+    openai: process.env[ENV_VARS.OPENAI_API_KEY] || ''
   },
   
   /**
@@ -190,12 +188,6 @@ export const ENV_VALIDATION = {
     return !!ENVIRONMENT.apiKeys.openai;
   },
   
-  /**
-   * Check if Tavily is properly configured
-   */
-  isTavilyConfigured: (): boolean => {
-    return !!ENVIRONMENT.apiKeys.tavily;
-  },
   
   /**
    * Check if Slack is properly configured
@@ -219,7 +211,6 @@ export const ENV_VALIDATION = {
       services: {
         google: ENV_VALIDATION.isGoogleConfigured(),
         openai: ENV_VALIDATION.isOpenAIConfigured(),
-        tavily: ENV_VALIDATION.isTavilyConfigured(),
         slack: ENV_VALIDATION.isSlackConfigured()
       }
     };
@@ -327,7 +318,6 @@ export const ENV_HELPERS = {
       LOG_LEVEL: ENVIRONMENT.logLevel,
       GOOGLE_CLIENT_ID: ENV_HELPERS.maskSensitive(ENVIRONMENT.google.clientId),
       OPENAI_API_KEY: ENV_HELPERS.maskSensitive(ENVIRONMENT.apiKeys.openai),
-      TAVILY_API_KEY: ENV_HELPERS.maskSensitive(ENVIRONMENT.apiKeys.tavily),
       JWT_SECRET: ENV_HELPERS.maskSensitive(ENVIRONMENT.jwtSecret),
       SLACK_BOT_TOKEN: ENV_HELPERS.maskSensitive(ENVIRONMENT.slack.botToken),
       SLACK_SIGNING_SECRET: ENV_HELPERS.maskSensitive(ENVIRONMENT.slack.signingSecret),

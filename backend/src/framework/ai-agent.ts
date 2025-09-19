@@ -1136,10 +1136,9 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   private getConfigAgentName(): string {
     const agentNameMapping: Record<string, string> = {
       'emailAgent': 'email',
-      'contactAgent': 'contact', 
+      'contactAgent': 'contact',
       'calendarAgent': 'calendar',
       'contentCreator': 'content',
-      'Tavily': 'search',
       'Think': 'think'
     };
     

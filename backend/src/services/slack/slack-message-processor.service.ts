@@ -5,6 +5,7 @@ import { TokenManager } from '../token-manager';
 import { AIClassificationService } from '../ai-classification.service';
 import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
+import { JobQueueService } from '../job-queue.service';
 import logger from '../../utils/logger';
 
 export interface SlackMessageProcessorConfig {
@@ -22,6 +23,7 @@ export class SlackMessageProcessor extends BaseService {
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
   private aiClassificationService: AIClassificationService | null = null;
+  private jobQueueService: JobQueueService | null = null;
 
   constructor(config: SlackMessageProcessorConfig) {
     super('SlackMessageProcessor');
@@ -59,6 +61,7 @@ export class SlackMessageProcessor extends BaseService {
       this.tokenManager = null;
       this.toolExecutorService = null;
       this.aiClassificationService = null;
+      this.jobQueueService = null;
       this.logInfo('SlackMessageProcessor destroyed successfully');
     } catch (error) {
       this.logError('Error during SlackMessageProcessor destruction', error);
@@ -174,6 +177,128 @@ export class SlackMessageProcessor extends BaseService {
         }
       };
     }
+  }
+
+  /**
+   * Process message asynchronously for immediate response
+   * Returns a job ID for tracking, actual processing happens in background
+   */
+  async processMessageAsync(
+    message: string,
+    context: SlackContext,
+    eventType: SlackEventType,
+    options: {
+      sendImmediateResponse?: boolean;
+      immediateResponseText?: string;
+    } = {}
+  ): Promise<{ jobId: string; immediateResponse?: any }> {
+    try {
+      // Validate message first
+      const validationResult = this.validateMessage(message);
+      if (!validationResult.isValid) {
+        throw new Error(validationResult.error || 'Invalid message');
+      }
+
+      // Check if async processing is available
+      if (!this.jobQueueService) {
+        this.logWarn('JobQueueService not available, falling back to sync processing');
+        const syncResult = await this.processMessage(message, context, eventType);
+        return {
+          jobId: 'sync-' + Date.now(),
+          immediateResponse: syncResult.response
+        };
+      }
+
+      // Send immediate response if requested
+      let immediateResponse;
+      if (options.sendImmediateResponse) {
+        immediateResponse = {
+          text: options.immediateResponseText || "🔄 Processing your request...",
+          response_type: 'in_channel'
+        };
+      }
+
+      // Queue the job for background processing
+      const jobId = await this.jobQueueService.addJob(
+        'ai_request',
+        {
+          message,
+          context,
+          eventType,
+          timestamp: Date.now()
+        },
+        {
+          priority: 2, // High priority for user requests
+          userId: context.userId,
+          sessionId: `user:${context.teamId}:${context.userId}`
+        }
+      );
+
+      this.logInfo('Message queued for async processing', {
+        jobId,
+        userId: context.userId,
+        messageLength: message.length
+      });
+
+      return {
+        jobId,
+        immediateResponse
+      };
+
+    } catch (error) {
+      this.logError('Error queueing message for async processing', error, {
+        userId: context.userId,
+        messageLength: message.length
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a message should be processed asynchronously
+   * Determines based on message content and expected processing time
+   */
+  shouldProcessAsync(message: string, context: SlackContext): boolean {
+    // Process async if:
+    // 1. JobQueueService is available
+    // 2. Message looks like it requires AI processing (complex request)
+    // 3. Not a simple confirmation or status check
+
+    if (!this.jobQueueService) {
+      return false;
+    }
+
+    // Simple confirmations should be processed immediately
+    const confirmationPatterns = [
+      /^(yes|y|ok|okay|confirm|proceed|go ahead|do it)$/i,
+      /^(no|n|cancel|stop|abort|nevermind)$/i
+    ];
+
+    for (const pattern of confirmationPatterns) {
+      if (pattern.test(message.trim())) {
+        return false; // Process confirmations immediately
+      }
+    }
+
+    // Process async if message is complex or likely to take time
+    const asyncPatterns = [
+      /send.*email/i,
+      /create.*calendar/i,
+      /schedule.*meeting/i,
+      /analyze/i,
+      /summarize/i,
+      /write.*code/i,
+      /generate/i
+    ];
+
+    for (const pattern of asyncPatterns) {
+      if (pattern.test(message)) {
+        return true;
+      }
+    }
+
+    // Default: process async if message is longer than 50 characters
+    return message.length > 50;
   }
 
   /**
@@ -592,7 +717,7 @@ export class SlackMessageProcessor extends BaseService {
       if (toolResult.success) {
         return {
           success: true,
-          message: toolResult.result?.message || 'Action completed successfully',
+          message: toolResult.result?.message || '🎉💖 Yay! Action completed successfully and I\'m so happy I could help! ✨',
           data: { 
             actionId: pendingAction.actionId, 
             result: toolResult.result,
@@ -841,7 +966,7 @@ export class SlackMessageProcessor extends BaseService {
       return {
         success: true,
         response: {
-          text: masterResponse.message || 'I processed your request successfully.'
+          text: masterResponse.message || '🌟💖 Yay! I processed your request successfully and I\'m so happy I could help! ✨'
         },
         shouldRespond: true,
         executionMetadata: {
@@ -893,6 +1018,11 @@ export class SlackMessageProcessor extends BaseService {
     this.toolExecutorService = serviceManager.getService('toolExecutorService') as ToolExecutorService;
     if (!this.toolExecutorService) {
       throw new Error('ToolExecutorService is required but not available');
+    }
+
+    this.jobQueueService = serviceManager.getService('jobQueueService') as JobQueueService;
+    if (!this.jobQueueService) {
+      this.logWarn('JobQueueService not available - will process requests synchronously');
     }
 
     this.aiClassificationService = serviceManager.getService('aiClassificationService') as AIClassificationService;

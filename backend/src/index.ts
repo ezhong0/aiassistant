@@ -27,6 +27,7 @@ import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 import enhancedHealthRoutes from './routes/enhanced-health.routes';
+import jobRoutes from './routes/jobs.routes';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
@@ -98,6 +99,7 @@ app.use('/health', enhancedHealthRoutes);
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 app.use('/api/assistant', assistantRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Slack routes - pass global interfaces for event handling
 app.use('/slack', createSlackRoutes(serviceManager, () => globalInterfaces));

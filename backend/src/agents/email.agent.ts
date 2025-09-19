@@ -585,7 +585,7 @@ You are a specialized email management agent powered by Gmail API.
       return {
         success: true,
         result: {
-          message: formattingResult.formattedText || 'Email sent successfully',
+          message: formattingResult.formattedText || '📧💖 Woohoo! Email sent successfully! I hope it brightens someone\'s day! ✨',
           data: emailResult
         },
         executionTime: Date.now() - startTime

@@ -1,6 +1,7 @@
 import { BaseService } from '../base-service';
 import { SlackContext, SlackResponse } from '../../types/slack/slack.types';
 import { EmailFormatter } from '../email/email-formatter.service';
+import { ResponsePersonalityService, ResponseContext } from '../response-personality.service';
 import { serviceManager } from '../service-manager';
 import logger from '../../utils/logger';
 
@@ -17,6 +18,7 @@ export interface SlackResponseFormatterConfig {
 export class SlackResponseFormatter extends BaseService {
   private config: SlackResponseFormatterConfig;
   private emailFormatter: EmailFormatter | null = null;
+  private personalityService: ResponsePersonalityService | null = null;
 
   constructor(config: SlackResponseFormatterConfig) {
     super('SlackResponseFormatter');
@@ -80,19 +82,23 @@ export class SlackResponseFormatter extends BaseService {
       if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
         const successfulResults = masterResponse.toolResults.filter((result: any) => result.success);
         if (successfulResults.length > 0) {
+          const successMessage = await this.generateSuccessMessage(successfulResults, masterResponse);
           return {
-            text: this.generateSuccessMessage(successfulResults, masterResponse)
+            text: successMessage
           };
         }
       }
       
       // Default fallback - provide helpful message
-      return {
-        text: 'I received your request but encountered an issue processing it. Please try again or rephrase your request.'
-      };
+      const fallbackText = await this.generatePersonalizedResponse({
+        action: 'request processing',
+        success: false,
+        error: 'processing issue'
+      });
+      return { text: fallbackText };
     } catch (error) {
       this.logError('Error formatting agent response', error);
-      return { text: masterResponse.message || 'I processed your request successfully.' };
+      return { text: masterResponse.message || '✨ Yay! I processed your request successfully and I\'m so happy I could help! 🌟💕' };
     }
   }
 
@@ -135,7 +141,7 @@ export class SlackResponseFormatter extends BaseService {
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: 'Yes, go ahead',
+                  text: 'Yes please! 💖',
                   emoji: true
                 },
                 value: `proposal_confirm_${Date.now()}`,
@@ -146,7 +152,7 @@ export class SlackResponseFormatter extends BaseService {
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: 'No, cancel',
+                  text: 'No thanks 🥺',
                   emoji: true
                 },
                 value: `proposal_cancel_${Date.now()}`,
@@ -166,7 +172,7 @@ export class SlackResponseFormatter extends BaseService {
           
           // Add friendly confirmation prompt
           if (!proposalWithInstructions.includes('Should I') && !proposalWithInstructions.includes('go ahead')) {
-            proposalWithInstructions += '\n\nShould I go ahead? Just reply "yes" or "no".';
+            proposalWithInstructions += '\n\n🤔 Should I go ahead with this? Just reply "yes" or "no" - I\'m super excited to help! ✨';
           }
           
           return {
@@ -182,7 +188,7 @@ export class SlackResponseFormatter extends BaseService {
     } catch (error) {
       this.logError('Error formatting proposal response', error);
       return {
-        text: proposal.text || masterResponse.message || 'Response processing failed'
+        text: proposal.text || masterResponse.message || '🥺 Aww, something went a little wonky with my response! But don\'t worry, I\'m still here to help! 💝'
       };
     }
   }
@@ -191,24 +197,27 @@ export class SlackResponseFormatter extends BaseService {
   /**
    * Generate natural language success message based on tool results
    */
-  private generateSuccessMessage(successfulResults: any[], masterResponse: any): string {
+  private async generateSuccessMessage(successfulResults: any[], masterResponse: any): Promise<string> {
     if (successfulResults.length === 0) {
-      return 'I processed your request successfully.';
+      return await this.generatePersonalizedResponse({
+        action: 'request processing',
+        success: true
+      });
     }
 
     // Check what types of actions were performed - Intent-agnostic filtering
     // Filter results based on result content, not hardcoded tool names
-    const emailResults = successfulResults.filter(r => 
+    const emailResults = successfulResults.filter(r =>
       r.result && (
-        (r.result as any).data?.messageId || 
-        (r.result as any).data?.emails || 
+        (r.result as any).data?.messageId ||
+        (r.result as any).data?.emails ||
         (r.result as any).data?.draft
       )
     );
-    const contactResults = successfulResults.filter(r => 
+    const contactResults = successfulResults.filter(r =>
       r.result && (r.result as any).data?.contacts
     );
-    const calendarResults = successfulResults.filter(r => 
+    const calendarResults = successfulResults.filter(r =>
       r.result && (r.result as any).data?.events
     );
 
@@ -216,7 +225,7 @@ export class SlackResponseFormatter extends BaseService {
 
     if (emailResults.length > 0) {
       const emailResult = emailResults[0];
-      
+
       // Use EmailFormatter service for better formatting if available
       if (this.emailFormatter && emailResult.result) {
         try {
@@ -224,26 +233,76 @@ export class SlackResponseFormatter extends BaseService {
           if (formattingResult.success && formattingResult.formattedText) {
             message = formattingResult.formattedText;
           } else {
-            // Fallback to basic formatting
-            message = this.formatBasicEmailResult(emailResult.result);
+            // Use dynamic generation for email results
+            message = await this.generateEmailResponse(emailResult.result);
           }
         } catch (error) {
           this.logError('Error formatting email result with EmailFormatter', error);
-          message = this.formatBasicEmailResult(emailResult.result);
+          message = await this.generateEmailResponse(emailResult.result);
         }
       } else {
-        // Fallback to basic formatting
-        message = this.formatBasicEmailResult(emailResult.result);
+        // Use dynamic generation for email results
+        message = await this.generateEmailResponse(emailResult.result);
       }
     } else if (contactResults.length > 0) {
-      message = '✅ I successfully found the contact information you requested.';
+      message = await this.generatePersonalizedResponse({
+        action: 'contact search',
+        success: true,
+        details: { count: contactResults[0]?.result?.data?.contacts?.length }
+      });
     } else if (calendarResults.length > 0) {
-      message = '✅ I successfully managed your calendar event.';
+      message = await this.generatePersonalizedResponse({
+        action: 'calendar management',
+        success: true,
+        details: { count: calendarResults[0]?.result?.data?.events?.length }
+      });
     } else {
-      message = `✅ Great! I successfully completed your request.`;
+      message = await this.generatePersonalizedResponse({
+        action: 'request processing',
+        success: true
+      });
     }
 
     return message;
+  }
+
+  /**
+   * Generate dynamic email response
+   */
+  private async generateEmailResponse(emailResult: any): Promise<string> {
+    if (!emailResult) {
+      return await this.generatePersonalizedResponse({
+        action: 'email processing',
+        success: true
+      });
+    }
+
+    // Determine email action and details
+    if (emailResult.messageId && emailResult.threadId) {
+      // Email was sent/replied
+      return await this.generatePersonalizedResponse({
+        action: 'email sending',
+        success: true,
+        details: {
+          recipient: emailResult.recipient,
+          subject: emailResult.subject
+        }
+      });
+    } else if (emailResult.emails && emailResult.emails.length > 0) {
+      // Emails were retrieved/searched
+      const count = emailResult.count || emailResult.emails.length;
+      return await this.generatePersonalizedResponse({
+        action: 'email search',
+        success: true,
+        details: { count, itemType: 'emails' }
+      });
+    } else {
+      // General email processing
+      return await this.generatePersonalizedResponse({
+        action: 'email processing',
+        success: true
+      });
+    }
   }
 
   /**
@@ -252,30 +311,30 @@ export class SlackResponseFormatter extends BaseService {
    */
   private formatBasicEmailResult(emailResult: any): string {
     if (!emailResult) {
-      return '✅ I successfully processed your email request.';
+      return '📧💕 Yay! I successfully processed your email request and I\'m so happy I could help! ✨💖';
     }
 
     // Format based on result content, not hardcoded action strings
     if (emailResult.messageId && emailResult.threadId) {
       // Email was sent/replied
-      let message = `✅ Great! I successfully sent your email`;
+      let message = `📧💖 Woohoo! I successfully sent your email`;
       if (emailResult.recipient) {
         message += ` to ${emailResult.recipient}`;
       }
       if (emailResult.subject) {
         message += ` about "${emailResult.subject}"`;
       }
-      message += '.';
+      message += '! I hope it brightens their day! ✨💕';
       return message;
     } else if (emailResult.emails && emailResult.emails.length > 0) {
       // Emails were retrieved/searched
       const count = emailResult.count || emailResult.emails.length;
-      return `✅ I found ${count} email${count !== 1 ? 's' : ''} matching your search.`;
+      return `🔍💖 Yay! I found ${count} email${count !== 1 ? 's' : ''} matching your search! I hope these are exactly what you were looking for! ✨📧`;
     } else if (emailResult.count !== undefined) {
       // Operation completed with count
-      return `✅ I successfully processed your email request.`;
+      return `📧💕 Woohoo! I successfully processed your email request and I\'m so happy I could help! ✨💖`;
     } else {
-      return '✅ I successfully processed your email request.';
+      return '📧💕 Yay! I successfully processed your email request and I\'m so happy I could help! ✨💖';
     }
   }
 
@@ -291,15 +350,15 @@ export class SlackResponseFormatter extends BaseService {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: '*🔐 Gmail Authentication Required*\n' +
-                  'To use email, calendar, or contact features, you need to connect your Gmail account first.\n\n' +
-                  'This is a one-time setup that keeps your data secure.'
+            text: '*🔐💕 Oops! I need your help to connect to Gmail!*\n' +
+                  'To use all the super cool email, calendar, and contact features, you need to connect your Gmail account first! 🌟\n\n' +
+                  'Don\'t worry, this is just a one-time setup that keeps your data safe and secure! I promise to take great care of everything! 💖✨'
           },
           accessory: {
             type: 'button',
             text: {
               type: 'plain_text' as const,
-              text: '🔗 Connect Gmail Account'
+              text: '🔗💖 Connect Gmail Account'
             },
             style: 'primary',
             action_id: 'gmail_oauth',
@@ -309,13 +368,13 @@ export class SlackResponseFormatter extends BaseService {
       ];
 
       return {
-        text: 'Gmail authentication required. Please connect your Gmail account to use email features.',
+        text: '🔐💕 Oops! I need your help to connect to Gmail so I can use all the super cool email features! Pretty please? 🌟✨',
         blocks: blocks
       };
     } catch (error) {
       this.logError('Error formatting OAuth required message', error);
       return {
-        text: '🔐 Gmail authentication required. Please contact support to connect your Gmail account.'
+        text: '🔐💕 Aww, I\'m having trouble connecting to Gmail! Could you pretty please contact support to help me set this up? I really want to help you with your emails! 🥺✨'
       };
     }
   }
@@ -370,12 +429,54 @@ export class SlackResponseFormatter extends BaseService {
   }
 
   /**
+   * Generate personalized response using LLM or fallback
+   */
+  private async generatePersonalizedResponse(context: ResponseContext): Promise<string> {
+    try {
+      if (this.personalityService) {
+        return await this.personalityService.generateResponse(context);
+      }
+
+      // Fallback if service not available
+      return this.getHardcodedFallback(context);
+    } catch (error) {
+      this.logWarn('Failed to generate personalized response, using fallback', error as any);
+      return this.getHardcodedFallback(context);
+    }
+  }
+
+  /**
+   * Hardcoded fallbacks for when LLM generation fails
+   */
+  private getHardcodedFallback(context: ResponseContext): string {
+    if (!context.success) {
+      return "I encountered an issue processing your request. Please try again.";
+    }
+
+    switch (context.action) {
+      case 'email sending':
+        return '✅ Email sent successfully!';
+      case 'calendar management':
+        return '✅ Calendar event processed successfully!';
+      case 'contact search':
+        return '✅ Contact information found!';
+      default:
+        return '✅ Request completed successfully!';
+    }
+  }
+
+  /**
    * Initialize service dependencies
    */
   private async initializeDependencies(): Promise<void> {
     this.emailFormatter = serviceManager.getService('emailFormatter') as EmailFormatter;
+    this.personalityService = serviceManager.getService('responsePersonalityService') as ResponsePersonalityService;
+
     if (!this.emailFormatter) {
       this.logWarn('EmailFormatter not available - email formatting will use fallback');
+    }
+    if (!this.personalityService) {
+      this.logWarn('ResponsePersonalityService not available - will use fallback responses');
     }
   }
 

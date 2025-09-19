@@ -1037,7 +1037,7 @@ Always return structured execution status with event details, scheduling insight
 
     return {
       success: true,
-      message: data.message || 'Calendar operation completed successfully',
+      message: data.message || '📅💖 Yay! Calendar operation completed successfully! Your schedule is looking amazing! ✨',
       event: data.event,
       events: data.events,
       count: data.count,

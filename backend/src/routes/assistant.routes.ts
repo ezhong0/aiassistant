@@ -843,7 +843,7 @@ const executeConfirmedAction = async (
     if (toolResult.success) {
       return {
         success: true,
-        message: toolResult.result?.message || 'Action completed successfully',
+        message: toolResult.result?.message || '🎉💖 Yay! Action completed successfully and I\'m so happy I could help! ✨',
         data: { 
           actionId, 
           result: toolResult.result,

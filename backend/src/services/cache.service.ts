@@ -358,4 +358,98 @@ export class CacheService extends BaseService {
       return false;
     }
   }
+
+  // ===== LIST OPERATIONS FOR JOB QUEUE =====
+
+  /**
+   * Push element to the left (head) of a list
+   */
+  async lpush(key: string, value: string): Promise<number | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    try {
+      const result = await this.client!.lPush(this.prefixKey(key), value);
+      logger.debug('List lpush', { key: this.prefixKey(key), length: result });
+      return result;
+    } catch (error) {
+      logger.warn('List lpush error:', { key: this.prefixKey(key), error: (error as Error).message });
+      return null;
+    }
+  }
+
+  /**
+   * Pop element from the right (tail) of a list with timeout
+   */
+  async brpop(key: string, timeoutSeconds: number): Promise<string | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    try {
+      const result = await this.client!.brPop(this.prefixKey(key), timeoutSeconds);
+      if (result) {
+        logger.debug('List brpop', { key: this.prefixKey(key), hasValue: true });
+        return result.element;
+      }
+      return null;
+    } catch (error) {
+      logger.warn('List brpop error:', { key: this.prefixKey(key), error: (error as Error).message });
+      return null;
+    }
+  }
+
+  /**
+   * Get the length of a list
+   */
+  async llen(key: string): Promise<number> {
+    if (!this.isAvailable()) {
+      return 0;
+    }
+
+    try {
+      const result = await this.client!.lLen(this.prefixKey(key));
+      return result;
+    } catch (error) {
+      logger.warn('List llen error:', { key: this.prefixKey(key), error: (error as Error).message });
+      return 0;
+    }
+  }
+
+
+  /**
+   * Increment a counter
+   */
+  async incr(key: string): Promise<number | null> {
+    if (!this.isAvailable()) {
+      return null;
+    }
+
+    try {
+      const result = await this.client!.incr(this.prefixKey(key));
+      return result;
+    } catch (error) {
+      logger.warn('Incr error:', { key: this.prefixKey(key), error: (error as Error).message });
+      return null;
+    }
+  }
+
+  /**
+   * Set a value with expiration time (alias for set with TTL)
+   */
+  async setex(key: string, seconds: number, value: string): Promise<boolean> {
+    if (!this.isAvailable()) {
+      return false;
+    }
+
+    try {
+      await this.client!.setEx(this.prefixKey(key), seconds, value);
+      logger.debug('Cache setex', { key: this.prefixKey(key), ttl: seconds });
+      return true;
+    } catch (error) {
+      logger.warn('Cache setex error:', { key: this.prefixKey(key), error: (error as Error).message });
+      return false;
+    }
+  }
 }
