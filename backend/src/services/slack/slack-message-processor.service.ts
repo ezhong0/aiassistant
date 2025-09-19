@@ -4,11 +4,22 @@ import { ToolExecutorService } from '../tool-executor.service';
 import { TokenManager } from '../token-manager';
 import { AIClassificationService } from '../ai-classification.service';
 import { AsyncRequestClassifierService, ClassificationContext } from '../async-request-classifier.service';
-import { SlackAsyncHandlerService, AsyncSlackResponse } from './slack-async-handler.service';
+import { ResponsePersonalityService, ResponseContext } from '../response-personality.service';
 import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
 import { JobQueueService } from '../job-queue.service';
 import logger from '../../utils/logger';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface AsyncSlackResponse {
+  shouldProcessAsync: boolean;
+  immediateResponse?: {
+    text: string;
+    response_type?: 'in_channel' | 'ephemeral';
+  };
+  jobId?: string;
+  estimatedCompletion?: Date;
+}
 
 export interface SlackMessageProcessorConfig {
   enableOAuthDetection: boolean;
@@ -27,7 +38,7 @@ export class SlackMessageProcessor extends BaseService {
   private toolExecutorService: ToolExecutorService | null = null;
   private aiClassificationService: AIClassificationService | null = null;
   private asyncRequestClassifierService: AsyncRequestClassifierService | null = null;
-  private slackAsyncHandlerService: SlackAsyncHandlerService | null = null;
+  private responsePersonalityService: ResponsePersonalityService | null = null;
   private jobQueueService: JobQueueService | null = null;
 
   constructor(config: SlackMessageProcessorConfig) {
@@ -53,7 +64,8 @@ export class SlackMessageProcessor extends BaseService {
         hasToolExecutor: !!this.toolExecutorService,
         hasAIClassification: !!this.aiClassificationService,
         hasAsyncClassifier: !!this.asyncRequestClassifierService,
-        hasSlackAsyncHandler: !!this.slackAsyncHandlerService,
+        hasPersonalityService: !!this.responsePersonalityService,
+        hasJobQueue: !!this.jobQueueService,
         enableAsyncProcessing: !!this.config.enableAsyncProcessing
       });
     } catch (error) {
@@ -70,7 +82,7 @@ export class SlackMessageProcessor extends BaseService {
       this.toolExecutorService = null;
       this.aiClassificationService = null;
       this.asyncRequestClassifierService = null;
-      this.slackAsyncHandlerService = null;
+      this.responsePersonalityService = null;
       this.jobQueueService = null;
       this.logInfo('SlackMessageProcessor destroyed successfully');
     } catch (error) {
@@ -971,9 +983,11 @@ export class SlackMessageProcessor extends BaseService {
       this.logWarn('AsyncRequestClassifierService not available - async processing will be disabled');
     }
 
-    this.slackAsyncHandlerService = serviceManager.getService('slackAsyncHandlerService') as SlackAsyncHandlerService;
-    if (!this.slackAsyncHandlerService && this.config.enableAsyncProcessing) {
-      this.logWarn('SlackAsyncHandlerService not available - async processing will be disabled');
+    this.responsePersonalityService = serviceManager.getService('responsePersonalityService') as ResponsePersonalityService;
+    this.jobQueueService = serviceManager.getService('jobQueueService') as JobQueueService;
+
+    if (this.config.enableAsyncProcessing && (!this.asyncRequestClassifierService || !this.jobQueueService)) {
+      this.logWarn('Async processing services not available - async processing will be disabled');
     }
   }
 
@@ -1153,7 +1167,7 @@ export class SlackMessageProcessor extends BaseService {
   }
 
   /**
-   * Handle async request processing
+   * Handle async request processing - merged from SlackAsyncHandlerService
    */
   private async handleAsyncRequest(
     message: string,
@@ -1161,35 +1175,111 @@ export class SlackMessageProcessor extends BaseService {
     eventType: SlackEventType
   ): Promise<SlackMessageProcessingResult> {
     try {
-      if (!this.slackAsyncHandlerService) {
-        // Fall back to sync processing if async handler not available
-        this.logWarn('SlackAsyncHandlerService not available, falling back to sync processing');
+      // Build classification context
+      const classificationContext: ClassificationContext = {
+        userInput: message,
+        requestType: 'slack_message',
+        systemLoad: await this.getSystemLoad() as any
+      };
+
+      // Try quick classification first
+      let classification = this.asyncRequestClassifierService!.quickClassify(message);
+
+      // If no quick match, use LLM classification
+      if (!classification) {
+        classification = await this.asyncRequestClassifierService!.classifyRequest(classificationContext);
+      }
+
+      // If should process sync, return early
+      if (!classification.shouldProcessAsync) {
         return this.processSyncMessage(message, context, eventType);
       }
 
-      const asyncResult = await this.slackAsyncHandlerService.handleSlackMessage(message, context, eventType);
+      // Generate immediate cute response
+      const immediateResponse = await this.generateImmediateResponse(message, classification);
 
-      if (!asyncResult.shouldProcessAsync) {
-        // Classifier determined sync processing is better
-        return this.processSyncMessage(message, context, eventType);
+      // If no job queue available, return sync recommendation
+      if (!this.jobQueueService) {
+        return {
+          success: true,
+          response: {
+            text: immediateResponse + ' (Processing synchronously due to system limitations)',
+            response_type: 'in_channel'
+          },
+          shouldRespond: true,
+          executionMetadata: {
+            processedSync: true,
+            reason: 'job_queue_unavailable'
+          }
+        };
       }
 
-      // Return immediate response for async processing
+      // Queue the job for background processing
+      const jobId = uuidv4();
+      await this.jobQueueService.addJob(
+        classification.suggestedJobType,
+        {
+          message,
+          context,
+          eventType,
+          slackChannelId: context.channelId,
+          slackUserId: context.userId,
+          classification,
+          timestamp: Date.now()
+        },
+        {
+          priority: this.getJobPriority(classification.complexity),
+          maxRetries: 3,
+          userId: context.userId,
+          sessionId: `user:${context.teamId}:${context.userId}`
+        }
+      );
+
+      // Calculate estimated completion
+      const estimatedMs = this.getEstimatedDuration(classification.estimatedDuration);
+      const estimatedCompletion = new Date(Date.now() + estimatedMs);
+
+      this.logInfo('Slack message queued for async processing', {
+        jobId,
+        message: message.substring(0, 100),
+        classification: classification.suggestedJobType,
+        estimatedDuration: classification.estimatedDuration,
+        userId: context.userId
+      });
+
       return {
         success: true,
-        response: asyncResult.immediateResponse,
+        response: {
+          text: immediateResponse,
+          response_type: 'in_channel'
+        },
         shouldRespond: true,
         executionMetadata: {
           processedAsync: true,
-          jobId: asyncResult.jobId,
-          estimatedCompletion: asyncResult.estimatedCompletion
+          jobId,
+          estimatedCompletion
         }
       };
 
     } catch (error) {
-      this.logError('Error in async request handling', error);
-      // Fall back to sync processing on error
-      return this.processSyncMessage(message, context, eventType);
+      this.logError('Error in async request handling', error, {
+        message: message.substring(0, 100),
+        userId: context.userId
+      });
+
+      // Safe fallback
+      return {
+        success: true,
+        response: {
+          text: '🔄 Processing your request...',
+          response_type: 'in_channel'
+        },
+        shouldRespond: true,
+        executionMetadata: {
+          processedSync: true,
+          reason: 'async_error_fallback'
+        }
+      };
     }
   }
 
@@ -1209,8 +1299,22 @@ export class SlackMessageProcessor extends BaseService {
    * Check if async processing should be considered for this message
    */
   private shouldUseAsyncProcessing(message: string, context: SlackContext): boolean {
-    if (!this.slackAsyncHandlerService) return false;
-    return this.slackAsyncHandlerService.shouldUseAsyncProcessing(message, context);
+    if (!this.asyncRequestClassifierService || !this.jobQueueService) return false;
+
+    // Quick heuristics for obvious sync cases
+    const syncPatterns = [
+      /^(hi|hello|hey|thanks|yes|no|ok)\s*$/i,
+      /^(status|ping|help)\s*$/i
+    ];
+
+    for (const pattern of syncPatterns) {
+      if (pattern.test(message.trim())) {
+        return false;
+      }
+    }
+
+    // Always use classification for anything else
+    return true;
   }
 
   /**
@@ -1329,6 +1433,99 @@ export class SlackMessageProcessor extends BaseService {
   }
 
   /**
+   * Generate a cute immediate response using personality service
+   */
+  private async generateImmediateResponse(message: string, classification: any): Promise<string> {
+    try {
+      if (!this.responsePersonalityService) {
+        return this.getFallbackImmediateResponse(classification);
+      }
+
+      const responseContext: ResponseContext = {
+        action: 'processing_async_request',
+        success: true,
+        details: {
+          itemType: classification.suggestedJobType,
+          count: 1
+        }
+      };
+
+      const personalizedResponse = await this.responsePersonalityService.generateResponse(responseContext);
+
+      // Add processing indicator
+      const processingHints = [
+        'I\'m working on this for you!',
+        'Give me a moment to think about this!',
+        'Processing your request now!',
+        'Working on it!'
+      ];
+
+      const hint = processingHints[Math.floor(Math.random() * processingHints.length)];
+
+      return `${personalizedResponse} ${hint}`;
+
+    } catch (error) {
+      this.logError('Failed to generate personalized immediate response', error);
+      return this.getFallbackImmediateResponse(classification);
+    }
+  }
+
+  /**
+   * Get fallback immediate response
+   */
+  private getFallbackImmediateResponse(classification: any): string {
+    const responses = {
+      'short': '🔄 Just a sec! Working on this for you!',
+      'medium': '⏳ This might take a moment - I\'m analyzing everything thoroughly!',
+      'long': '🤔 This is a complex request! I\'m processing it carefully and will get back to you soon!'
+    };
+
+    return responses[classification.estimatedDuration as keyof typeof responses] || responses.medium;
+  }
+
+  /**
+   * Get job priority based on complexity
+   */
+  private getJobPriority(complexity: string): number {
+    switch (complexity) {
+      case 'complex': return 1;
+      case 'moderate': return 2;
+      case 'simple': return 3;
+      default: return 2;
+    }
+  }
+
+  /**
+   * Get estimated duration in milliseconds
+   */
+  private getEstimatedDuration(duration: string): number {
+    switch (duration) {
+      case 'long': return 15000;   // 15 seconds
+      case 'medium': return 8000;  // 8 seconds
+      case 'short': return 3000;   // 3 seconds
+      default: return 8000;
+    }
+  }
+
+  /**
+   * Get current system load for classification context
+   */
+  private async getSystemLoad(): Promise<Partial<ClassificationContext['systemLoad']>> {
+    try {
+      if (!this.jobQueueService) return {};
+
+      const stats = await this.jobQueueService.getQueueStats();
+      return {
+        currentQueueLength: stats.totalJobs || 0,
+        avgProcessingTime: stats.avgProcessingTime || 1000
+      };
+    } catch (error) {
+      this.logError('Failed to get system load', error);
+      return {};
+    }
+  }
+
+  /**
    * Get service health status
    */
   getHealth(): { healthy: boolean; details?: any } {
@@ -1343,7 +1540,7 @@ export class SlackMessageProcessor extends BaseService {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
           aiClassificationService: !!this.aiClassificationService,
-          slackAsyncHandlerService: !!this.slackAsyncHandlerService
+          responsePersonalityService: !!this.responsePersonalityService
         }
       }
     };

@@ -300,7 +300,7 @@ const registerCoreServices = async (): Promise<void> => {
         enableAsyncProcessing: true
       });
       serviceManager.registerService('slackMessageProcessor', slackMessageProcessor, {
-        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService', 'slackAsyncHandlerService'],
+        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService', 'asyncRequestClassifierService', 'responsePersonalityService', 'jobQueueService'],
         priority: 81,
         autoStart: true
       });
@@ -421,7 +421,7 @@ const registerCoreServices = async (): Promise<void> => {
         development: ENVIRONMENT.nodeEnv === 'development'
       });
       serviceManager.registerService('slackInterfaceService', slackInterfaceService, {
-        dependencies: ['slackMessageProcessor', 'slackAsyncHandlerService'],
+        dependencies: ['slackMessageProcessor'],
         priority: 94,
         autoStart: true
       });
@@ -531,14 +531,6 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 37. SlackAsyncHandlerService - Slack async processing integration
-    const { SlackAsyncHandlerService } = await import('./slack/slack-async-handler.service');
-    const slackAsyncHandlerService = new SlackAsyncHandlerService();
-    serviceManager.registerService('slackAsyncHandlerService', slackAsyncHandlerService, {
-      dependencies: ['asyncRequestClassifierService', 'jobQueueService', 'responsePersonalityService'],
-      priority: 65, // After classifier but before interfaces
-      autoStart: true
-    });
 
     // 36. CachePerformanceMonitoringService - Monitor all cache performance (Enhanced)
     const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();

@@ -552,23 +552,59 @@ export class JobQueueService extends BaseService {
    * Notify job completion and send Slack response
    */
   private async notifyJobCompletion(job: Job, result: JobResult): Promise<void> {
+    this.logInfo('🔔 DEBUG: notifyJobCompletion called', {
+      jobId: job.id,
+      userId: job.userId,
+      sessionId: job.sessionId,
+      hasUserId: !!job.userId,
+      hasSessionId: !!job.sessionId,
+      success: result.success,
+      processingTime: result.processingTime,
+      jobData: {
+        hasContext: !!job.data.context,
+        hasSlackChannelId: !!job.data.slackChannelId,
+        hasSlackUserId: !!job.data.slackUserId,
+        slackChannelId: job.data.slackChannelId,
+        slackUserId: job.data.slackUserId
+      }
+    });
+
     if (job.userId && job.sessionId) {
-      this.logInfo('Job completion notification', {
+      this.logInfo('✅ DEBUG: First condition met (userId && sessionId)', {
         jobId: job.id,
         userId: job.userId,
-        sessionId: job.sessionId,
-        success: result.success,
-        processingTime: result.processingTime
+        sessionId: job.sessionId
       });
 
       // If this is a Slack-related job, send the result back to Slack
       if (job.data.slackChannelId && job.data.slackUserId) {
+        this.logInfo('✅ DEBUG: Second condition met (slackChannelId && slackUserId)', {
+          jobId: job.id,
+          slackChannelId: job.data.slackChannelId,
+          slackUserId: job.data.slackUserId
+        });
         try {
           await this.sendSlackCompletionNotification(job, result);
         } catch (error) {
-          this.logError('Failed to send Slack completion notification', error);
+          this.logError('❌ DEBUG: Failed to send Slack completion notification', error);
         }
+      } else {
+        this.logWarn('❌ DEBUG: Second condition NOT met', {
+          jobId: job.id,
+          hasSlackChannelId: !!job.data.slackChannelId,
+          hasSlackUserId: !!job.data.slackUserId,
+          slackChannelId: job.data.slackChannelId,
+          slackUserId: job.data.slackUserId
+        });
       }
+    } else {
+      this.logWarn('❌ DEBUG: First condition NOT met', {
+        jobId: job.id,
+        hasUserId: !!job.userId,
+        hasSessionId: !!job.sessionId,
+        userId: job.userId,
+        sessionId: job.sessionId
+      });
     }
   }
 
@@ -576,10 +612,21 @@ export class JobQueueService extends BaseService {
    * Send job completion result back to Slack
    */
   private async sendSlackCompletionNotification(job: Job, result: JobResult): Promise<void> {
+    this.logInfo('📤 DEBUG: sendSlackCompletionNotification called', {
+      jobId: job.id,
+      success: result.success
+    });
+
     try {
-      const slackInterface = serviceManager.getService('slackInterface');
+      const slackInterface = serviceManager.getService('slackInterfaceService');
+      this.logInfo('🔍 DEBUG: SlackInterface lookup result', {
+        jobId: job.id,
+        hasSlackInterface: !!slackInterface,
+        serviceType: slackInterface ? slackInterface.constructor.name : 'null'
+      });
+
       if (!slackInterface) {
-        this.logWarn('SlackInterface not available for completion notification');
+        this.logWarn('❌ DEBUG: SlackInterface not available for completion notification');
         return;
       }
 
@@ -600,12 +647,23 @@ export class JobQueueService extends BaseService {
       // Format the response message
       let responseText: string;
       if (result.success && result.result) {
-        // Extract the formatted message from the result
-        if (result.result.message) {
+        // Check if this is a structured response with actual results
+        if (result.result.response && result.result.response.text) {
+          responseText = result.result.response.text;
+        } else if (result.result.message) {
           responseText = result.result.message;
         } else if (result.result.text) {
           responseText = result.result.text;
+        } else if (typeof result.result === 'string') {
+          responseText = result.result;
         } else {
+          // Log the structure for debugging
+          this.logInfo('🔍 DEBUG: Unexpected result structure', {
+            jobId: job.id,
+            resultKeys: Object.keys(result.result || {}),
+            resultType: typeof result.result,
+            hasResponse: !!(result.result && result.result.response)
+          });
           responseText = '✅ Your request has been completed successfully!';
         }
       } else {
@@ -613,12 +671,19 @@ export class JobQueueService extends BaseService {
       }
 
       // Send the response back to Slack
-      await (slackInterface as any).sendSlackMessage(channelId, {
-        text: responseText,
-        thread_ts: context?.ts // Reply in thread if available
+      this.logInfo('📨 DEBUG: About to send Slack message', {
+        jobId: job.id,
+        channelId,
+        userId,
+        responseText: responseText.substring(0, 200),
+        textLength: responseText.length
       });
 
-      this.logInfo('Slack completion notification sent', {
+      await (slackInterface as any).sendMessage(channelId, {
+        text: responseText
+      });
+
+      this.logInfo('✅ DEBUG: Slack completion notification sent successfully', {
         jobId: job.id,
         channelId,
         userId,
