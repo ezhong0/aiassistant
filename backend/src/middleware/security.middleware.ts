@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { configService } from '../config/config.service';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * CORS configuration
@@ -25,7 +25,11 @@ export const corsMiddleware = cors({
       return callback(null, true);
     }
     
-    logger.warn('CORS origin blocked', { origin, allowedOrigins });
+    EnhancedLogger.warn('CORS origin blocked', {
+      correlationId: `cors-blocked-${Date.now()}`,
+      operation: 'cors_blocked',
+      metadata: { origin, allowedOrigins }
+    });
     callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
@@ -102,11 +106,15 @@ export const requestSizeLimiter = (req: Request, res: Response, next: NextFuncti
   const contentLength = parseInt(req.get('Content-Length') || '0', 10);
   
   if (contentLength > maxSize) {
-    logger.warn('Request size too large', {
-      contentLength,
-      maxSize,
-      path: req.path,
-      ip: req.ip
+    EnhancedLogger.warn('Request size too large', {
+      correlationId: `request-too-large-${Date.now()}`,
+      operation: 'request_size_limit',
+      metadata: {
+        contentLength,
+        maxSize,
+        path: req.path,
+        ip: req.ip
+      }
     });
     
     res.status(413).json({
@@ -168,11 +176,15 @@ export const validateContentType = (allowedTypes: string[] = ['application/json'
     const isAllowed = allowedTypes.some(type => contentType.includes(type));
     
     if (!isAllowed) {
-      logger.warn('Invalid content type', {
-        contentType,
-        allowedTypes,
-        path: req.path,
-        ip: req.ip
+      EnhancedLogger.warn('Invalid content type', {
+        correlationId: `invalid-content-type-${Date.now()}`,
+        operation: 'content_type_validation',
+        metadata: {
+          contentType,
+          allowedTypes,
+          path: req.path,
+          ip: req.ip
+        }
       });
       
       res.status(415).json({
@@ -196,11 +208,15 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const timeout = (globalThis as any).setTimeout(() => {
       if (!res.headersSent) {
-        logger.warn('Request timeout', {
-          path: req.path,
-          method: req.method,
-          timeoutMs,
-          ip: req.ip
+        EnhancedLogger.warn('Request timeout', {
+          correlationId: `request-timeout-${Date.now()}`,
+          operation: 'request_timeout',
+          metadata: {
+            path: req.path,
+            method: req.method,
+            timeoutMs,
+            ip: req.ip
+          }
         });
         
         res.status(408).json({

@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 import { Contact, ContactSearchResult, ContactServiceError } from '../types/agents/contact.types';
 import { BaseService } from './base-service';
-import logger from '../utils/logger';
 import { z } from 'zod';
 
 // ✅ Zod schema for contact search validation

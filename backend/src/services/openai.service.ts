@@ -2,7 +2,6 @@ import OpenAI from 'openai';
 import { ToolCall, ToolExecutionContext } from '../types/tools';
 import { aiConfigService } from '../config/ai-config';
 import { BaseService } from './base-service';
-import logger from '../utils/logger';
 import { z } from 'zod';
 
 /**

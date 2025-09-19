@@ -14,7 +14,6 @@ import {
   SlackOAuthSuccessMessageData
 } from '../../types/slack/slack-oauth-types';
 import { AIClassificationService } from '../ai-classification.service';
-import logger from '../../utils/logger';
 
 /**
  * SlackOAuthManager - Focused service for Slack OAuth handling

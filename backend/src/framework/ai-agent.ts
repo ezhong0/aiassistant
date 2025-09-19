@@ -3,7 +3,7 @@ import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, ActionRiskAssessment } from '../types/api/api.types';
 import { OpenAIService } from '../services/openai.service';
 import { getService } from '../services/service-manager';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { aiConfigService } from '../config/ai-config';
 import { AGENT_HELPERS } from '../config/agent-config';
 import { setTimeout as sleep } from 'timers/promises';
@@ -133,7 +133,6 @@ export interface AIPlanningResult {
  * ```
  */
 export abstract class AIAgent<TParams = any, TResult = any> {
-  protected logger: Logger;
   protected config: AgentConfig;
   protected aiConfig: AIPlanningConfig;
   protected openaiService: OpenAIService | undefined;
@@ -175,7 +174,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   constructor(config: AgentConfig & { aiPlanning?: AIPlanningConfig }) {
     this.config = config;
-    this.logger = logger.child({ agent: config.name });
     
     this.aiConfig = {
       enableAIPlanning: true,
@@ -211,19 +209,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   ): void {
     const timestamp = new Date().toISOString();
     
-    this.logger.error('AI Planning Error', {
-      agent: this.config.name,
-      errorType,
-      error: error.message,
-      sessionId: context.sessionId,
-      userId: context.userId,
-      timestamp,
-      aiConfig: {
-        enableAIPlanning: this.aiConfig.enableAIPlanning,
-        maxPlanningSteps: this.aiConfig.maxPlanningSteps,
-        planningTimeout: this.aiConfig.planningTimeout
-      }
-    });
   }
 
   /**
@@ -234,12 +219,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     operation: string,
     reason: 'unavailable' | 'timeout' | 'error'
   ): void {
-    this.logger.error(`Service Error: ${serviceName} ${operation} failed (${reason})`, {
-      serviceName,
-      operation,
-      reason,
-      agent: this.config.name
-    });
   }
 
   /**
@@ -250,12 +229,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     timeoutMs: number,
     context?: any
   ): void {
-    this.logger.error('Timeout Error', {
-      operation,
-      timeoutMs,
-      agent: this.config.name,
-      context
-    });
   }
 
   /**
@@ -269,20 +242,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     const fallbackType = 'AI Planning → Manual Execution';
     const timestamp = new Date().toISOString();
     
-    this.logger.warn('AI Planning Fallback', {
-      agent: this.config.name,
-      fallbackType,
-      fallbackReason,
-      error: error.message,
-      sessionId: context.sessionId,
-      userId: context.userId,
-      timestamp,
-      aiConfig: {
-        enableAIPlanning: this.aiConfig.enableAIPlanning,
-        maxPlanningSteps: this.aiConfig.maxPlanningSteps,
-        planningTimeout: this.aiConfig.planningTimeout
-      }
-    });
   }
 
   /**
@@ -292,10 +251,10 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     try {
       this.openaiService = getService<OpenAIService>('openaiService');
       if (!this.openaiService) {
-        this.logger.debug('OpenAI service not available during agent initialization - will retry when needed');
+        
       }
     } catch (error) {
-      this.logger.debug('Failed to initialize OpenAI service during agent creation - will retry when needed', error);
+      
     }
   }
 
@@ -335,11 +294,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       // Pre-execution hooks
       await this.beforeExecution(params, context);
       this.validateParams(params);
-      this.logger.info('Agent execution started', { 
-        params: this.sanitizeForLogging(params),
-        sessionId: context.sessionId,
-        userId: context.userId 
-      });
       
       // Core business logic (implemented by subclass)
       const result = await this.processQuery(params, context);
@@ -365,29 +319,14 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       // Pre-execution hooks (but not actual execution)
       await this.beforeExecution(params, context);
       this.validateParams(params);
-      this.logger.info('Agent preview execution started', { 
-        params: this.sanitizeForLogging(params),
-        sessionId: context.sessionId,
-        userId: context.userId 
-      });
       
       // Check if this operation actually needs confirmation
       const operation = await this.detectOperation(params);
       const needsConfirmation = await this.operationRequiresConfirmation(operation);
       
-      this.logger.info('Operation confirmation check', {
-        operation,
-        needsConfirmation,
-        agentName: this.config.name,
-        sessionId: context.sessionId
-      });
       
       // If operation doesn't need confirmation, execute directly
       if (!needsConfirmation) {
-        this.logger.info('Operation does not require confirmation, executing directly', {
-          operation,
-          reason: await this.getOperationConfirmationReason(operation)
-        });
         return await this.execute(params, context);
       }
       
@@ -417,12 +356,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
         originalQuery: previewResult.preview?.originalQuery
       } as TResult;
       
-      this.logger.info('Agent preview completed', {
-        actionId: previewResult.preview?.actionId,
-        actionType: previewResult.preview?.actionType,
-        requiresConfirmation: previewResult.preview?.requiresConfirmation,
-        riskLevel: previewResult.preview?.riskAssessment?.level
-      });
       
       return this.createSuccessResult(result, Date.now() - startTime);
       
@@ -436,10 +369,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected registerTool(tool: AITool): void {
     this.toolRegistry.set(tool.name, tool);
-    this.logger.debug(`Tool registered for AI planning: ${tool.name}`, {
-      agent: this.config.name,
-      capabilities: tool.capabilities
-    });
   }
 
   /**
@@ -448,22 +377,11 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected async processQuery(params: TParams, context: ToolExecutionContext): Promise<TResult> {
     try {
-        this.logger.debug('Executing with AI planning', {
-            agent: this.config.name,
-            sessionId: context.sessionId,
-          aiPlanningEnabled: this.aiConfig.enableAIPlanning
-          });
       
       return await this.executeWithAIPlanning(params, context);
       
     } catch (error) {
       // Enhanced error handling with user-friendly messages
-      this.logger.error('AI planning execution failed', {
-        agent: this.config.name,
-        error: error instanceof Error ? error.message : error,
-        sessionId: context.sessionId,
-        errorType: error instanceof Error ? error.constructor.name : 'Unknown'
-      });
       
       // Create user-friendly error message
       const userMessage = this.createUserFriendlyErrorMessage(error as Error, params);
@@ -523,11 +441,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
     const plan = planningResult.plan;
     
-      this.logger.debug('AI execution plan generated', {
-          agent: this.config.name,
-          planId: plan.id,
-        stepCount: plan.steps.length
-        });
 
     // Step 2: Execute plan steps with enhanced error handling
     const executionResults = await this.executePlan(plan, params, context);
@@ -546,7 +459,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     const openaiService = this.getOpenAIService();
     if (!openaiService || !openaiService.isReady()) {
       const reason = !openaiService ? 'OpenAI service not available' : 'OpenAI service not ready (likely invalid API key)';
-      this.logger.debug('AI planning unavailable', { reason, hasService: !!openaiService });
+      
       return {
         success: false,
         error: reason,
@@ -566,11 +479,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
           cacheEntry.accessCount++;
           this.planCache.set(cacheKey, { ...cacheEntry, timestamp: Date.now() });
           
-          this.logger.debug('Using cached AI plan', {
-              agent: this.config.name,
-              planId: cacheEntry.plan.id,
-            sessionId: context.sessionId
-            });
           return { success: true, plan: cacheEntry.plan, executionTime: Date.now() - startTime };
         } else {
           // Remove expired entry
@@ -609,11 +517,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
           accessCount: 1
         });
       } else if (this.aiConfig.cachePlans) {
-        this.logger.debug('Skipping cache due to memory pressure', {
-          agent: this.config.name,
-          currentCacheSize: this.planCache.size,
-          maxSize: this.maxCacheSize
-        });
       }
 
       return {
@@ -623,11 +526,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       };
 
     } catch (error) {
-      this.logger.error('Failed to generate AI execution plan', {
-        agent: this.config.name,
-        error: error instanceof Error ? error.message : error,
-        sessionId: context.sessionId
-      });
 
       return {
         success: false,
@@ -645,10 +543,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     const results = new Map<string, any>();
     const executedSteps = new Set<string>();
 
-      this.logger.debug('Starting AI plan execution', {
-          agent: this.config.name,
-        planId: plan.id
-        });
 
     // Execute steps respecting dependencies
     const remainingSteps = [...plan.steps];
@@ -669,29 +563,14 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
         if (canExecute) {
           try {
-              this.logger.debug(`Executing plan step: ${step.id}`, {
-                  agent: this.config.name,
-                  tool: step.tool,
-                  sessionId: context.sessionId
-                });
 
             const stepResult = await this.executeToolStep(step, results, params, context);
             results.set(step.id, stepResult);
             executedSteps.add(step.id);
             remainingSteps.splice(i, 1);
 
-              this.logger.debug(`Plan step completed: ${step.id}`, {
-                  agent: this.config.name,
-                  success: stepResult?.success !== false,
-                  sessionId: context.sessionId
-                });
 
           } catch (error) {
-            this.logger.error(`Plan step failed: ${step.id}`, {
-              agent: this.config.name,
-              error: error instanceof Error ? error.message : error,
-              sessionId: context.sessionId
-            });
 
             // Decide whether to continue or abort based on step criticality
             if (this.isStepCritical(step)) {
@@ -726,12 +605,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       );
     }
 
-      this.logger.debug('AI plan execution completed', {
-          agent: this.config.name,
-          planId: plan.id,
-          executedSteps: executedSteps.size,
-        sessionId: context.sessionId
-        });
 
     return results;
   }
@@ -822,12 +695,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
       warnings: []
     };
 
-      this.logger.debug('AI plan results synthesized', {
-          agent: this.config.name,
-          planId: plan.id,
-          successRate: `${successfulResults.length}/${plan.steps.length}`,
-        sessionId: context.sessionId
-        });
 
     // Override this method in subclasses for custom result synthesis
     return this.buildFinalResult(summary, successfulResults, failedResults, params, context);
@@ -892,10 +759,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected async beforeExecution(params: TParams, context: ToolExecutionContext): Promise<void> {
     // Override for pre-execution logic
-    this.logger.debug('Pre-execution hook called', { 
-      agent: this.config.name,
-      sessionId: context.sessionId 
-    });
   }
   
   /**
@@ -904,10 +767,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected async afterExecution(result: TResult, context: ToolExecutionContext): Promise<void> {
     // Override for post-execution logic
-    this.logger.debug('Post-execution hook called', { 
-      agent: this.config.name,
-      sessionId: context.sessionId 
-    });
   }
   
   /**
@@ -925,11 +784,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    * Create a successful tool result with standardized format
    */
   protected createSuccessResult(result: TResult, executionTime: number): ToolResult {
-    this.logger.info('Agent execution completed successfully', { 
-      executionTime,
-      agent: this.config.name,
-      resultType: typeof result
-    });
     
     return {
       toolName: this.config.name,
@@ -943,13 +797,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    * Create an error tool result with standardized format and logging
    */
   protected createErrorResult(error: Error, executionTime: number): ToolResult {
-    this.logger.error('Agent execution failed', {
-      error: error.message,
-      stack: error.stack,
-      executionTime,
-      agent: this.config.name,
-      errorType: error.constructor.name
-    });
     
     return {
       toolName: this.config.name,
@@ -1082,10 +929,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         if (attempt > 0) {
-          this.logger.warn(`Retry attempt ${attempt}/${retries}`, {
-            agent: this.config.name,
-            lastError: lastError?.message
-          });
           
           // Wait before retry
           await sleep(retryDelay * attempt);
@@ -1096,12 +939,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
         lastError = error as Error;
         
         if (attempt === retries) {
-          this.logger.error('Operation failed after all retries', {
-            agent: this.config.name,
-            attempts: attempt + 1,
-            maxRetries: retries,
-            finalError: lastError.message
-          });
           throw lastError;
         }
       }
@@ -1194,7 +1031,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     try {
       return getService<OpenAIService>('openaiService') || null;
     } catch (error) {
-      this.logger.debug('Failed to get OpenAI service', { error });
+      
       return null;
     }
   }
@@ -1204,10 +1041,6 @@ export abstract class AIAgent<TParams = any, TResult = any> {
    */
   protected async executeCustomTool(toolName: string, _parameters: ToolParameters, _context: ToolExecutionContext): Promise<ToolExecutionResult> {
     // Override this method to handle custom tools specific to your agent
-    this.logger.warn(`Unknown tool in AI plan: ${toolName}`, {
-      agent: this.config.name,
-      availableTools: Array.from(this.toolRegistry.keys())
-    });
 
     return {
       success: false,
@@ -1246,19 +1079,8 @@ export abstract class AIAgent<TParams = any, TResult = any> {
     try {
       resolvedParams = JSON.parse(resolvedString);
     } catch (error) {
-      this.logger.warn('Failed to resolve step parameters', {
-        agent: this.config.name,
-        stepId: step.id,
-        error: error instanceof Error ? error.message : error
-      });
     }
 
-    this.logger.debug('Step parameters resolved', {
-      agent: this.config.name,
-      stepId: step.id,
-      hasAccessToken: !!(resolvedParams as any).accessToken,
-      parameterKeys: Object.keys(resolvedParams)
-    });
 
     return resolvedParams;
   }
@@ -1363,10 +1185,6 @@ Please provide a detailed execution plan that accomplishes this request efficien
     // Validate tools exist
     for (const step of enhancedPlan.steps) {
       if (!this.toolRegistry.has(step.tool) && !this.isBuiltinTool(step.tool)) {
-        this.logger.warn(`Plan references unknown tool: ${step.tool}`, {
-          agent: this.config.name,
-          availableTools: Array.from(this.toolRegistry.keys())
-        });
       }
     }
 
@@ -1435,10 +1253,6 @@ Please provide a detailed execution plan that accomplishes this request efficien
    */
   updateAIConfig(updates: Partial<AIPlanningConfig>): void {
     this.aiConfig = { ...this.aiConfig, ...updates };
-    this.logger.debug('AI planning configuration updated', {
-      agent: this.config.name,
-      updates
-    });
   }
 
   /**
@@ -1453,9 +1267,6 @@ Please provide a detailed execution plan that accomplishes this request efficien
    */
   clearPlanCache(): void {
     this.planCache.clear();
-    this.logger.debug('AI plan cache cleared', {
-      agent: this.config.name
-    });
   }
 
   /**
@@ -1471,17 +1282,8 @@ Please provide a detailed execution plan that accomplishes this request efficien
         const sizeAfter = this.planCache.size;
         
         if (sizeBefore > sizeAfter) {
-          this.logger.debug('Periodic cache cleanup completed', {
-            agent: this.config.name,
-            removedEntries: sizeBefore - sizeAfter,
-            currentSize: sizeAfter
-          });
         }
       } catch (error) {
-        this.logger.error('Cache cleanup failed', {
-          agent: this.config.name,
-          error: error instanceof Error ? error.message : error
-        });
       }
     }, 2 * 60 * 1000); // Reduced to 2 minutes
   }
@@ -1541,11 +1343,6 @@ Please provide a detailed execution plan that accomplishes this request efficien
         this.planCache.delete(key);
       }
 
-      this.logger.debug('Cache size limit enforced', {
-        agent: this.config.name,
-        removedEntries: toRemove.length,
-        newSize: this.planCache.size
-      });
     }
   }
 }
@@ -1620,10 +1417,6 @@ export abstract class AIAgentWithPreview<TParams = any, TResult = any> extends A
       };
 
     } catch (error) {
-      this.logger.error('Failed to generate AI-powered preview', {
-        agent: this.config.name,
-        error: error instanceof Error ? error.message : error
-      });
 
       return {
         success: false,

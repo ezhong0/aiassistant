@@ -1,7 +1,6 @@
 import { BaseService } from './base-service';
 import { serviceManager } from './service-manager';
 import { CacheService } from './cache.service';
-import logger from '../utils/logger';
 import crypto from 'crypto';
 
 export interface Job {

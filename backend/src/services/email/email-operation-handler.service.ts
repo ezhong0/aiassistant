@@ -4,7 +4,6 @@ import { GmailService } from './gmail.service';
 import { GmailCacheService } from './gmail-cache.service';
 import { SendEmailRequest, SearchEmailsRequest, ReplyEmailRequest, GmailMessage } from '../../types/email/gmail.types';
 import { EMAIL_SERVICE_CONSTANTS } from '../../config/email-service-constants';
-import logger from '../../utils/logger';
 
 /**
  * Email operation result for handler

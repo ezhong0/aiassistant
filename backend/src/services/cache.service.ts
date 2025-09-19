@@ -1,8 +1,8 @@
 import { createClient, RedisClientType } from 'redis';
 import { BaseService } from './base-service';
 import { ServiceState } from './service-manager';
-import logger from '../utils/logger';
 import { configService } from '../config/config.service';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export class CacheService extends BaseService {
   private client: RedisClientType | null = null;
@@ -22,14 +22,18 @@ export class CacheService extends BaseService {
                      process.env.RAILWAY_REDIS_URL ||
                      'redis://localhost:6379';
     
-    logger.debug('CacheService initializing', {
-      redisUrl: this.maskRedisUrl(this.REDIS_URL),
-      environment: configService.nodeEnv,
-      hasRedisEnv: !!(process.env.REDIS_URL || process.env.REDISCLOUD_URL || 
-                     process.env.REDIS_PRIVATE_URL || process.env.REDIS_PUBLIC_URL ||
-                     process.env.RAILWAY_REDIS_URL),
-      availableRedisVars: Object.keys(process.env).filter(key => 
-        key.toLowerCase().includes('redis')).length
+    EnhancedLogger.debug('CacheService initializing', {
+      correlationId: `cache-init-${Date.now()}`,
+      operation: 'cache_service_init',
+      metadata: {
+        redisUrl: this.maskRedisUrl(this.REDIS_URL),
+        environment: configService.nodeEnv,
+        hasRedisEnv: !!(process.env.REDIS_URL || process.env.REDISCLOUD_URL || 
+                       process.env.REDIS_PRIVATE_URL || process.env.REDIS_PUBLIC_URL ||
+                       process.env.RAILWAY_REDIS_URL),
+        availableRedisVars: Object.keys(process.env).filter(key => 
+          key.toLowerCase().includes('redis')).length
+      }
     });
   }
 
@@ -46,7 +50,11 @@ export class CacheService extends BaseService {
     try {
       // Check if Redis should be disabled
       if (process.env.DISABLE_REDIS === 'true') {
-        logger.info('Redis disabled via DISABLE_REDIS environment variable');
+        EnhancedLogger.debug('Redis disabled via DISABLE_REDIS environment variable', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { reason: 'disabled_env_var' }
+        });
         return;
       }
 
@@ -54,13 +62,22 @@ export class CacheService extends BaseService {
       const redisEnvVars = Object.keys(process.env).filter(key => 
         key.toLowerCase().includes('redis'));
       if (redisEnvVars.length > 0) {
-        logger.info('Available Redis environment variables:', 
-          redisEnvVars.map(key => `${key}=${this.maskRedisUrl(process.env[key] || '')}`));
+        EnhancedLogger.debug('Available Redis environment variables', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { 
+            redisEnvVars: redisEnvVars.map(key => `${key}=${this.maskRedisUrl(process.env[key] || '')}`)
+          }
+        });
       }
 
       // Skip Redis if we're using localhost and not in development
       if (this.REDIS_URL.includes('localhost') && configService.nodeEnv === 'production') {
-        logger.warn('Skipping Redis connection - localhost URL in production environment');
+        EnhancedLogger.warn('Skipping Redis connection - localhost URL in production environment', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { reason: 'localhost_in_production' }
+        });
         return;
       }
 
@@ -71,7 +88,11 @@ export class CacheService extends BaseService {
           connectTimeout: 10000, // Longer timeout for Railway
           reconnectStrategy: (retries) => {
             if (retries > 3) {
-              logger.error('Redis max reconnection attempts reached');
+              EnhancedLogger.error('Redis max reconnection attempts reached', new Error('Max reconnection attempts reached'), {
+                correlationId: `cache-init-${Date.now()}`,
+                operation: 'cache_service_init',
+                metadata: { retries, maxRetries: 3 }
+              });
               return false;
             }
             // Exponential backoff with max 2 seconds
@@ -84,26 +105,46 @@ export class CacheService extends BaseService {
 
       // Set up event handlers
       this.client.on('error', (error) => {
-        logger.error('Redis client error:', error);
+        EnhancedLogger.error('Redis client error', error as Error, {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { phase: 'client_error' }
+        });
         this.isConnected = false;
       });
 
       this.client.on('connect', () => {
-        logger.info('Redis client connecting...');
+        EnhancedLogger.debug('Redis client connecting...', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { phase: 'connecting' }
+        });
       });
 
       this.client.on('ready', () => {
-        logger.info('Redis client connected and ready');
+        EnhancedLogger.debug('Redis client connected and ready', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { phase: 'ready' }
+        });
         this.isConnected = true;
       });
 
       this.client.on('end', () => {
-        logger.warn('Redis client connection ended');
+        EnhancedLogger.warn('Redis client connection ended', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { phase: 'connection_ended' }
+        });
         this.isConnected = false;
       });
 
       this.client.on('reconnecting', () => {
-        logger.info('Redis client reconnecting...');
+        EnhancedLogger.debug('Redis client reconnecting...', {
+          correlationId: `cache-init-${Date.now()}`,
+          operation: 'cache_service_init',
+          metadata: { phase: 'reconnecting' }
+        });
       });
 
       // Connect to Redis with timeout
@@ -116,23 +157,39 @@ export class CacheService extends BaseService {
       // Test the connection
       await this.client.ping();
       
-      logger.debug('CacheService initialized successfully');
+      EnhancedLogger.debug('CacheService initialized successfully', {
+        correlationId: `cache-init-${Date.now()}`,
+        operation: 'cache_service_init',
+        metadata: { phase: 'initialized' }
+      });
 
     } catch (error) {
-      logger.error('Failed to initialize CacheService:', error);
+      EnhancedLogger.error('Failed to initialize CacheService', error as Error, {
+        correlationId: `cache-init-${Date.now()}`,
+        operation: 'cache_service_init',
+        metadata: { phase: 'initialization_failed' }
+      });
       
       // Clean up client on failure
       if (this.client) {
         try {
           this.client.disconnect();
         } catch (disconnectError) {
-          logger.warn('Error disconnecting Redis client:', disconnectError);
+          EnhancedLogger.warn('Error disconnecting Redis client', {
+            correlationId: `cache-init-${Date.now()}`,
+            operation: 'cache_service_init',
+            metadata: { phase: 'disconnect_error', error: disconnectError }
+          });
         }
         this.client = null;
       }
       
       // Always continue without cache rather than failing
-      logger.warn('Redis unavailable - continuing without cache functionality');
+      EnhancedLogger.warn('Redis unavailable - continuing without cache functionality', {
+        correlationId: `cache-init-${Date.now()}`,
+        operation: 'cache_service_init',
+        metadata: { phase: 'fallback_mode' }
+      });
       this.isConnected = false;
       
       // Don't throw - just continue without Redis
@@ -144,13 +201,13 @@ export class CacheService extends BaseService {
     try {
       if (this.client && this.isConnected) {
         await this.client.quit();
-        logger.info('Redis client disconnected');
+        
       }
       
       this.isConnected = false;
-      logger.info('CacheService destroyed successfully');
+      
     } catch (error) {
-      logger.error('Error destroying CacheService:', error);
+      
       throw error;
     }
   }
@@ -182,11 +239,11 @@ export class CacheService extends BaseService {
       
       const parsed = JSON.parse(value);
       
-      logger.debug('Cache hit', { key: this.prefixKey(key) });
+      
       return parsed as T;
       
     } catch (error) {
-      logger.warn('Cache get error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return null; // Graceful degradation
     }
   }
@@ -205,16 +262,11 @@ export class CacheService extends BaseService {
       
       await this.client!.setEx(this.prefixKey(key), ttl, serialized);
       
-      logger.debug('Cache set', { 
-        key: this.prefixKey(key), 
-        ttl,
-        sizeBytes: serialized.length 
-      });
       
       return true;
       
     } catch (error) {
-      logger.warn('Cache set error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return false; // Graceful degradation
     }
   }
@@ -230,12 +282,12 @@ export class CacheService extends BaseService {
     try {
       const deleted = await this.client!.del(this.prefixKey(key));
       
-      logger.debug('Cache delete', { key: this.prefixKey(key), deleted: deleted > 0 });
+      
       
       return deleted > 0;
       
     } catch (error) {
-      logger.warn('Cache delete error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return false; // Graceful degradation
     }
   }
@@ -253,7 +305,7 @@ export class CacheService extends BaseService {
       return exists === 1;
       
     } catch (error) {
-      logger.warn('Cache exists error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return false;
     }
   }
@@ -271,7 +323,7 @@ export class CacheService extends BaseService {
       return result;
       
     } catch (error) {
-      logger.warn('Cache expire error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return false;
     }
   }
@@ -304,7 +356,7 @@ export class CacheService extends BaseService {
       };
       
     } catch (error) {
-      logger.warn('Cache stats error:', error);
+      
       return { connected: false };
     }
   }
@@ -319,11 +371,11 @@ export class CacheService extends BaseService {
 
     try {
       await this.client!.flushAll();
-      logger.info('Cache flushed all data');
+      
       return true;
       
     } catch (error) {
-      logger.error('Cache flush error:', error);
+      
       return false;
     }
   }
@@ -354,7 +406,7 @@ export class CacheService extends BaseService {
       const result = await this.client!.ping();
       return result === 'PONG';
     } catch (error) {
-      logger.warn('Cache ping error:', error);
+      
       return false;
     }
   }
@@ -371,10 +423,10 @@ export class CacheService extends BaseService {
 
     try {
       const result = await this.client!.lPush(this.prefixKey(key), value);
-      logger.debug('List lpush', { key: this.prefixKey(key), length: result });
+      
       return result;
     } catch (error) {
-      logger.warn('List lpush error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return null;
     }
   }
@@ -390,12 +442,12 @@ export class CacheService extends BaseService {
     try {
       const result = await this.client!.brPop(this.prefixKey(key), timeoutSeconds);
       if (result) {
-        logger.debug('List brpop', { key: this.prefixKey(key), hasValue: true });
+        
         return result.element;
       }
       return null;
     } catch (error) {
-      logger.warn('List brpop error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return null;
     }
   }
@@ -412,7 +464,7 @@ export class CacheService extends BaseService {
       const result = await this.client!.lLen(this.prefixKey(key));
       return result;
     } catch (error) {
-      logger.warn('List llen error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return 0;
     }
   }
@@ -430,7 +482,7 @@ export class CacheService extends BaseService {
       const result = await this.client!.incr(this.prefixKey(key));
       return result;
     } catch (error) {
-      logger.warn('Incr error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return null;
     }
   }
@@ -445,10 +497,10 @@ export class CacheService extends BaseService {
 
     try {
       await this.client!.setEx(this.prefixKey(key), seconds, value);
-      logger.debug('Cache setex', { key: this.prefixKey(key), ttl: seconds });
+      
       return true;
     } catch (error) {
-      logger.warn('Cache setex error:', { key: this.prefixKey(key), error: (error as Error).message });
+      
       return false;
     }
   }

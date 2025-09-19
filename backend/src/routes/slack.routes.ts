@@ -8,7 +8,7 @@ import {
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackInterfaceService } from '../services/slack/slack-interface.service';
-import logger from '../utils/logger';
+import { EnhancedLogger, LOG_MESSAGES, createLogContext } from '../utils/enhanced-logger';
 
 const emptyQuerySchema = z.object({});
 const emptyBodySchema = z.object({});
@@ -27,24 +27,33 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   router.get('/oauth/callback', 
     validateRequest({ query: z.object({ code: z.string().optional(), state: z.string().optional(), error: z.string().optional() }) }),
     async (req, res): Promise<void> => {
+    const logContext = createLogContext(req);
+    
     try {
       const { code, state, error } = req.query;
 
       if (error) {
-        logger.error('Slack OAuth error', { error });
+        EnhancedLogger.error('Slack OAuth error', new Error(error as string), {
+          correlationId: logContext.correlationId,
+          operation: 'oauth_callback',
+          metadata: { error }
+        });
         res.status(400).json({ error: 'OAuth authorization failed' });
         return;
       }
 
       if (!code) {
-        logger.error('No authorization code received');
+        EnhancedLogger.error('No authorization code received', new Error('Missing authorization code'), {
+          correlationId: logContext.correlationId,
+          operation: 'oauth_callback'
+        });
         res.status(400).json({ error: 'No authorization code received' });
         return;
       }
 
       // OAuth token exchange is handled by SlackOAuthManager service
 
-      logger.info('Slack OAuth callback received', { code: typeof code, state });
+      
       
       res.send(`
         <html>
@@ -63,7 +72,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       `);
 
     } catch (error) {
-      logger.error('Error in Slack OAuth callback', error);
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -118,7 +127,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       `);
 
     } catch (error) {
-      logger.error('Error serving Slack install page', error);
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -153,7 +162,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       });
 
     } catch (error) {
-      logger.error('Error checking Slack interface health', error);
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -166,39 +175,30 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
     validateRequest({ body: SlackWebhookEventSchema }),
     async (req, res): Promise<void> => {
     const requestStartTime = Date.now();
+    const logContext = createLogContext(req);
     
     try {
       const { challenge, type, event, team_id, api_app_id } = req.body;
       
-      // Log comprehensive event details for duplicate analysis
-      logger.info('Slack event received - FULL ANALYSIS', { 
-        type, 
-        eventType: event?.type,
-        teamId: team_id,
-        apiAppId: api_app_id,
-        hasChallenge: !!challenge,
-        requestStartTime,
-        // Event details
-        eventTs: event?.ts,
-        eventUser: event?.user,
-        eventChannel: event?.channel,
-        eventText: event?.text?.substring(0, 100) + '...',
-        eventClientMsgId: event?.client_msg_id,
-        // Request metadata
-        userAgent: req.get('User-Agent'),
-        xSlackSignature: req.get('X-Slack-Signature')?.substring(0, 20) + '...',
-        xSlackRequestTimestamp: req.get('X-Slack-Request-Timestamp'),
-        contentType: req.get('Content-Type'),
-        // Full event object (first 500 chars)
-        fullEventPreview: JSON.stringify(event).substring(0, 500) + '...'
+      EnhancedLogger.requestStart('Slack event received', {
+        ...logContext,
+        metadata: {
+          eventType: type,
+          hasChallenge: !!challenge,
+          teamId: team_id,
+          eventUser: event?.user,
+          eventChannel: event?.channel,
+          eventText: event?.text?.substring(0, 100)
+        }
       });
 
       // Handle URL verification challenge (required for Slack app setup)
       if (type === 'url_verification' && challenge) {
         const responseTime = Date.now() - requestStartTime;
-        logger.info('Slack URL verification challenge received', { 
-          challenge: challenge.substring(0, 10) + '...',
-          responseTimeMs: responseTime
+        EnhancedLogger.debug('URL verification challenge received', {
+          ...logContext,
+          duration: responseTime,
+          metadata: { challengeLength: challenge.length }
         });
         
         // Respond with the challenge value to verify the endpoint
@@ -208,23 +208,22 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
       // For actual events, handle them directly instead of forwarding
       if (type === 'event_callback' && event) {
-        logger.info('Slack event callback received, processing directly', { 
-          eventType: event.type,
-          userId: event.user,
-          channelId: event.channel,
-          eventTs: event.ts,
-          eventClientMsgId: event.client_msg_id,
-          // Check if this is the exact same event
-          eventHash: `${event.ts}-${event.user}-${event.channel}-${event.type}`,
-          requestTimestamp: req.get('X-Slack-Request-Timestamp')
+        EnhancedLogger.debug('Event callback processing', {
+          ...logContext,
+          metadata: {
+            eventType: event.type,
+            userId: event.user,
+            channelId: event.channel,
+            eventTs: event.ts
+          }
         });
 
         // IMMEDIATELY acknowledge to Slack to prevent retries
         const responseTime = Date.now() - requestStartTime;
-        logger.info('Sending acknowledgment to Slack', { 
-          responseTimeMs: responseTime,
-          eventType: event.type,
-          eventTs: event.ts
+        EnhancedLogger.debug('Sending acknowledgment to Slack', {
+          ...logContext,
+          duration: responseTime,
+          metadata: { eventTs: event.ts }
         });
         res.status(200).json({ ok: true });
         
@@ -233,20 +232,20 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         if (interfaces?.slackInterface) {
           // Process in background - don't block the response
           interfaces.slackInterface.handleEvent(event, team_id).catch((processError: unknown) => {
-            logger.error('Error processing Slack event asynchronously', processError);
+            
           });
         } else {
-          logger.warn('SlackInterface not available - may not be initialized yet');
+          
         }
         return;
       }
 
       // Handle other event types
-      logger.info('Other Slack event type received', { type });
+      
       res.status(200).json({ ok: true });
       
     } catch (error) {
-      logger.error('Error handling Slack event', error);
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -261,16 +260,10 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
     try {
       const { command, text, user_id, channel_id } = req.body;
       
-      logger.info('Slack command received', { 
-        command,
-        text: text?.substring(0, 100) + (text && text.length > 100 ? '...' : ''),
-        userId: user_id,
-        channelId: channel_id
-      });
 
       // Handle empty commands with helpful guidance
       if (!text || text.trim().length === 0) {
-        logger.info('Empty slash command received, providing usage guidance');
+        
         // Acknowledge receipt - actual processing handled by Bolt
         res.status(200).json({ ok: true });
         return;
@@ -280,7 +273,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       res.status(200).json({ ok: true });
       
     } catch (error) {
-      logger.error('Error handling Slack command', error);
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -299,14 +292,6 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       }
 
       const parsedPayload = JSON.parse(payload);
-      logger.info('Slack interactive component received', { 
-        type: parsedPayload.type,
-        actionId: parsedPayload.actions?.[0]?.action_id,
-        userId: parsedPayload.user?.id,
-        teamId: parsedPayload.team?.id,
-        channelId: parsedPayload.channel?.id,
-        responseUrl: parsedPayload.response_url
-      });
 
       // Process button clicks
       if (parsedPayload.type === 'block_actions' && parsedPayload.actions?.[0]) {
@@ -314,15 +299,10 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         const actionId = action.action_id;
         const actionValue = action.value;
         
-        logger.info('Processing button click', { 
-          actionId, 
-          actionValue,
-          actionType: typeof actionId 
-        });
 
         // Handle view results buttons
         if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
-          logger.info('Matched view results button pattern');
+          
           const toolName = actionId.replace('view_', '').replace('_results', '');
           
           const responseMessage = {
@@ -352,7 +332,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         }
 
         // Handle other button types
-        logger.info('Unhandled button interaction', { actionId, actionValue });
+        
         res.status(200).json({
           text: `Button clicked: ${actionId}`,
           response_type: 'ephemeral'
@@ -363,7 +343,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       }
       
     } catch (error) {
-      logger.error('Error handling Slack interactive component', error);
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -388,7 +368,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
         const { message = 'test message', channel = 'test' } = req.body;
         
-        logger.info('Testing Slack interface with manual event', { message, channel });
+        
         
         // Note: Interfaces don't have direct sendMessage methods
         // This endpoint now just validates configuration
@@ -400,7 +380,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         });
 
       } catch (error) {
-        logger.error('Error processing test event', error);
+        
         res.status(500).json({ error: 'Test event failed' });
       }
     });
@@ -444,7 +424,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         });
 
       } catch (error) {
-        logger.error('Error checking Slack configuration', error);
+        
         res.status(500).json({ error: 'Internal server error' });
       }
     });

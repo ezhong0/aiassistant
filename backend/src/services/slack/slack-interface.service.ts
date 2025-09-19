@@ -15,7 +15,6 @@ import {
 } from '../../types/slack/slack.types';
 import { SlackConfig } from '../../types/slack/slack-config.types';
 import { serviceManager } from '../service-manager';
-import logger from '../../utils/logger';
 
 /**
  * SlackInterface Service - Central coordinator for all Slack operations

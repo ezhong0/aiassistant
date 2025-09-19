@@ -23,6 +23,7 @@ import { CalendarEventManager, CalendarEventManagementResult } from '../services
 import { CalendarAvailabilityChecker, AvailabilityCheckResult } from '../services/calendar/calendar-availability-checker.service';
 import { CalendarFormatter, CalendarFormattingResult, CalendarResult } from '../services/calendar/calendar-formatter.service';
 import { CalendarValidator, CalendarValidationResult } from '../services/calendar/calendar-validator.service';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export interface CalendarAgentRequest {
   action: 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots';
@@ -125,62 +126,74 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    * Required method to process incoming requests - routes to appropriate handlers
    */
   protected async processQuery(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<any> {
-    this.logger.info('CalendarAgent.processQuery - Starting calendar processing', {
-      action: params.action,
-      hasAccessToken: !!params.accessToken,
-      sessionId: context.sessionId
-    });
+    const logContext: LogContext = {
+      correlationId: `calendar-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'calendar_processing',
+      metadata: {
+        action: params.action,
+        hasAccessToken: !!params.accessToken
+      }
+    };
+
+    EnhancedLogger.requestStart('Calendar processing started', logContext);
 
     // Ensure services are initialized
     this.ensureServices();
 
-    this.logger.info('CalendarAgent.processQuery - Services ensured', {
-      hasCalendarEventManager: !!this.calendarEventManager,
-      hasCalendarAvailabilityChecker: !!this.calendarAvailabilityChecker,
-      hasCalendarFormatter: !!this.calendarFormatter,
-      hasCalendarValidator: !!this.calendarValidator
+    EnhancedLogger.debug('Calendar services ensured', {
+      ...logContext,
+      metadata: {
+        hasCalendarEventManager: !!this.calendarEventManager,
+        hasCalendarAvailabilityChecker: !!this.calendarAvailabilityChecker,
+        hasCalendarFormatter: !!this.calendarFormatter,
+        hasCalendarValidator: !!this.calendarValidator
+      }
     });
 
     // First detect the operation
     const operation = await this.detectOperation(params);
 
-    this.logger.info('CalendarAgent.processQuery - Operation detected', {
-      detectedOperation: operation,
-      hasAction: !!params.action,
-      hasOperation: !!(params as any).operation,
-      sessionId: context.sessionId
+    EnhancedLogger.debug('Operation detected', {
+      ...logContext,
+      metadata: {
+        detectedOperation: operation,
+        hasAction: !!params.action,
+        hasOperation: !!(params as any).operation
+      }
     });
 
     // Route to appropriate handler based on detected operation
     switch (operation.toLowerCase()) {
       case 'create':
-        this.logger.info('CalendarAgent.processQuery - Routing to handleCreateEvent');
+        EnhancedLogger.debug('Routing to create event', { ...logContext, metadata: { operation: 'create' } });
         return await this.handleCreateEvent(params as unknown as ToolParameters, context);
 
       case 'list':
-        this.logger.info('CalendarAgent.processQuery - Routing to handleListEvents');
+        EnhancedLogger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list' } });
         return await this.handleListEvents(params as unknown as ToolParameters, context);
 
       case 'update':
-        this.logger.info('CalendarAgent.processQuery - Routing to handleUpdateEvent');
+        EnhancedLogger.debug('Routing to update event', { ...logContext, metadata: { operation: 'update' } });
         return await this.handleUpdateEvent(params as unknown as ToolParameters, context);
 
       case 'delete':
-        this.logger.info('CalendarAgent.processQuery - Routing to handleDeleteEvent');
+        EnhancedLogger.debug('Routing to delete event', { ...logContext, metadata: { operation: 'delete' } });
         return await this.handleDeleteEvent(params as unknown as ToolParameters, context);
 
       case 'check_availability':
-        this.logger.info('CalendarAgent.processQuery - Routing to handleCheckAvailability');
+        EnhancedLogger.debug('Routing to check availability', { ...logContext, metadata: { operation: 'check_availability' } });
         return await this.handleCheckAvailability(params as unknown as ToolParameters, context);
 
       case 'find_slots':
-        this.logger.info('CalendarAgent.processQuery - Routing to handleFindSlots');
+        EnhancedLogger.debug('Routing to find slots', { ...logContext, metadata: { operation: 'find_slots' } });
         return await this.handleFindSlots(params as unknown as ToolParameters, context);
 
       default:
-        this.logger.warn('CalendarAgent.processQuery - Unknown operation, defaulting to create', {
-          detectedOperation: operation,
-          action: params.action
+        EnhancedLogger.warn('Unknown operation, defaulting to create', {
+          ...logContext,
+          metadata: { detectedOperation: operation, action: params.action }
         });
         return await this.handleCreateEvent(params as unknown as ToolParameters, context);
     }
@@ -191,14 +204,26 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.logger.info('Destroying CalendarAgent...');
+      EnhancedLogger.debug('Destroying CalendarAgent', {
+        correlationId: 'calendar-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'CalendarAgent' }
+      });
       this.calendarEventManager = null;
       this.calendarAvailabilityChecker = null;
       this.calendarFormatter = null;
       this.calendarValidator = null;
-      this.logger.info('CalendarAgent destroyed successfully');
+      EnhancedLogger.debug('CalendarAgent destroyed successfully', {
+        correlationId: 'calendar-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'CalendarAgent' }
+      });
     } catch (error) {
-      this.logger.error('Error during CalendarAgent destruction', error);
+      EnhancedLogger.error('Error during CalendarAgent destruction', error as Error, {
+        correlationId: 'calendar-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'CalendarAgent' }
+      });
     }
   }
 
@@ -371,13 +396,20 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    * Generate preview for Calendar operations
    */
   protected async generatePreview(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
-    try {
-      this.logger.info('CalendarAgent.generatePreview - Generating calendar event preview', {
+    const logContext: LogContext = {
+      correlationId: `calendar-preview-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'calendar_preview_generation',
+      metadata: {
         action: params.action,
         summary: params.summary,
-        start: params.start,
-        sessionId: context.sessionId
-      });
+        start: params.start
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('Generating calendar event preview', logContext);
 
       // Create preview data for calendar operations
       const previewData: CalendarPreviewData = {
@@ -414,11 +446,14 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         previewData
       };
 
-      this.logger.info('CalendarAgent.generatePreview - Preview generated successfully', {
-        actionId,
-        actionType: params.action || 'create',
-        eventSummary: params.summary,
-        requiresConfirmation: true
+      EnhancedLogger.debug('Calendar preview generated successfully', {
+        ...logContext,
+        metadata: {
+          actionId,
+          actionType: params.action || 'create',
+          eventSummary: params.summary,
+          requiresConfirmation: true
+        }
       });
 
       return {
@@ -426,7 +461,10 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         preview: actionPreview
       };
     } catch (error) {
-      this.logger.error('CalendarAgent.generatePreview - Failed to generate preview', error);
+      EnhancedLogger.error('Failed to generate calendar preview', error as Error, {
+        ...logContext,
+        metadata: { action: params.action }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to generate calendar preview'
@@ -493,11 +531,18 @@ Always return structured execution status with event details, scheduling insight
    * Execute calendar-specific tools during AI planning
    */
   protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    this.logger.debug(`Executing calendar tool: ${toolName}`, {
-      toolName,
-      parametersKeys: Object.keys(parameters),
-      sessionId: context.sessionId
-    });
+    const logContext: LogContext = {
+      correlationId: `calendar-tool-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'calendar_tool_execution',
+      metadata: {
+        toolName,
+        parametersKeys: Object.keys(parameters)
+      }
+    };
+
+    EnhancedLogger.debug('Executing calendar tool', logContext);
 
     // Ensure we have access token
     if (!parameters.accessToken) {
@@ -515,11 +560,14 @@ Always return structured execution status with event details, scheduling insight
       // Let OpenAI determine the operation from the parameters
       const operation = (parameters as any).operation;
 
-      this.logger.info('CalendarAgent.executeCustomTool - Operation detection', {
-        toolName,
-        operation,
-        hasParameters: !!parameters,
-        parametersKeys: Object.keys(parameters)
+      EnhancedLogger.debug('Operation detection', {
+        ...logContext,
+        metadata: {
+          toolName,
+          operation,
+          hasParameters: !!parameters,
+          parametersKeys: Object.keys(parameters)
+        }
       });
 
       // If no operation is specified, try to detect from query or parameters
@@ -530,14 +578,17 @@ Always return structured execution status with event details, scheduling insight
 
       // Default to create if still no operation detected
       if (!detectedOperation) {
-        this.logger.info('No operation detected, defaulting to create');
+        EnhancedLogger.debug('No operation detected, defaulting to create', { ...logContext, metadata: { detectedOperation } });
         detectedOperation = 'create';
       }
 
-      this.logger.info('CalendarAgent.executeCustomTool - Using operation', {
-        originalOperation: operation,
-        detectedOperation,
-        willExecute: detectedOperation
+      EnhancedLogger.debug('Using operation', {
+        ...logContext,
+        metadata: {
+          originalOperation: operation,
+          detectedOperation,
+          willExecute: detectedOperation
+        }
       });
 
       if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CREATE || detectedOperation === 'create') {
@@ -553,11 +604,17 @@ Always return structured execution status with event details, scheduling insight
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.FIND_SLOTS || detectedOperation === 'find_slots') {
         return await this.handleFindSlots(parameters, context);
       } else {
-        this.logger.warn('Unknown operation, defaulting to create', { detectedOperation });
+        EnhancedLogger.warn('Unknown operation, defaulting to create', {
+          ...logContext,
+          metadata: { detectedOperation }
+        });
         return await this.handleCreateEvent(parameters, context);
       }
     } catch (error) {
-      this.logger.error(`Error executing calendar tool ${toolName}:`, error);
+      EnhancedLogger.error('Error executing calendar tool', error as Error, {
+        ...logContext,
+        metadata: { toolName }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.UNKNOWN_ERROR
@@ -630,7 +687,11 @@ Always return structured execution status with event details, scheduling insight
         };
       }
     } catch (error) {
-      this.logger.error('Error handling create event:', error);
+      EnhancedLogger.error('Error handling create event', error as Error, {
+        correlationId: 'calendar-create',
+        operation: 'calendar_create',
+        metadata: { summary: parameters.summary }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_CREATION_FAILED
@@ -692,7 +753,11 @@ Always return structured execution status with event details, scheduling insight
         };
       }
     } catch (error) {
-      this.logger.error('Error handling list events:', error);
+      EnhancedLogger.error('Error handling list events', error as Error, {
+        correlationId: 'calendar-list',
+        operation: 'calendar_list',
+        metadata: { query: parameters.query }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_LISTING_FAILED
@@ -775,7 +840,11 @@ Always return structured execution status with event details, scheduling insight
         };
       }
     } catch (error) {
-      this.logger.error('Error handling update event:', error);
+      EnhancedLogger.error('Error handling update event', error as Error, {
+        correlationId: 'calendar-update',
+        operation: 'calendar_update',
+        metadata: { eventId: parameters.eventId }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_UPDATE_FAILED
@@ -818,7 +887,11 @@ Always return structured execution status with event details, scheduling insight
         };
       }
     } catch (error) {
-      this.logger.error('Error handling delete event:', error);
+      EnhancedLogger.error('Error handling delete event', error as Error, {
+        correlationId: 'calendar-delete',
+        operation: 'calendar_delete',
+        metadata: { eventId: parameters.eventId }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_DELETION_FAILED
@@ -863,7 +936,11 @@ Always return structured execution status with event details, scheduling insight
         };
       }
     } catch (error) {
-      this.logger.error('Error handling check availability:', error);
+      EnhancedLogger.error('Error handling check availability', error as Error, {
+        correlationId: 'calendar-availability',
+        operation: 'calendar_availability',
+        metadata: { startTime: parameters.startTime, endTime: parameters.endTime }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.AVAILABILITY_CHECK_FAILED
@@ -907,7 +984,11 @@ Always return structured execution status with event details, scheduling insight
         };
       }
     } catch (error) {
-      this.logger.error('Error handling find slots:', error);
+      EnhancedLogger.error('Error handling find slots', error as Error, {
+        correlationId: 'calendar-find-slots',
+        operation: 'calendar_find_slots',
+        metadata: { startTime: parameters.startTime, endTime: parameters.endTime }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : CALENDAR_SERVICE_CONSTANTS.ERRORS.TIME_SLOT_SEARCH_FAILED
@@ -1100,7 +1181,11 @@ Always return structured execution status with event details, scheduling insight
       // Default to create for calendar operations
       return 'create';
     } catch (error) {
-      this.logger.warn('Failed to detect calendar operation, defaulting to create', { query, error });
+      EnhancedLogger.warn('Failed to detect calendar operation, defaulting to create', {
+        correlationId: 'calendar-operation-detect',
+        operation: 'operation_detection',
+        metadata: { query, error: error instanceof Error ? error.message : 'Unknown error' }
+      });
       return 'create';
     }
   }

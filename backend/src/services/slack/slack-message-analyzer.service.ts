@@ -3,7 +3,6 @@ import { ServiceManager, serviceManager } from '../service-manager';
 import { SLACK_SERVICE_CONSTANTS } from '../../config/slack-service-constants';
 import { SlackInterfaceService } from './slack-interface.service';
 import { ServiceDependencyError } from '../../errors/error-types';
-import logger from '../../utils/logger';
 
 /**
  * Slack message reading result

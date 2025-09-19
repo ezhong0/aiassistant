@@ -2,7 +2,6 @@ import { BaseService } from './base-service';
 import { OpenAIService } from './openai.service';
 import { serviceManager } from './service-manager';
 import { CacheService } from './cache.service';
-import logger from '../utils/logger';
 
 export interface PersonalityConfig {
   personality: 'cute' | 'professional' | 'friendly' | 'casual';

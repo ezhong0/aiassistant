@@ -3,7 +3,6 @@ import { BaseService } from '../base-service';
 import { SlackCacheService } from './slack-cache.service';
 import { ServiceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
-import logger from '../../utils/logger';
 
 export interface SlackContextExtractorConfig {
   enableUserInfoFetching: boolean;

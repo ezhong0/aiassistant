@@ -3,7 +3,7 @@ import { serviceManager } from '../services/service-manager';
 import { JobQueueService } from '../services/job-queue.service';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { apiRateLimit } from '../middleware/rate-limiting.middleware';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 
@@ -44,7 +44,8 @@ router.get('/status/:jobId', authenticateToken, apiRateLimit, async (req: Reques
     });
 
   } catch (error) {
-    logger.error('Error getting job status:', error);
+    const logContext = createLogContext(req, { operation: 'job_status' });
+    EnhancedLogger.error('Error getting job status', error as Error, logContext);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -89,7 +90,8 @@ router.get('/result/:jobId', authenticateToken, apiRateLimit, async (req: Reques
     });
 
   } catch (error) {
-    logger.error('Error getting job result:', error);
+    const logContext = createLogContext(req, { operation: 'job_result' });
+    EnhancedLogger.error('Error getting job result', error as Error, logContext);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -118,7 +120,8 @@ router.get('/stats', authenticateToken, apiRateLimit, async (req: Request, res: 
     });
 
   } catch (error) {
-    logger.error('Error getting queue stats:', error);
+    const logContext = createLogContext(req, { operation: 'queue_stats' });
+    EnhancedLogger.error('Error getting queue stats', error as Error, logContext);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'

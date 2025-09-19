@@ -2,7 +2,6 @@ import { BaseService } from './base-service';
 import { OpenAIService } from './openai.service';
 import { AIConfigService } from '../config/ai-config';
 import { serviceManager } from './service-manager';
-import logger from '../utils/logger';
 
 export interface RequestClassification {
   shouldProcessAsync: boolean;

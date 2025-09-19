@@ -18,6 +18,7 @@ import {
   ContactSearchParams,
   ContactSearchResult
 } from '../types/agents/agent-specific-parameters';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Contact operation result interface
@@ -271,10 +272,15 @@ You are a specialized contact discovery and management agent.
    * @throws {Error} When contact service is unavailable or API call fails
    */
   protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    this.logger.debug(`Executing contact tool: ${toolName}`, {
-      toolName,
-      parametersKeys: Object.keys(parameters),
-      sessionId: context.sessionId
+    EnhancedLogger.debug('Executing contact tool', {
+      correlationId: `contact-tool-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'contact_tool_execution',
+      metadata: {
+        toolName,
+        parametersKeys: Object.keys(parameters)
+      }
     });
 
     // Handle contact-specific tools
@@ -291,11 +297,14 @@ You are a specialized contact discovery and management agent.
           
           // Execute the contact operation using AI planning
           const result = await this.executeWithAIPlanning(contactParams, context);
-          this.logger.info('Contact tool executed successfully in AI plan', {
-            toolName,
-            operation: result.operation,
-            contactsFound: result.totalCount,
-            sessionId: context.sessionId
+          EnhancedLogger.debug('Contact tool executed successfully in AI plan', {
+            correlationId: `contact-tool-${context.sessionId}`,
+            operation: 'contact_tool_execution',
+            metadata: {
+              toolName,
+              operation: result.operation,
+              contactsFound: result.totalCount
+            }
           });
           
           return {
@@ -303,10 +312,10 @@ You are a specialized contact discovery and management agent.
             data: result
           };
         } catch (error) {
-          this.logger.error('Contact tool execution failed in AI plan', {
-            toolName,
-            error: error instanceof Error ? error.message : error,
-            sessionId: context.sessionId
+          EnhancedLogger.error('Contact tool execution failed in AI plan', error as Error, {
+            correlationId: `contact-tool-${context.sessionId}`,
+            operation: 'contact_tool_execution',
+            metadata: { toolName }
           });
           
           return {
@@ -394,9 +403,13 @@ You are a specialized contact discovery and management agent.
     await super.beforeExecution(params, context);
     
     // Log contact operation start
-    this.logger.debug('Google Contacts access validated', { 
-      sessionId: context.sessionId,
-      operation: params.operation || 'search'
+    EnhancedLogger.debug('Google Contacts access validated', {
+      correlationId: `contact-${context.sessionId}`,
+      operation: 'contact_validation',
+      metadata: {
+        sessionId: context.sessionId,
+        operation: params.operation || 'search'
+      }
     });
   }
   
@@ -407,11 +420,14 @@ You are a specialized contact discovery and management agent.
     await super.afterExecution(result, context);
     
     // Log contact operation metrics
-    this.logger.info('Contact operation completed', {
-      operation: result.operation,
-      contactsFound: result.totalCount,
-      searchTerm: result.searchTerm?.substring(0, 50),
-      sessionId: context.sessionId
+    EnhancedLogger.debug('Contact operation completed', {
+      correlationId: `contact-${context.sessionId}`,
+      operation: 'contact_operation',
+      metadata: {
+        operation: result.operation,
+        contactsFound: result.totalCount,
+        searchTerm: result.searchTerm?.substring(0, 50)
+      }
     });
   }
   
@@ -456,9 +472,13 @@ You are a specialized contact discovery and management agent.
       return await contactService.searchContacts(searchRequest.query, params.accessToken);
     });
 
-    this.logger.info('Contact search completed successfully', {
-      query: searchParams.searchTerm,
-      foundCount: searchResult.contacts.length
+    EnhancedLogger.debug('Contact search completed successfully', {
+      correlationId: `contact-search-${Date.now()}`,
+      operation: 'contact_search',
+      metadata: {
+        query: searchParams.searchTerm,
+        foundCount: searchResult.contacts.length
+      }
     });
 
     return {
@@ -485,9 +505,13 @@ You are a specialized contact discovery and management agent.
       // Only support search operations - create/update require additional permissions
       return 'search';
     } catch (error) {
-      this.logger.warn('Failed to determine contact operation via AI, defaulting to search', { 
-        query, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      EnhancedLogger.warn('Failed to determine contact operation via AI, defaulting to search', {
+        correlationId: `contact-ai-${Date.now()}`,
+        operation: 'contact_ai_detection',
+        metadata: {
+          query,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }
       });
       return 'search';
     }
@@ -526,7 +550,11 @@ You are a specialized contact discovery and management agent.
         maxResults: maxResults || undefined
       };
     } catch (error) {
-      this.logger.error('Failed to extract search parameters:', error);
+      EnhancedLogger.error('Failed to extract search parameters', error as Error, {
+        correlationId: 'contact-ai-extraction',
+        operation: 'contact_ai_extraction',
+        metadata: { query }
+      });
       throw new Error('AI search parameter extraction failed. Please check your OpenAI configuration.');
     }
   }

@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 import { GmailServiceError, SendEmailRequestSchema, SearchEmailsRequestSchema } from '../../types/email/gmail.types';
 import { BaseService } from '../base-service';
-import logger from '../../utils/logger';
 import { z } from 'zod';
 
 interface GmailHeader {

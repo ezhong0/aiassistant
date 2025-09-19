@@ -7,7 +7,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Extended Request interface with correlation data
@@ -238,14 +238,17 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
   });
 
   // Log request start
-  logger.info('Request started', {
+  EnhancedLogger.requestStart('Request started', {
     correlationId: correlatedReq.correlationId,
-    method: req.method,
-    path: req.path,
     userId: correlatedReq.userId,
     sessionId: correlatedReq.sessionId,
-    ip: req.ip,
-    userAgent: req.headers['user-agent']
+    operation: 'request_start',
+    metadata: {
+      method: req.method,
+      path: req.path,
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    }
   });
 
   // Capture original res.end to track completion
@@ -259,13 +262,17 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
 
     // Log request completion
     if (metrics) {
-      logger.info('Request completed', {
+      EnhancedLogger.requestEnd('Request completed', {
         correlationId: correlatedReq.correlationId,
-        statusCode: res.statusCode,
-        duration: metrics.duration,
-        method: req.method,
-        path: req.path,
-        userId: correlatedReq.userId
+        userId: correlatedReq.userId,
+        sessionId: correlatedReq.sessionId,
+        operation: 'request_complete',
+        metadata: {
+          statusCode: res.statusCode,
+          duration: metrics.duration,
+          method: req.method,
+          path: req.path
+        }
       });
     }
 
@@ -313,12 +320,16 @@ export function errorCorrelationMiddleware(
   }
 
   // Log correlated error
-  logger.error('Correlated error occurred', {
+  EnhancedLogger.error('Correlated error occurred', error as Error, {
     correlationId,
-    error: errorInfo,
-    endpoint: correlatedReq.endpoint,
     userId: correlatedReq.userId,
-    requestDuration: Date.now() - correlatedReq.startTime
+    sessionId: correlatedReq.sessionId,
+    operation: 'error_correlation',
+    metadata: {
+      error: errorInfo,
+      endpoint: correlatedReq.endpoint,
+      requestDuration: Date.now() - correlatedReq.startTime
+    }
   });
 
   next(error);
@@ -438,11 +449,15 @@ export function createCorrelationMiddleware(options: {
 
     correlationStore.startRequest(correlatedReq.correlationId, metrics);
 
-    logger.debug('Request started with correlation', {
+    EnhancedLogger.debug('Request started with correlation', {
       correlationId: correlatedReq.correlationId,
-      method: req.method,
-      path: req.path,
-      userId: correlatedReq.userId
+      userId: correlatedReq.userId,
+      sessionId: correlatedReq.sessionId,
+      operation: 'correlation_start',
+      metadata: {
+        method: req.method,
+        path: req.path
+      }
     });
 
     next();

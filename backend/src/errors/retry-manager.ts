@@ -6,7 +6,6 @@
  */
 
 import { BaseError, ErrorSeverity, ErrorRecoveryStrategy } from './error-types';
-import logger from '../utils/logger';
 
 /**
  * Retry strategy configuration
@@ -216,21 +215,9 @@ export class RetryManager {
 
         // Log retry attempt
         if (attempts < retryConfig.maxAttempts) {
-          logger.debug('Retry attempt failed', {
-            service: context?.service,
-            operation: context?.operation,
-            attempt: attempts,
-            maxAttempts: retryConfig.maxAttempts,
-            error: lastError.message
-          });
 
           // Check if we should retry this error
           if (retryConfig.retryIf && !retryConfig.retryIf(lastError)) {
-            logger.debug('Error is not retryable', {
-              service: context?.service,
-              operation: context?.operation,
-              error: lastError.message
-            });
             break;
           }
 
@@ -277,12 +264,6 @@ export class RetryManager {
     }
 
     // Log fallback attempt
-    logger.info('Primary operation failed, attempting fallback', {
-      service: context?.service,
-      operation: context?.operation,
-      primaryAttempts: primaryResult.attempts,
-      primaryError: primaryResult.error?.message
-    });
 
     // Try fallback operation
     const fallbackResult = await this.execute(
@@ -457,12 +438,6 @@ export class RetryManager {
       // Check if we should open the circuit breaker
       if (breaker.failures >= breaker.config.failureThreshold) {
         breaker.state = CircuitBreakerState.OPEN;
-        logger.warn('Circuit breaker opened', {
-          service,
-          operation,
-          failures: breaker.failures,
-          threshold: breaker.config.failureThreshold
-        });
       }
     }
   }

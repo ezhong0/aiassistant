@@ -3,7 +3,6 @@ import { getService } from './service-manager';
 import { OpenAIService } from './openai.service';
 import { AgentFactory } from '../framework/agent-factory';
 import { ToolCall, ToolExecutionContext } from '../types/tools';
-import logger from '../utils/logger';
 import { z } from 'zod';
 
 /**
@@ -64,12 +63,8 @@ export class ToolRoutingService extends BaseService {
       // Initialize agent capabilities
       await this.initializeAgentCapabilities();
       
-      logger.info('ToolRoutingService initialized successfully', {
-        hasOpenAI: !!this.openaiService,
-        registeredAgents: this.agentCapabilities.size
-      });
     } catch (error) {
-      logger.error('Failed to initialize ToolRoutingService:', error);
+      
       throw error;
     }
   }
@@ -77,7 +72,7 @@ export class ToolRoutingService extends BaseService {
   protected async onDestroy(): Promise<void> {
     this.openaiService = null;
     this.agentCapabilities.clear();
-    logger.info('ToolRoutingService shutdown complete');
+    
   }
 
   /**
@@ -94,13 +89,9 @@ export class ToolRoutingService extends BaseService {
           const capabilities = this.extractAgentCapabilities(agentName, agent);
           this.agentCapabilities.set(agentName, capabilities);
           
-          logger.debug(`Registered capabilities for agent: ${agentName}`, {
-            capabilities: capabilities.capabilities,
-            specialties: capabilities.specialties
-          });
         }
       } catch (error) {
-        logger.warn(`Failed to extract capabilities for agent ${agentName}:`, error);
+        
       }
     }
   }
@@ -133,7 +124,7 @@ export class ToolRoutingService extends BaseService {
         limitations = AgentClass.getLimitations();
       }
     } catch (error) {
-      logger.debug(`Could not extract all capabilities for ${agentName}, using defaults:`, error);
+      
     }
 
     // Fallback capabilities based on agent name
@@ -239,10 +230,6 @@ Return JSON with:
 
       // Validate selected agent exists
       if (!this.agentCapabilities.has(response.selectedAgent)) {
-        logger.error('AI selected unknown agent', {
-          selectedAgent: response.selectedAgent,
-          availableAgents: agents
-        });
         throw new Error(`AI selected unknown agent: ${response.selectedAgent}. Available agents: ${agents.join(', ')}`);
       }
 
@@ -272,17 +259,11 @@ Return JSON with:
         parameters: toolCall.parameters
       };
 
-      logger.info('AI agent selection completed', {
-        userQuery: userQuery.substring(0, 100),
-        selectedAgent: decision.selectedAgent,
-        confidence: decision.confidence,
-        requiresConfirmation: decision.requiresConfirmation
-      });
 
       return decision;
 
     } catch (error) {
-      logger.error('AI agent selection failed', error);
+      
       throw new Error('AI agent selection failed. Please check your OpenAI configuration.');
     }
   }
@@ -336,16 +317,11 @@ Return JSON with:
         { temperature: 0.3, maxTokens: 400 }
       );
 
-      logger.debug('AI confirmation message generated', {
-        agentName,
-        riskLevel: response.riskLevel,
-        hasDetails: response.contextualDetails?.length > 0
-      });
 
       return response;
 
     } catch (error) {
-      logger.error('AI confirmation generation failed', error);
+      
       throw new Error('AI confirmation generation failed. Please check your OpenAI configuration.');
     }
   }
@@ -378,7 +354,7 @@ Return JSON with:
    */
   registerCustomCapability(capability: AgentCapability): void {
     this.agentCapabilities.set(capability.agentName, capability);
-    logger.debug('Custom agent capability registered', { agentName: capability.agentName });
+    
   }
 
   /**
@@ -406,7 +382,7 @@ Show the key details they need to know in a clean, readable format.`;
       return formattedDetails || `🤖 AI preview formatting is unavailable. Please try again when AI service is restored.`;
 
     } catch (error) {
-      logger.warn('Failed to generate AI preview formatting:', error);
+      
       throw new Error(`🤖 AI preview formatting failed. Please try again when AI service is restored.`);
     }
   }

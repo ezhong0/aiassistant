@@ -26,7 +26,7 @@ import {
   validateMobileTokenExchange,
 } from '../middleware/enhanced-validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 
@@ -84,14 +84,16 @@ router.get('/google/slack',
     
     const authUrl = authService.generateAuthUrl(scopes, state);
     
-    logger.info('Generated Google OAuth URL for Slack user authentication', {
-      user_id,
-      team_id
+    const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
+    EnhancedLogger.requestStart('Generated Google OAuth URL for Slack user authentication', {
+      ...logContext,
+      metadata: { user_id, team_id }
     });
     
     return res.redirect(authUrl);
   } catch (error) {
-    logger.error('Error initiating Slack OAuth flow:', error);
+    const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
+    EnhancedLogger.error('Error initiating Slack OAuth flow', error as Error, logContext);
     return res.status(500).send(`
       <html>
         <head><title>Authentication Error</title></head>
@@ -130,11 +132,13 @@ router.get('/google',
     }
     const authUrl = authService.generateAuthUrl(scopes);
     
-    logger.info('Generated Google OAuth URL for user authentication');
+    const logContext = createLogContext(req, { operation: 'google_oauth_init' });
+    EnhancedLogger.requestStart('Generated Google OAuth URL for user authentication', logContext);
     
     return res.redirect(authUrl);
   } catch (error) {
-    logger.error('Error generating Google auth URL:', error);
+    const logContext = createLogContext(req, { operation: 'google_oauth_init' });
+    EnhancedLogger.error('Error generating Google auth URL', error as Error, logContext);
     return res.status(500).json({
       error: 'Failed to initiate authentication',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -226,7 +230,8 @@ router.get('/debug/test-oauth-url',
       }
     });
   } catch (error) {
-    logger.error('Error in test OAuth URL endpoint:', error);
+    const logContext = createLogContext(req, { operation: 'test_oauth_url' });
+    EnhancedLogger.error('Error in test OAuth URL endpoint', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Test OAuth URL generation failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -261,7 +266,8 @@ router.get('/debug/current-config',
       }
     });
   } catch (error) {
-    logger.error('Error in current config debug endpoint:', error);
+    const logContext = createLogContext(req, { operation: 'current_config_debug' });
+    EnhancedLogger.error('Error in current config debug endpoint', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -296,7 +302,8 @@ router.get('/debug/oauth-config',
       config
     });
   } catch (error) {
-    logger.error('Error in OAuth config debug endpoint:', error);
+    const logContext = createLogContext(req, { operation: 'oauth_config_debug' });
+    EnhancedLogger.error('Error in OAuth config debug endpoint', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -329,11 +336,12 @@ router.get('/debug/test-token-exchange',
 
     try {
       // Test token exchange
-      logger.info('Testing token exchange with provided code');
+      const logContext = createLogContext(req, { operation: 'test_token_exchange' });
+      EnhancedLogger.debug('Testing token exchange with provided code', logContext);
       const tokens = await authService.exchangeCodeForTokens(code);
       
       // Test getting user info
-      logger.info('Testing user info retrieval');
+      EnhancedLogger.debug('Testing user info retrieval', logContext);
       const userInfo = await authService.getGoogleUserInfo(tokens.access_token);
       
       return res.json({
@@ -352,10 +360,10 @@ router.get('/debug/test-token-exchange',
         }
       });
     } catch (exchangeError: unknown) {
-      logger.error('Token exchange test failed:', {
-        error: exchangeError instanceof Error ? exchangeError.message : exchangeError,
-        stack: exchangeError instanceof Error ? exchangeError.stack : undefined,
-        errorType: (exchangeError as any)?.constructor?.name
+      const logContext = createLogContext(req, { operation: 'test_token_exchange' });
+      EnhancedLogger.error('Token exchange test failed', exchangeError as Error, {
+        ...logContext,
+        metadata: { errorType: (exchangeError as any)?.constructor?.name }
       });
       
       return res.status(500).json({
@@ -365,7 +373,8 @@ router.get('/debug/test-token-exchange',
       });
     }
   } catch (error) {
-    logger.error('Debug token exchange endpoint error:', error);
+    const logContext = createLogContext(req, { operation: 'debug_token_exchange' });
+    EnhancedLogger.error('Debug token exchange endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -401,10 +410,13 @@ router.get('/debug/token-info',
         tokenInfo: response.data
       });
     } catch (tokenError: unknown) {
-      logger.error('Token info check failed:', {
-        error: tokenError instanceof Error ? tokenError.message : tokenError,
-            status: (tokenError as any).response?.status,
-            data: (tokenError as any).response?.data
+      const logContext = createLogContext(req, { operation: 'token_info_check' });
+      EnhancedLogger.error('Token info check failed', tokenError as Error, {
+        ...logContext,
+        metadata: {
+          status: (tokenError as any).response?.status,
+          data: (tokenError as any).response?.data
+        }
       });
       
       return res.status(400).json({
@@ -414,7 +426,8 @@ router.get('/debug/token-info',
       });
     }
   } catch (error) {
-    logger.error('Debug token info endpoint error:', error);
+    const logContext = createLogContext(req, { operation: 'debug_token_info' });
+    EnhancedLogger.error('Debug token info endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -454,7 +467,8 @@ router.get('/debug/detailed-token-test',
 
     try {
       // Step 1: Exchange code for tokens
-      logger.info('Step 1: Testing token exchange');
+      const logContext = createLogContext(req, { operation: 'detailed_token_test' });
+      EnhancedLogger.debug('Step 1: Testing token exchange', logContext);
       const tokens = await authService.exchangeCodeForTokens(code);
       results.step1_tokenExchange = {
         success: true,
@@ -467,7 +481,7 @@ router.get('/debug/detailed-token-test',
       };
 
       // Step 2: Validate token with Google's tokeninfo
-      logger.info('Step 2: Testing token validation');
+      EnhancedLogger.debug('Step 2: Testing token validation', logContext);
       try {
         const tokenInfoResponse = await axios.get(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${tokens.access_token}`);
         results.step2_tokenValidation = {
@@ -483,7 +497,7 @@ router.get('/debug/detailed-token-test',
       }
 
       // Step 3: Test userinfo endpoints
-      logger.info('Step 3: Testing userinfo endpoints');
+      EnhancedLogger.debug('Step 3: Testing userinfo endpoints', logContext);
       const endpoints = [
         'https://openidconnect.googleapis.com/v1/userinfo',
         'https://www.googleapis.com/oauth2/v2/userinfo',
@@ -548,7 +562,8 @@ router.get('/debug/detailed-token-test',
       });
     }
   } catch (error: unknown) {
-    logger.error('Debug detailed token test endpoint error:', error);
+    const logContext = createLogContext(req, { operation: 'debug_detailed_token_test' });
+    EnhancedLogger.error('Debug detailed token test endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -613,7 +628,8 @@ router.get('/debug/oauth-validation',
       }
     });
   } catch (error: unknown) {
-    logger.error('Debug OAuth validation endpoint error:', error);
+    const logContext = createLogContext(req, { operation: 'debug_oauth_validation' });
+    EnhancedLogger.error('Debug OAuth validation endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -641,7 +657,8 @@ router.get('/debug/sessions',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error in debug endpoint:', error);
+    const logContext = createLogContext(req, { operation: 'debug_endpoint' });
+    EnhancedLogger.error('Error in debug endpoint', error as Error, logContext);
     return res.status(500).json({ error: 'Debug endpoint failed' });
   }
 });
@@ -682,15 +699,20 @@ router.get('/init',
       state as string
     );
     
-    logger.info('Generated Google OAuth URL via /auth/init', {
-      isSlackUser: !!slackContext,
-      slackUserId: slackContext?.user_id,
-      slackTeamId: slackContext?.team_id
+    const logContext = createLogContext(req, { operation: 'auth_init' });
+    EnhancedLogger.requestStart('Generated Google OAuth URL via /auth/init', {
+      ...logContext,
+      metadata: {
+        isSlackUser: !!slackContext,
+        slackUserId: slackContext?.user_id,
+        slackTeamId: slackContext?.team_id
+      }
     });
     
     return res.redirect(authUrl);
   } catch (error) {
-    logger.error('Error in /auth/init:', error);
+    const logContext = createLogContext(req, { operation: 'auth_init' });
+    EnhancedLogger.error('Error in /auth/init', error as Error, logContext);
     return res.status(500).send(`
       <html>
         <head><title>Authentication Error</title></head>
@@ -722,14 +744,14 @@ router.get('/callback',
       try {
         slackContext = JSON.parse(state);
       } catch (e) {
-        logger.warn('Failed to parse state parameter:', state);
+        
       }
     }
 
     const isSlackAuth = slackContext?.source === 'slack';
 
     if (error) {
-      logger.error('OAuth callback error:', { error, error_description, isSlackAuth });
+      
       
       if (isSlackAuth) {
         return res.status(400).send(`
@@ -752,7 +774,7 @@ router.get('/callback',
     }
 
     if (!code || typeof code !== 'string') {
-      logger.error('No authorization code received in callback', { isSlackAuth });
+      
       
       if (isSlackAuth) {
         return res.status(400).send(`
@@ -793,34 +815,15 @@ router.get('/callback',
       picture: userInfo.picture
     });
 
-    logger.info(`User authenticated successfully: ${userInfo.email}`, { 
-      isSlackAuth, 
-      slackUserId: slackContext?.user_id,
-      slackTeamId: slackContext?.team_id
-    });
 
     // Store tokens associated with Slack user context for future use
     if (isSlackAuth && slackContext?.user_id && slackContext?.team_id) {
       try {
-        logger.info('Processing OAuth callback for Slack user', {
-          teamId: slackContext.team_id,
-          userId: slackContext.user_id,
-          hasTokens: !!tokens.access_token
-        });
         
         const tokenStorageService = getService('tokenStorageService') as unknown as TokenStorageService;
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
           const userId = `${slackContext.team_id}:${slackContext.user_id}`;
-          logger.info('🔍 STORAGE DEBUG - Creating user ID for token storage', {
-            slackContextTeamId: slackContext.team_id,
-            slackContextUserId: slackContext.user_id,
-            constructedUserId: userId,
-            teamIdType: typeof slackContext.team_id,
-            userIdType: typeof slackContext.user_id,
-            userIdKeyType: typeof userId,
-            userIdKeyLength: userId?.length
-          });
           await tokenStorageService.storeUserTokens(userId, {
             google: {
               access_token: tokens.access_token,
@@ -836,33 +839,12 @@ router.get('/callback',
             }
           });
 
-          logger.info('✅ Successfully stored OAuth tokens for Slack user', {
-            teamId: slackContext.team_id,
-            userId: slackContext.user_id,
-            tokenDetails: {
-              hasAccessToken: !!tokens.access_token,
-              hasRefreshToken: !!tokens.refresh_token,
-              expiresIn: tokens.expires_in,
-              scope: tokens.scope
-            }
-          });
         } else {
-          logger.error('TokenStorageService not available for OAuth token storage');
+          
         }
       } catch (error) {
-        logger.error('Error storing OAuth tokens for Slack user', {
-          error,
-          teamId: slackContext.team_id,
-          userId: slackContext.user_id
-        });
       }
     } else {
-      logger.info('OAuth callback not for Slack user or missing context', {
-        isSlackAuth,
-        hasUserId: !!slackContext?.user_id,
-        hasTeamId: !!slackContext?.team_id,
-        slackContext
-      });
     }
 
     if (isSlackAuth) {
@@ -913,12 +895,6 @@ router.get('/callback',
     return res.json(successResponse);
 
   } catch (error) {
-    logger.error('OAuth callback processing error:', {
-      error: error instanceof Error ? error.message : error,
-      stack: error instanceof Error ? error.stack : undefined,
-      errorType: (error as any)?.constructor?.name,
-      query: req.query
-    });
     
     // Parse state for Slack context in error case too
     let slackContext = null;
@@ -1003,7 +979,7 @@ router.post('/refresh',
       picture: userInfo.picture
     });
 
-    logger.info(`Token refreshed successfully for user: ${userInfo.email}`);
+    
 
     return res.json({
       success: true,
@@ -1020,7 +996,7 @@ router.post('/refresh',
     });
 
   } catch (error) {
-    logger.error('Token refresh error:', error);
+    
     const authError = error instanceof AuthenticationError 
       ? error 
       : handleOAuthError('token_refresh', error);
@@ -1049,16 +1025,8 @@ router.post('/logout',
           throw new Error('Auth service not available');
         }
         await authService.revokeGoogleTokens(tokenToRevoke);
-        logger.info('User tokens revoked successfully', { 
-          userId: req.user?.userId,
-          everywhere 
-        });
       } catch (revokeError) {
         // Log the error but don't fail the logout
-        logger.warn('Token revocation failed, but continuing with logout', { 
-          error: revokeError,
-          userId: req.user?.userId 
-        });
       }
     }
 
@@ -1068,7 +1036,7 @@ router.post('/logout',
     });
 
   } catch (error) {
-    logger.error('Logout error:', error);
+    
     const authError = error instanceof AuthenticationError 
       ? error 
       : new AuthenticationError('UNKNOWN_ERROR' as any, 'Logout failed', 500);
@@ -1114,7 +1082,7 @@ router.get('/validate',
     }
 
   } catch (error) {
-    logger.error('Token validation error:', error);
+    
     return res.status(500).json({
       valid: false,
       error: 'Token validation failed'
@@ -1172,10 +1140,6 @@ router.post('/exchange-mobile-tokens',
       picture: userInfo.picture
     });
 
-    logger.info(`Mobile token exchange successful for user: ${userInfo.email}`, {
-      platform,
-      userId: userInfo.sub
-    });
 
     return res.json({
       success: true,
@@ -1186,7 +1150,7 @@ router.post('/exchange-mobile-tokens',
     });
 
   } catch (error) {
-    logger.error('Mobile token exchange error:', error);
+    
     const authError = error instanceof AuthenticationError 
       ? error 
       : handleOAuthError('token_exchange', error);

@@ -3,7 +3,6 @@ import { ServiceManager } from '../service-manager';
 import { ContactService } from '../contact.service';
 import { ContactCacheService } from '../contact/contact-cache.service';
 import { Contact, ContactSearchResult } from '../../types/agents/contact.types';
-import logger from '../../utils/logger';
 
 /**
  * Contact resolution result

@@ -8,7 +8,6 @@
 import { BaseService } from '../services/base-service';
 import { BaseError, ErrorSeverity, ErrorCategory, ErrorFactory, IError } from './error-types';
 import { retryManager, RetryConfig } from './retry-manager';
-import logger from '../utils/logger';
 
 /**
  * Error statistics and metrics
@@ -374,19 +373,19 @@ export class ErrorManagerService extends BaseService {
 
     switch (error.severity) {
       case ErrorSeverity.CRITICAL:
-        logger.error('CRITICAL ERROR', logData);
+        
         break;
       case ErrorSeverity.HIGH:
-        logger.error('HIGH SEVERITY ERROR', logData);
+        
         break;
       case ErrorSeverity.MEDIUM:
-        logger.warn('MEDIUM SEVERITY ERROR', logData);
+        
         break;
       case ErrorSeverity.LOW:
-        logger.info('LOW SEVERITY ERROR', logData);
+        
         break;
       default:
-        logger.debug('ERROR', logData);
+        
     }
   }
 
@@ -432,12 +431,6 @@ export class ErrorManagerService extends BaseService {
    */
   private sendNotification(error: BaseError): void {
     // This would integrate with actual notification systems
-    logger.warn('Error notification triggered', {
-      code: error.code,
-      severity: error.severity,
-      service: error.service,
-      message: error.message
-    });
   }
 
   /**

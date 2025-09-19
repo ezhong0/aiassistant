@@ -16,7 +16,6 @@ import {
   isSlackEvent,
   isSlackContext
 } from '../../utils/type-guards';
-import logger from '../../utils/logger';
 
 /**
  * SlackEventHandler - Focused service for Slack event processing

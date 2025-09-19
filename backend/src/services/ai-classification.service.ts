@@ -1,8 +1,8 @@
 import { BaseService } from './base-service';
 import { getService } from './service-manager';
 import { OpenAIService } from './openai.service';
-import logger from '../utils/logger';
 import { z } from 'zod';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * AI Classification Service - Centralized AI-driven classification system
@@ -76,16 +76,28 @@ export class AIClassificationService extends BaseService {
     try {
       const service = getService<OpenAIService>('openaiService');
       this.openaiService = service || null;
-      logger.info('AIClassificationService initialized successfully');
+      EnhancedLogger.debug('AIClassificationService initialized successfully', {
+        correlationId: `ai-class-init-${Date.now()}`,
+        operation: 'ai_classification_init',
+        metadata: { hasOpenAIService: !!this.openaiService }
+      });
     } catch (error) {
-      logger.error('Failed to initialize AIClassificationService:', error);
+      EnhancedLogger.error('Failed to initialize AIClassificationService', error as Error, {
+        correlationId: `ai-class-init-${Date.now()}`,
+        operation: 'ai_classification_init',
+        metadata: { phase: 'initialization' }
+      });
       throw error;
     }
   }
 
   protected async onDestroy(): Promise<void> {
     this.openaiService = null;
-    logger.info('AIClassificationService shutdown complete');
+    EnhancedLogger.debug('AIClassificationService shutdown complete', {
+      correlationId: `ai-class-shutdown-${Date.now()}`,
+      operation: 'ai_classification_shutdown',
+      metadata: { phase: 'cleanup' }
+    });
   }
 
   /**
@@ -157,7 +169,11 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       }
       return 'unknown';
     } catch (error) {
-      logger.error('Failed to classify confirmation response:', error);
+      EnhancedLogger.error('Failed to classify confirmation response', error as Error, {
+        correlationId: `ai-class-${Date.now()}`,
+        operation: 'ai_classification',
+        metadata: { method: 'classifyConfirmationResponse', input: text }
+      });
       return 'unknown';
     }
   }
@@ -194,7 +210,11 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       const validOperations = ['read', 'write', 'search', 'create', 'update', 'delete', 'unknown'];
       return validOperations.includes(result) ? result : 'unknown';
     } catch (error) {
-      logger.error('Failed to detect operation:', error);
+      EnhancedLogger.error('Failed to detect operation', error as Error, {
+        correlationId: `ai-class-${Date.now()}`,
+        operation: 'ai_classification',
+        metadata: { method: 'detectOperation', input: query, agentName }
+      });
       return 'unknown';
     }
   }
@@ -248,7 +268,11 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
         parameters: result.parameters || {}
       };
     } catch (error) {
-      logger.error('Failed to extract entities:', error);
+      EnhancedLogger.error('Failed to extract entities', error as Error, {
+        correlationId: `ai-class-${Date.now()}`,
+        operation: 'ai_classification',
+        metadata: { method: 'extractEntities', input: text }
+      });
       return { action: null, parameters: {} };
     }
   }
@@ -284,7 +308,11 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       }
       return 'normal';
     } catch (error) {
-      logger.error('Failed to classify email priority:', error);
+      EnhancedLogger.error('Failed to classify email priority', error as Error, {
+        correlationId: `ai-class-${Date.now()}`,
+        operation: 'ai_classification',
+        metadata: { method: 'classifyEmailPriority', input: content }
+      });
       return 'normal';
     }
   }
@@ -320,7 +348,11 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       }
       return 'unknown';
     } catch (error) {
-      logger.error('Failed to detect contact operation:', error);
+      EnhancedLogger.error('Failed to detect contact operation', error as Error, {
+        correlationId: `ai-class-${Date.now()}`,
+        operation: 'ai_classification',
+        metadata: { method: 'detectContactOperation', input: query }
+      });
       return 'unknown';
     }
   }
@@ -359,7 +391,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
         reason: result.reason || 'Analysis failed'
       };
     } catch (error) {
-      logger.error('Failed to analyze tool appropriateness:', error);
+      
       return { appropriateness: 'suboptimal', reason: 'Analysis failed' };
     }
   }
@@ -390,7 +422,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
 
       return response.trim().toLowerCase() === 'valid';
     } catch (error) {
-      logger.error('Failed to validate operation:', error);
+      
       return false;
     }
   }
@@ -421,7 +453,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       );
       return response.trim().toLowerCase() === 'yes';
     } catch (error) {
-      logger.error('Error determining confirmation requirement:', error);
+      
       return true; // Default to requiring confirmation for safety
     }
   }
@@ -461,7 +493,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       const validResults = ['email_send', 'email_read', 'calendar_create', 'calendar_read', 'contact_access', 'none'];
       return validResults.includes(result) ? result as any : 'none';
     } catch (error) {
-      logger.error('Error detecting OAuth requirement:', error);
+      
       return 'none';
     }
   }
@@ -493,7 +525,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       const result = response.toLowerCase().trim();
       return result === 'yes';
     } catch (error) {
-      logger.error('Failed to detect help request with AI:', error);
+      
       throw new Error('AI help request detection failed. Please check your OpenAI configuration.');
     }
   }
@@ -542,7 +574,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       // Default to SEND_EMAIL for unclear cases
       return 'SEND_EMAIL';
     } catch (error) {
-      logger.error('Failed to classify email sub-operation with AI:', error);
+      
       throw new Error('AI email sub-operation classification failed. Please check your OpenAI configuration.');
     }
   }
@@ -589,7 +621,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
       // Default to SEARCH_EMAILS for unclear cases
       return 'SEARCH_EMAILS';
     } catch (error) {
-      logger.error('Failed to classify email read sub-operation with AI:', error);
+      
       throw new Error('AI email read sub-operation classification failed. Please check your OpenAI configuration.');
     }
   }
@@ -619,7 +651,7 @@ IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requ
         names: result.names || []
       };
     } catch (error) {
-      logger.error('Failed to extract contact names:', error);
+      
       return { needed: false, names: [] };
     }
   }
@@ -663,20 +695,12 @@ Return exactly one of: read_messages, read_thread, send_message, detect_drafts, 
       // Validate the response is one of our expected intents
       const validIntents = ['read_messages', 'read_thread', 'send_message', 'detect_drafts', 'manage_drafts', 'search_messages'];
       if (validIntents.includes(result)) {
-        logger.debug('Slack intent classified successfully', { 
-          query: query.substring(0, 100), 
-          intent: result 
-        });
         return result as any;
       } else {
-        logger.warn('AI returned unexpected Slack intent, defaulting to read_messages', { 
-          query: query.substring(0, 100), 
-          aiResponse: result 
-        });
         return 'read_messages';
       }
     } catch (error) {
-      logger.error('Failed to classify Slack intent with AI:', error);
+      
       throw new Error('AI Slack intent classification failed. Please check your OpenAI configuration.');
     }
   }
@@ -759,35 +783,29 @@ Examples:
 
       // Critical field validation with fallbacks
       if (typeof validatedResponse.needsContext !== 'boolean') {
-        logger.warn('Invalid needsContext field, defaulting to true', { response });
+        
         validatedResponse.needsContext = true;
       }
       
       if (!['recent_messages', 'thread_history', 'search_results', 'none'].includes(validatedResponse.contextType)) {
-        logger.warn('Invalid contextType field, defaulting to recent_messages', { response });
+        
         validatedResponse.contextType = 'recent_messages';
       }
       
       if (typeof validatedResponse.confidence !== 'number' || validatedResponse.confidence < 0 || validatedResponse.confidence > 1) {
-        logger.warn('Invalid confidence field, defaulting to 0.8', { response });
+        
         validatedResponse.confidence = 0.8;
       }
       
       if (typeof validatedResponse.reasoning !== 'string') {
-        logger.warn('Invalid reasoning field, defaulting to empty string', { response });
+        
         validatedResponse.reasoning = '';
       }
 
-      logger.info('Context detection completed', {
-        userInput: userInput.substring(0, 100),
-        needsContext: validatedResponse.needsContext,
-        contextType: validatedResponse.contextType,
-        confidence: validatedResponse.confidence
-      });
 
       return validatedResponse;
     } catch (error) {
-      logger.error('Failed to detect context needs:', error);
+      
       throw new Error('AI context detection failed. Please check your OpenAI configuration.');
     }
   }

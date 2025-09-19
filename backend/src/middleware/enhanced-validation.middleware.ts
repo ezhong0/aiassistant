@@ -4,7 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodSchema, ZodError } from 'zod';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 
 export interface ValidationOptions {
   body?: ZodSchema;
@@ -98,15 +98,20 @@ export function validateRequest(options: ValidationOptions) {
       }
 
       if (!validationResult.success) {
-        logger.warn('Validation failed', {
-          errors: JSON.stringify(validationResult.errors),
-          path: req.path,
-          method: req.method,
-          body: JSON.stringify(req.body),
-          query: JSON.stringify(req.query),
-          params: JSON.stringify(req.params),
-          headers: JSON.stringify(req.headers),
-          timestamp: new Date().toISOString()
+        const logContext = createLogContext(req, { operation: 'validation_failed' });
+        EnhancedLogger.warn('Validation failed', {
+          correlationId: logContext.correlationId,
+          operation: 'validation_middleware',
+          metadata: {
+            errors: JSON.stringify(validationResult.errors),
+            path: req.path,
+            method: req.method,
+            body: JSON.stringify(req.body),
+            query: JSON.stringify(req.query),
+            params: JSON.stringify(req.params),
+            headers: JSON.stringify(req.headers),
+            timestamp: new Date().toISOString()
+          }
         });
 
         res.status(400).json({
@@ -120,13 +125,18 @@ export function validateRequest(options: ValidationOptions) {
 
       next();
     } catch (error) {
-      logger.error('Validation middleware error', { 
-        error: error instanceof Error ? error.message : JSON.stringify(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        path: req.path,
-        method: req.method,
-        body: JSON.stringify(req.body),
-        timestamp: new Date().toISOString()
+      const logContext = createLogContext(req, { operation: 'validation_error' });
+      EnhancedLogger.error('Validation middleware error', error as Error, {
+        correlationId: logContext.correlationId,
+        operation: 'validation_middleware',
+        metadata: { 
+          error: error instanceof Error ? error.message : JSON.stringify(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          path: req.path,
+          method: req.method,
+          body: JSON.stringify(req.body),
+          timestamp: new Date().toISOString()
+        }
       });
       res.status(500).json({
         success: false,
@@ -173,7 +183,12 @@ export function sanitizeRequest(req: Request, res: Response, next: NextFunction)
     req.params = sanitizeInput(req.params) as any;
     next();
   } catch (error) {
-    logger.error('Sanitization middleware error', { error });
+    const logContext = createLogContext(req, { operation: 'sanitization_error' });
+    EnhancedLogger.error('Sanitization middleware error', error as Error, {
+      correlationId: logContext.correlationId,
+      operation: 'sanitization_middleware',
+      metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+    });
     res.status(500).json({
       success: false,
       error: 'Internal sanitization error',
@@ -223,9 +238,13 @@ export function validateResponse<T>(schema: ZodSchema<T>) {
       return schema.parse(data);
     } catch (error) {
       if (error instanceof ZodError) {
-        logger.error('Response validation failed', {
-          errors: transformZodErrors(error),
-          data,
+        EnhancedLogger.error('Response validation failed', error as Error, {
+          correlationId: `response-validation-${Date.now()}`,
+          operation: 'response_validation',
+          metadata: {
+            errors: transformZodErrors(error),
+            data,
+          }
         });
         throw new Error('Response validation failed');
       }

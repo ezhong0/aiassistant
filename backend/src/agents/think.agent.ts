@@ -12,6 +12,7 @@ import {
   ThinkAnalysisParams,
   ThinkAnalysisResult
 } from '../types/agents/agent-specific-parameters';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {
@@ -165,11 +166,17 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    * Process thinking and verification queries
    */
   private async processThinking(params: ThinkParams): Promise<ThinkAgentResponse> {
-    try {
-      this.logger.info('ThinkAgent processing verification query', { 
+    const logContext: LogContext = {
+      correlationId: `think-${Date.now()}`,
+      operation: 'think_processing',
+      metadata: {
         query: params.query,
-        hasPreviousActions: !!params.previousActions?.length 
-      });
+        hasPreviousActions: !!params.previousActions?.length
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('ThinkAgent processing verification query', logContext);
 
       // Analyze the query and previous actions
       const analysis = await this.analyzeToolUsage(params);
@@ -181,7 +188,10 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
       };
 
     } catch (error) {
-      this.logger.error('Error in ThinkAgent.processQuery:', error);
+      EnhancedLogger.error('Error in ThinkAgent.processQuery', error as Error, {
+        ...logContext,
+        metadata: { query: params.query }
+      });
       return {
         success: false,
         message: 'An error occurred during reflection and verification',

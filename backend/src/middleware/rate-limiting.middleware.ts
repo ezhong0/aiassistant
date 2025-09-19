@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './auth.middleware';
 import { configService } from '../config/config.service';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import { serviceManager, IService, ServiceState } from '../services/service-manager';
@@ -113,7 +113,11 @@ class RateLimitStore implements IService {
     }
     
     if (cleanedCount > 0) {
-      logger.debug(`Cleaned up ${cleanedCount} expired rate limit entries`);
+      EnhancedLogger.debug('Rate limit cleanup completed', {
+        correlationId: `cleanup-${Date.now()}`,
+        operation: 'rate_limit_cleanup',
+        metadata: { cleanedCount }
+      });
     }
   }
   
@@ -175,14 +179,18 @@ export const rateLimit = (options: RateLimitOptions) => {
       }
       
       if (data.count > maxRequests) {
-        logger.warn('Rate limit exceeded', {
-          key: key.substring(0, 10) + '***', // Partially mask for privacy
-          count: data.count,
-          maxRequests,
-          windowMs,
-          path: req.path,
-          method: req.method,
-          userAgent: req.get('User-Agent')
+        EnhancedLogger.warn('Rate limit exceeded', {
+          correlationId: `rate-limit-${Date.now()}`,
+          operation: 'rate_limit_exceeded',
+          metadata: {
+            key: key.substring(0, 10) + '***', // Partially mask for privacy
+            count: data.count,
+            maxRequests,
+            windowMs,
+            path: req.path,
+            method: req.method,
+            userAgent: req.get('User-Agent')
+          }
         });
         
         res.status(429).json({
@@ -198,17 +206,24 @@ export const rateLimit = (options: RateLimitOptions) => {
       
       // Log if approaching limit (90% of max)
       if (data.count >= maxRequests * 0.9) {
-        logger.warn('Rate limit warning', {
-          key: key.substring(0, 10) + '***',
-          count: data.count,
-          maxRequests,
-          remainingRequests: maxRequests - data.count
+        EnhancedLogger.warn('Rate limit warning', {
+          correlationId: `rate-limit-warn-${Date.now()}`,
+          operation: 'rate_limit_warning',
+          metadata: {
+            key: key.substring(0, 10) + '***',
+            count: data.count,
+            maxRequests,
+            remainingRequests: maxRequests - data.count
+          }
         });
       }
       
       next();
     } catch (error) {
-      logger.error('Rate limiting middleware error:', error);
+      EnhancedLogger.error('Rate limiting middleware error', error as Error, {
+        correlationId: `rate-limit-error-${Date.now()}`,
+        operation: 'rate_limit_middleware_error'
+      });
       // Don't block requests on rate limiting errors
       next();
     }

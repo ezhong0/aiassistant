@@ -1,4 +1,4 @@
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { AgentFactory } from '../framework/agent-factory';
 import { MasterAgent } from '../agents/master.agent';
 import { MasterAgentConfig } from '../types/tools';
@@ -9,32 +9,46 @@ import { MasterAgentConfig } from '../types/tools';
  */
 export const initializeAgentFactory = (): void => {
   try {
-    logger.info('Initializing AgentFactory...');
+    EnhancedLogger.debug('Initializing AgentFactory...', {
+      correlationId: `agent-factory-init-${Date.now()}`,
+      operation: 'agent_factory_initialization'
+    });
     
     // Initialize AgentFactory with all agents and metadata
     AgentFactory.initialize();
     
     // Log initialization statistics
     const stats = AgentFactory.getStats();
-    logger.info('AgentFactory initialized successfully', {
-      totalAgents: stats.totalAgents,
-      enabledAgents: stats.enabledAgents,
-      totalTools: stats.totalTools,
-      criticalTools: stats.criticalTools,
-      confirmationTools: stats.confirmationTools,
-      agentNames: stats.agentNames,
-      toolNames: stats.toolNames
+    EnhancedLogger.debug('AgentFactory initialized successfully', {
+      correlationId: `agent-factory-init-${Date.now()}`,
+      operation: 'agent_factory_initialization_success',
+      metadata: {
+        totalAgents: stats.totalAgents,
+        enabledAgents: stats.enabledAgents,
+        totalTools: stats.totalTools,
+        criticalTools: stats.criticalTools,
+        confirmationTools: stats.confirmationTools,
+        agentNames: stats.agentNames,
+        toolNames: stats.toolNames
+      }
     });
 
     // Generate and log OpenAI functions for debugging
     const openAIFunctions = AgentFactory.generateOpenAIFunctions();
-    logger.debug('Generated OpenAI functions', { 
-      functionCount: openAIFunctions.length,
-      functions: openAIFunctions.map(f => ({ name: f.name, description: f.description }))
+    EnhancedLogger.debug('Generated OpenAI functions', {
+      correlationId: `agent-factory-init-${Date.now()}`,
+      operation: 'openai_functions_generation',
+      metadata: {
+        functionCount: openAIFunctions.length,
+        functions: openAIFunctions.map(f => ({ name: f.name, description: f.description }))
+      }
     });
 
   } catch (error) {
-    logger.error('Failed to initialize AgentFactory:', error);
+    EnhancedLogger.error('Failed to initialize AgentFactory', error as Error, {
+      correlationId: `agent-factory-init-error-${Date.now()}`,
+      operation: 'agent_factory_initialization_error'
+    });
     throw error;
   }
 }
@@ -64,14 +78,10 @@ export const createMasterAgent = (config?: MasterAgentConfig): MasterAgent => {
     // No need to check or initialize it again here
     
     const masterAgent = new MasterAgent(config);
-    logger.info('MasterAgent created successfully', {
-      hasOpenAI: !!config?.openaiApiKey,
-      model: config?.model || 'default'
-    });
     
     return masterAgent;
   } catch (error) {
-    logger.error('Failed to create MasterAgent:', error);
+    
     throw error;
   }
 }

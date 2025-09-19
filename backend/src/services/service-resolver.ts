@@ -3,7 +3,6 @@
  */
 
 import { getService } from './service-manager';
-import logger from '../utils/logger';
 
 export interface ServiceResolverConfig {
   /** Whether to throw errors on service resolution failure */
@@ -31,7 +30,7 @@ export class ServiceResolver {
    */
   async resolve<T = any>(serviceName: string): Promise<T> {
     if (this.config.logResolution) {
-      logger.debug(`Resolving service: ${serviceName}`);
+      
     }
 
     try {
@@ -39,10 +38,6 @@ export class ServiceResolver {
       
       if (!service) {
         const error = new Error(`Service '${serviceName}' not found`);
-        logger.error('Service resolution failed', { 
-          serviceName, 
-          error: error.message 
-        });
         
         if (this.config.throwOnError) {
           throw error;
@@ -52,15 +47,11 @@ export class ServiceResolver {
       }
 
       if (this.config.logResolution) {
-        logger.debug(`Service resolved successfully: ${serviceName}`);
+        
       }
 
       return service;
     } catch (error) {
-      logger.error('Service resolution error', { 
-        serviceName, 
-        error: error instanceof Error ? error.message : String(error)
-      });
       
       if (this.config.throwOnError) {
         throw error;
@@ -97,7 +88,7 @@ export class ServiceResolver {
       try {
         results[key as keyof T] = await this.resolve(serviceName);
       } catch (error) {
-        logger.error(`Failed to resolve service ${serviceName}`, { error });
+        
         if (this.config.throwOnError) {
           throw error;
         }

@@ -1,5 +1,5 @@
 import { AuthError, AuthErrorCode } from '../types/auth.types';
-import logger from './logger';
+import { EnhancedLogger, LogContext } from './enhanced-logger';
 import { setTimeout as delay } from 'timers/promises';
 
 /**
@@ -167,10 +167,15 @@ export const handleOAuthError = (
   error: any,
   context?: any
 ): AuthenticationError => {
-  logger.error(`OAuth ${operation} failed`, {
-    error: error?.message || error,
-    stack: error?.stack,
-    context
+  EnhancedLogger.error(`OAuth ${operation} failed`, error as Error, {
+    correlationId: `oauth-error-${Date.now()}`,
+    operation: 'oauth_operation_error',
+    metadata: {
+      operation,
+      error: error?.message || error,
+      stack: error?.stack,
+      context
+    }
   });
 
   if (error instanceof AuthenticationError) {
@@ -269,10 +274,14 @@ export const retryOAuthOperation = async <T>(
         throw lastError;
       }
       
-      logger.warn(`OAuth operation attempt ${attempt} failed, retrying in ${delayMs}ms`, {
-        error: error instanceof Error ? error.message : error,
-        attempt,
-        maxRetries
+      EnhancedLogger.warn(`OAuth operation attempt ${attempt} failed, retrying in ${delayMs}ms`, {
+        correlationId: `oauth-retry-${Date.now()}`,
+        operation: 'oauth_operation_retry',
+        metadata: {
+          error: error instanceof Error ? error.message : error,
+          attempt,
+          maxRetries
+        }
       });
       
       await delay(delayMs * attempt);

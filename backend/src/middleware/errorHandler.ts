@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseError, ErrorSeverity, ErrorCategory, ERROR_MESSAGES } from '../errors/error-types';
 import { errorManager } from '../errors/error-manager.service';
 import { CorrelatedRequest, addCorrelationContext } from './error-correlation.middleware';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -92,12 +92,15 @@ export const errorHandler = (
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const notFoundHandler = (req: Request, res: Response, _next: NextFunction) => {
-  logger.warn({
-    message: 'Route not found',
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
+  EnhancedLogger.warn('Route not found', {
+    correlationId: `not-found-${Date.now()}`,
+    operation: 'route_not_found',
+    metadata: {
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    }
   });
 
   res.status(404).json({
@@ -251,13 +254,17 @@ function getRetryAfterSeconds(error: BaseError): number {
 export const enhancedNotFoundHandler = (req: Request, res: Response, _next: NextFunction) => {
   const correlatedReq = req as CorrelatedRequest;
 
-  logger.warn('Route not found', {
-    correlationId: correlatedReq.correlationId,
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    userId: correlatedReq.userId
+  EnhancedLogger.warn('Route not found', {
+    correlationId: correlatedReq.correlationId || `not-found-${Date.now()}`,
+    userId: correlatedReq.userId,
+    sessionId: correlatedReq.sessionId,
+    operation: 'route_not_found',
+    metadata: {
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    }
   });
 
   res.status(404).json({

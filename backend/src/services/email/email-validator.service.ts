@@ -1,6 +1,5 @@
 import { BaseService } from '../base-service';
 import { SendEmailRequest, SearchEmailsRequest, ReplyEmailRequest } from '../../types/email/gmail.types';
-import logger from '../../utils/logger';
 
 /**
  * Email validation result

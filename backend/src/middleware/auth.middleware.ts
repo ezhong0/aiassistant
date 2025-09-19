@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 
 /**
  * Authenticated user interface for request context
@@ -58,10 +58,16 @@ export const authenticateToken = (
     const authHeader = req.headers.authorization;
     
     if (!authHeader) {
-      logger.warn('Authentication failed: No authorization header provided', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path
+      const logContext = createLogContext(req, { operation: 'auth_failed_no_header' });
+      EnhancedLogger.warn('Authentication failed: No authorization header provided', {
+        correlationId: logContext.correlationId,
+        operation: 'auth_middleware',
+        metadata: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          path: req.path,
+          reason: 'no_authorization_header'
+        }
       });
       
       res.status(401).json({
@@ -72,10 +78,16 @@ export const authenticateToken = (
     }
 
     if (!authHeader.startsWith('Bearer ')) {
-      logger.warn('Authentication failed: Invalid authorization header format', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path
+      const logContext = createLogContext(req, { operation: 'auth_failed_invalid_format' });
+      EnhancedLogger.warn('Authentication failed: Invalid authorization header format', {
+        correlationId: logContext.correlationId,
+        operation: 'auth_middleware',
+        metadata: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          path: req.path,
+          reason: 'invalid_header_format'
+        }
       });
       
       res.status(401).json({
@@ -88,10 +100,16 @@ export const authenticateToken = (
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
     
     if (!token) {
-      logger.warn('Authentication failed: Empty token', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path
+      const logContext = createLogContext(req, { operation: 'auth_failed_empty_token' });
+      EnhancedLogger.warn('Authentication failed: Empty token', {
+        correlationId: logContext.correlationId,
+        operation: 'auth_middleware',
+        metadata: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          path: req.path,
+          reason: 'empty_token'
+        }
       });
       
       res.status(401).json({
@@ -112,10 +130,16 @@ export const authenticateToken = (
     const payload = validation;
     
     if (!payload.sub || !payload.email) {
-      logger.warn('Authentication failed: Invalid token payload', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        path: req.path
+      const logContext = createLogContext(req, { operation: 'auth_failed_invalid_payload' });
+      EnhancedLogger.warn('Authentication failed: Invalid token payload', {
+        correlationId: logContext.correlationId,
+        operation: 'auth_middleware',
+        metadata: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          path: req.path,
+          reason: 'invalid_token_payload'
+        }
       });
       
       res.status(401).json({
@@ -134,20 +158,30 @@ export const authenticateToken = (
     };
     req.token = token;
 
-    logger.info('User authenticated successfully', {
-      userId: payload.sub,
-      email: payload.email,
-      path: req.path
+    const logContext = createLogContext(req, { operation: 'auth_success' });
+    EnhancedLogger.debug('User authenticated successfully', {
+      correlationId: logContext.correlationId,
+      operation: 'auth_middleware',
+      metadata: {
+        userId: payload.sub,
+        email: payload.email,
+        path: req.path
+      }
     });
 
     next();
   } catch (error) {
-    logger.error('Authentication middleware error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      path: req.path
+    const logContext = createLogContext(req, { operation: 'auth_error' });
+    EnhancedLogger.error('Authentication middleware error', error as Error, {
+      correlationId: logContext.correlationId,
+      operation: 'auth_middleware',
+      metadata: {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+        path: req.path
+      }
     });
     
     res.status(500).json({
@@ -201,22 +235,37 @@ export const optionalAuth = (
         };
         req.token = token;
         
-        logger.info('Optional authentication successful', {
-          userId: payload.sub,
-          email: payload.email,
-          path: req.path
+        const logContext = createLogContext(req, { operation: 'optional_auth_success' });
+        EnhancedLogger.debug('Optional authentication successful', {
+          correlationId: logContext.correlationId,
+          operation: 'optional_auth_middleware',
+          metadata: {
+            userId: payload.sub,
+            email: payload.email,
+            path: req.path
+          }
         });
       }
     } catch (error) {
       // Token validation failed, but that's okay for optional auth
-      logger.debug('Optional authentication failed', { error });
+      const logContext = createLogContext(req, { operation: 'optional_auth_failed' });
+      EnhancedLogger.debug('Optional authentication failed', {
+        correlationId: logContext.correlationId,
+        operation: 'optional_auth_middleware',
+        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+      });
     }
 
     next();
   } catch (error) {
-    logger.error('Optional authentication middleware error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      path: req.path
+    const logContext = createLogContext(req, { operation: 'optional_auth_error' });
+    EnhancedLogger.error('Optional authentication middleware error', error as Error, {
+      correlationId: logContext.correlationId,
+      operation: 'optional_auth_middleware',
+      metadata: {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        path: req.path
+      }
     });
     
     // Don't fail on optional auth errors, just continue
@@ -239,10 +288,15 @@ export const requirePermissions = (permissions: string[]) => {
 
     // For now, we'll implement basic permission checking
     // In a real app, you'd check against user roles/permissions from database
-    logger.info('Permission check passed', {
-      userId: req.user.userId,
-      requiredPermissions: permissions,
-      path: req.path
+    const logContext = createLogContext(req, { operation: 'permission_check_passed' });
+    EnhancedLogger.debug('Permission check passed', {
+      correlationId: logContext.correlationId,
+      operation: 'permission_middleware',
+      metadata: {
+        userId: req.user.userId,
+        requiredPermissions: permissions,
+        path: req.path
+      }
     });
 
     next();
@@ -273,10 +327,15 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
     }
 
     if (req.user.userId !== resourceUserId) {
-      logger.warn('Ownership check failed', {
-        authenticatedUserId: req.user.userId,
-        requestedUserId: resourceUserId,
-        path: req.path
+      const logContext = createLogContext(req, { operation: 'ownership_check_failed' });
+      EnhancedLogger.warn('Ownership check failed', {
+        correlationId: logContext.correlationId,
+        operation: 'ownership_middleware',
+        metadata: {
+          authenticatedUserId: req.user.userId,
+          requestedUserId: resourceUserId,
+          path: req.path
+        }
       });
       
       res.status(403).json({
@@ -286,9 +345,14 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
       return;
     }
 
-    logger.info('Ownership check passed', {
-      userId: req.user.userId,
-      path: req.path
+    const logContext = createLogContext(req, { operation: 'ownership_check_passed' });
+    EnhancedLogger.debug('Ownership check passed', {
+      correlationId: logContext.correlationId,
+      operation: 'ownership_middleware',
+      metadata: {
+        userId: req.user.userId,
+        path: req.path
+      }
     });
 
     next();
@@ -321,11 +385,16 @@ export const rateLimitAuth = (maxRequests: number = 100, windowMs: number = 15 *
     }
 
     if (userRequests.count >= maxRequests) {
-      logger.warn('Rate limit exceeded', {
-        userId: req.user.userId,
-        count: userRequests.count,
-        maxRequests,
-        path: req.path
+      const logContext = createLogContext(req, { operation: 'rate_limit_exceeded' });
+      EnhancedLogger.warn('Rate limit exceeded', {
+        correlationId: logContext.correlationId,
+        operation: 'rate_limit_middleware',
+        metadata: {
+          userId: req.user.userId,
+          count: userRequests.count,
+          maxRequests,
+          path: req.path
+        }
       });
       
       res.status(429).json({

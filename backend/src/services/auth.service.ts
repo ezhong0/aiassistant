@@ -17,7 +17,6 @@ import {
 import { serviceManager } from './service-manager';
 import { ConfigService } from '../config/config.service';
 import { BaseService } from './base-service';
-import logger from '../utils/logger';
 
 export class AuthService extends BaseService {
   private oauth2Client!: OAuth2Client;

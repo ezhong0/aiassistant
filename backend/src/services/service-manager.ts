@@ -1,4 +1,3 @@
-import logger from '../utils/logger';
 import { setTimeout as delay } from 'timers/promises';
 
 /**
@@ -213,12 +212,12 @@ export class ServiceManager {
     } = {}
   ): void {
     if (this.isShuttingDown) {
-      logger.warn(`Cannot register service ${name} - system is shutting down`);
+      
       return;
     }
 
     if (this.services.has(name)) {
-      logger.warn(`Service ${name} is already registered, replacing with new instance`);
+      
       this.unregisterService(name);
     }
 
@@ -232,11 +231,6 @@ export class ServiceManager {
     this.services.set(name, registration);
     this.serviceInstances.set(name, service);
 
-    logger.debug(`Service registered: ${name}`, {
-      dependencies: registration.dependencies,
-      priority: registration.priority,
-      autoStart: registration.autoStart
-    });
 
     // Note: Auto-start is disabled during registration to ensure proper initialization order
     // Services will be initialized in dependency order by initializeAllServices()
@@ -254,7 +248,7 @@ export class ServiceManager {
     // Destroy the service if it's running
     if (registration.service.state !== ServiceState.DESTROYED) {
       registration.service.destroy().catch(error => {
-        logger.error(`Error destroying service ${name}:`, error);
+        
       });
     }
 
@@ -267,7 +261,7 @@ export class ServiceManager {
       this.initializationOrder.splice(index, 1);
     }
 
-    logger.debug(`Service unregistered: ${name}`);
+    
   }
 
   /**
@@ -308,8 +302,8 @@ export class ServiceManager {
       throw new Error('Cannot initialize services - system is shutting down');
     }
 
-    logger.info(`Initializing ${this.services.size} services...`);
-    logger.debug('Registered services:', Array.from(this.services.keys()));
+    
+    
 
     // Calculate initialization order based on dependencies
     this.calculateInitializationOrder();
@@ -324,7 +318,7 @@ export class ServiceManager {
       } catch (error) {
         // In development, allow database service to fail gracefully
         if (serviceName === 'databaseService' && process.env.NODE_ENV === 'development') {
-          logger.warn(`Database service failed to initialize in development mode, continuing without database`, error);
+          
           // Mark the service as failed but continue with other services
           const registration = this.services.get(serviceName);
           if (registration) {
@@ -337,7 +331,7 @@ export class ServiceManager {
       }
     }
 
-    logger.info('All services initialized successfully');
+    
   }
 
   /**
@@ -350,7 +344,7 @@ export class ServiceManager {
     }
 
     if (registration.service.state === ServiceState.READY) {
-      logger.debug(`Service ${name} already ready`);
+      
       return;
     }
 
@@ -371,7 +365,7 @@ export class ServiceManager {
       
       // Skip failed dependencies in development if they're optional (like database)
       if (dependencyFailed && depName === 'databaseService' && process.env.NODE_ENV === 'development') {
-        logger.debug(`Skipping failed dependency ${depName} for service ${name} in development`);
+        
         continue;
       }
       
@@ -382,7 +376,7 @@ export class ServiceManager {
 
     // Initialize the service
     try {
-      logger.debug(`Initializing service: ${name}`);
+      
       await registration.service.initialize();
       
       // Wait a moment and verify the service is actually ready
@@ -392,7 +386,7 @@ export class ServiceManager {
         // Check if this is a service that can be partially ready (like OpenAI with invalid API key)
         const baseService = registration.service as any;
         if (baseService.state === ServiceState.READY && baseService.initialized) {
-          logger.warn(`Service ${name} is initialized but not fully ready - allowing partial initialization`);
+          
         } else {
           throw new Error(`Service ${name} failed to transition to READY state after initialization. Current state: ${registration.service.state}`);
         }
@@ -400,7 +394,7 @@ export class ServiceManager {
       
       // Service initialization complete
     } catch (error) {
-      logger.error(`Failed to initialize service ${name}:`, error);
+      
       throw error;
     }
   }
@@ -475,12 +469,12 @@ export class ServiceManager {
   private setupGracefulShutdown(): void {
     const shutdown = async (signal: string) => {
       if (this.isShuttingDown) {
-        logger.warn(`Shutdown signal ${signal} received but already shutting down`);
+        
         return;
       }
 
       this.isShuttingDown = true;
-      logger.info(`Received ${signal}. Starting graceful shutdown of ${this.services.size} services...`);
+      
 
       // Shutdown services in reverse initialization order
       const shutdownOrder = [...this.initializationOrder].reverse();
@@ -492,21 +486,21 @@ export class ServiceManager {
           try {
             await service.destroy();
             cleanedCount++;
-            logger.debug(`Service shutdown successfully: ${serviceName}`);
+            
           } catch (error) {
-            logger.error(`Error shutting down service ${serviceName}:`, error);
+            
           }
         }
       }
 
-      logger.info(`Graceful shutdown completed. Cleaned up ${cleanedCount}/${this.services.size} services`);
+      
     };
 
     // Handle shutdown signals
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
 
-    logger.info('Service manager graceful shutdown handlers configured');
+    
   }
 
 
@@ -553,7 +547,7 @@ export class ServiceManager {
    * Force cleanup of all services (for testing)
    */
   async forceCleanup(): Promise<void> {
-    logger.warn('Force cleanup of all services requested');
+    
     
     for (const [name, service] of this.serviceInstances) {
       try {
@@ -561,7 +555,7 @@ export class ServiceManager {
           await service.destroy();
         }
       } catch (error) {
-        logger.error(`Error during force cleanup of ${name}:`, error);
+        
       }
     }
     

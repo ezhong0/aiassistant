@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import logger from '../utils/logger';
 import { BaseService } from '../services/base-service';
 
 // Environment schema validation
@@ -97,23 +96,12 @@ export class ConfigService extends BaseService {
       
       return result.data;
     } catch (error) {
-      logger.error('Failed to load configuration:', error);
+      
       throw error;
     }
   }
   
   private logConfigSummary(): void {
-    logger.info('Configuration loaded successfully', {
-      nodeEnv: this.config.NODE_ENV,
-      port: this.config.PORT,
-      logLevel: this.config.LOG_LEVEL,
-      jwtIssuer: this.config.JWT_ISSUER,
-      corsOrigin: this.config.CORS_ORIGIN,
-      // Never log sensitive values
-      googleClientIdSet: !!this.config.GOOGLE_CLIENT_ID,
-      googleClientSecretSet: !!this.config.GOOGLE_CLIENT_SECRET,
-      jwtSecretSet: !!this.config.JWT_SECRET,
-    });
   }
   
   // Getter methods for type-safe access

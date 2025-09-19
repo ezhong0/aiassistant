@@ -1,4 +1,4 @@
-import logger from '../utils/logger';
+import { EnhancedLogger, LOG_MESSAGES, LogContext } from '../utils/enhanced-logger';
 import { OpenAIService } from '../services/openai.service';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
@@ -154,15 +154,27 @@ export class MasterAgent {
     
     // Initialize agent schemas for OpenAI function calling
     this.initializeAgentSchemas().catch(error => {
-      logger.error('Failed to initialize agent schemas:', error);
+      EnhancedLogger.error('Agent schema initialization failed', error, {
+        correlationId: 'init',
+        operation: 'agent_schema_init',
+        metadata: { service: 'MasterAgent' }
+      });
     });
     
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
       this.useOpenAI = true;
-      logger.info('MasterAgent initialized with OpenAI integration and context gathering');
+      EnhancedLogger.debug('MasterAgent initialized with OpenAI integration', {
+        correlationId: 'init',
+        operation: 'agent_init',
+        metadata: { hasOpenAI: true, hasContextGathering: true }
+      });
     } else {
-      logger.info('MasterAgent initialized with rule-based routing only');
+      EnhancedLogger.debug('MasterAgent initialized with rule-based routing only', {
+        correlationId: 'init',
+        operation: 'agent_init',
+        metadata: { hasOpenAI: false, hasContextGathering: false }
+      });
     }
   }
 
@@ -182,11 +194,20 @@ export class MasterAgent {
       this.agentSchemas.set('contactAgent', ContactAgent.getOpenAIFunctionSchema() as any);
       this.agentSchemas.set('calendarAgent', CalendarAgent.getOpenAIFunctionSchema());
       
-      logger.info('Agent schemas initialized for OpenAI function calling', {
-        schemas: Array.from(this.agentSchemas.keys())
+      EnhancedLogger.debug('Agent schemas initialized for OpenAI function calling', {
+        correlationId: 'init',
+        operation: 'agent_schema_init',
+        metadata: { 
+          schemaCount: this.agentSchemas.size,
+          schemaNames: Array.from(this.agentSchemas.keys())
+        }
       });
     } catch (error) {
-      logger.error('Failed to initialize agent schemas:', error);
+      EnhancedLogger.error('Agent schema initialization failed', error as Error, {
+        correlationId: 'init',
+        operation: 'agent_schema_init',
+        metadata: { service: 'MasterAgent' }
+      });
       // Clear schemas on error to prevent memory leaks from partial initialization
       this.agentSchemas.clear();
     }
@@ -226,7 +247,11 @@ export class MasterAgent {
         }
       };
     } catch (error) {
-      logger.error('Failed to get agent capabilities:', error);
+      EnhancedLogger.error('Failed to get agent capabilities', error as Error, {
+        correlationId: 'init',
+        operation: 'agent_capabilities',
+        metadata: { service: 'MasterAgent' }
+      });
       return {};
     }
   }
@@ -238,7 +263,11 @@ export class MasterAgent {
     try {
       return AgentFactory.getAgent('slackAgent') as SlackAgent;
     } catch (error) {
-      logger.warn('SlackAgent not available from AgentFactory:', error);
+      EnhancedLogger.warn('SlackAgent not available from AgentFactory', {
+        correlationId: 'init',
+        operation: 'agent_resolution',
+        metadata: { requestedAgent: 'SlackAgent' }
+      });
       return null;
     }
   }
@@ -278,7 +307,11 @@ export class MasterAgent {
     
     const openaiService = getService<OpenAIService>('openaiService');
     if (!openaiService) {
-      logger.warn('OpenAI service not available from service registry');
+      EnhancedLogger.warn('OpenAI service not available from service registry', {
+        correlationId: 'init',
+        operation: 'service_resolution',
+        metadata: { requestedService: 'OpenAIService' }
+      });
       return null;
     }
     return openaiService;
@@ -338,8 +371,18 @@ export class MasterAgent {
     userId?: string,
     slackContext?: SlackContext
   ): Promise<MasterAgentResponse> {
+    const startTime = Date.now();
+    const correlationId = `master-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'processUserInput',
+      metadata: { inputLength: userInput.length }
+    };
+
     try {
-      logger.info(`MasterAgent processing input: "${userInput}" for session: ${sessionId}`);
+      EnhancedLogger.requestStart(LOG_MESSAGES.REQUEST_START, logContext);
       
       // Check memory usage periodically
       this.checkMemoryUsage();
@@ -356,7 +399,14 @@ export class MasterAgent {
         throw new Error('AIClassificationService is required but not available');
       }
       const contextDetection = await aiClassificationService.detectContextNeeds(userInput, slackContext);
-      logger.info('Context detection result:', contextDetection);
+      EnhancedLogger.debug(LOG_MESSAGES.CONTEXT_DETECTION, {
+        ...logContext,
+        metadata: { 
+          needsContext: contextDetection.needsContext,
+          contextType: contextDetection.contextType,
+          confidence: contextDetection.confidence
+        }
+      });
 
       // Step 2: Gather context if needed
       let contextGathered: ContextGatheringResult | undefined;
@@ -364,13 +414,16 @@ export class MasterAgent {
         const slackAgent = this.getSlackAgent();
         if (slackAgent) {
           contextGathered = await slackAgent.gatherContext(userInput, contextDetection, slackContext);
-          logger.info('Context gathered via SlackAgent delegation:', { 
-            contextType: contextGathered?.contextType, 
-            messageCount: contextGathered?.messages.length || 0,
-            confidence: contextGathered?.confidence || 0
+          EnhancedLogger.debug(LOG_MESSAGES.CONTEXT_GATHERING, {
+            ...logContext,
+            metadata: {
+              contextType: contextGathered?.contextType,
+              messageCount: contextGathered?.messages.length || 0,
+              confidence: contextGathered?.confidence || 0
+            }
           });
         } else {
-          logger.warn('SlackAgent not available for context gathering');
+          EnhancedLogger.warn('SlackAgent unavailable for context gathering', logContext);
           contextGathered = {
             messages: [],
             relevantContext: '',
@@ -381,8 +434,11 @@ export class MasterAgent {
       }
 
       // Step 3: Parse intent and resolve dependencies
-      const intentAnalysis = await this.parseIntentAndResolveDependencies(userInput, contextGathered);
-      logger.info('Intent analysis result:', intentAnalysis);
+      const intentAnalysis = await this.parseIntentAndResolveDependencies(userInput, contextGathered, logContext);
+      EnhancedLogger.debug('Intent analysis completed', {
+        ...logContext,
+        metadata: { intent: intentAnalysis.intent }
+      });
 
       // Step 4: Enhanced AI planning with context and resolved dependencies
       const enhancedSystemPrompt = await this.generateEnhancedSystemPrompt(contextGathered, intentAnalysis);
@@ -398,11 +454,17 @@ export class MasterAgent {
       const message = response.message;
 
       // Step 5: Validate tool calls against available agents
-      const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput, intentAnalysis);
+      const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput, intentAnalysis, logContext);
 
-      logger.info(`MasterAgent determined ${validatedToolCalls.length} tool calls:`, validatedToolCalls.map(tc => tc.name));
+      EnhancedLogger.debug('Tool calls generated', {
+        ...logContext,
+        metadata: { 
+          toolCallCount: validatedToolCalls.length,
+          toolCallNames: validatedToolCalls.map(tc => tc.name)
+        }
+      });
 
-      // Step 5: Generate conversational proposal if appropriate (delegate to EmailFormatter)
+      // Step 6: Generate conversational proposal if appropriate (delegate to EmailFormatter)
       const emailFormatter = this.getEmailFormatter();
       if (!emailFormatter) {
         throw new Error('EmailFormatter is required for proposal generation but not available');
@@ -417,17 +479,27 @@ export class MasterAgent {
         contextGathered
       };
       
-      logger.info('MasterAgent processUserInput result', {
-        hasProposal: !!proposal,
-        proposalRequiresConfirmation: proposal?.requiresConfirmation,
-        toolCallsCount: validatedToolCalls.length,
-        toolCallNames: validatedToolCalls.map(tc => tc.name)
+      const duration = Date.now() - startTime;
+      EnhancedLogger.requestEnd(LOG_MESSAGES.REQUEST_END, {
+        ...logContext,
+        duration,
+        metadata: {
+          hasProposal: !!proposal,
+          proposalRequiresConfirmation: proposal?.requiresConfirmation,
+          toolCallsCount: validatedToolCalls.length,
+          toolCallNames: validatedToolCalls.map(tc => tc.name)
+        }
       });
       
       return result;
       
     } catch (error) {
-      logger.error('Error in MasterAgent.processUserInput:', error);
+      const duration = Date.now() - startTime;
+      EnhancedLogger.error(LOG_MESSAGES.OPERATION_ERROR, error as Error, {
+        ...logContext,
+        duration,
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
       
       // Provide user-friendly error message
       const errorMessage = this.createUserFriendlyErrorMessage(error as Error, userInput);
@@ -473,7 +545,8 @@ export class MasterAgent {
   private async validateAndEnhanceToolCalls(
     toolCalls: ToolCall[], 
     userInput: string, 
-    intentAnalysis: {resolvedContacts: Array<{name: string, email: string}>, intent: string}
+    intentAnalysis: {resolvedContacts: Array<{name: string, email: string}>, intent: string},
+    logContext: LogContext
   ): Promise<ToolCall[]> {
     const enhancedToolCalls: ToolCall[] = [];
     
@@ -481,12 +554,16 @@ export class MasterAgent {
       // Check if agent exists and is enabled using tool name mapping
       const agent = AgentFactory.getAgentByToolName(toolCall.name);
       if (!agent) {
-          logger.warn(`Tool call for disabled/missing agent: ${toolCall.name}`);
+        EnhancedLogger.warn('Tool call for disabled/missing agent', {
+          correlationId: logContext.correlationId,
+          operation: 'tool_validation',
+          metadata: { toolName: toolCall.name }
+        });
         continue;
       }
 
       // Enhance tool call with agent-specific parameters and resolved contacts
-      const enhancedCall = await this.enhanceToolCallWithAgentContext(toolCall, userInput, intentAnalysis);
+      const enhancedCall = await this.enhanceToolCallWithAgentContext(toolCall, userInput, intentAnalysis, logContext);
       enhancedToolCalls.push(enhancedCall);
     }
 
@@ -499,7 +576,8 @@ export class MasterAgent {
   private async enhanceToolCallWithAgentContext(
     toolCall: ToolCall, 
     userInput: string, 
-    intentAnalysis: {resolvedContacts: Array<{name: string, email: string}>, intent: string}
+    intentAnalysis: {resolvedContacts: Array<{name: string, email: string}>, intent: string},
+    logContext: LogContext
   ): Promise<ToolCall> {
     const toolName = toolCall.name;
     
@@ -523,36 +601,21 @@ export class MasterAgent {
     const enhancedParameters = { ...toolCall.parameters };
 
     // Fix email parameter mapping: Handle both recipientName and recipients properly
-    logger.info(`Parameter mapping for ${toolName}:`, {
-      original: enhancedParameters,
-      hasRecipientName: !!enhancedParameters.recipientName,
-      hasRecipients: !!enhancedParameters.recipients
-    });
 
     if (toolName === "manage_emails" || toolName === "send_email") {
       // Handle recipientName -> recipients conversion
       if (enhancedParameters.recipientName && !enhancedParameters.recipients) {
         enhancedParameters.recipients = [enhancedParameters.recipientName];
         delete enhancedParameters.recipientName;
-        logger.info(`Converted recipientName to recipients for ${toolName}:`, {
-          recipients: enhancedParameters.recipients
-        });
       }
       // Ensure recipients is always an array
       if (enhancedParameters.recipients && !Array.isArray(enhancedParameters.recipients)) {
         enhancedParameters.recipients = [enhancedParameters.recipients];
-        logger.info(`Converted recipients to array for ${toolName}:`, {
-          recipients: enhancedParameters.recipients
-        });
       }
 
       // Check if we need to resolve contact names to email addresses
       const needsContactResolution = this.needsContactResolution(enhancedParameters.recipients);
       if (needsContactResolution) {
-        logger.info(`Contact resolution needed for ${toolName}`, {
-          recipients: enhancedParameters.recipients,
-          resolvedContacts: intentAnalysis.resolvedContacts
-        });
         
         try {
           // Use pre-resolved contacts from intent analysis if available
@@ -562,12 +625,12 @@ export class MasterAgent {
           );
           enhancedParameters.recipients = resolvedRecipients;
           
-          logger.info(`Contact resolution completed for ${toolName}:`, {
-            originalRecipients: enhancedParameters.recipients,
-            resolvedRecipients: resolvedRecipients
-          });
         } catch (error) {
-          logger.error(`Contact resolution failed for ${toolName}:`, error);
+          EnhancedLogger.error('Contact resolution failed', error as Error, {
+            correlationId: logContext.correlationId,
+            operation: 'contact_resolution',
+            metadata: { toolName, recipients: enhancedParameters.recipients }
+          });
           // Keep original recipients and let EmailAgent handle the error
         }
       }
@@ -616,7 +679,11 @@ export class MasterAgent {
         // Call ContactAgent to resolve the contact name
         const contactAgent = this.getContactAgent();
         if (!contactAgent) {
-          logger.warn(`ContactAgent not available for resolving "${recipient}"`);
+          EnhancedLogger.warn('ContactAgent not available for contact resolution', {
+            correlationId: 'contact-resolution',
+            operation: 'contact_resolution',
+            metadata: { recipient }
+          });
           resolvedRecipients.push(recipient); // Keep original, let EmailAgent handle the error
           continue;
         }
@@ -643,18 +710,15 @@ export class MasterAgent {
             const email = contacts[0].email || contacts[0].emailAddress;
             if (email) {
               resolvedRecipients.push(email);
-              logger.info(`Resolved contact "${recipient}" to email "${email}"`);
               continue;
             }
           }
         }
 
         // If resolution failed, keep the original recipient
-        logger.warn(`Failed to resolve contact "${recipient}", keeping original`);
         resolvedRecipients.push(recipient);
 
       } catch (error) {
-        logger.error(`Error resolving contact "${recipient}":`, error);
         // Keep original recipient on error
         resolvedRecipients.push(recipient);
       }
@@ -686,7 +750,6 @@ export class MasterAgent {
 
       if (resolvedContact && resolvedContact.email) {
         resolvedRecipients.push(resolvedContact.email);
-        logger.info(`Used pre-resolved contact "${recipient}" -> "${resolvedContact.email}"`);
         continue;
       }
 
@@ -694,7 +757,6 @@ export class MasterAgent {
       try {
         const contactAgent = this.getContactAgent();
         if (!contactAgent) {
-          logger.warn(`ContactAgent not available for resolving "${recipient}"`);
           resolvedRecipients.push(recipient); // Keep original, let EmailAgent handle the error
           continue;
         }
@@ -721,18 +783,15 @@ export class MasterAgent {
             const email = contacts[0].email || contacts[0].emailAddress;
             if (email) {
               resolvedRecipients.push(email);
-              logger.info(`Resolved contact "${recipient}" to email "${email}"`);
               continue;
             }
           }
         }
 
         // If resolution failed, keep the original recipient
-        logger.warn(`Failed to resolve contact "${recipient}", keeping original`);
         resolvedRecipients.push(recipient);
 
       } catch (error) {
-        logger.error(`Error resolving contact "${recipient}":`, error);
         // Keep original recipient on error
         resolvedRecipients.push(recipient);
       }
@@ -746,7 +805,8 @@ export class MasterAgent {
    */
   private async parseIntentAndResolveDependencies(
     userInput: string, 
-    contextGathered?: ContextGatheringResult
+    contextGathered: ContextGatheringResult | undefined,
+    logContext: LogContext
   ): Promise<{resolvedContacts: Array<{name: string, email: string}>, intent: string}> {
     try {
       const openaiService = this.getOpenAIService();
@@ -786,10 +846,6 @@ export class MasterAgent {
       // Note: We don't resolve here because we don't have access token yet
       // Resolution will happen in enhanceToolCallWithAgentContext when we have proper context
       if (contactExtraction.needed && contactExtraction.names.length > 0) {
-        logger.info('Contact names detected for resolution during tool execution', {
-          names: contactExtraction.names,
-          stage: 'intent-parsing'
-        });
 
         for (const name of contactExtraction.names) {
           resolvedContacts.push({
@@ -804,7 +860,11 @@ export class MasterAgent {
         intent: userInput
       };
     } catch (error) {
-      logger.error('Failed to parse intent and resolve dependencies:', error);
+      EnhancedLogger.error('Failed to parse intent and resolve dependencies', error as Error, {
+        correlationId: logContext.correlationId,
+        operation: 'intent_parsing',
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
       return {
         resolvedContacts: [],
         intent: userInput
@@ -835,9 +895,13 @@ export class MasterAgent {
         }
         
         // If all else fails, return default structure
-        logger.warn('Failed to parse JSON from OpenAI response', { 
-          response: response.substring(0, 200),
-          error: error instanceof Error ? error.message : 'Unknown error'
+        EnhancedLogger.warn('Failed to parse JSON from OpenAI response', {
+          correlationId: 'json-parsing',
+          operation: 'json_extraction',
+          metadata: { 
+            responseLength: response.length,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         });
         
         return {
@@ -846,9 +910,13 @@ export class MasterAgent {
           emails: []
         };
       } catch (extractError) {
-        logger.error('Failed to extract JSON from response', { 
-          response: response.substring(0, 200),
-          extractError: extractError instanceof Error ? extractError.message : 'Unknown error'
+        EnhancedLogger.error('Failed to extract JSON from response', extractError as Error, {
+          correlationId: 'json-parsing',
+          operation: 'json_extraction',
+          metadata: { 
+            responseLength: response.length,
+            extractError: extractError instanceof Error ? extractError.message : 'Unknown error'
+          }
         });
         
         return {
@@ -1028,18 +1096,26 @@ Be helpful, professional, and take intelligent action rather than asking for cla
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
     const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
     
-    logger.debug('Memory usage check', {
-      heapUsed: `${heapUsedMB}MB`,
-      heapTotal: `${heapTotalMB}MB`,
-      external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
-      rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`
+    EnhancedLogger.debug('Memory usage check', {
+      correlationId: 'memory-check',
+      operation: 'memory_monitoring',
+      metadata: {
+        heapUsed: `${heapUsedMB}MB`,
+        heapTotal: `${heapTotalMB}MB`,
+        external: `${Math.round(memUsage.external / 1024 / 1024)}MB`,
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`
+      }
     });
 
     // If heap usage exceeds threshold, trigger garbage collection and cleanup
     if (heapUsedMB > APP_CONSTANTS.MEMORY_WARNING_THRESHOLD_MB) {
-      logger.warn('High memory usage detected, triggering cleanup', {
-        heapUsed: `${heapUsedMB}MB`,
-        heapTotal: `${heapTotalMB}MB`
+      EnhancedLogger.warn('High memory usage detected, triggering cleanup', {
+        correlationId: 'memory-check',
+        operation: 'memory_cleanup',
+        metadata: {
+          heapUsed: `${heapUsedMB}MB`,
+          heapTotal: `${heapTotalMB}MB`
+        }
       });
       
       // Clear agent schemas to free memory
@@ -1048,15 +1124,26 @@ Be helpful, professional, and take intelligent action rather than asking for cla
         this.agentSchemas.clear();
         // Reinitialize immediately to maintain functionality
         this.initializeAgentSchemas().catch(error => {
-          logger.error('Failed to reinitialize agent schemas:', error);
+          EnhancedLogger.error('Failed to reinitialize agent schemas', error, {
+            correlationId: 'memory-cleanup',
+            operation: 'schema_reinit',
+            metadata: { previousSize: schemasSize }
+          });
         });
-        logger.debug('Agent schemas cleared and reinitialized', { previousSize: schemasSize });
+        EnhancedLogger.debug('Agent schemas cleared and reinitialized', {
+          correlationId: 'memory-cleanup',
+          operation: 'schema_reinit',
+          metadata: { previousSize: schemasSize }
+        });
       }
       
       // Force garbage collection if available
       if (global.gc) {
         global.gc();
-        logger.debug('Forced garbage collection completed');
+        EnhancedLogger.debug('Forced garbage collection completed', {
+          correlationId: 'memory-cleanup',
+          operation: 'garbage_collection'
+        });
       }
     }
   }
@@ -1067,7 +1154,8 @@ Be helpful, professional, and take intelligent action rather than asking for cla
   async processToolResultsWithLLM(
     userInput: string, 
     toolResults: ToolResult[], 
-    sessionId: string
+    sessionId: string,
+    logContext: LogContext
   ): Promise<string> {
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
@@ -1082,11 +1170,14 @@ Be helpful, professional, and take intelligent action rather than asking for cla
         error: tr.error
       }));
 
-      logger.info('Processing tool results with LLM', {
-        userInput,
-        toolResultsCount: toolResults.length,
-        toolResultsSummary: JSON.stringify(toolResultsSummary, null, 2),
-        sessionId
+      EnhancedLogger.debug('Processing tool results with LLM', {
+        correlationId: logContext.correlationId,
+        operation: 'tool_result_processing',
+        metadata: {
+          userInput: userInput.substring(0, 100),
+          toolResultsCount: toolResults.length,
+          sessionId
+        }
       });
 
       const prompt = `User asked: "${userInput}"
@@ -1104,11 +1195,19 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
       return response.trim();
     } catch (error) {
-      logger.error('Error processing tool results with LLM:', error);
+      EnhancedLogger.error('Error processing tool results with LLM', error as Error, {
+        correlationId: logContext.correlationId,
+        operation: 'tool_result_processing',
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
       
       // Check if it's a context length error
       if (error instanceof Error && error.message.includes('maximum context length')) {
-        logger.warn('Context length exceeded - AI processing failed');
+        EnhancedLogger.warn('Context length exceeded - AI processing failed', {
+          correlationId: logContext.correlationId,
+          operation: 'tool_result_processing',
+          metadata: { errorType: 'context_length_exceeded' }
+        });
         throw new Error('🤖 AI service encountered a context length limit. Please try with a simpler request or break it into smaller parts.');
       }
       
@@ -1168,6 +1267,10 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
    */
   public cleanup(): void {
     this.agentSchemas.clear();
-    logger.debug('MasterAgent cleanup completed');
+    EnhancedLogger.debug('MasterAgent cleanup completed', {
+      correlationId: 'cleanup',
+      operation: 'agent_cleanup',
+      metadata: { service: 'MasterAgent' }
+    });
   }
 }

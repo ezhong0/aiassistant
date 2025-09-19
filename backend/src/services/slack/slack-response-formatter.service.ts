@@ -3,7 +3,6 @@ import { SlackContext, SlackResponse } from '../../types/slack/slack.types';
 import { EmailFormatter } from '../email/email-formatter.service';
 import { ResponsePersonalityService, ResponseContext } from '../response-personality.service';
 import { serviceManager } from '../service-manager';
-import logger from '../../utils/logger';
 
 export interface SlackResponseFormatterConfig {
   enableRichFormatting: boolean;

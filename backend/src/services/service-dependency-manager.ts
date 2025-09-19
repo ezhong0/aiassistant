@@ -1,5 +1,4 @@
 import { serviceManager, IService } from './service-manager';
-import logger from '../utils/logger';
 
 export enum ServiceHealth {
   HEALTHY = 'healthy',

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
@@ -7,13 +7,17 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   const originalSend = res.send;
   res.send = function(body) {
     const duration = Date.now() - start;
-    logger.info({
-      method: req.method,
-      url: req.url,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      userAgent: req.get('User-Agent'),
-      ip: req.ip
+    EnhancedLogger.requestEnd('Request completed', {
+      correlationId: `request-${Date.now()}`,
+      operation: 'request_complete',
+      metadata: {
+        method: req.method,
+        url: req.url,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        userAgent: req.get('User-Agent'),
+        ip: req.ip
+      }
     });
     return originalSend.call(this, body);
   };

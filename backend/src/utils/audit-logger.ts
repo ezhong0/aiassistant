@@ -1,4 +1,4 @@
-import logger from './logger';
+import { EnhancedLogger, LogContext } from './enhanced-logger';
 import { CryptoUtil } from './crypto.util';
 
 export interface AuditEvent {
@@ -57,7 +57,11 @@ export class AuditLogger {
       auditData.details = this.sanitizeAuditDetails(auditData.details);
     }
     
-    logger.info('AUDIT_EVENT', auditData);
+    EnhancedLogger.debug('AUDIT_EVENT', {
+      correlationId: `audit-${Date.now()}`,
+      operation: 'audit_event',
+      metadata: auditData
+    });
   }
 
   /**

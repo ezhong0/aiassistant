@@ -1,6 +1,5 @@
 import { google, calendar_v3 } from 'googleapis';
 import { BaseService } from '../base-service';
-import logger from '../../utils/logger';
 import { CreateEventRequestSchema, UpdateEventRequestSchema, ListEventsRequestSchema } from '../../types/calendar/index';
 import { z } from 'zod';
 

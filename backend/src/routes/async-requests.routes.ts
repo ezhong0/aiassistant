@@ -4,7 +4,7 @@ import { JobQueueService } from '../services/job-queue.service';
 import { AsyncRequestClassifierService, ClassificationContext } from '../services/async-request-classifier.service';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { apiRateLimit } from '../middleware/rate-limiting.middleware';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = express.Router();
@@ -157,17 +157,22 @@ router.post('/submit', authenticateToken, apiRateLimit, async (req: Request, res
       resultUrl: `/api/jobs/result/${jobId}`
     };
 
-    logger.info('Async request submitted', {
-      jobId,
-      userInput: body.userInput.substring(0, 100),
-      classification: classification.suggestedJobType,
-      estimatedDuration: classification.estimatedDuration
+    const logContext = createLogContext(req, { operation: 'async_request_submit' });
+    EnhancedLogger.requestStart('Async request submitted', {
+      ...logContext,
+      metadata: {
+        jobId,
+        userInput: body.userInput.substring(0, 100),
+        classification: classification.suggestedJobType,
+        estimatedDuration: classification.estimatedDuration
+      }
     });
 
     return res.status(202).json(response); // 202 Accepted
 
   } catch (error) {
-    logger.error('Error submitting async request:', error);
+    const logContext = createLogContext(req, { operation: 'async_request_submit' });
+    EnhancedLogger.error('Error submitting async request', error as Error, logContext);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -219,7 +224,8 @@ router.post('/classify', authenticateToken, apiRateLimit, async (req: Request, r
     });
 
   } catch (error) {
-    logger.error('Error classifying request:', error);
+    const logContext = createLogContext(req, { operation: 'async_request_classify' });
+    EnhancedLogger.error('Error classifying request', error as Error, logContext);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -255,7 +261,8 @@ router.get('/stats', authenticateToken, apiRateLimit, async (req: Request, res: 
     });
 
   } catch (error) {
-    logger.error('Error getting async request stats:', error);
+    const logContext = createLogContext(req, { operation: 'async_request_stats' });
+    EnhancedLogger.error('Error getting async request stats', error as Error, logContext);
     return res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -287,7 +294,8 @@ router.get('/health', async (req: Request, res: Response) => {
     return res.status(statusCode).json(health);
 
   } catch (error) {
-    logger.error('Error checking async request health:', error);
+    const logContext = createLogContext(req, { operation: 'async_request_health' });
+    EnhancedLogger.error('Error checking async request health', error as Error, logContext);
     return res.status(500).json({
       healthy: false,
       error: 'Internal server error',

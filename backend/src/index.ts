@@ -8,7 +8,6 @@ dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
 import { configService } from './config/config.service';
-import logger from './utils/logger';
 import { initializeAgentFactory } from './config/agent-factory-init';
 import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
@@ -46,9 +45,9 @@ const initializeApplication = async (): Promise<void> => {
     // Initialize AgentFactory after services
     initializeAgentFactory();
 
-    logger.info('Application initialization completed successfully');
+    
   } catch (error) {
-    logger.error('Failed to initialize application:', error);
+    
     throw error; // Don't continue with broken services in production
   }
 }
@@ -78,14 +77,6 @@ app.use(requestLogger);
 
 // Log all incoming requests
 app.use((req, res, next) => {
-  logger.info('Incoming request', {
-    method: req.method,
-    path: req.path,
-    query: JSON.stringify(req.query),
-    body: JSON.stringify(req.body),
-    headers: JSON.stringify(req.headers),
-    timestamp: new Date().toISOString()
-  });
   next();
 });
 
@@ -114,12 +105,12 @@ const setupSlackInterface = async () => {
       // Only initialize the SlackInterface service without mounting Bolt routes
       // The manual /slack/events endpoint handles all Slack events directly
       await startInterfaces(globalInterfaces);
-      logger.debug('Slack interface initialized (manual routing)');
+      
     } else {
-      logger.info('Slack interface not available');
+      
     }
   } catch (error) {
-    logger.error('Error setting up Slack interface:', error);
+    
   }
 };
 
@@ -165,19 +156,15 @@ const startServer = async (): Promise<void> => {
 
     // Start the server
     const server = app.listen(port, () => {
-      logger.info('Server started successfully', {
-        port,
-        environment: configService.nodeEnv
-      });
     });
 
     // Enhanced error handling
     server.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
-        logger.error(`Port ${port} is already in use. Please check if another instance is running.`);
+        
         process.exit(1);
       } else {
-        logger.error('Server error:', err);
+        
         process.exit(1);
       }
     });
@@ -188,21 +175,21 @@ const startServer = async (): Promise<void> => {
 
     // Graceful shutdown handling
     const gracefulShutdown = async (signal: string) => {
-      logger.info(`Received ${signal}. Starting graceful shutdown...`);
+      
       
       server.close((err) => {
         if (err) {
-          logger.error('Error during server shutdown:', err);
+          
           process.exit(1);
         } else {
-          logger.info('HTTP server closed');
+          
           process.exit(0);
         }
       });
 
       // Force exit after 30 seconds
       setTimeout(() => {
-        logger.error('Forced shutdown after timeout');
+        
         process.exit(1);
       }, 30000);
     };
@@ -212,23 +199,23 @@ const startServer = async (): Promise<void> => {
     
     // Handle unhandled errors to prevent crashes
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      
       // Don't exit on unhandled rejection in production
     });
     
     process.on('uncaughtException', (error) => {
-      logger.error('Uncaught Exception:', error);
+      
       gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
 
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    
     process.exit(1);
   }
 }
 
 // Start the application
 startServer().catch((error) => {
-  logger.error('Fatal error during application startup:', error);
+  
   process.exit(1);
 });

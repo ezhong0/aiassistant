@@ -2,7 +2,6 @@ import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { CalendarService, CalendarQueryOptions } from './calendar.service';
 import { CALENDAR_SERVICE_CONSTANTS } from '../../config/calendar-service-constants';
-import logger from '../../utils/logger';
 
 /**
  * Availability check result

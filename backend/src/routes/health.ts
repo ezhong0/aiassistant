@@ -6,7 +6,7 @@ import { HealthCheckSchema } from '../schemas/api.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { getEnhancedServiceManager, getServiceHealthReport } from '../services/service-initialization';
 import { ServiceHealth } from '../services/service-dependency-manager';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 
@@ -24,7 +24,11 @@ const checkServiceHealth = async (serviceName: string, checkFunction: () => Prom
       lastCheck: new Date().toISOString()
     };
   } catch (error) {
-    logger.warn(`Health check failed for ${serviceName}:`, error);
+    EnhancedLogger.warn(`Health check failed for ${serviceName}`, {
+      correlationId: `health-check-${serviceName}-${Date.now()}`,
+      operation: 'health_check',
+      metadata: { serviceName, error: error instanceof Error ? error.message : 'Unknown error' }
+    });
     return {
       status: 'unhealthy',
       responseTime: Date.now() - startTime,
@@ -131,21 +135,11 @@ router.get('/', validateRequest({ query: z.object({}) }), async (req: Request, r
     const httpStatus = overallStatus === 'healthy' ? 200 :
                       overallStatus === 'degraded' ? 200 : 503;
 
-    logger.info('Enhanced health check completed', {
-      status: overallStatus,
-      responseTime: Date.now() - (req.startTime || Date.now()),
-      memoryUsedMB: memory.used,
-      servicesCount: Object.keys(services).length,
-      healthyServices: Object.values(services).filter(s => s.status === 'healthy').length,
-      degradedServices: Object.values(services).filter(s => s.status === 'degraded').length,
-      unhealthyServices: Object.values(services).filter(s => s.status === 'unhealthy').length,
-      recommendations: serviceHealthReport.recommendations.length
-    });
 
     res.status(httpStatus).json(healthCheck);
 
   } catch (error) {
-    logger.error('Health check error:', error);
+    
     
     const errorResponse: HealthCheckResponse = {
       status: 'unhealthy',

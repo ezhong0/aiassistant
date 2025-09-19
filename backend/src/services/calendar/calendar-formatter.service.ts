@@ -1,6 +1,5 @@
 import { BaseService } from '../base-service';
 import { CALENDAR_SERVICE_CONSTANTS } from '../../config/calendar-service-constants';
-import logger from '../../utils/logger';
 
 /**
  * Calendar formatting result

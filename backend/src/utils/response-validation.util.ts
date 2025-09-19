@@ -4,7 +4,7 @@
 
 import { Response } from 'express';
 import { z } from 'zod';
-import logger from './logger';
+import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**
  * Validate and send a response using a Zod schema
@@ -20,9 +20,13 @@ export function validateAndSendResponse<T>(
     res.status(statusCode).json(validatedData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      logger.error('Response validation failed', {
-        errors: error.errors,
-        data: data
+      EnhancedLogger.error('Response validation failed', error as Error, {
+        correlationId: `response-validation-${Date.now()}`,
+        operation: 'response_validation_error',
+        metadata: {
+          errors: error.errors,
+          data: data
+        }
       });
       
       res.status(500).json({
@@ -36,7 +40,10 @@ export function validateAndSendResponse<T>(
         }))
       });
     } else {
-      logger.error('Unexpected response validation error', { error });
+      EnhancedLogger.error('Unexpected response validation error', error as Error, {
+        correlationId: `response-validation-${Date.now()}`,
+        operation: 'response_validation_unexpected_error'
+      });
       res.status(500).json({
         success: false,
         error: 'Internal server error',

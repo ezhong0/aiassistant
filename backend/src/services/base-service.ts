@@ -1,7 +1,6 @@
 import { ServiceState, IService } from './service-manager';
 import { BaseError, ServiceError, ServiceDependencyError, ErrorFactory, ErrorCategory } from '../errors/error-types';
 import { retryManager, RetryConfig } from '../errors/retry-manager';
-import logger from '../utils/logger';
 
 /**
  * Base service class that provides common functionality and lifecycle management
@@ -104,7 +103,7 @@ export abstract class BaseService implements IService {
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
-      logger.debug(`Service ${this.name} already initialized`);
+      
       return;
     }
 
@@ -114,17 +113,17 @@ export abstract class BaseService implements IService {
 
     try {
       this._state = ServiceState.INITIALIZING;
-      logger.debug(`Initializing service: ${this.name}`);
+      
 
       // Call the abstract initialization method
       await this.onInitialize();
 
       this.initialized = true;
       this._state = ServiceState.READY;
-      logger.debug(`Service initialized successfully: ${this.name}`);
+      
     } catch (error) {
       this._state = ServiceState.ERROR;
-      logger.error(`Failed to initialize service ${this.name}:`, error);
+      
       throw error;
     }
   }
@@ -134,22 +133,22 @@ export abstract class BaseService implements IService {
    */
   async destroy(): Promise<void> {
     if (this.destroyed) {
-      logger.debug(`Service ${this.name} already destroyed`);
+      
       return;
     }
 
     try {
       this._state = ServiceState.SHUTTING_DOWN;
-      logger.debug(`Destroying service: ${this.name}`);
+      
 
       // Call the abstract cleanup method
       await this.onDestroy();
 
       this.destroyed = true;
       this._state = ServiceState.DESTROYED;
-      logger.info(`Service destroyed successfully: ${this.name}`);
+      
     } catch (error) {
-      logger.error(`Error destroying service ${this.name}:`, error);
+      
       // Still mark as destroyed even if cleanup failed
       this.destroyed = true;
       this._state = ServiceState.DESTROYED;
@@ -323,19 +322,19 @@ export abstract class BaseService implements IService {
 
     switch (error.severity) {
       case 'critical':
-        logger.error('CRITICAL SERVICE ERROR', logData);
+        
         break;
       case 'high':
-        logger.error('HIGH SEVERITY SERVICE ERROR', logData);
+        
         break;
       case 'medium':
-        logger.warn('MEDIUM SEVERITY SERVICE ERROR', logData);
+        
         break;
       case 'low':
-        logger.info('LOW SEVERITY SERVICE ERROR', logData);
+        
         break;
       default:
-        logger.debug('SERVICE ERROR', logData);
+        
     }
   }
 
@@ -343,31 +342,26 @@ export abstract class BaseService implements IService {
    * Helper method for consistent logging
    */
   protected logInfo(message: string, meta?: Record<string, unknown>): void {
-    logger.info(message, { service: this.name, ...meta });
+    
   }
 
   /**
    * Helper method for consistent debug logging
    */
   protected logDebug(message: string, meta?: Record<string, unknown>): void {
-    logger.debug(message, { service: this.name, ...meta });
+    
   }
 
   /**
    * Helper method for consistent warning logging
    */
   protected logWarn(message: string, meta?: Record<string, unknown>): void {
-    logger.warn(message, { service: this.name, ...meta });
+    
   }
 
   /**
    * Helper method for consistent error logging
    */
   protected logError(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void {
-    logger.error(message, { 
-      service: this.name, 
-      error: error instanceof Error ? error.stack : error,
-      ...meta 
-    });
   }
 }

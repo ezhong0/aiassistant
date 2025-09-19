@@ -8,7 +8,7 @@ import {
 } from '../types/email/gmail.types';
 import { getService } from '../services/service-manager';
 import { AIClassificationService } from '../services/ai-classification.service';
-import logger from './logger';
+import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**
  * Email parsing and formatting utilities
@@ -43,7 +43,11 @@ export class EmailParser {
         importance: await this.determineImportance(message)
       };
     } catch (error) {
-      logger.error('Failed to parse Gmail message', { error, messageId: message.id });
+      EnhancedLogger.error('Failed to parse Gmail message', error as Error, {
+        correlationId: `email-parse-${Date.now()}`,
+        operation: 'email_parsing_error',
+        metadata: { messageId: message.id }
+      });
       throw new Error(`Failed to parse email: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -257,7 +261,10 @@ export class EmailParser {
           return 'normal';
       }
     } catch (error) {
-      logger.error('Failed to classify email priority with AI:', error);
+      EnhancedLogger.error('Failed to classify email priority with AI', error as Error, {
+        correlationId: `email-priority-${Date.now()}`,
+        operation: 'email_priority_classification_error'
+      });
       throw new Error('AI email priority classification failed. Please check your OpenAI configuration.');
     }
   }

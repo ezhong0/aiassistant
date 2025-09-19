@@ -8,7 +8,6 @@ import { ResponsePersonalityService, ResponseContext } from '../response-persona
 import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
 import { JobQueueService } from '../job-queue.service';
-import logger from '../../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface AsyncSlackResponse {
@@ -900,10 +899,18 @@ export class SlackMessageProcessor extends BaseService {
 
       // Process tool results through Master Agent LLM for natural language response
       if (toolResults.length > 0) {
+        const logContext = {
+          correlationId: `slack-process-${Date.now()}`,
+          userId: request.context.userId,
+          sessionId: sessionId,
+          operation: 'process_tool_results'
+        };
+        
         const naturalLanguageResponse = await masterAgent.processToolResultsWithLLM(
           request.message,
           toolResults,
-          sessionId
+          sessionId,
+          logContext
         );
         
         masterResponse.message = naturalLanguageResponse;

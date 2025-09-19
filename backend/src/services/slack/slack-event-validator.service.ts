@@ -1,6 +1,5 @@
 import { BaseService } from '../base-service';
 import { SlackEventType } from '../../types/slack/slack.types';
-import logger from '../../utils/logger';
 
 export interface SlackEventValidatorConfig {
   enableDeduplication: boolean;

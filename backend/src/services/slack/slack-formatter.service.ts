@@ -1,6 +1,5 @@
 import { BaseService } from '../base-service';
 import { SLACK_SERVICE_CONSTANTS } from '../../config/slack-service-constants';
-import logger from '../../utils/logger';
 
 /**
  * Slack formatting result

@@ -1,6 +1,5 @@
 import { IService, ServiceState } from './service-manager';
 import { OpenAIService } from './openai.service';
-import logger from '../utils/logger';
 
 export enum CircuitState {
   CLOSED = 'closed',
@@ -68,10 +67,10 @@ export class AIServiceCircuitBreaker implements IService {
       // It will get the OpenAI service reference when needed
       
       this._state = ServiceState.READY;
-      logger.info('AIServiceCircuitBreaker initialized successfully');
+      
     } catch (error) {
       this._state = ServiceState.ERROR;
-      logger.error('Failed to initialize AIServiceCircuitBreaker:', error);
+      
       throw error;
     }
   }
@@ -90,7 +89,7 @@ export class AIServiceCircuitBreaker implements IService {
     this.openaiService = null;
     
     this._state = ServiceState.DESTROYED;
-    logger.info('AIServiceCircuitBreaker destroyed');
+    
   }
 
   getHealth(): { healthy: boolean; details?: any } {
@@ -128,7 +127,7 @@ export class AIServiceCircuitBreaker implements IService {
         // Move to half-open state
         this.circuitState = CircuitState.HALF_OPEN;
         this.successCount = 0;
-        logger.info('Circuit breaker moving to HALF_OPEN state for recovery test');
+        
       }
     }
 
@@ -176,13 +175,13 @@ export class AIServiceCircuitBreaker implements IService {
       if (this.successCount >= this.config.successThreshold) {
         this.circuitState = CircuitState.CLOSED;
         this.failureCount = 0;
-        logger.info('Circuit breaker CLOSED - service recovered');
+        
       }
     } else if (this.circuitState === CircuitState.OPEN) {
       // This shouldn't happen, but reset if it does
       this.circuitState = CircuitState.CLOSED;
       this.failureCount = 0;
-      logger.warn('Circuit breaker reset from OPEN to CLOSED unexpectedly');
+      
     }
   }
 
@@ -198,7 +197,7 @@ export class AIServiceCircuitBreaker implements IService {
     if (this.circuitState === CircuitState.CLOSED || this.circuitState === CircuitState.HALF_OPEN) {
       if (this.failureCount >= this.config.failureThreshold) {
         this.circuitState = CircuitState.OPEN;
-        logger.warn(`Circuit breaker OPEN - ${this.failureCount} consecutive failures`);
+        
       }
     }
   }
@@ -263,7 +262,7 @@ export class AIServiceCircuitBreaker implements IService {
     this.successCount = 0;
     this.lastFailureTime = 0;
     this.lastSuccessTime = 0;
-    logger.info('Circuit breaker reset to CLOSED state');
+    
   }
 }
 

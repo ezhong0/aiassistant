@@ -24,6 +24,7 @@ import {
 import { SlackMessageAnalyzer, SlackMessageReadingResult } from '../services/slack/slack-message-analyzer.service';
 import { SlackDraftManager, SlackDraftManagementResult } from '../services/slack/slack-draft-manager.service';
 import { SlackFormatter, SlackFormattingResult, SlackResult } from '../services/slack/slack-formatter.service';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 // Import context gathering interfaces from MasterAgent
 export interface ContextGatheringResult {
@@ -167,13 +168,25 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.logger.info('Destroying SlackAgent...');
+      EnhancedLogger.debug('Destroying SlackAgent', {
+        correlationId: 'slack-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'SlackAgent' }
+      });
       this.slackMessageAnalyzer = null;
       this.slackDraftManager = null;
       this.slackFormatter = null;
-      this.logger.info('SlackAgent destroyed successfully');
+      EnhancedLogger.debug('SlackAgent destroyed successfully', {
+        correlationId: 'slack-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'SlackAgent' }
+      });
     } catch (error) {
-      this.logger.error('Error during SlackAgent destruction', error);
+      EnhancedLogger.error('Error during SlackAgent destruction', error as Error, {
+        correlationId: 'slack-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'SlackAgent' }
+      });
     }
   }
 
@@ -249,11 +262,18 @@ You are a specialized Slack workspace management agent focused on reading and un
    * Execute Slack-specific tools during AI planning
    */
   protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    this.logger.debug(`Executing Slack tool: ${toolName}`, {
-      toolName,
-      parametersKeys: Object.keys(parameters),
-      sessionId: context.sessionId
-    });
+    const logContext: LogContext = {
+      correlationId: `slack-tool-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'slack_tool_execution',
+      metadata: {
+        toolName,
+        parametersKeys: Object.keys(parameters)
+      }
+    };
+
+    EnhancedLogger.debug('Executing Slack tool', logContext);
 
     try {
       // Route to appropriate handler based on tool name - Intent-agnostic routing
@@ -273,10 +293,13 @@ You are a specialized Slack workspace management agent focused on reading and un
       } else {
         throw new Error(`Unknown operation: ${operation}`);
       }
-        } catch (error) {
-      this.logger.error(`Error executing Slack tool ${toolName}:`, error);
-          return {
-            success: false,
+    } catch (error) {
+      EnhancedLogger.error('Error executing Slack tool', error as Error, {
+        ...logContext,
+        metadata: { toolName }
+      });
+      return {
+        success: false,
         error: error instanceof Error ? error.message : SLACK_SERVICE_CONSTANTS.ERRORS.UNKNOWN_ERROR
       };
     }
@@ -328,7 +351,11 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
         } catch (error) {
-      this.logger.error('Error handling read messages:', error);
+      EnhancedLogger.error('Error handling read messages', error as Error, {
+        correlationId: 'slack-read-messages',
+        operation: 'slack_read_messages',
+        metadata: { channel: parameters.channel }
+      });
           return {
             success: false,
         error: error instanceof Error ? error.message : SLACK_SERVICE_CONSTANTS.ERRORS.MESSAGE_READING_FAILED
@@ -388,7 +415,11 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
         } catch (error) {
-      this.logger.error('Error handling read thread:', error);
+      EnhancedLogger.error('Error handling read thread', error as Error, {
+        correlationId: 'slack-read-thread',
+        operation: 'slack_read_thread',
+        metadata: { threadTs: parameters.threadTs }
+      });
           return {
             success: false,
         error: error instanceof Error ? error.message : SLACK_SERVICE_CONSTANTS.ERRORS.THREAD_READING_FAILED
@@ -443,7 +474,11 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
     } catch (error) {
-      this.logger.error('Error handling analyze conversation:', error);
+      EnhancedLogger.error('Error handling analyze conversation', error as Error, {
+        correlationId: 'slack-analyze-conversation',
+        operation: 'slack_analyze_conversation',
+        metadata: { channel: parameters.channel }
+      });
     return {
         success: false,
         error: error instanceof Error ? error.message : SLACK_SERVICE_CONSTANTS.ERRORS.CONVERSATION_ANALYSIS_FAILED
@@ -528,7 +563,11 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
     } catch (error) {
-      this.logger.error('Error handling manage drafts:', error);
+      EnhancedLogger.error('Error handling manage drafts', error as Error, {
+        correlationId: 'slack-manage-drafts',
+        operation: 'slack_manage_drafts',
+        metadata: { channel: parameters.channel }
+      });
     return {
         success: false,
         error: error instanceof Error ? error.message : SLACK_SERVICE_CONSTANTS.ERRORS.DRAFT_CREATION_FAILED
@@ -576,7 +615,11 @@ You are a specialized Slack workspace management agent focused on reading and un
         }
       };
     } catch (error) {
-      this.logger.error('Error handling detect confirmations:', error);
+      EnhancedLogger.error('Error handling detect confirmations', error as Error, {
+        correlationId: 'slack-detect-confirmations',
+        operation: 'slack_detect_confirmations',
+        metadata: { channel: parameters.channel }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : SLACK_SERVICE_CONSTANTS.ERRORS.CONFIRMATION_DETECTION_FAILED
@@ -830,11 +873,15 @@ You are a specialized Slack workspace management agent focused on reading and un
           contextType = 'none';
       }
 
-      this.logger.info('Context gathering completed', {
-        contextType,
-        messageCount: messages.length,
-        confidence: contextDetection.confidence,
-        userInput: userInput.substring(0, 100)
+      EnhancedLogger.debug('Context gathering completed', {
+        correlationId: 'slack-context-gathering',
+        operation: 'slack_context_gathering',
+        metadata: {
+          contextType,
+          messageCount: messages.length,
+          confidence: contextDetection.confidence,
+          userInput: userInput.substring(0, 100)
+        }
       });
 
       return {
@@ -845,7 +892,11 @@ You are a specialized Slack workspace management agent focused on reading and un
       };
 
     } catch (error) {
-      this.logger.error('Error gathering context:', error);
+      EnhancedLogger.error('Error gathering context', error as Error, {
+        correlationId: 'slack-context-gathering',
+        operation: 'slack_context_gathering',
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
       return {
         messages: [],
         relevantContext: '',

@@ -24,7 +24,7 @@ import {
   SearchEmailActionParams,
   EmailSummaryParams
 } from '../types/agents/agent-specific-parameters';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Email operation result interface - Intent-agnostic
@@ -153,38 +153,51 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
    * Required method to process incoming requests - routes to appropriate handlers
    */
   protected async processQuery(params: EmailAgentRequest, context: ToolExecutionContext): Promise<any> {
-    logger.info('EmailAgent.processQuery - Starting email processing', {
-      operation: params.operation,
-      hasAccessToken: !!params.accessToken,
-      sessionId: context.sessionId
-    });
+    const logContext: LogContext = {
+      correlationId: `email-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'email_processing',
+      metadata: { 
+        operation: params.operation,
+        hasAccessToken: !!params.accessToken
+      }
+    };
+
+    EnhancedLogger.requestStart('Email processing started', logContext);
 
     // Ensure services are initialized
     this.ensureServices();
 
-    logger.info('EmailAgent.processQuery - Services ensured', {
-      hasEmailOps: !!this.emailOps,
-      hasEmailValidator: !!this.emailValidator,
-      hasEmailFormatter: !!this.emailFormatter
+    EnhancedLogger.debug('Email services ensured', {
+      ...logContext,
+      metadata: {
+        hasEmailOps: !!this.emailOps,
+        hasEmailValidator: !!this.emailValidator,
+        hasEmailFormatter: !!this.emailFormatter
+      }
     });
 
     // Route to appropriate handler based on operation
     switch (params.operation?.toLowerCase()) {
       case 'search':
-        logger.info('EmailAgent.processQuery - Routing to handleSearchEmails');
+        EnhancedLogger.debug('Routing to email search', { ...logContext, metadata: { operation: 'search' } });
         return await this.handleSearchEmails(params, {
           query: params.query || '',
           maxResults: params.maxResults || 10
         });
 
       case 'send':
-        logger.info('EmailAgent.processQuery - Routing to handleSendEmail');
+        EnhancedLogger.debug('Routing to email send', { ...logContext, metadata: { operation: 'send' } });
 
         // Validate that we have proper email recipients, not person names
         if (params.recipientName && !params.contactEmail) {
-          logger.error('EmailAgent.processQuery - Received recipientName without contactEmail', {
-            recipientName: params.recipientName,
-            hasContactEmail: !!params.contactEmail
+          EnhancedLogger.error('Received recipientName without contactEmail', new Error('Invalid recipient format'), {
+            ...logContext,
+            metadata: { 
+              recipientName: params.recipientName,
+              hasContactEmail: !!params.contactEmail
+            }
           });
           return {
             success: false,
@@ -203,19 +216,23 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
           recipients = [params.contactEmail];
         }
 
-        logger.info('EmailAgent.processQuery - Recipient resolution', {
-          hasContactEmail: !!params.contactEmail,
-          hasRecipientsParam: !!((params as any).recipients),
-          resolvedRecipients: recipients,
-          recipientsCount: recipients.length
+        EnhancedLogger.debug('Recipient resolution completed', {
+          ...logContext,
+          metadata: {
+            hasContactEmail: !!params.contactEmail,
+            hasRecipientsParam: !!((params as any).recipients),
+            recipientsCount: recipients.length
+          }
         });
 
         // Validate that we have recipients
         if (!recipients || recipients.length === 0) {
-          logger.error('EmailAgent.processQuery - No recipients found', {
-            params: Object.keys(params),
-            contactEmail: params.contactEmail,
-            recipientsParam: (params as any).recipients
+          EnhancedLogger.error('No recipients found for email send', new Error('Missing recipients'), {
+            ...logContext,
+            metadata: { 
+              hasContactEmail: !!params.contactEmail,
+              hasRecipientsParam: !!((params as any).recipients)
+            }
           });
           return {
             success: false,
@@ -231,7 +248,7 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
         });
 
       case 'reply':
-        logger.info('EmailAgent.processQuery - Reply operation requested but not yet implemented');
+        EnhancedLogger.debug('Reply operation requested but not yet implemented', { ...logContext, metadata: { operation: 'reply' } });
         return {
           success: false,
           error: 'Reply email operation not yet implemented in EmailAgent',
@@ -239,8 +256,9 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
         };
 
       default:
-        logger.warn('EmailAgent.processQuery - Unknown operation, defaulting to search', {
-          operation: params.operation
+        EnhancedLogger.warn('Unknown operation, defaulting to search', {
+          ...logContext,
+          metadata: { operation: params.operation }
         });
         const preprocessedQuery = this.preprocessEmailQuery(params.query || 'in:inbox');
         return await this.handleSearchEmails(params, {
@@ -258,9 +276,17 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
       this.emailOps = null;
       this.emailValidator = null;
       this.emailFormatter = null;
-      logger.info('EmailAgent destroyed successfully');
+      EnhancedLogger.debug('EmailAgent destroyed successfully', {
+        correlationId: 'email-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'EmailAgent' }
+      });
     } catch (error) {
-      logger.error('Error during EmailAgent destruction', error);
+      EnhancedLogger.error('Error during EmailAgent destruction', error as Error, {
+        correlationId: 'email-destroy',
+        operation: 'agent_destroy',
+        metadata: { service: 'EmailAgent' }
+      });
     }
   }
 
@@ -379,7 +405,11 @@ You are a specialized email management agent powered by Gmail API.
         throw new Error(`Unknown operation: ${operation}`);
       }
     } catch (error) {
-      logger.error('Error executing custom tool', error);
+      EnhancedLogger.error('Error executing custom tool', error as Error, {
+        correlationId: 'email-custom-tool',
+        operation: 'custom_tool_execution',
+        metadata: { operationType: 'custom_tool' }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : EMAIL_SERVICE_CONSTANTS.ERRORS.UNKNOWN_ERROR,
@@ -437,13 +467,20 @@ You are a specialized email management agent powered by Gmail API.
    * Generate preview for Email operations
    */
   protected async generatePreview(params: EmailAgentRequest, context: ToolExecutionContext): Promise<PreviewGenerationResult> {
-    try {
-      logger.info('EmailAgent.generatePreview - Generating email preview', {
+    const logContext: LogContext = {
+      correlationId: `email-preview-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'email_preview_generation',
+      metadata: {
         operation: params.operation,
         hasRecipients: !!((params as any).recipients),
-        subject: params.subject,
-        sessionId: context.sessionId
-      });
+        subject: params.subject
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('Generating email preview', logContext);
 
       // Get recipients from various sources
       let recipients: string[] = [];
@@ -497,11 +534,9 @@ You are a specialized email management agent powered by Gmail API.
         previewData
       };
 
-      logger.info('EmailAgent.generatePreview - Preview generated successfully', {
-        actionId,
-        actionType: 'email',
-        recipientCount: recipients.length,
-        requiresConfirmation: true
+      EnhancedLogger.debug('Email preview generated successfully', {
+        ...logContext,
+        metadata: { actionId, recipientsCount: recipients.length }
       });
 
       return {
@@ -509,7 +544,10 @@ You are a specialized email management agent powered by Gmail API.
         preview: actionPreview
       };
     } catch (error) {
-      logger.error('EmailAgent.generatePreview - Failed to generate preview', error);
+      EnhancedLogger.error('Failed to generate email preview', error as Error, {
+        ...logContext,
+        metadata: { operation: params.operation }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to generate email preview'
@@ -543,9 +581,13 @@ You are a specialized email management agent powered by Gmail API.
       // Check if recipient looks like a person name instead of email address
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(recipientEmail)) {
-        logger.error('EmailAgent received person name instead of email address', {
-          recipient: recipientEmail,
-          isEmail: emailRegex.test(recipientEmail)
+        EnhancedLogger.error('Received person name instead of email address', new Error('Invalid email format'), {
+          correlationId: 'email-send',
+          operation: 'email_validation',
+          metadata: { 
+            recipient: recipientEmail,
+            isEmail: emailRegex.test(recipientEmail)
+          }
         });
         throw new Error(`Cannot send email to "${recipientEmail}" - this appears to be a person's name, not an email address. The system should resolve contact information first. Please ensure contact resolution is working properly.`);
       }
@@ -591,7 +633,11 @@ You are a specialized email management agent powered by Gmail API.
         executionTime: Date.now() - startTime
       };
     } catch (error) {
-      logger.error('Error handling send email', error);
+      EnhancedLogger.error('Error handling send email', error as Error, {
+        correlationId: 'email-send',
+        operation: 'email_send',
+        metadata: { recipient: actionParams.recipients }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -633,30 +679,30 @@ You are a specialized email management agent powered by Gmail API.
       }
 
       // DEBUG: Log search request
-      logger.info('EmailAgent.handleSearchEmails - Search request debug', {
-        searchQuery: searchRequest.query,
-        maxResults: searchRequest.maxResults,
-        hasAccessToken: !!params.accessToken
+      EnhancedLogger.debug('Search request processed', {
+        correlationId: 'email-search',
+        operation: 'email_search',
+        metadata: {
+          searchQuery: searchRequest.query,
+          maxResults: searchRequest.maxResults,
+          hasAccessToken: !!params.accessToken
+        }
       });
 
       // Search emails
       const operationResult = await this.emailOps.searchEmails(searchRequest, params.accessToken);
 
       // DEBUG: Log operation result
-      logger.info('EmailAgent.handleSearchEmails - Operation result debug', {
-        success: operationResult.success,
-        hasResult: !!operationResult.result,
-        hasEmails: !!(operationResult.result?.emails),
-        emailsLength: operationResult.result?.emails?.length || 0,
-        count: operationResult.result?.count,
-        error: operationResult.error,
-        executionTime: operationResult.executionTime,
-        resultKeys: operationResult.result ? Object.keys(operationResult.result) : [],
-        emailsSample: operationResult.result?.emails?.length && operationResult.result.emails.length > 0 ? {
-          id: operationResult.result.emails[0]?.id,
-          subject: operationResult.result.emails[0]?.subject,
-          from: operationResult.result.emails[0]?.from
-        } : null
+      EnhancedLogger.debug('Search operation completed', {
+        correlationId: 'email-search',
+        operation: 'email_search',
+        metadata: {
+          success: operationResult.success,
+          hasResult: !!operationResult.result,
+          emailsLength: operationResult.result?.emails?.length || 0,
+          count: operationResult.result?.count,
+          executionTime: operationResult.executionTime
+        }
       });
 
       if (!operationResult.success) {
@@ -670,26 +716,26 @@ You are a specialized email management agent powered by Gmail API.
       };
 
       // DEBUG: Log email result construction
-      logger.info('EmailAgent.handleSearchEmails - EmailResult construction debug', {
-        emailResultEmails: emailResult.emails?.length || 0,
-        emailResultCount: emailResult.count,
-        emailResultKeys: Object.keys(emailResult),
-        firstEmailFromResult: emailResult.emails?.[0] ? {
-          id: emailResult.emails[0].id,
-          subject: emailResult.emails[0].subject,
-          from: emailResult.emails[0].from
-        } : null
+      EnhancedLogger.debug('Email result constructed', {
+        correlationId: 'email-search',
+        operation: 'email_search',
+        metadata: {
+          emailResultEmails: emailResult.emails?.length || 0,
+          emailResultCount: emailResult.count,
+          emailResultKeys: Object.keys(emailResult)
+        }
       });
 
       const formattingResult = this.emailFormatter.formatEmailResult(emailResult);
 
       // DEBUG: Log formatting result
-      logger.info('EmailAgent.handleSearchEmails - Formatting result debug', {
-        formattingSuccess: formattingResult.success,
-        hasFormattedText: !!formattingResult.formattedText,
-        formattedTextLength: formattingResult.formattedText?.length || 0,
-        formattedTextPreview: formattingResult.formattedText?.substring(0, 200),
-        formattingError: formattingResult.error
+      EnhancedLogger.debug('Email formatting completed', {
+        correlationId: 'email-search',
+        operation: 'email_search',
+        metadata: {
+          hasFormattedText: !!formattingResult.formattedText,
+          formattedTextLength: formattingResult.formattedText?.length || 0
+        }
       });
       
       return {
@@ -701,7 +747,11 @@ You are a specialized email management agent powered by Gmail API.
         executionTime: Date.now() - startTime
       };
     } catch (error) {
-      logger.error('Error handling search emails', error);
+      EnhancedLogger.error('Error handling search emails', error as Error, {
+        correlationId: 'email-search',
+        operation: 'email_search',
+        metadata: { query: actionParams.query }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -764,7 +814,11 @@ You are a specialized email management agent powered by Gmail API.
         executionTime: Date.now() - startTime
       };
     } catch (error) {
-      logger.error('Error handling reply email', error);
+      EnhancedLogger.error('Error handling reply email', error as Error, {
+        correlationId: 'email-reply',
+        operation: 'email_reply',
+        metadata: { messageId: params.messageId }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -819,7 +873,11 @@ You are a specialized email management agent powered by Gmail API.
         executionTime: Date.now() - startTime
       };
     } catch (error) {
-      logger.error('Error handling get email', error);
+      EnhancedLogger.error('Error handling get email', error as Error, {
+        correlationId: 'email-get',
+        operation: 'email_get',
+        metadata: { messageId: params.messageId }
+      });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -908,10 +966,14 @@ You are a specialized email management agent powered by Gmail API.
     // Clean up extra spaces and ensure proper formatting
     finalQuery = finalQuery.replace(/\s+/g, ' ').trim();
 
-    logger.info('EmailAgent.preprocessEmailQuery - Query conversion', {
-      originalQuery: query,
-      processedQuery: finalQuery,
-      timeFilter: timeFilter || 'none'
+    EnhancedLogger.debug('Email query preprocessed', {
+      correlationId: 'email-query-preprocess',
+      operation: 'query_preprocessing',
+      metadata: {
+        originalQuery: query,
+        processedQuery: finalQuery,
+        timeFilter: timeFilter || 'none'
+      }
     });
 
     return finalQuery;

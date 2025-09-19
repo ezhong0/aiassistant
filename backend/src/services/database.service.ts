@@ -1,8 +1,8 @@
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { BaseService } from './base-service';
-import logger from '../utils/logger';
 import { serviceManager } from './service-manager';
 import { ConfigService } from '../config/config.service';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export interface DatabaseConfig {
   host: string;
@@ -505,22 +505,36 @@ export class DatabaseService extends BaseService {
   async getUserTokens(userId: string): Promise<any | null> {
     const client = await this.getClient();
     try {
-      logger.debug('Executing getUserTokens query', {
-        userId,
-        userIdType: typeof userId
+      EnhancedLogger.debug('Executing getUserTokens query', {
+        correlationId: `db-query-${Date.now()}`,
+        operation: 'database_query',
+        metadata: {
+          userId,
+          userIdType: typeof userId,
+          query: 'getUserTokens'
+        }
       });
       
       const result = await client.query(`
         SELECT * FROM user_tokens WHERE user_id = $1
       `, [userId]);
 
-      logger.debug('Database query result', {
-        userId,
-        rowCount: result.rows.length
+      EnhancedLogger.debug('Database query result', {
+        correlationId: `db-query-${Date.now()}`,
+        operation: 'database_query',
+        metadata: {
+          userId,
+          rowCount: result.rows.length,
+          query: 'getUserTokens'
+        }
       });
 
       if (result.rows.length === 0) {
-        logger.debug('No tokens found in database', { userId });
+        EnhancedLogger.debug('No tokens found in database', {
+          correlationId: `db-query-${Date.now()}`,
+          operation: 'database_query',
+          metadata: { userId, query: 'getUserTokens' }
+        });
         return null;
       }
 
@@ -720,21 +734,35 @@ export class DatabaseService extends BaseService {
   async query(sql: string, params: any[] = []): Promise<QueryResult> {
     const client = await this.getClient();
     try {
-      logger.debug('Executing SQL query', { 
-        sql: sql.substring(0, 100) + (sql.length > 100 ? '...' : ''),
-        paramCount: params.length 
+      EnhancedLogger.debug('Executing SQL query', {
+        correlationId: `db-query-${Date.now()}`,
+        operation: 'database_query',
+        metadata: { 
+          sql: sql.substring(0, 100) + (sql.length > 100 ? '...' : ''),
+          paramCount: params.length,
+          query: 'raw_sql'
+        }
       });
       
       const result = await client.query(sql, params);
       
-      logger.debug('SQL query completed', { 
-        rowCount: result.rowCount,
-        commandType: result.command 
+      EnhancedLogger.debug('SQL query completed', {
+        correlationId: `db-query-${Date.now()}`,
+        operation: 'database_query',
+        metadata: { 
+          rowCount: result.rowCount,
+          commandType: result.command,
+          query: 'raw_sql'
+        }
       });
       
       return result;
     } catch (error) {
-      logger.error('SQL query failed', { sql, params, error });
+      EnhancedLogger.error('SQL query failed', error as Error, {
+        correlationId: `db-query-${Date.now()}`,
+        operation: 'database_query',
+        metadata: { sql, params, query: 'raw_sql' }
+      });
       throw error;
     } finally {
       client.release();

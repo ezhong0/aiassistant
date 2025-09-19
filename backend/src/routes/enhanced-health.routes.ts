@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { getEnhancedServiceManager, getServiceHealthReport } from '../services/service-initialization';
 import { ServiceHealth } from '../services/service-dependency-manager';
-import logger from '../utils/logger';
 
 const router = express.Router();
 
@@ -29,7 +28,7 @@ router.get('/services',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('Enhanced service health check failed:', error);
+      
 
       res.status(503).json({
         success: false,
@@ -93,7 +92,7 @@ router.get('/services/:serviceName',
         }
       });
     } catch (error) {
-      logger.error(`Service health check failed for ${req.params.serviceName}:`, error);
+      
 
       return res.status(503).json({
         success: false,
@@ -163,7 +162,7 @@ router.get('/dependencies',
         }
       });
     } catch (error) {
-      logger.error('Dependency graph generation failed:', error);
+      
 
       res.status(503).json({
         success: false,
@@ -244,7 +243,7 @@ router.get('/capabilities',
         }
       });
     } catch (error) {
-      logger.error('Capability analysis failed:', error);
+      
 
       res.status(503).json({
         success: false,
@@ -319,7 +318,7 @@ router.post('/services/:serviceName/check',
         }
       });
     } catch (error) {
-      logger.error(`Forced health check failed for ${req.params.serviceName}:`, error);
+      
 
       return res.status(503).json({
         success: false,

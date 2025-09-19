@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import logger from '../utils/logger';
 import { BaseService } from '../services/base-service';
 
 // Configuration schemas for type safety
@@ -224,7 +223,7 @@ export class AIConfigService extends BaseService {
   getOpenAIConfig(purpose: keyof typeof OPENAI_CONFIGS | string = 'general'): OpenAIConfig {
     const config = OPENAI_CONFIGS[purpose as keyof typeof OPENAI_CONFIGS];
     if (!config) {
-      logger.warn(`OpenAI configuration not found for purpose: ${purpose}, using general config`);
+      
       return OPENAI_CONFIGS.general as OpenAIConfig;
     }
     
@@ -232,7 +231,7 @@ export class AIConfigService extends BaseService {
     try {
       return OpenAIConfigSchema.parse(config);
     } catch (error) {
-      logger.error(`Invalid OpenAI configuration for ${purpose}:`, error);
+      
       throw new Error(`Invalid OpenAI configuration for ${purpose}`);
     }
   }
@@ -251,7 +250,7 @@ export class AIConfigService extends BaseService {
       const validated = PromptTemplateSchema.parse(promptConfig);
       return this.renderTemplate(validated.template, variables);
     } catch (error) {
-      logger.error(`Invalid prompt template for ${key}:`, error);
+      
       throw new Error(`Invalid prompt template for ${key}`);
     }
   }
@@ -262,7 +261,7 @@ export class AIConfigService extends BaseService {
   getAgentConfig(agentName: string): AgentAIConfig {
     const config = AGENT_AI_CONFIGS[agentName];
     if (!config) {
-      logger.warn(`Agent AI configuration not found for: ${agentName}, using default config`);
+      
       return {
         timeout: 30000,
         retries: 2,
@@ -275,7 +274,7 @@ export class AIConfigService extends BaseService {
     try {
       return AgentConfigSchema.parse(config);
     } catch (error) {
-      logger.error(`Invalid agent configuration for ${agentName}:`, error);
+      
       throw new Error(`Invalid agent configuration for ${agentName}`);
     }
   }
@@ -288,7 +287,7 @@ export class AIConfigService extends BaseService {
       if (varName in variables) {
         return String(variables[varName]);
       }
-      logger.warn(`Variable ${varName} not provided for template, leaving placeholder`);
+      
       return match;
     });
   }
@@ -334,13 +333,8 @@ export class AIConfigService extends BaseService {
         AgentConfigSchema.parse(config);
       });
       
-      logger.info('All AI configurations validated successfully', {
-        openaiConfigs: Object.keys(OPENAI_CONFIGS).length,
-        promptTemplates: Object.keys(PROMPT_TEMPLATES).length,
-        agentConfigs: Object.keys(AGENT_AI_CONFIGS).length
-      });
     } catch (error) {
-      logger.error('AI configuration validation failed:', error);
+      
       throw new Error('AI configuration validation failed');
     }
   }

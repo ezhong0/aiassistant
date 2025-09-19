@@ -12,7 +12,6 @@ import {
 import { Permission } from '../types/auth.types';
 import { ProfileResponseSchema, AdminUsersResponseSchema, SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
 import { validateAndSendResponse, sendSuccessResponse, sendErrorResponse } from '../utils/response-validation.util';
-import logger from '../utils/logger';
 
 const router = express.Router();
 
@@ -60,7 +59,7 @@ router.get('/profile',
   try {
     const user = req.user!; // TypeScript knows this exists due to authenticateToken middleware
     
-    logger.info('Profile accessed', { userId: user.userId });
+    
     
     res.json({
       success: true,
@@ -78,7 +77,7 @@ router.get('/profile',
       }
     });
   } catch (error) {
-    logger.error('Profile access error:', error);
+    
     res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -99,10 +98,6 @@ router.put('/profile',
     const { name, picture } = req.validatedBody as z.infer<typeof profileUpdateSchema>;
     
     // Validation is now handled by Zod schema
-    logger.info('Profile update requested', { 
-      userId: user.userId, 
-      updates: { name: !!name, picture: !!picture } 
-    });
     
     res.json({
       success: true,
@@ -117,7 +112,7 @@ router.put('/profile',
       }
     });
   } catch (error) {
-    logger.error('Profile update error:', error);
+    
     res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -138,7 +133,7 @@ router.get('/users/:userId',
       const user = req.user!;
       const { userId } = req.params;
       
-      logger.info('User data accessed', { requestedUserId: userId, authenticatedUserId: user.userId });
+      
       
       res.json({
         success: true,
@@ -157,7 +152,7 @@ router.get('/users/:userId',
         }
       });
     } catch (error) {
-      logger.error('User data access error:', error);
+      
       res.status(500).json({
         success: false,
         error: 'Internal server error'
@@ -178,7 +173,7 @@ router.get('/admin/users',
     try {
       const user = req.user!;
       
-      logger.info('Admin users list accessed', { adminUserId: user.userId });
+      
       
       // In a real app, you'd fetch users from database
       res.json({
@@ -199,7 +194,7 @@ router.get('/admin/users',
         }
       });
     } catch (error) {
-      logger.error('Admin users access error:', error);
+      
       res.status(500).json({
         success: false,
         error: 'Internal server error'
@@ -220,7 +215,7 @@ router.get('/dashboard',
     const user = req.user;
     
     if (user) {
-      logger.info('Authenticated dashboard access', { userId: user.userId });
+      
       
       res.json({
         success: true,
@@ -241,7 +236,7 @@ router.get('/dashboard',
         }
       });
     } else {
-      logger.info('Anonymous dashboard access');
+      
       
       res.json({
         success: true,
@@ -258,7 +253,7 @@ router.get('/dashboard',
       });
     }
   } catch (error) {
-    logger.error('Dashboard access error:', error);
+    
     res.status(500).json({
       success: false,
       error: 'Internal server error'
@@ -279,10 +274,6 @@ router.post('/api-heavy',
       const user = req.user!;
       const { operation, parameters } = req.validatedBody as z.infer<typeof apiHeavyRequestSchema>;
       
-      logger.info('Heavy API operation requested', { 
-        userId: user.userId,
-        operation: operation || 'default'
-      });
       
       // Simulate heavy processing
       (globalThis as any).setTimeout(() => {
@@ -300,7 +291,7 @@ router.post('/api-heavy',
       }, 1000);
       
     } catch (error) {
-      logger.error('Heavy API operation error:', error);
+      
       const errorData = {
         success: false,
         error: 'Internal server error',

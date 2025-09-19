@@ -2,7 +2,6 @@ import { ServiceManager } from '../../services/service-manager';
 import { SlackInterfaceService } from '../../services/slack/slack-interface.service';
 import { SlackConfig } from './slack-config.types';
 import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
-import logger from '../../utils/logger';
 
 export interface InterfaceManager {
   slackInterface?: SlackInterfaceService;
@@ -44,16 +43,16 @@ export const initializeInterfaces = async (
 
       interfaces.slackInterface = new SlackInterfaceService(slackConfig);
       await interfaces.slackInterface.initialize();
-      logger.debug('Slack interface initialized');
+      
     } else {
-      logger.info('Slack interface not configured');
+      
     }
 
-    logger.info('All interfaces initialized successfully');
+    
 
     return interfaces;
   } catch (error) {
-    logger.error('Failed to initialize interfaces:', error);
+    
     throw error;
   }
 };
@@ -67,9 +66,9 @@ export const startInterfaces = async (interfaces: InterfaceManager): Promise<voi
       await interfaces.slackInterface.initialize();
     }
     
-    logger.debug('All interfaces started');
+    
   } catch (error) {
-    logger.error('Failed to start interfaces:', error);
+    
     throw error;
   }
 };
@@ -83,9 +82,9 @@ export const stopInterfaces = async (interfaces: InterfaceManager): Promise<void
       await interfaces.slackInterface.destroy();
     }
     
-    logger.info('All interfaces stopped successfully');
+    
   } catch (error) {
-    logger.error('Failed to stop interfaces:', error);
+    
     throw error;
   }
 };

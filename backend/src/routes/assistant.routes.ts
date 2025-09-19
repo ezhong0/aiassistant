@@ -49,7 +49,7 @@ type ConfirmationCheck = {
   needsConfirmation: boolean;
   action: ToolCall;
 };
-import logger from '../utils/logger';
+import { EnhancedLogger, LOG_MESSAGES, createLogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 
@@ -73,8 +73,8 @@ try {
     masterAgent = createMasterAgent();
   }
 } catch (error) {
-  logger.error('Failed to initialize MasterAgent:', error);
-  logger.warn('Assistant will operate in fallback mode');
+  
+  
 }
 
 // Using TokenStorageService from service registry instead of SessionService
@@ -144,11 +144,6 @@ router.post('/text-command',
     RATE_LIMITS.assistant.textCommand.windowMs
   ),
   (req, res, next) => {
-    logger.info('Text command request received', {
-      body: req.body,
-      bodyKeys: Object.keys(req.body || {}),
-      contentType: req.get('Content-Type')
-    });
     next();
   },
   validateRequest({ body: textCommandSchema }),
@@ -165,45 +160,20 @@ router.post('/text-command',
     // For now, we'll work with client-provided context only
     const sessionContext = null;
     
-    logger.info('Using client context only', {
-      sessionId: finalSessionId,
-      clientPendingActions: context?.pendingActions?.length || 0,
-      clientPendingActionsData: context?.pendingActions
-    });
     
     // Use client context directly (no session merging)
     const mergedContext = (context as any) || {};
     
-    logger.info('Processing assistant text command', { 
-      userId: user.userId, 
-      command: commandString.substring(0, 100) + (commandString.length > 100 ? '...' : ''),
-      sessionId: finalSessionId,
-      hasContext: !!mergedContext,
-      hasAccessToken: !!accessToken,
-      pendingActions: mergedContext?.pendingActions?.length || 0,
-      sessionDebug: mergedContext ? { 
-        hasPendingActions: !!mergedContext.pendingActions,
-        pendingActionsCount: mergedContext.pendingActions?.length,
-        pendingActionsData: mergedContext.pendingActions?.slice(0, 2) // Only show first 2 for debugging
-      } : 'no-context'
-    });
 
     // Handle pending actions if present
-    logger.info('Checking for pending actions', {
-      hasMergedContext: !!mergedContext,
-      hasPendingActions: !!(mergedContext?.pendingActions),
-      pendingActionsCount: mergedContext?.pendingActions?.length || 0,
-      pendingActionsDetails: mergedContext?.pendingActions,
-      command: command
-    });
     
     if (mergedContext?.pendingActions && mergedContext.pendingActions.length > 0) {
       const pendingAction = mergedContext.pendingActions.find((action: any) => action.awaitingConfirmation);
-      logger.info('Found pending action for confirmation', { pendingAction, command });
+      
       
       const isConfirmation = await isConfirmationResponse(commandString);
       if (pendingAction && isConfirmation) {
-        logger.info('Processing confirmation response', { actionId: pendingAction.actionId });
+        
         return await handleActionConfirmation(req, res, pendingAction, commandString, finalSessionId);
       }
     }
@@ -234,11 +204,6 @@ router.post('/text-command',
         timestamp: new Date()
       };
       
-      logger.info('Starting preview mode execution', {
-        toolCalls: masterResponse.toolCalls.map(tc => ({ name: tc.name, hasParams: !!tc.parameters })),
-        sessionId: finalSessionId,
-        userId: user.userId
-      });
       
       // First, run in preview mode to see if confirmation is needed
       const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
@@ -252,15 +217,6 @@ router.post('/text-command',
           { preview: true } // Run in preview mode
         );
       
-      logger.info('Preview mode execution completed', {
-        previewResultsCount: previewResults.length,
-        results: previewResults.map(r => ({
-          toolName: r.toolName,
-          success: r.success,
-          hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
-          awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : undefined
-        }))
-      });
       
       // Check if any tools require confirmation
       const needsConfirmation = previewResults.some(result => 
@@ -269,28 +225,11 @@ router.post('/text-command',
         result.result.awaitingConfirmation === true
       );
       
-      logger.info('Confirmation check completed', {
-        needsConfirmation,
-        previewResults: previewResults.map(r => ({
-          toolName: r.toolName,
-          hasResult: !!r.result,
-          resultType: typeof r.result,
-          hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
-          awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : 'N/A'
-        }))
-      });
       
       if (needsConfirmation) {
         // Store pending actions in session context
         const pendingActions = extractPendingActions(previewResults);
         
-        logger.info('Storing pending actions in session', {
-          sessionId: finalSessionId,
-          pendingActionsCount: pendingActions.length,
-          pendingActionsData: pendingActions,
-          previewResultsCount: previewResults.length,
-          previewResultsAwaitingConfirmation: previewResults.filter(r => r.result?.awaitingConfirmation).length
-        });
         
         // Note: Using stateless architecture with TokenStorageService now
         
@@ -360,7 +299,7 @@ router.post('/text-command',
     }
 
   } catch (error) {
-    logger.error('Assistant text command error:', error);
+    
     return res.status(500).json({
       success: false,
       type: 'error',
@@ -387,12 +326,6 @@ router.post('/confirm-action',
       const { actionId, confirmed, sessionId, parameters } = req.validatedBody as z.infer<typeof confirmActionSchema>;
       const user = req.user!;
 
-      logger.info('Processing action confirmation', {
-        userId: user.userId,
-        actionId,
-        confirmed,
-        sessionId
-      });
 
       if (!confirmed) {
         const cancelMessage = await generateDynamicCancelMessage(actionId);
@@ -425,7 +358,7 @@ router.post('/confirm-action',
       });
 
     } catch (error) {
-      logger.error('Action confirmation error:', error);
+      
       return res.status(500).json({
         success: false,
         type: 'error',
@@ -462,11 +395,6 @@ router.post('/email/send',
       return;
     }
 
-    logger.info('Direct email send request', { 
-      userId: user.userId,
-      to: Array.isArray(to) ? to.join(', ') : to,
-      subject 
-    });
 
     // Use email agent directly
     const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
@@ -505,7 +433,7 @@ router.post('/email/send',
     validateAndSendResponse(res, SuccessResponseSchema, responseData);
 
   } catch (error) {
-    logger.error('Direct email send error:', error);
+    
     const errorData = {
       success: false,
       error: 'Failed to send email',
@@ -543,11 +471,6 @@ router.get('/email/search',
       });
     }
 
-    logger.info('Email search request', { 
-      userId: user.userId,
-      query: query.substring(0, 100),
-      maxResults: limit 
-    });
 
     const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
     if (!toolExecutorService) {
@@ -578,7 +501,7 @@ router.get('/email/search',
     });
 
   } catch (error) {
-    logger.error('Email search error:', error);
+    
     return res.status(500).json({
       success: false,
       error: 'Failed to search emails'
@@ -620,7 +543,7 @@ const isConfirmationResponse = async (command: string): Promise<boolean> => {
     const classification = await aiClassificationService.classifyConfirmationResponse(command);
     return classification === 'confirm' || classification === 'reject';
   } catch (error) {
-    logger.error('Failed to classify confirmation response:', error);
+    
     return false;
   }
 }
@@ -677,7 +600,7 @@ const handleActionConfirmation = async (
     }
   });
   } catch (error) {
-    logger.error('Failed to handle action confirmation:', error);
+    
     return res.status(500).json({
       success: false,
       type: 'error',
@@ -710,7 +633,7 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
         }
       }
     } catch (error) {
-      logger.warn('Failed to check operation sensitivity with AI:', error);
+      
       // Continue without AI detection
     }
   }
@@ -743,7 +666,7 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
         };
       }
     } catch (error) {
-      logger.warn('AI confirmation generation failed, using fallback', { error });
+      
       // Throw error instead of using hardcoded fallbacks
       throw new Error(`AI confirmation generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -763,7 +686,7 @@ const executeConfirmedAction = async (
   accessToken?: string
 ): Promise<{ success: boolean; message: string; data?: unknown }> => {
   try {
-    logger.info('Executing confirmed action', { actionId, userId, sessionId });
+    
     
     // Extract action details from parameters
     const actionType = parameters?.type || 'unknown';
@@ -794,16 +717,11 @@ const executeConfirmedAction = async (
         const routingDecision = await toolRoutingService.selectAgentForTask(query as string, executionContext);
         toolCall = routingDecision.toolCall;
         
-        logger.info('AI tool routing completed', {
-          selectedAgent: routingDecision.selectedAgent,
-          confidence: routingDecision.confidence,
-          reasoning: routingDecision.reasoning.substring(0, 100)
-        });
       } else {
         throw new Error('ToolRoutingService not available');
       }
     } catch (error) {
-      logger.warn('AI tool routing failed, using fallback mapping', { error });
+      
       
       // Fallback to simple action type mapping
       const actionTypeMapping: Record<string, string> = {
@@ -858,7 +776,7 @@ const executeConfirmedAction = async (
       };
     }
   } catch (error) {
-    logger.error('Failed to execute confirmed action:', error);
+    
     return {
       success: false,
       message: 'Failed to execute action',
@@ -1017,7 +935,7 @@ const generateDynamicConfirmationMessage = async (toolCalls: ToolCall[], toolRes
       return response.content.trim().replace(/^"|"$/g, '');
     }
   } catch (error) {
-    logger.error('Failed to generate dynamic confirmation message', { error });
+    
   }
   
   // Fallback
@@ -1040,7 +958,7 @@ const generateDynamicConfirmationPrompt = async (toolCalls: ToolCall[], toolResu
       return generateFallbackDynamicConfirmationPrompt(toolCalls, toolResults, userCommand);
     }
   } catch (error) {
-    logger.error('Failed to generate dynamic confirmation prompt with AI routing service', { error });
+    
     return generateFallbackDynamicConfirmationPrompt(toolCalls, toolResults, userCommand);
   }
 };
@@ -1066,7 +984,7 @@ const generateFallbackDynamicConfirmationPrompt = async (toolCalls: ToolCall[], 
       return response.content.trim().replace(/^"|"$/g, '');
     }
   } catch (error) {
-    logger.error('Failed to generate dynamic confirmation prompt', { error });
+    
     // Throw error instead of using hardcoded fallback messages
     throw new Error(`Failed to generate confirmation prompt: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -1095,7 +1013,7 @@ const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: To
       throw new Error('Tool routing service not available for confirmation generation');
     }
   } catch (error) {
-    logger.warn('Failed to generate AI confirmation prompt:', error);
+    
     throw new Error(`Failed to generate confirmation prompt: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
@@ -1125,7 +1043,7 @@ const generateDynamicCompletionMessage = async (toolResults: ToolResult[], userC
       return response.content.trim().replace(/^"|"$/g, '');
     }
   } catch (error) {
-    logger.error('Failed to generate dynamic completion message', { error });
+    
   }
   
   // Fallback to original logic
@@ -1152,7 +1070,7 @@ const generateDynamicCancelMessage = async (actionId: string): Promise<string> =
       return response.content.trim().replace(/^"|"$/g, '');
     }
   } catch (error) {
-    logger.error('Failed to generate dynamic cancel message', { error });
+    
   }
   
   // Fallback

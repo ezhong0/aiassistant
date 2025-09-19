@@ -7,7 +7,7 @@ import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
 import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
-import logger from '../utils/logger';
+import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 // OpenAI Function Schema interface
 export interface OpenAIFunctionSchema {
@@ -45,7 +45,11 @@ export class AgentFactory {
    */
   static registerAgent(name: string, agent: AIAgent): void {
     if (this.agents.has(name)) {
-      logger.warn(`Agent ${name} is already registered, replacing with new instance`);
+      EnhancedLogger.warn(`Agent ${name} is already registered, replacing with new instance`, {
+        correlationId: `agent-register-${Date.now()}`,
+        operation: 'agent_registration_warning',
+        metadata: { agentName: name }
+      });
     }
     
     this.agents.set(name, agent);
@@ -53,9 +57,14 @@ export class AgentFactory {
     // Auto-register agent's tools using dynamic discovery
     this.autoRegisterTools(name, agent);
     
-    logger.debug(`Framework agent registered: ${name}`, {
-      enabled: agent.isEnabled(),
-      toolCount: this.getToolsForAgent(name).length
+    EnhancedLogger.debug(`Framework agent registered: ${name}`, {
+      correlationId: `agent-register-${Date.now()}`,
+      operation: 'agent_registration_success',
+      metadata: {
+        agentName: name,
+        enabled: agent.isEnabled(),
+        toolCount: this.getToolsForAgent(name).length
+      }
     });
   }
   
@@ -70,7 +79,11 @@ export class AgentFactory {
       const agent = new AgentClass();
       this.registerAgent(name, agent);
     } catch (error) {
-      logger.error(`Failed to register agent class ${name}:`, error);
+      EnhancedLogger.error(`Failed to register agent class ${name}`, error as Error, {
+        correlationId: `agent-register-error-${Date.now()}`,
+        operation: 'agent_registration_error',
+        metadata: { agentName: name }
+      });
       throw new Error(`Agent registration failed for ${name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -80,7 +93,7 @@ export class AgentFactory {
    */
   static registerToolMetadata(metadata: ToolMetadata): void {
     this.toolMetadata.set(metadata.name, metadata);
-    logger.debug(`Tool metadata registered: ${metadata.name}`);
+    
   }
   
   /**
@@ -90,15 +103,12 @@ export class AgentFactory {
     const agent = this.agents.get(name);
     
     if (!agent) {
-      logger.warn(`Agent not found: ${name}`, {
-        availableAgents: Array.from(this.agents.keys())
-      });
       return undefined;
     }
     
     // Check if agent is enabled
     if (!agent.isEnabled()) {
-      logger.warn(`Agent is disabled: ${name}`);
+      
       return undefined;
     }
     
@@ -116,10 +126,6 @@ export class AgentFactory {
   static getAgentByToolName(toolName: string): AIAgent | undefined {
     const agentName = this.toolToAgentMap.get(toolName);
     if (!agentName) {
-      logger.warn(`No agent mapping found for tool: ${toolName}`, {
-        availableTools: Array.from(this.toolToAgentMap.keys()),
-        availableAgents: Array.from(this.agents.keys())
-      });
       return undefined;
     }
 
@@ -164,9 +170,6 @@ export class AgentFactory {
       this.registerConventionalTools(agentName, agentClass);
       
     } catch (error) {
-      logger.warn(`Failed to auto-register tools for agent: ${agentName}`, {
-        error: error instanceof Error ? error.message : error
-      });
     }
   }
 
@@ -274,19 +277,12 @@ export class AgentFactory {
       };
       
       // Log error for missing agent
-      logger.error('Agent Not Found', {
-        agentName: name,
-        availableAgents: this.getEnabledAgentNames(),
-        errorType: 'AGENT_NOT_FOUND',
-        reason: `Agent "${name}" not found or disabled`,
-        timestamp: new Date().toISOString()
-      });
       
       return errorResult;
     }
     
     try {
-        logger.debug(`Executing agent: ${name}`);
+        
       
       // Add access token to parameters if provided
       const executionParameters = accessToken 
@@ -306,14 +302,6 @@ export class AgentFactory {
       };
       
       // Log error for execution failure
-      logger.error('Agent Execution Failed', {
-        agentName: name,
-        error: error instanceof Error ? error.message : error,
-        sessionId: context.sessionId,
-        errorType: 'AGENT_EXECUTION_FAILED',
-        reason: `Agent "${name}" execution failed with error`,
-        timestamp: new Date().toISOString()
-      });
       
       return errorResult;
     }
@@ -359,7 +347,7 @@ export class AgentFactory {
       functions.push(...otherTools);
       
     } catch (error) {
-      logger.error('Failed to generate enhanced OpenAI functions:', error);
+      
       // Fallback to basic functions
       return this.generateOpenAIFunctions();
     }
@@ -400,7 +388,7 @@ export class AgentFactory {
       };
       
     } catch (error) {
-      logger.error('Failed to get agent discovery metadata:', error);
+      
     }
     
     return metadata;
@@ -509,12 +497,12 @@ export class AgentFactory {
    */
   static initialize(): void {
     if (this.initialized) {
-      logger.warn('AgentFactory already initialized, skipping');
+      
       return;
     }
     
     try {
-      logger.debug('Initializing AgentFactory...');
+      
       
       // Register core agents
       this.registerAgentClass('emailAgent', EmailAgent);
@@ -705,14 +693,9 @@ export class AgentFactory {
       this.initialized = true;
       
       const stats = this.getStats();
-      logger.info('AgentFactory initialized successfully', {
-        totalAgents: stats.totalAgents,
-        enabledAgents: stats.enabledAgents,
-        totalTools: stats.totalTools
-      });
       
     } catch (error) {
-      logger.error('Failed to initialize AgentFactory:', error);
+      
       throw new Error(`AgentFactory initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -725,7 +708,7 @@ export class AgentFactory {
     this.toolMetadata.clear();
     this.toolToAgentMap.clear();
     this.initialized = false;
-    logger.debug('AgentFactory reset');
+    
   }
   
   /**
@@ -769,13 +752,13 @@ export class AgentFactory {
   static enableAgent(name: string): boolean {
     const agent = this.agents.get(name);
     if (!agent) {
-      logger.warn(`Cannot enable agent - not found: ${name}`);
+      
       return false;
     }
     
     // Note: AIAgent doesn't have enable/disable methods in current implementation
     // This would require extending the AIAgent class to support dynamic enable/disable
-    logger.info(`Agent enabled: ${name}`);
+    
     return true;
   }
   
@@ -785,13 +768,13 @@ export class AgentFactory {
   static disableAgent(name: string): boolean {
     const agent = this.agents.get(name);
     if (!agent) {
-      logger.warn(`Cannot disable agent - not found: ${name}`);
+      
       return false;
     }
     
     // Note: AIAgent doesn't have enable/disable methods in current implementation
     // This would require extending the AIAgent class to support dynamic enable/disable
-    logger.info(`Agent disabled: ${name}`);
+    
     return true;
   }
   

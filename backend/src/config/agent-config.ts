@@ -6,7 +6,6 @@
 import { getService } from '../services/service-manager';
 import { OpenAIService } from '../services/openai.service';
 import { AIClassificationService } from '../services/ai-classification.service';
-import logger from '../utils/logger';
 
 /** Agent capability descriptions for AI-driven routing */
 export const AGENT_CAPABILITIES = {
@@ -279,7 +278,7 @@ Return only the operation name.`;
       }
       return await aiClassificationService.validateOperation(operation, agentName);
     } catch (error) {
-      logger.warn('AI operation validation failed:', error);
+      
       // Throw error instead of defaulting to valid
       throw new Error(`AI operation validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -314,7 +313,7 @@ Return only the operation name.`;
       
       return true; // Assume write operations need confirmation
     } catch (error) {
-      logger.warn('AI confirmation check failed:', error);
+      
       return true; // Default to requiring confirmation if AI fails
     }
   },
@@ -343,7 +342,7 @@ Return only the operation name.`;
         return 'Read-only operation, no confirmation needed';
       }
     } catch (error) {
-      logger.error('Error getting confirmation reason:', error);
+      
       return 'Operation requires confirmation for safety';
     }
   },

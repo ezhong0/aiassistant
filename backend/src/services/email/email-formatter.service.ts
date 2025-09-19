@@ -3,7 +3,6 @@ import { EmailResult } from '../../agents/email.agent';
 import { GmailMessage } from '../../types/email/gmail.types';
 import { SlackMessage } from '../../types/slack/slack.types';
 import { EMAIL_SERVICE_CONSTANTS } from '../../config/email-service-constants';
-import logger from '../../utils/logger';
 
 /**
  * Email formatting result

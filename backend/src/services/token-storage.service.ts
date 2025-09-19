@@ -4,7 +4,6 @@ import { CacheService } from './cache.service';
 import { CryptoUtil } from '../utils/crypto.util';
 import { AuditLogger } from '../utils/audit-logger';
 import { validateUserId } from '../utils/service-validation.util';
-import logger from '../utils/logger';
 import { serviceManager } from './service-manager';
 
 export interface GoogleTokens {

@@ -1,7 +1,6 @@
 import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { SLACK_SERVICE_CONSTANTS } from '../../config/slack-service-constants';
-import logger from '../../utils/logger';
 
 /**
  * Slack draft management result
