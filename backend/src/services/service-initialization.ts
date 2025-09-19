@@ -421,6 +421,7 @@ const registerCoreServices = async (): Promise<void> => {
         development: ENVIRONMENT.nodeEnv === 'development'
       });
       serviceManager.registerService('slackInterfaceService', slackInterfaceService, {
+        dependencies: ['slackMessageProcessor', 'slackAsyncHandlerService'],
         priority: 94,
         autoStart: true
       });

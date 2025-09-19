@@ -89,87 +89,9 @@ export class SlackMessageProcessor extends BaseService {
       if (this.config.enableAsyncProcessing && this.shouldUseAsyncProcessing(message, context)) {
         return await this.handleAsyncRequest(message, context, eventType);
       }
-      // Validate message
-      const validationResult = this.validateMessage(message);
-      if (!validationResult.isValid) {
-        return {
-          success: false,
-          response: {
-            text: validationResult.error || 'Invalid message format'
-          },
-          shouldRespond: true,
-          error: validationResult.error
-        };
-      }
 
-      // Check DM-only mode
-      if (this.config.enableDMOnlyMode && !context.isDirectMessage) {
-        return {
-          success: false,
-          response: {
-            text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance."
-          },
-          shouldRespond: true,
-          error: 'Channel interaction rejected - DM-only mode enforced'
-        };
-      }
-
-      // Check OAuth requirements
-      if (this.config.enableOAuthDetection) {
-        const oauthResult = await this.checkOAuthRequirement(message, context);
-        if (oauthResult.requiresOAuth) {
-          return {
-            success: false,
-            response: oauthResult.response,
-            shouldRespond: true,
-            error: 'OAuth required but not available'
-          };
-        }
-      }
-
-      // Check for confirmation responses
-      if (this.config.enableConfirmationDetection) {
-        const confirmationResult = await this.checkConfirmationResponse(message, context);
-        if (confirmationResult.isConfirmation) {
-          return {
-            success: true,
-            response: confirmationResult.response,
-            shouldRespond: true,
-            isConfirmation: true
-          };
-        }
-      }
-
-      // Create agent request
-      const agentRequest: SlackAgentRequest = {
-        message: message,
-        context: context,
-        eventType: eventType,
-        metadata: {
-          timestamp: new Date().toISOString(),
-          eventId: `${context.userId}-${Date.now()}`
-        }
-      };
-
-      // Route to agent
-      const agentResponse = await this.routeToAgent(agentRequest);
-
-      const processingTime = Date.now() - startTime;
-      this.logInfo('Message processed successfully', {
-        userId: context.userId,
-        processingTimeMs: processingTime,
-        hasResponse: !!agentResponse.response
-      });
-
-      return {
-        success: true,
-        response: agentResponse.response,
-        shouldRespond: agentResponse.shouldRespond ?? true,
-        executionMetadata: {
-          ...agentResponse.executionMetadata,
-          processingTime
-        }
-      };
+      // Fall back to sync processing
+      return await this.processMessageInternal(message, context, eventType);
 
     } catch (error) {
       const processingTime = Date.now() - startTime;
@@ -1299,26 +1221,111 @@ export class SlackMessageProcessor extends BaseService {
     context: SlackContext,
     eventType: SlackEventType
   ): Promise<SlackMessageProcessingResult> {
-    // Move the original processMessage implementation here
-    const validationResult = this.validateMessage(message);
-    if (!validationResult.isValid) {
+    const startTime = Date.now();
+
+    try {
+      // Validate message
+      const validationResult = this.validateMessage(message);
+      if (!validationResult.isValid) {
+        return {
+          success: false,
+          response: {
+            text: validationResult.error || 'Invalid message format'
+          },
+          shouldRespond: true,
+          error: validationResult.error
+        };
+      }
+
+      // Check DM-only mode
+      if (this.config.enableDMOnlyMode && !context.isDirectMessage) {
+        return {
+          success: false,
+          response: {
+            text: "🔒 AI Assistant works exclusively through direct messages to protect your privacy. Please send me a direct message to get assistance."
+          },
+          shouldRespond: true,
+          error: 'Channel interaction rejected - DM-only mode enforced'
+        };
+      }
+
+      // Check OAuth requirements
+      if (this.config.enableOAuthDetection) {
+        const oauthResult = await this.checkOAuthRequirement(message, context);
+        if (oauthResult.requiresOAuth) {
+          return {
+            success: false,
+            response: oauthResult.response,
+            shouldRespond: true,
+            error: 'OAuth required but not available'
+          };
+        }
+      }
+
+      // Check for confirmation responses
+      if (this.config.enableConfirmationDetection) {
+        const confirmationResult = await this.checkConfirmationResponse(message, context);
+        if (confirmationResult.isConfirmation) {
+          return {
+            success: true,
+            response: confirmationResult.response,
+            shouldRespond: true,
+            isConfirmation: true
+          };
+        }
+      }
+
+      // Create agent request
+      const agentRequest: SlackAgentRequest = {
+        message: message,
+        context: context,
+        eventType: eventType,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          eventId: `${context.userId}-${Date.now()}`
+        }
+      };
+
+      // Route to agent
+      const agentResponse = await this.routeToAgent(agentRequest);
+
+      const processingTime = Date.now() - startTime;
+      this.logInfo('Message processed successfully', {
+        userId: context.userId,
+        processingTimeMs: processingTime,
+        hasResponse: !!agentResponse.response
+      });
+
+      return {
+        success: true,
+        response: agentResponse.response,
+        shouldRespond: agentResponse.shouldRespond ?? true,
+        executionMetadata: {
+          ...agentResponse.executionMetadata,
+          processingTime
+        }
+      };
+
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      this.logError('Error processing message', error, {
+        userId: context.userId,
+        processingTimeMs: processingTime
+      });
+
       return {
         success: false,
         response: {
-          text: validationResult.error || 'Invalid message format'
+          text: "I'm having trouble processing your request right now. Please try again."
         },
         shouldRespond: true,
-        error: validationResult.error
+        error: error instanceof Error ? error.message : 'Unknown error',
+        executionMetadata: {
+          processingTime,
+          error: true
+        }
       };
     }
-
-    // Continue with rest of original logic...
-    // [The rest of the original processMessage logic would go here]
-    return {
-      success: true,
-      response: { text: 'Sync processing placeholder' },
-      shouldRespond: true
-    };
   }
 
   /**

@@ -529,6 +529,13 @@ export class SlackInterfaceService extends BaseService {
 
     // Initialize SlackMessageProcessor - use shared service with async processing
     this.slackMessageProcessor = serviceManager.getService<SlackMessageProcessor>('slackMessageProcessor') || null;
+
+    this.logInfo('SlackMessageProcessor service lookup result', {
+      found: !!this.slackMessageProcessor,
+      serviceManagerAvailable: !!serviceManager,
+      registeredServices: serviceManager ? Object.keys((serviceManager as any).services || {}) : []
+    });
+
     if (!this.slackMessageProcessor) {
       this.logWarn('SlackMessageProcessor not available from service manager - creating fallback instance');
       this.slackMessageProcessor = new SlackMessageProcessor({
@@ -538,6 +545,8 @@ export class SlackInterfaceService extends BaseService {
         enableAsyncProcessing: false // Fallback without async
       });
       await this.slackMessageProcessor.initialize();
+    } else {
+      this.logInfo('Successfully retrieved shared SlackMessageProcessor with async processing enabled');
     }
 
     // Initialize SlackResponseFormatter
