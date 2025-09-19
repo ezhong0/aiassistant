@@ -198,14 +198,15 @@ export class TokenManager extends BaseService {
         return { isValid: false, reason: 'expired_or_expiring_soon' };
       }
     } else {
-      // No expiry information - this is suspicious for OAuth tokens
-      // Google OAuth tokens should always have expiry information
-      logger.warn('Token has no expiry information - treating as potentially invalid', {
+      // No expiry information - tokens without expiry info need refresh
+      // This is common when tokens are stored without proper expiry metadata
+      logger.warn('Token has no expiry information - marking as expired to force refresh', {
         hasExpiryDate: !!token.expiry_date,
         hasExpiresAt: !!token.expires_at,
         tokenPreview: token.access_token ? `${token.access_token.substring(0, 10)}...` : 'none'
       });
-      return { isValid: false, reason: 'no_expiry_information' };
+
+      return { isValid: false, reason: 'no_expiry_information_needs_refresh' };
     }
     
     return { isValid: true };
@@ -257,7 +258,7 @@ export class TokenManager extends BaseService {
         google: {
           access_token: refreshedTokens.access_token,
           refresh_token: refreshedTokens.refresh_token || tokens.googleTokens.refresh_token,
-          expires_at: refreshedTokens.expiry_date ? new Date(refreshedTokens.expiry_date) : undefined,
+          expires_at: refreshedTokens.expires_at || (refreshedTokens.expiry_date ? new Date(refreshedTokens.expiry_date) : new Date(Date.now() + (3600 * 1000))),
           token_type: refreshedTokens.token_type,
           scope: refreshedTokens.scope || undefined
         },
@@ -483,6 +484,26 @@ export class TokenManager extends BaseService {
   }
 
   /**
+   * Check if token has required Gmail scopes for email operations
+   */
+  private hasGmailScopes(token: any): boolean {
+    if (!token?.scope || typeof token.scope !== 'string') {
+      return false;
+    }
+
+    const scopes = token.scope.split(' ');
+    const requiredGmailScopes = [
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly'
+    ];
+
+    // Check if token has at least one Gmail scope
+    return requiredGmailScopes.some(requiredScope =>
+      scopes.includes(requiredScope)
+    );
+  }
+
+  /**
    * Get valid tokens specifically for calendar operations
    * Returns null if user doesn't have calendar permissions
    */
@@ -519,6 +540,60 @@ export class TokenManager extends BaseService {
     }
 
     logger.debug('Valid calendar tokens found for Slack user', { teamId, userId });
+    return tokens.googleTokens.access_token;
+  }
+
+  /**
+   * Get valid tokens specifically for Gmail operations
+   * Returns null if user doesn't have Gmail permissions or tokens need refresh
+   */
+  async getValidTokensForGmail(teamId: string, userId: string): Promise<string | null> {
+    logger.debug('Getting valid Gmail tokens for Slack user', { teamId, userId });
+
+    const userId_key = `${teamId}:${userId}`;
+    const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
+
+    if (!tokens?.googleTokens?.access_token) {
+      logger.debug('No OAuth tokens found for Gmail operation', { teamId, userId });
+      return null;
+    }
+
+    // First check basic token validation
+    const validationResult = this.validateToken(tokens.googleTokens);
+    if (!validationResult.isValid) {
+      logger.info('OAuth tokens invalid for Gmail operation, attempting refresh', {
+        teamId,
+        userId,
+        reason: validationResult.reason
+      });
+
+      // Try to refresh token
+      if (tokens.googleTokens.refresh_token) {
+        const refreshedTokens = await this.refreshTokens(teamId, userId);
+        if (refreshedTokens?.google?.access_token) {
+          // Re-validate after refresh
+          const refreshedValidation = this.validateToken(refreshedTokens.google);
+          if (refreshedValidation.isValid && this.hasGmailScopes(refreshedTokens.google)) {
+            logger.info('Gmail tokens refreshed successfully', { teamId, userId });
+            return refreshedTokens.google.access_token;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    // Check Gmail scopes
+    if (!this.hasGmailScopes(tokens.googleTokens)) {
+      logger.info('OAuth tokens missing Gmail scopes', {
+        teamId,
+        userId,
+        scopes: tokens.googleTokens.scope || 'no_scopes'
+      });
+      return null;
+    }
+
+    logger.debug('Valid Gmail tokens found for Slack user', { teamId, userId });
     return tokens.googleTokens.access_token;
   }
 

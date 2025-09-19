@@ -589,7 +589,7 @@ You are a specialized Slack workspace management agent focused on reading and un
    */
   static getOpenAIFunctionSchema(): any {
     return {
-      name: 'manage_slack',
+      name: 'slackAgent',
       description: 'Comprehensive Slack workspace management. Read messages, analyze conversations, manage drafts, detect confirmations. Let OpenAI determine the operation from natural language.',
       parameters: {
         type: 'object',

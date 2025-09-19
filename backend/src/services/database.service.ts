@@ -26,6 +26,7 @@ export interface SessionData {
   toolCalls: any[];
   toolResults: any[];
   slackContext?: any;
+  pendingActions?: any[];
 }
 
 export interface OAuthTokenData {
@@ -176,7 +177,8 @@ export class DatabaseService extends BaseService {
           conversation_history JSONB DEFAULT '[]',
           tool_calls JSONB DEFAULT '[]',
           tool_results JSONB DEFAULT '[]',
-          slack_context JSONB
+          slack_context JSONB,
+          pending_actions JSONB DEFAULT '[]'
         )
       `);
 
@@ -238,6 +240,12 @@ export class DatabaseService extends BaseService {
         )
       `);
 
+      // Add pending_actions column to existing sessions table (migration)
+      await client.query(`
+        ALTER TABLE sessions
+        ADD COLUMN IF NOT EXISTS pending_actions JSONB DEFAULT '[]';
+      `);
+
       // Create indexes for better performance
       await client.query(`
         CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
@@ -276,8 +284,8 @@ export class DatabaseService extends BaseService {
       await client.query(`
         INSERT INTO sessions (
           session_id, user_id, created_at, expires_at, last_activity,
-          conversation_history, tool_calls, tool_results, slack_context
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          conversation_history, tool_calls, tool_results, slack_context, pending_actions
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (session_id) DO UPDATE SET
           user_id = EXCLUDED.user_id,
           expires_at = EXCLUDED.expires_at,
@@ -285,7 +293,8 @@ export class DatabaseService extends BaseService {
           conversation_history = EXCLUDED.conversation_history,
           tool_calls = EXCLUDED.tool_calls,
           tool_results = EXCLUDED.tool_results,
-          slack_context = EXCLUDED.slack_context
+          slack_context = EXCLUDED.slack_context,
+          pending_actions = EXCLUDED.pending_actions
       `, [
         sessionData.sessionId,
         sessionData.userId,
@@ -295,7 +304,8 @@ export class DatabaseService extends BaseService {
         JSON.stringify(sessionData.conversationHistory),
         JSON.stringify(sessionData.toolCalls),
         JSON.stringify(sessionData.toolResults),
-        sessionData.slackContext ? JSON.stringify(sessionData.slackContext) : null
+        sessionData.slackContext ? JSON.stringify(sessionData.slackContext) : null,
+        JSON.stringify(sessionData.pendingActions || [])
       ]);
     } finally {
       client.release();
@@ -323,7 +333,8 @@ export class DatabaseService extends BaseService {
         conversationHistory: row.conversation_history || [],
         toolCalls: row.tool_calls || [],
         toolResults: row.tool_results || [],
-        slackContext: row.slack_context
+        slackContext: row.slack_context,
+        pendingActions: row.pending_actions || []
       };
     } finally {
       client.release();

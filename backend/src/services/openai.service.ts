@@ -167,10 +167,16 @@ export class OpenAIService extends BaseService {
     this.activeRequests++;
     
     try {
-      this.logDebug('Generating tool calls', { 
+      this.logInfo('Generating tool calls', { 
         userInputLength: userInput.length,
         systemPromptLength: systemPrompt.length,
         sessionId 
+      });
+
+      const toolDefinitions = await this.getToolDefinitions();
+      this.logInfo('Tool definitions retrieved', {
+        toolCount: toolDefinitions.length,
+        toolNames: toolDefinitions.map((t: any) => t.function?.name || 'unknown')
       });
 
       const response = await this.client.chat.completions.create({
@@ -179,7 +185,7 @@ export class OpenAIService extends BaseService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userInput }
         ],
-        tools: await this.getToolDefinitions(),
+        tools: toolDefinitions,
         tool_choice: 'auto',
         temperature: 0.1,
         max_tokens: 500 // Reduced to prevent memory issues
@@ -434,7 +440,7 @@ export class OpenAIService extends BaseService {
         }
       }));
       
-      this.logDebug('Generated enhanced tool definitions', {
+      this.logInfo('Generated enhanced tool definitions', {
         toolCount: tools.length,
         toolNames: tools.map((t: any) => t.function.name)
       });

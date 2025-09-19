@@ -150,7 +150,7 @@ You are a specialized contact discovery and management agent.
      */
     static getOpenAIFunctionSchema(): Record<string, unknown> {
       return {
-        name: 'search_contacts',
+        name: 'contactAgent',
         description: 'Search and retrieve contact information from Google Contacts and email history. Use this to find contact details before sending emails or creating calendar events.',
         parameters: {
           type: 'object',

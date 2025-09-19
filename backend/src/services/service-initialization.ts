@@ -14,7 +14,6 @@ import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { AIClassificationService } from './ai-classification.service';
 import { SlackEventHandler } from './slack/slack-event-handler.service';
 import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
-import { SlackConfirmationHandler } from './slack/slack-confirmation-handler.service';
 import { SlackMessageProcessor } from './slack/slack-message-processor.service';
 import { SlackResponseFormatter } from './slack/slack-response-formatter.service';
 import { SlackEventValidator } from './slack/slack-event-validator.service';
@@ -288,20 +287,6 @@ const registerCoreServices = async (): Promise<void> => {
       });
     }
 
-    // 14. SlackConfirmationHandler - Focused service for Slack confirmation handling
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackConfirmationHandler = new SlackConfirmationHandler({
-        confirmationTimeout: 10 * 60 * 1000, // 10 minutes
-        maxPendingConfirmations: 100,
-        enableProposalParsing: true,
-        enableAIClassification: true
-      });
-      serviceManager.registerService('slackConfirmationHandler', slackConfirmationHandler, {
-        dependencies: ['aiClassificationService', 'toolExecutorService'],
-        priority: 80,
-        autoStart: true
-      });
-    }
 
     // 15. SlackMessageProcessor - Focused service for message processing pipeline
     if (ENV_VALIDATION.isSlackConfigured()) {

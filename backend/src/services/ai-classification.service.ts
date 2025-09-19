@@ -120,18 +120,33 @@ export class AIClassificationService extends BaseService {
 
     try {
       const response = await this.openaiService.generateText(
-        `Classify this response to a confirmation request: "${text}"
-        
-        Return exactly one word: confirm, reject, or unknown
-        
-        Examples:
-        - "yes" → confirm
-        - "go for it" → confirm  
-        - "sounds good" → confirm
-        - "not now" → reject
-        - "cancel" → reject
-        - "weather is nice" → unknown
-        - "what time is it" → unknown`,
+        `You are analyzing a user's response to a confirmation prompt asking if they want to proceed with an action.
+
+Classify this message: "${text}"
+
+Return exactly one word: confirm, reject, or unknown
+
+CONFIRM - User agrees to proceed:
+- "yes" → confirm
+- "go for it" → confirm
+- "sounds good" → confirm
+- "proceed" → confirm
+- "do it" → confirm
+
+REJECT - User wants to cancel:
+- "no" → reject
+- "not now" → reject
+- "cancel" → reject
+- "stop" → reject
+
+UNKNOWN - Not a confirmation response (new requests, questions, etc):
+- "send an email to john" → unknown
+- "what time is it" → unknown
+- "i am going to the gym at 4" → unknown
+- "put that on my calendar" → unknown
+- "weather is nice" → unknown
+
+IMPORTANT: Only classify simple yes/no responses as confirm/reject. Complex requests, commands, or questions should be 'unknown'.`,
         'Classify confirmation responses. Return only: confirm, reject, or unknown',
         { temperature: 0, maxTokens: 5 }
       );

@@ -934,7 +934,7 @@ You are a specialized email management agent powered by Gmail API.
    */
   static getOpenAIFunctionSchema(): any {
     return {
-      name: 'manage_emails',
+      name: 'emailAgent',
       description: 'Comprehensive email management using Gmail API. Send emails, search through inbox, list emails, reply to messages, and manage email communications. Let OpenAI determine the operation from natural language.',
       parameters: {
         type: 'object',

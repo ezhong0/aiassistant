@@ -920,7 +920,7 @@ Always return structured execution status with event details, scheduling insight
    */
   static getOpenAIFunctionSchema(): any {
     return {
-      name: 'manage_calendar',
+      name: 'calendarAgent',
       description: 'Comprehensive calendar management using Google Calendar API. Create events, check availability, find time slots, list events, update and delete events. Let OpenAI determine the operation from natural language.',
       parameters: {
         type: 'object',

@@ -505,11 +505,11 @@ export class MasterAgent {
     
     // Map tool names to agent names for capability lookup
     const toolToAgentMap: Record<string, string> = {
-      'send_email': 'emailAgent',
-      'search_contacts': 'contactAgent', 
-      'manage_calendar': 'calendarAgent',
+      'emailAgent': 'emailAgent',
+      'contactAgent': 'contactAgent', 
+      'calendarAgent': 'calendarAgent',
       'Think': 'Think',
-      'slack_operations': 'slackAgent'
+      'slackAgent': 'slackAgent'
     };
 
     const agentName = toolToAgentMap[toolName];
@@ -952,15 +952,14 @@ You're a smart personal assistant that helps users by coordinating different too
 Be helpful, professional, and take intelligent action rather than asking for clarification when possible.
 
 ## Agent Orchestration Rules
-- **SMART EMAIL ROUTING**: When user provides email addresses (with @ symbol), call manage_emails DIRECTLY - NO contact resolution needed
-- **SMART PERSON ROUTING**: When user provides person names (no @ symbol), call search_contacts first, then manage_emails
+- **CRITICAL: ALWAYS CALL TOOLS FOR USER REQUESTS** - Never respond without calling appropriate tools
+- **EMAIL REQUESTS**: When user says "send email", "email", or mentions email addresses (@ symbol), ALWAYS call emailAgent tool
+- **CONTACT REQUESTS**: When user says "find contact", "search contact", or mentions person names (no @), call contactAgent tool  
+- **CALENDAR REQUESTS**: When user says "schedule", "meeting", "calendar", or mentions dates/times, call calendarAgent tool
+- **SLACK REQUESTS**: When user asks about messages, conversations, or Slack context, call slackAgent tool
+- **ALWAYS END WITH THINK**: After calling any tool, ALWAYS call Think tool to verify correct orchestration
 - **CONFIRMATION REQUIRED**: All email and calendar operations require user confirmation before execution
-- **CRITICAL: Use Slack agent proactively** when user requests are ambiguous or lack context - read recent messages first
-- When user asks follow-up questions (like "what about X?" or "other Y?"), ALWAYS check Slack context before responding
-- Use agent capabilities to determine the best approach for complex requests
-- Prefer taking intelligent action over asking for clarification when context provides reasonable clues
 - **DISTINGUISH EMAIL vs NAME**: Analyze input to detect email addresses vs person names automatically
-- Always call Think tool at the end to verify correct orchestration
 
 ## Context Gathering Strategy
 - **For ambiguous requests**: FIRST call Slack agent to read recent conversation history
@@ -968,6 +967,14 @@ Be helpful, professional, and take intelligent action rather than asking for cla
 - **For email requests**: If unclear, show recent emails, unread emails, or broader email list rather than asking
 - **For calendar requests**: If unclear, show today's/upcoming events rather than asking for specifics
 - **Default to helpful action**: When in doubt, provide useful information rather than requesting clarification
+
+## Examples of Tool Usage
+- User: "send an email to john@example.com" → Call emailAgent tool
+- User: "email bananaplum0@gmail.com about dinner" → Call emailAgent tool  
+- User: "find contact for John" → Call contactAgent tool
+- User: "schedule a meeting tomorrow" → Call calendarAgent tool
+- User: "what did I say in Slack?" → Call slackAgent tool
+- After ANY tool call → ALWAYS call Think tool
 
 ## Current Context
 - Current date/time: ${new Date().toISOString()}

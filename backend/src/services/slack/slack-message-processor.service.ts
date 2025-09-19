@@ -3,6 +3,7 @@ import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } f
 import { ToolExecutorService } from '../tool-executor.service';
 import { TokenManager } from '../token-manager';
 import { AIClassificationService } from '../ai-classification.service';
+import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
 import logger from '../../utils/logger';
 
@@ -247,29 +248,369 @@ export class SlackMessageProcessor extends BaseService {
         return { isConfirmation: false };
       }
 
+      // First check if there are any pending actions for this user
+      const sessionId = `user:${context.teamId}:${context.userId}`;
+      const databaseService = serviceManager.getService('databaseService') as any;
+
+      let hasPendingActions = false;
+      if (databaseService) {
+        try {
+          const session = await databaseService.getSession(sessionId);
+          hasPendingActions = session?.pendingActions && Array.isArray(session.pendingActions) && session.pendingActions.length > 0;
+        } catch (error) {
+          this.logWarn('Could not check for pending actions', { sessionId, error: error instanceof Error ? error.message : 'Unknown error' });
+        }
+      }
+
+      // Only run AI classification if there are pending actions
+      if (!hasPendingActions) {
+        this.logInfo('No pending actions found, skipping confirmation detection', {
+          sessionId,
+          message: message.substring(0, 50)
+        });
+        return { isConfirmation: false };
+      }
+
+      // Now check if the message is actually a confirmation
       const classification = await this.aiClassificationService.classifyConfirmationResponse(message);
-      const isConfirmation = classification !== 'unknown';
-      
+      const isConfirmation = classification === 'confirm' || classification === 'reject';
+
+      this.logInfo('Confirmation classification result', {
+        message: message.substring(0, 50),
+        classification,
+        isConfirmation,
+        hasPendingActions,
+        sessionId
+      });
+
       if (isConfirmation) {
-        this.logInfo('Confirmation response detected', {
+        this.logInfo('Confirmation response detected with pending actions', {
           message: message.substring(0, 50),
           classification,
           userId: context.userId,
           channelId: context.channelId
         });
-        
+
+        // Process confirmation using existing database system
+        const confirmationResponse = await this.processConfirmationFromDatabase(message, context);
+        if (confirmationResponse) {
+          return {
+            isConfirmation: true,
+            response: confirmationResponse
+          };
+        }
+
+        // Fallback if confirmation processing fails
         return {
           isConfirmation: true,
           response: {
             text: 'I detected a confirmation response, but I need access to recent messages to process it. Please try again.'
           }
         };
-      }
+      } else {
+        // User provided a new request instead of confirming
+        // Clear pending actions since they've moved on to a new task
+        this.logInfo('User provided new request instead of confirmation, clearing pending actions', {
+          sessionId,
+          oldPendingActionsCount: hasPendingActions ? 1 : 0,
+          newMessage: message.substring(0, 50)
+        });
 
-      return { isConfirmation: false };
+        if (databaseService && hasPendingActions) {
+          try {
+            const session = await databaseService.getSession(sessionId);
+            if (session) {
+              const updatedSessionData = {
+                ...session,
+                pendingActions: [], // Clear pending actions
+                lastActivity: new Date()
+              };
+              await databaseService.createSession(updatedSessionData);
+
+              this.logInfo('Pending actions cleared, processing new request', {
+                sessionId,
+                clearedActionsCount: session.pendingActions?.length || 0
+              });
+            }
+          } catch (error) {
+            this.logWarn('Failed to clear pending actions', {
+              sessionId,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+        }
+
+        return { isConfirmation: false };
+      }
     } catch (error) {
       this.logError('Error detecting confirmation response', error);
       return { isConfirmation: false };
+    }
+  }
+
+  /**
+   * Process confirmation using existing database system
+   */
+  private async processConfirmationFromDatabase(message: string, context: SlackContext): Promise<any> {
+    try {
+      // Find pending confirmation in session data
+      const databaseService = serviceManager.getService('databaseService') as any;
+      if (!databaseService) {
+        this.logWarn('Database service not available for confirmation processing');
+        return null;
+      }
+
+      // Generate session ID for this user (matches the format used in storing confirmations)
+      const sessionId = `user:${context.teamId}:${context.userId}`;
+
+      this.logInfo('Looking for pending actions in session', {
+        sessionId,
+        userId: context.userId,
+        teamId: context.teamId
+      });
+
+      // Get the specific session for this user
+      const session = await databaseService.getSession(sessionId);
+
+      if (!session) {
+        this.logWarn('No session found for user', {
+          sessionId,
+          userId: context.userId,
+          channelId: context.channelId
+        });
+        return null;
+      }
+
+      // Check if session has pending actions
+      if (!session.pendingActions || !Array.isArray(session.pendingActions) || session.pendingActions.length === 0) {
+        this.logWarn('No pending actions found in session', {
+          sessionId,
+          userId: context.userId,
+          hasPendingActions: !!session.pendingActions,
+          pendingActionsLength: session.pendingActions?.length || 0
+        });
+        return null;
+      }
+
+      const pendingActions = session.pendingActions;
+
+      if (!pendingActions || pendingActions.length === 0) {
+        this.logWarn('No pending actions in session');
+        return null;
+      }
+
+      // Use the first pending action (most recent)
+      const pendingAction = pendingActions[0];
+
+      this.logInfo('Processing pending action', {
+        sessionId,
+        pendingActionType: pendingAction.type,
+        pendingActionId: pendingAction.actionId,
+        awaitingConfirmation: pendingAction.awaitingConfirmation
+      });
+
+      // Determine if this is a confirmation or rejection
+      const classification = await this.aiClassificationService?.classifyConfirmationResponse(message);
+      const isConfirmation = classification === 'confirm';
+      const isRejection = classification === 'reject';
+
+      this.logInfo('Confirmation classification result', {
+        classification,
+        isConfirmation,
+        isRejection,
+        message: message.substring(0, 100)
+      });
+
+      if (isConfirmation) {
+        // Execute the confirmed action using ToolExecutorService
+        const result = await this.executeConfirmedActionFromPendingAction(pendingAction, context.userId, sessionId);
+
+        if (result.success) {
+          // Clear pending actions from session
+          const updatedSessionData = {
+            ...session,
+            pendingActions: [],
+            lastActivity: new Date()
+          };
+          await databaseService.createSession(updatedSessionData);
+
+          this.logInfo('Confirmation processed successfully', {
+            sessionId,
+            actionType: pendingAction.type,
+            resultMessage: result.message
+          });
+
+          return {
+            text: `✅ ${result.message}`
+          };
+        } else {
+          this.logError('Confirmed action execution failed', {
+            sessionId,
+            actionType: pendingAction.type,
+            error: result.message
+          });
+
+          return {
+            text: `❌ ${result.message}`
+          };
+        }
+      } else if (isRejection) {
+        // Clear pending actions from session
+        const updatedSessionData = {
+          ...session,
+          pendingActions: [],
+          lastActivity: new Date()
+        };
+        await databaseService.createSession(updatedSessionData);
+
+        this.logInfo('Action cancelled by user', {
+          sessionId,
+          actionType: pendingAction.type
+        });
+
+        return {
+          text: '❌ Action cancelled as requested.'
+        };
+      } else {
+        // Unclear response
+        this.logWarn('Unclear confirmation response', {
+          sessionId,
+          classification,
+          message: message.substring(0, 100)
+        });
+
+        return {
+          text: 'I\'m not sure if you want me to proceed or not. Please reply with "yes" to confirm or "no" to cancel.'
+        };
+      }
+
+    } catch (error) {
+      this.logError('Error processing confirmation from database', error);
+      return null;
+    }
+  }
+
+  /**
+   * Execute confirmed action from pending action data
+   */
+  private async executeConfirmedActionFromPendingAction(
+    pendingAction: any,
+    userId: string,
+    sessionId: string
+  ): Promise<{ success: boolean; message: string; data?: unknown }> {
+    try {
+      if (!this.toolExecutorService) {
+        throw new Error('ToolExecutorService not available');
+      }
+
+      // Extract action details from pending action
+      const actionType = pendingAction.type || 'unknown';
+      const query = pendingAction.parameters?.query || pendingAction.parameters?.originalQuery;
+
+      if (!query) {
+        return {
+          success: false,
+          message: 'Cannot execute action: missing query information'
+        };
+      }
+
+      // Get OAuth tokens if available - extract teamId from sessionId
+      let accessToken: string | undefined;
+      if (this.tokenManager && sessionId) {
+        try {
+          // Extract teamId and userId from sessionId format: "user:teamId:userId"
+          const sessionParts = sessionId.split(':');
+          if (sessionParts.length >= 3) {
+            const teamId = sessionParts[1];
+            const userIdFromSession = sessionParts[2];
+
+            // Validate that we have non-empty strings
+            if (teamId && userIdFromSession && typeof teamId === 'string' && typeof userIdFromSession === 'string') {
+              this.logInfo('Retrieving access token for confirmed action execution', {
+                sessionId,
+                teamId,
+                userId: userIdFromSession,
+                actionType
+              });
+
+              // Use Gmail-specific token method for email actions that includes validation and refresh
+              if (actionType === 'email') {
+                const tokenResult = await this.tokenManager.getValidTokensForGmail(teamId, userIdFromSession);
+                accessToken = tokenResult || undefined;
+              } else {
+                // For other action types, use general token method
+                const tokenResult = await this.tokenManager.getValidTokens(teamId, userIdFromSession);
+                accessToken = tokenResult || undefined;
+              }
+            } else {
+              this.logWarn('Invalid teamId or userId extracted from sessionId', {
+                sessionId,
+                teamId,
+                userIdFromSession,
+                actionType
+              });
+            }
+
+            if (!accessToken) {
+              this.logWarn('No valid access token found for confirmed action execution', {
+                sessionId,
+                teamId,
+                userId: userIdFromSession,
+                actionType
+              });
+            }
+          }
+        } catch (error) {
+          this.logError('Error retrieving OAuth tokens for confirmed action', error, {
+            sessionId,
+            actionType
+          });
+        }
+      }
+
+      // Create execution context
+      const executionContext: ToolExecutionContext = {
+        sessionId: sessionId || `session-${userId}-${Date.now()}`,
+        userId,
+        timestamp: new Date()
+      };
+
+      // Create tool call from pending action
+      const toolCall = {
+        name: actionType === 'email' ? 'emailAgent' : actionType === 'calendar' ? 'calendarAgent' : actionType,
+        parameters: pendingAction.parameters
+      };
+
+      // Execute the tool call with proper access token
+      const toolResult = await this.toolExecutorService.executeTool(
+        toolCall,
+        executionContext,
+        accessToken, // Pass the retrieved access token
+        { preview: false } // Execute for real
+      );
+
+      if (toolResult.success) {
+        return {
+          success: true,
+          message: toolResult.result?.message || 'Action completed successfully',
+          data: { 
+            actionId: pendingAction.actionId, 
+            result: toolResult.result,
+            executionTime: toolResult.executionTime
+          }
+        };
+      } else {
+        return {
+          success: false,
+          message: toolResult.error || 'Action execution failed'
+        };
+      }
+    } catch (error) {
+      this.logError('Failed to execute confirmed action:', error);
+      return {
+        success: false,
+        message: 'Failed to execute action'
+      };
     }
   }
 
@@ -291,17 +632,40 @@ export class SlackMessageProcessor extends BaseService {
         userId: request.context.userId
       });
       
-      // Get OAuth tokens if available
+      // Get OAuth tokens if available - retry logic for token refresh
       let accessToken: string | undefined;
-      if (this.tokenManager) {
-        try {
-          accessToken = await this.tokenManager.getValidTokens(
-            request.context.teamId, 
-            request.context.userId
-          ) || undefined;
-        } catch (error) {
-          this.logError('Error retrieving OAuth tokens', error, { sessionId });
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      while (retryCount <= maxRetries) {
+        if (this.tokenManager) {
+          try {
+            accessToken = await this.tokenManager.getValidTokens(
+              request.context.teamId, 
+              request.context.userId
+            ) || undefined;
+            
+            // If we got a token, break out of retry loop
+            if (accessToken) {
+              break;
+            }
+            
+            // If no token and this is not the last retry, wait a bit and try again
+            if (retryCount < maxRetries) {
+              this.logInfo('No valid tokens found, retrying after token refresh', { 
+                retryCount, 
+                sessionId 
+              });
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+            }
+          } catch (error) {
+            this.logError('Error retrieving OAuth tokens', error, { sessionId, retryCount });
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+            }
+          }
         }
+        retryCount++;
       }
       
       // Initialize MasterAgent
@@ -318,29 +682,96 @@ export class SlackMessageProcessor extends BaseService {
         request.context
       );
 
-      // Check for proposals first - don't execute tools immediately if confirmation needed
-      if (masterResponse.proposal && masterResponse.proposal.requiresConfirmation) {
-        this.logInfo('Proposal requires confirmation, showing proposal to user', {
-          proposalText: masterResponse.proposal.text.substring(0, 100),
-          actionType: masterResponse.proposal.actionType,
-          sessionId
+      // Execute tools in preview mode to check for confirmation needs
+      if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
+        const executionContext: ToolExecutionContext = {
+          sessionId,
+          userId: request.context.userId,
+          timestamp: new Date(),
+          metadata: {
+            teamId: request.context.teamId,
+            channelId: request.context.channelId
+          }
+        };
+        
+        this.logInfo('Starting preview mode execution for Slack', {
+          toolCalls: masterResponse.toolCalls.map(tc => ({ name: tc.name, hasParams: !!tc.parameters })),
+          sessionId,
+          userId: request.context.userId
         });
         
-        // Return proposal without executing tools
-        const processingTime = Date.now() - startTime;
-        return {
-          success: true,
-          response: {
-            text: masterResponse.proposal.text + '\n\nShould I go ahead? Just reply "yes" or "no".'
-          },
-          shouldRespond: true,
-          executionMetadata: {
-            processingTime,
-            toolResults: [],
-            masterAgentResponse: masterResponse.message,
-            awaitingConfirmation: true
-          } as any
-        };
+        // Execute tools in preview mode to check for confirmation needs
+        const previewResults = await this.toolExecutorService.executeTools(
+          masterResponse.toolCalls,
+          executionContext,
+          accessToken,
+          { preview: true } // Run in preview mode
+        );
+        
+        this.logInfo('Preview mode execution completed for Slack', {
+          previewResultsCount: previewResults.length,
+          results: previewResults.map(r => ({
+            toolName: r.toolName,
+            success: r.success,
+            hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
+            awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : undefined
+          }))
+        });
+        
+        // Check if any tools require confirmation
+        const needsConfirmation = previewResults.some(result =>
+          result.result && typeof result.result === 'object' &&
+          'awaitingConfirmation' in result.result &&
+          result.result.awaitingConfirmation === true
+        );
+
+        this.logInfo('Preview results analysis', {
+          previewResultsCount: previewResults.length,
+          needsConfirmation,
+          resultsWithAwaitingConfirmation: previewResults.filter(r =>
+            r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result
+          ).length,
+          resultsDetails: previewResults.map(r => ({
+            toolName: r.toolName,
+            success: r.success,
+            hasResult: !!r.result,
+            hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
+            awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : undefined
+          }))
+        });
+
+        if (needsConfirmation) {
+          this.logInfo('Tools require confirmation, showing preview to user', {
+            sessionId,
+            previewResultsCount: previewResults.length
+          });
+
+          // Generate confirmation message from preview results
+          const confirmationText = this.generateConfirmationMessage(previewResults, masterResponse);
+
+          // Store confirmation in database using existing system
+          await this.storeConfirmationInDatabase(sessionId, request.context, masterResponse.toolCalls, previewResults);
+
+          const processingTime = Date.now() - startTime;
+          return {
+            success: true,
+            response: {
+              text: confirmationText
+            },
+            shouldRespond: true,
+            executionMetadata: {
+              processingTime,
+              toolResults: previewResults.map(tr => ({
+                toolName: tr.toolName,
+                success: tr.success,
+                executionTime: tr.executionTime,
+                error: tr.error || undefined,
+                result: tr.result
+              })),
+              masterAgentResponse: confirmationText
+            }
+          };
+        }
       }
 
       // Execute tool calls if present (only when no confirmation needed)
@@ -467,6 +898,181 @@ export class SlackMessageProcessor extends BaseService {
     this.aiClassificationService = serviceManager.getService('aiClassificationService') as AIClassificationService;
     if (!this.aiClassificationService) {
       this.logWarn('AIClassificationService not available - some features will be limited');
+    }
+  }
+
+  /**
+   * Generate confirmation message from preview results
+   */
+  private generateConfirmationMessage(previewResults: any[], masterResponse: any): string {
+    const confirmationResults = previewResults.filter(result =>
+      result.result && typeof result.result === 'object' &&
+      'awaitingConfirmation' in result.result &&
+      result.result.awaitingConfirmation === true
+    );
+
+    if (confirmationResults.length === 0) {
+      return 'I need to confirm this action before proceeding.';
+    }
+
+    let message = 'I\'d like to confirm the following action:\n\n';
+
+    confirmationResults.forEach((result, index) => {
+      const preview = result.result.preview;
+      if (preview) {
+        // Use the structured preview format
+        message += `**${preview.title || result.toolName}**\n`;
+        if (preview.description) {
+          message += `${preview.description}\n`;
+        }
+
+        // Add detailed preview data for email and calendar operations
+        if (preview.previewData) {
+          if (preview.actionType === 'email') {
+            const emailData = preview.previewData;
+            if (emailData.recipients) {
+              message += `📧 **To:** ${Array.isArray(emailData.recipients.to) ? emailData.recipients.to.join(', ') : emailData.recipients.to}\n`;
+            }
+            if (emailData.subject) {
+              message += `📋 **Subject:** ${emailData.subject}\n`;
+            }
+            if (emailData.contentSummary) {
+              const bodyPreview = emailData.contentSummary.length > 100
+                ? emailData.contentSummary.substring(0, 100) + '...'
+                : emailData.contentSummary;
+              message += `💬 **Message:** ${bodyPreview}\n`;
+            }
+          } else if (preview.actionType === 'calendar') {
+            const calendarData = preview.previewData;
+            if (calendarData.title) {
+              message += `📅 **Event:** ${calendarData.title}\n`;
+            }
+            if (calendarData.startTime) {
+              message += `⏰ **Start:** ${new Date(calendarData.startTime).toLocaleString()}\n`;
+            }
+            if (calendarData.endTime) {
+              message += `⏱️ **End:** ${new Date(calendarData.endTime).toLocaleString()}\n`;
+            }
+            if (calendarData.attendees && calendarData.attendees.length > 0) {
+              message += `👥 **Attendees:** ${calendarData.attendees.join(', ')}\n`;
+            }
+            if (calendarData.location) {
+              message += `📍 **Location:** ${calendarData.location}\n`;
+            }
+          }
+        }
+
+        // Add risk assessment
+        if (preview.riskAssessment) {
+          const riskLevel = preview.riskAssessment.level?.toUpperCase() || 'UNKNOWN';
+          const riskEmoji = riskLevel === 'HIGH' ? '🔴' : riskLevel === 'MEDIUM' ? '🟡' : '🟢';
+          message += `${riskEmoji} **Risk Level:** ${riskLevel}\n`;
+
+          if (preview.riskAssessment.warnings && preview.riskAssessment.warnings.length > 0) {
+            message += `⚠️ **Warnings:**\n`;
+            preview.riskAssessment.warnings.forEach((warning: string) => {
+              message += `  • ${warning}\n`;
+            });
+          }
+        }
+
+        // Add execution details
+        if (preview.estimatedExecutionTime) {
+          message += `⏳ **Estimated time:** ${preview.estimatedExecutionTime}\n`;
+        }
+
+        if (index < confirmationResults.length - 1) {
+          message += '\n';
+        }
+      } else {
+        // Fallback for results without preview data
+        message += `**${result.toolName}**\n`;
+        if (result.result.message) {
+          message += `${result.result.message}\n`;
+        }
+      }
+    });
+
+    message += '\nWould you like me to proceed? Just reply naturally to confirm.';
+    return message;
+  }
+
+  /**
+   * Store confirmation in database using existing system
+   */
+  private async storeConfirmationInDatabase(
+    sessionId: string, 
+    context: SlackContext, 
+    toolCalls: any[], 
+    previewResults: any[]
+  ): Promise<void> {
+    try {
+      const databaseService = serviceManager.getService('databaseService') as any;
+      if (!databaseService) {
+        this.logWarn('Database service not available for confirmation storage');
+        return;
+      }
+
+      // Extract pending actions using the same logic as REST API
+      const pendingActions = previewResults
+        .filter(result => result.result && typeof result.result === 'object' && 'awaitingConfirmation' in result.result)
+        .map(result => ({
+          actionId: result.result.actionId || `action-${Date.now()}`,
+          type: result.toolName === 'emailAgent' ? 'email' : result.toolName === 'calendarAgent' ? 'calendar' : result.toolName,
+          parameters: {
+            type: result.toolName === 'emailAgent' ? 'email' : result.toolName === 'calendarAgent' ? 'calendar' : result.toolName,
+            query: result.result.parameters?.query || result.result.originalQuery,
+            ...result.result.parameters
+          },
+          awaitingConfirmation: true
+        }));
+
+      if (pendingActions.length === 0) {
+        this.logWarn('No pending actions to store');
+        return;
+      }
+
+      // Store pending actions in the session using the same format as REST API
+      let sessionData = await databaseService.getSession(sessionId);
+      const sessionExisted = !!sessionData;
+
+      if (!sessionData) {
+        // Create a new session if one doesn't exist
+        this.logInfo('Creating new session for confirmation storage', { sessionId });
+
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
+
+        sessionData = {
+          sessionId,
+          userId: context.userId,
+          createdAt: now,
+          expiresAt,
+          lastActivity: now,
+          conversationHistory: [],
+          toolCalls: [],
+          toolResults: [],
+          slackContext: context,
+          pendingActions: []
+        };
+      }
+
+      // Update session with pending actions
+      const updatedSessionData = {
+        ...sessionData,
+        pendingActions: pendingActions,
+        lastActivity: new Date()
+      };
+
+      await databaseService.createSession(updatedSessionData);
+      this.logInfo('Pending actions stored in session', {
+        sessionId,
+        pendingActionsCount: pendingActions.length,
+        sessionExisted
+      });
+      
+    } catch (error) {
+      this.logError('Error storing confirmation in database', error);
     }
   }
 

@@ -9,8 +9,6 @@ export * from './slack-event-definitions';
 // OAuth handling types
 export * from './slack-oauth-types';
 
-// Confirmation handling types
-export * from './slack-confirmation-types';
 
 // Message formatting types
 export * from './slack-message-formatting-types';

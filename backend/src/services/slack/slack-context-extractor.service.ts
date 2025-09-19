@@ -124,6 +124,8 @@ export class SlackContextExtractor extends BaseService {
       .replace(/<@[UW][A-Z0-9]+>/g, '') // Remove user mentions
       .replace(/<#[C][A-Z0-9]+\|[^>]+>/g, '') // Remove channel mentions
       .replace(/<![^>]+>/g, '') // Remove special mentions (@channel, @here)
+      .replace(/<mailto:([^|>]+)\|[^>]+>/g, '$1') // Extract email from mailto links
+      .replace(/<mailto:([^>]+)>/g, '$1') // Extract email from simple mailto links
       .replace(/\s+/g, ' ') // Normalize whitespace
       .trim();
   }

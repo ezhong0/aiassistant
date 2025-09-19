@@ -3,7 +3,6 @@ import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { SlackEventHandler } from './slack-event-handler.service';
 import { SlackOAuthManager } from './slack-oauth-manager.service';
-import { SlackConfirmationHandler } from './slack-confirmation-handler.service';
 import { SlackMessageProcessor } from './slack-message-processor.service';
 import { SlackResponseFormatter } from './slack-response-formatter.service';
 import { SlackEventValidator } from './slack-event-validator.service';
@@ -47,7 +46,6 @@ export class SlackInterfaceService extends BaseService {
   // Focused services for proper separation of concerns
   private slackEventHandler: SlackEventHandler | null = null;
   private slackOAuthManager: SlackOAuthManager | null = null;
-  private slackConfirmationHandler: SlackConfirmationHandler | null = null;
   private slackMessageProcessor: SlackMessageProcessor | null = null;
   private slackResponseFormatter: SlackResponseFormatter | null = null;
   private slackEventValidator: SlackEventValidator | null = null;
@@ -108,7 +106,6 @@ export class SlackInterfaceService extends BaseService {
       this.logInfo('SlackInterface initialized successfully', {
         hasSlackEventHandler: !!this.slackEventHandler,
         hasSlackOAuthManager: !!this.slackOAuthManager,
-        hasSlackConfirmationHandler: !!this.slackConfirmationHandler,
         hasSlackMessageProcessor: !!this.slackMessageProcessor,
         hasSlackResponseFormatter: !!this.slackResponseFormatter,
         hasSlackEventValidator: !!this.slackEventValidator,
@@ -135,10 +132,6 @@ export class SlackInterfaceService extends BaseService {
         this.slackOAuthManager = null;
       }
       
-      if (this.slackConfirmationHandler) {
-        await this.slackConfirmationHandler.destroy();
-        this.slackConfirmationHandler = null;
-      }
       
       if (this.slackMessageProcessor) {
         await this.slackMessageProcessor.destroy();
@@ -399,6 +392,8 @@ export class SlackInterfaceService extends BaseService {
         .replace(/<@[UW][A-Z0-9]+>/g, '')
         .replace(/<#[C][A-Z0-9]+\|[^>]+>/g, '')
         .replace(/<![^>]+>/g, '')
+        .replace(/<mailto:([^|>]+)\|[^>]+>/g, '$1') // Extract email from mailto links
+        .replace(/<mailto:([^>]+)>/g, '$1') // Extract email from simple mailto links
         .replace(/\s+/g, ' ')
         .trim();
     }
@@ -531,11 +526,6 @@ export class SlackInterfaceService extends BaseService {
       this.logWarn('SlackOAuthManager not available - OAuth handling will use fallback');
     }
 
-    // Initialize SlackConfirmationHandler
-    this.slackConfirmationHandler = serviceManager.getService('slackConfirmationHandler') as SlackConfirmationHandler;
-    if (!this.slackConfirmationHandler) {
-      this.logWarn('SlackConfirmationHandler not available - confirmation handling will use fallback');
-    }
 
     // Initialize SlackMessageProcessor
     this.slackMessageProcessor = new SlackMessageProcessor({
@@ -614,7 +604,6 @@ export class SlackInterfaceService extends BaseService {
         focusedServices: {
           slackEventHandler: !!this.slackEventHandler,
           slackOAuthManager: !!this.slackOAuthManager,
-          slackConfirmationHandler: !!this.slackConfirmationHandler,
           slackMessageProcessor: !!this.slackMessageProcessor,
           slackResponseFormatter: !!this.slackResponseFormatter,
           slackEventValidator: !!this.slackEventValidator,

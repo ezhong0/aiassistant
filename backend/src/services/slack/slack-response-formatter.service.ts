@@ -69,7 +69,27 @@ export class SlackResponseFormatter extends BaseService {
         return this.formatProposalResponse(masterResponse.proposal, masterResponse, slackContext);
       }
       
-      return this.createFallbackResponse(masterResponse, slackContext);
+      // Handle cases where no proposal was generated but we have a message
+      if (masterResponse.message) {
+        return {
+          text: masterResponse.message
+        };
+      }
+      
+      // Handle cases where we have tool results but no proposal
+      if (masterResponse.toolResults && masterResponse.toolResults.length > 0) {
+        const successfulResults = masterResponse.toolResults.filter((result: any) => result.success);
+        if (successfulResults.length > 0) {
+          return {
+            text: this.generateSuccessMessage(successfulResults, masterResponse)
+          };
+        }
+      }
+      
+      // Default fallback - provide helpful message
+      return {
+        text: 'I received your request but encountered an issue processing it. Please try again or rephrase your request.'
+      };
     } catch (error) {
       this.logError('Error formatting agent response', error);
       return { text: masterResponse.message || 'I processed your request successfully.' };
@@ -167,14 +187,6 @@ export class SlackResponseFormatter extends BaseService {
     }
   }
 
-  /**
-   * Create natural language response without technical details
-   * Shows user-friendly messages instead of tool execution details
-   */
-  private createFallbackResponse(masterResponse: any, slackContext: SlackContext): SlackResponse {
-    // Throw error instead of creating hardcoded fallback responses
-    throw new Error(`Failed to format response: ${masterResponse.message || 'Unknown error'}`);
-  }
 
   /**
    * Generate natural language success message based on tool results
