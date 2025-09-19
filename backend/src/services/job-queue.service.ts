@@ -47,10 +47,11 @@ export class JobQueueService extends BaseService {
     this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
 
     // Check if we should use in-memory fallback
-    if (!this.cacheService || !await this.checkCacheServiceAvailability()) {
+    if (!this.cacheService || !this.isCacheServiceHealthy()) {
       this.useMemoryFallback = true;
       this.logWarn('Redis unavailable, using in-memory job queue fallback', {
         hasCacheService: !!this.cacheService,
+        cacheHealth: this.cacheService?.getHealth(),
         fallbackMode: true
       });
     }
@@ -66,20 +67,13 @@ export class JobQueueService extends BaseService {
   }
 
   /**
-   * Check if cache service is actually available
+   * Check if cache service is healthy and connected
    */
-  private async checkCacheServiceAvailability(): Promise<boolean> {
+  private isCacheServiceHealthy(): boolean {
     if (!this.cacheService) return false;
 
-    try {
-      // Try a simple operation to test connectivity
-      await this.cacheService.set('health-check', 'ok', 1);
-      await this.cacheService.del('health-check');
-      return true;
-    } catch (error) {
-      this.logWarn('Cache service connectivity test failed', { error: error instanceof Error ? error.message : 'Unknown error' });
-      return false;
-    }
+    const health = this.cacheService.getHealth();
+    return health.healthy && health.details?.connected === true;
   }
 
   protected async onDestroy(): Promise<void> {
