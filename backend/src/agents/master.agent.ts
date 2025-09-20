@@ -12,7 +12,6 @@ import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './sl
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
 import { AIClassificationService } from '../services/ai-classification.service';
-import { EmailFormatter } from '../services/email/email-formatter.service';
 import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
 import { IntentAnalysisService, IntentAnalysis } from '../services/intent-analysis.service';
 import { SequentialExecutionService, StepResult as SequentialStepResult, WorkflowResult } from '../services/sequential-execution.service';
@@ -20,6 +19,8 @@ import { PlanModificationService, PlanModification } from '../services/plan-modi
 import { ContextAnalysisService, ContextAnalysis } from '../services/context-analysis.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
+import { AutonomousEmailAgent } from './autonomous-email.agent';
+import { AutonomousAgent, AgentResponse, AgentContext } from '../interfaces/autonomous-agent.interface';
 
 /**
  * Agent capabilities interface for internal use
@@ -76,6 +77,13 @@ export const MasterAgentResponseSchema = z.object({
     workflowId: z.string().optional(),
     workflowAction: z.string().optional(),
     currentStep: z.number().optional(),
+    // Autonomous agent metadata
+    autonomousAgent: z.string().optional(),
+    reasoning: z.string().optional(),
+    suggestions: z.array(z.string()).optional(),
+    needsFollowup: z.boolean().optional(),
+    strategiesAttempted: z.array(z.string()).optional(),
+    executionTime: z.number().optional(),
   }).optional(),
   suggestions: z.array(z.string()).optional(),
   workflowResults: z.array(z.unknown()).optional()
@@ -167,6 +175,9 @@ export class MasterAgent {
   private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
 
+  // Autonomous agent instances
+  private autonomousEmailAgent: AutonomousEmailAgent;
+
   /**
    * Initialize MasterAgent with optional configuration
    * 
@@ -200,6 +211,9 @@ export class MasterAgent {
         metadata: { service: 'MasterAgent' }
       });
     });
+
+    // Initialize autonomous agents
+    this.autonomousEmailAgent = new AutonomousEmailAgent();
     
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
@@ -330,14 +344,6 @@ export class MasterAgent {
     return getService('aiClassificationService') as AIClassificationService | null;
   }
 
-  /**
-   * Get EmailFormatter for proposal generation
-   * 
-   * @returns EmailFormatter instance or null if not available
-   */
-  private getEmailFormatter(): EmailFormatter | null {
-    return getService('emailFormatter') as EmailFormatter | null;
-  }
 
   /**
    * Get OpenAI service from the registry
@@ -456,10 +462,10 @@ export class MasterAgent {
         duration,
         metadata: { userInput: userInput.substring(0, 100) }
       });
-
+      
       // Provide user-friendly error message
-      const errorMessage = this.createUserFriendlyErrorMessage(error as Error, userInput);
-
+      const errorMessage = await this.createUserFriendlyErrorMessage(error as Error, userInput);
+      
       return {
         message: errorMessage,
         executionMetadata: {
@@ -471,167 +477,50 @@ export class MasterAgent {
     }
   }
 
-  // Original method renamed for reference (can be removed later)
-  async processUserInputLegacy(
-    userInput: string,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext
-  ): Promise<MasterAgentResponse> {
-    // Legacy implementation preserved for reference
-    const startTime = Date.now();
-    const correlationId = `master-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'processUserInputLegacy',
-      metadata: { inputLength: userInput.length }
-    };
-
-    try {
-      // Get required services
-      const openaiService = this.getOpenAIService();
-      if (!this.useOpenAI || !openaiService) {
-        throw new Error('🤖 AI service is required but not available. Please check OpenAI configuration.');
-      }
-
-      // Step 1: Detect if context is needed (delegate to AIClassificationService)
-      const aiClassificationService = this.getAIClassificationService();
-      if (!aiClassificationService) {
-        throw new Error('AIClassificationService is required but not available');
-      }
-      const contextDetection = await aiClassificationService.detectContextNeeds(userInput, slackContext);
-
-      // Step 2: Gather context if needed
-      let contextGathered: ContextGatheringResult | undefined;
-      if (contextDetection.needsContext && slackContext) {
-        const slackAgent = this.getSlackAgent();
-        if (slackAgent) {
-          contextGathered = await slackAgent.gatherContext(userInput, contextDetection, slackContext);
-          EnhancedLogger.debug(LOG_MESSAGES.CONTEXT_GATHERING, {
-            ...logContext,
-            metadata: {
-              contextType: contextGathered?.contextType,
-              messageCount: contextGathered?.messages.length || 0,
-              confidence: contextGathered?.confidence || 0
-            }
-          });
-        } else {
-          EnhancedLogger.warn('SlackAgent unavailable for context gathering', logContext);
-          contextGathered = {
-            messages: [],
-            relevantContext: '',
-            contextType: 'none',
-            confidence: 0.0
-          };
-        }
-      }
-
-      // Step 3: Parse intent and resolve dependencies
-      const intentAnalysis = await this.parseIntentAndResolveDependencies(userInput, contextGathered, logContext);
-      EnhancedLogger.debug('Intent analysis completed', {
-        ...logContext,
-        metadata: { intent: intentAnalysis.intent }
-      });
-
-      // Step 4: Enhanced AI planning with context and resolved dependencies
-      const enhancedSystemPrompt = await this.generateEnhancedSystemPrompt(contextGathered, intentAnalysis);
-      
-      // Use enhanced system prompt with agent capabilities and context
-      const response = await openaiService.generateToolCalls(
-        userInput, 
-        enhancedSystemPrompt, 
-        sessionId
-      );
-      
-      const toolCalls = response.toolCalls;
-      const message = response.message;
-
-      // Step 5: Validate tool calls against available agents
-      const validatedToolCalls = await this.validateAndEnhanceToolCalls(toolCalls, userInput, intentAnalysis, logContext);
-
-      EnhancedLogger.debug('Tool calls generated', {
-        ...logContext,
-        metadata: { 
-          toolCallCount: validatedToolCalls.length,
-          toolCallNames: validatedToolCalls.map(tc => tc.name)
-        }
-      });
-
-      // Step 6: Generate conversational proposal if appropriate (delegate to EmailFormatter)
-      const emailFormatter = this.getEmailFormatter();
-      if (!emailFormatter) {
-        throw new Error('EmailFormatter is required for proposal generation but not available');
-      }
-      const proposal = await emailFormatter.generateProposal(userInput, validatedToolCalls, contextGathered, slackContext);
-      
-      const result = {
-        message: proposal?.text || message,
-        toolCalls: validatedToolCalls,
-        needsThinking: validatedToolCalls.some(tc => tc.name === 'Think'),
-        proposal,
-        contextGathered
-      };
-      
-      const duration = Date.now() - startTime;
-      EnhancedLogger.requestEnd(LOG_MESSAGES.REQUEST_END, {
-        ...logContext,
-        duration,
-        metadata: {
-          hasProposal: !!proposal,
-          proposalRequiresConfirmation: proposal?.requiresConfirmation,
-          toolCallsCount: validatedToolCalls.length,
-          toolCallNames: validatedToolCalls.map(tc => tc.name)
-        }
-      });
-      
-      return result;
-      
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      EnhancedLogger.error(LOG_MESSAGES.OPERATION_ERROR, error as Error, {
-        ...logContext,
-        duration,
-        metadata: { userInput: userInput.substring(0, 100) }
-      });
-      
-      // Provide user-friendly error message
-      const errorMessage = this.createUserFriendlyErrorMessage(error as Error, userInput);
-      
-      return {
-        message: errorMessage,
-        toolCalls: [{
-          name: 'Think',
-          parameters: { query: `Error occurred while processing: ${userInput}` }
-        }]
-      };
-    }
-  }
 
   /**
-   * Create user-friendly error messages for MasterAgent failures
+   * Create user-friendly error messages for MasterAgent failures using LLM intelligence
    */
-  private createUserFriendlyErrorMessage(error: Error, userInput: string): string {
-    const errorMessage = error.message.toLowerCase();
-    
-    if (errorMessage.includes('openai') || errorMessage.includes('api key')) {
-      return 'I\'m having trouble connecting to my AI services. Please check the configuration and try again.';
-    }
-    
-    if (errorMessage.includes('timeout')) {
-      return 'Your request is taking longer than expected. Please try with a simpler request.';
-    }
-    
-    if (errorMessage.includes('unauthorized') || errorMessage.includes('invalid token')) {
-      return 'I need proper authorization to process your request. Please check your authentication settings.';
-    }
-    
-    if (errorMessage.includes('rate limit')) {
-      return 'I\'m receiving too many requests. Please wait a moment and try again.';
-    }
-    
+  private async createUserFriendlyErrorMessage(error: Error, userInput: string): Promise<string> {
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        return 'I encountered an unexpected error while processing your request. Please try again or contact support if the issue continues.';
+      }
+
+      const errorAnalysisPrompt = `
+You are an expert error message translator. Convert technical error messages into user-friendly responses.
+
+ORIGINAL ERROR: "${error.message}"
+USER REQUEST: "${userInput}"
+
+TASK: Create a helpful, non-technical error message that:
+1. Explains what went wrong in simple terms
+2. Suggests what the user can do about it
+3. Is empathetic and professional
+4. Avoids technical jargon
+
+RESPONSE FORMAT: Return only the user-friendly error message, no JSON or additional formatting.
+
+GUIDELINES:
+- For authentication errors: Suggest checking credentials/settings
+- For timeout errors: Suggest simpler requests or trying again
+- For rate limit errors: Suggest waiting and trying again
+- For API errors: Suggest checking configuration
+- For unknown errors: Provide general troubleshooting advice
+`;
+
+      const response = await openaiService.generateText(
+        errorAnalysisPrompt,
+        'You are an error message translator. Return only the user-friendly message.',
+        { temperature: 0.3, maxTokens: 200 }
+      );
+
+      return response.trim();
+    } catch (llmError) {
+      // Fallback to a generic message if LLM fails
     return 'I encountered an unexpected error while processing your request. Please try again or contact support if the issue continues.';
+    }
   }
 
   /**
@@ -1391,333 +1280,10 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     }
   }
 
-  /**
-   * Handle workflow interruption - analyze if new input relates to current workflow
-   */
-  private async handleWorkflowInterruption(
-    userInput: string, 
-    activeWorkflow: WorkflowState, 
-    sessionId: string, 
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `workflow-interrupt-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'workflow_interruption',
-      metadata: { 
-        workflowId: activeWorkflow.workflowId,
-        currentStep: activeWorkflow.currentStep,
-        totalSteps: activeWorkflow.totalSteps
-      }
-    };
 
-    try {
-      EnhancedLogger.debug('Handling workflow interruption', logContext);
 
-      const openaiService = this.getOpenAIService();
-      if (!openaiService) {
-        throw new Error('OpenAI service not available for workflow interruption analysis');
-      }
 
-      // Analyze if the new input relates to the current workflow
-      const analysisPrompt = `
-You are analyzing whether a user's new input relates to an ongoing workflow.
 
-CURRENT WORKFLOW:
-- Workflow ID: ${activeWorkflow.workflowId}
-- Original Request: "${activeWorkflow.context.originalRequest}"
-- Current Step: ${activeWorkflow.currentStep}/${activeWorkflow.totalSteps}
-- Current Step Description: "${activeWorkflow.pendingStep?.description || 'No pending step'}"
-- Status: ${activeWorkflow.status}
-
-USER'S NEW INPUT: "${userInput}"
-
-ANALYSIS TASK:
-Determine if the new input:
-1. Relates to the current workflow (continue, modify, or provide additional info)
-2. Is a new unrelated request (start new workflow)
-3. Is a cancellation or pause request
-
-RESPONSE FORMAT (JSON only):
-{
-  "relatesToWorkflow": true/false,
-  "action": "continue|modify|cancel|new_request",
-  "reasoning": "Brief explanation",
-  "response": "Natural language response to user"
-}
-
-GUIDELINES:
-- If user provides additional info for current step: relatesToWorkflow=true, action=continue
-- If user wants to modify current workflow: relatesToWorkflow=true, action=modify  
-- If user says "cancel", "stop", "nevermind": relatesToWorkflow=true, action=cancel
-- If user asks something completely different: relatesToWorkflow=false, action=new_request
-`;
-
-      const response = await openaiService.generateText(
-        analysisPrompt,
-        'You are a workflow interruption analyzer. Return only valid JSON.',
-        { temperature: 0.1, maxTokens: 500 }
-      );
-
-      const analysis = JSON.parse(response);
-      
-      if (analysis.relatesToWorkflow && analysis.action === 'continue') {
-        // Continue current workflow with new input
-        return await this.continueWorkflow(activeWorkflow, userInput, sessionId, userId);
-      } else if (analysis.relatesToWorkflow && analysis.action === 'cancel') {
-        // Cancel current workflow
-        const workflowCacheService = this.getWorkflowCacheService();
-        if (workflowCacheService) {
-          await workflowCacheService.cancelWorkflow(activeWorkflow.workflowId);
-        }
-        
-        return {
-          message: analysis.response || 'Workflow cancelled. How can I help you?',
-          toolCalls: [],
-          toolResults: [],
-          executionMetadata: {
-            processingTime: Date.now() - Date.now(),
-            workflowId: activeWorkflow.workflowId,
-            workflowAction: 'cancelled'
-          }
-        };
-      } else {
-        // Start new workflow
-        return await this.startNewWorkflow(userInput, sessionId, userId);
-      }
-    } catch (error) {
-      EnhancedLogger.error('Error handling workflow interruption', error as Error, logContext);
-      
-      // Fallback: start new workflow
-      return await this.startNewWorkflow(userInput, sessionId, userId);
-    }
-  }
-
-  /**
-   * Start a new workflow with intent analysis
-   */
-  private async startNewWorkflow(
-    userInput: string, 
-    sessionId: string, 
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `new-workflow-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'start_new_workflow',
-      metadata: { userInput: userInput.substring(0, 100) }
-    };
-
-    try {
-      EnhancedLogger.debug('Starting new workflow', logContext);
-
-      const intentAnalysisService = this.getIntentAnalysisService();
-      if (!intentAnalysisService) {
-        // Fallback to regular processing
-        return await this.processUserInputRegular(userInput, sessionId, userId);
-      }
-
-      // Analyze intent and create plan
-      const intentAnalysis = await intentAnalysisService.analyzeIntent(userInput);
-      const executionPlan = await intentAnalysisService.createExecutionPlan(intentAnalysis);
-
-      // Create workflow state
-      const workflowId = `workflow-${sessionId}-${Date.now()}`;
-      const workflowState: WorkflowState = {
-        workflowId,
-        sessionId,
-        userId,
-        status: 'active',
-        currentStep: 0,
-        totalSteps: executionPlan.length,
-        plan: executionPlan,
-        completedSteps: [],
-        pendingStep: executionPlan[0] || null,
-        context: {
-          originalRequest: userInput,
-          userIntent: intentAnalysis.intent,
-          gatheredData: {}
-        },
-        createdAt: new Date(),
-        lastActivity: new Date(),
-        expiresAt: new Date(Date.now() + 3600000) // 1 hour
-      };
-
-      // Save workflow to cache
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.createWorkflow(workflowState);
-      }
-
-      // Execute first step
-      return await this.executeWorkflowStep(workflowState, sessionId, userId);
-    } catch (error) {
-      EnhancedLogger.error('Error starting new workflow', error as Error, logContext);
-      
-      // Fallback to regular processing
-      return await this.processUserInputRegular(userInput, sessionId, userId);
-    }
-  }
-
-  /**
-   * Continue existing workflow with new input
-   */
-  private async continueWorkflow(
-    workflow: WorkflowState, 
-    userInput: string, 
-    sessionId: string, 
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `continue-workflow-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'continue_workflow',
-      metadata: { 
-        workflowId: workflow.workflowId,
-        currentStep: workflow.currentStep
-      }
-    };
-
-    try {
-      EnhancedLogger.debug('Continuing workflow', logContext);
-
-      // Update workflow context with new input
-      workflow.context.gatheredData[`step_${workflow.currentStep}_input`] = userInput;
-      workflow.lastActivity = new Date();
-
-      // Update workflow in cache
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.updateWorkflow(workflow.workflowId, workflow);
-      }
-
-      // Execute current step
-      return await this.executeWorkflowStep(workflow, sessionId, userId);
-    } catch (error) {
-      EnhancedLogger.error('Error continuing workflow', error as Error, logContext);
-      throw error;
-    }
-  }
-
-  /**
-   * Execute a workflow step
-   */
-  private async executeWorkflowStep(
-    workflow: WorkflowState, 
-    sessionId: string, 
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `execute-step-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'execute_workflow_step',
-      metadata: { 
-        workflowId: workflow.workflowId,
-        currentStep: workflow.currentStep,
-        totalSteps: workflow.totalSteps
-      }
-    };
-
-    try {
-      EnhancedLogger.debug('Executing workflow step', logContext);
-
-      const currentStep = workflow.plan[workflow.currentStep];
-      if (!currentStep) {
-        // Workflow completed
-        const workflowCacheService = this.getWorkflowCacheService();
-        if (workflowCacheService) {
-          await workflowCacheService.completeWorkflow(workflow.workflowId);
-        }
-
-        return {
-          message: 'Workflow completed successfully!',
-          toolCalls: [],
-          toolResults: [],
-          executionMetadata: {
-            processingTime: Date.now() - Date.now(),
-            workflowId: workflow.workflowId,
-            workflowAction: 'completed'
-          }
-        };
-      }
-
-      // Execute the step using regular tool execution
-      const toolCall: ToolCall = {
-        name: currentStep.toolCall.name,
-        parameters: currentStep.toolCall.parameters
-      };
-
-      const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId);
-      
-      // Update step status
-      currentStep.status = toolResult.success ? 'executed' : 'failed';
-      currentStep.result = toolResult.result;
-      
-      // Update workflow
-      workflow.completedSteps.push(currentStep);
-      workflow.currentStep++;
-      workflow.pendingStep = workflow.plan[workflow.currentStep] || null;
-      workflow.lastActivity = new Date();
-
-      // Update workflow in cache
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.updateWorkflow(workflow.workflowId, workflow);
-      }
-
-      // Generate natural language response
-      const naturalResponse = await this.generateNaturalLanguageResponseInternal(
-        `Executed step ${currentStep.stepNumber}: ${currentStep.description}`,
-        [toolResult],
-        sessionId
-      );
-
-      return {
-        message: naturalResponse,
-        toolCalls: [toolCall],
-        toolResults: [toolResult],
-        executionMetadata: {
-          processingTime: Date.now() - Date.now(),
-          workflowId: workflow.workflowId,
-          currentStep: workflow.currentStep,
-          totalSteps: workflow.totalSteps,
-          workflowAction: 'step_executed'
-        }
-      };
-    } catch (error) {
-      EnhancedLogger.error('Error executing workflow step', error as Error, logContext);
-      throw error;
-    }
-  }
-
-  /**
-   * Regular processing without workflow (fallback)
-   */
-  private async processUserInputRegular(
-    userInput: string, 
-    sessionId: string, 
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    // This would be the original processUserInput logic
-    // For now, return a simple response
-    return {
-      message: `I understand you want to: ${userInput}. Let me help you with that.`,
-      toolCalls: [],
-      toolResults: [],
-      executionMetadata: {
-        processingTime: Date.now() - Date.now(),
-        workflowAction: 'regular_processing'
-      }
-    };
-  }
 
   /**
    * Internal tool call execution for workflow steps
@@ -1727,15 +1293,27 @@ GUIDELINES:
     sessionId: string, 
     userId?: string
   ): Promise<ToolResult> {
+    console.log(`⚡ TOOL EXECUTION: Starting tool execution...`);
+    console.log(`📊 Tool Name: ${toolCall.name}`);
+    console.log(`📊 Parameters:`, JSON.stringify(toolCall.parameters, null, 2));
+    
     try {
       // This is a simplified version - in a real implementation, you'd use the ToolExecutorService
-      return {
+      const result = {
         success: true,
         toolName: toolCall.name,
         executionTime: 100,
         result: { message: `Executed ${toolCall.name}` }
       };
+      
+      console.log(`✅ TOOL EXECUTION: Tool execution successful`);
+      console.log(`📊 Result:`, JSON.stringify(result, null, 2));
+      
+      return result;
     } catch (error) {
+      console.log(`❌ TOOL EXECUTION: Tool execution failed`);
+      console.log(`📊 Error:`, error);
+      
       return {
         success: false,
         toolName: toolCall.name,
@@ -1978,7 +1556,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       EnhancedLogger.debug('Branching workflow for parallel processing', logContext);
 
       // Create new workflow for the interruption while preserving original
-      const branchedResponse = await this.startNewWorkflow(userInput, sessionId, userId);
+      const branchedResponse = await this.executeStepByStep(userInput, sessionId, userId);
 
       // Add reference to original workflow
       if (branchedResponse.executionMetadata) {
@@ -2053,7 +1631,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     // Original interruption logic as fallback
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
-      return await this.startNewWorkflow(userInput, sessionId, userId);
+      return await this.executeStepByStep(userInput, sessionId, userId);
     }
 
     const analysisPrompt = `
@@ -2079,13 +1657,13 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       const analysis = JSON.parse(analysisResponse);
 
       if (analysis.relatesToWorkflow) {
-        return await this.continueWorkflow(activeWorkflow, userInput, sessionId, userId);
+        return await this.executeStepByStep(userInput, sessionId, userId);
       } else {
         await this.abortWorkflow(activeWorkflow.workflowId);
-        return await this.startNewWorkflow(userInput, sessionId, userId);
+        return await this.executeStepByStep(userInput, sessionId, userId);
       }
     } catch (error) {
-      return await this.startNewWorkflow(userInput, sessionId, userId);
+      return await this.executeStepByStep(userInput, sessionId, userId);
     }
   }
 
@@ -2167,6 +1745,12 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     userId?: string,
     slackContext?: SlackContext
   ): Promise<MasterAgentResponse> {
+    console.log('🎯 MASTER AGENT: Starting step-by-step execution...');
+    console.log('📊 User Input:', userInput);
+    console.log('📊 Session ID:', sessionId);
+    console.log('📊 User ID:', userId);
+    console.log('📊 Slack Context:', slackContext ? 'Present' : 'None');
+    
     const startTime = Date.now();
     const correlationId = `step-by-step-${sessionId}-${Date.now()}`;
     const logContext: LogContext = {
@@ -2248,6 +1832,11 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     sessionId: string,
     userId?: string
   ): Promise<MasterAgentResponse> {
+    console.log('🔄 MASTER AGENT: Starting step-by-step loop...');
+    console.log('📊 Workflow ID:', workflowId);
+    console.log('📊 Current Step:', workflowContext.currentStep);
+    console.log('📊 Max Steps:', workflowContext.maxSteps);
+    
     const nextStepPlanningService = getService<NextStepPlanningService>('nextStepPlanningService');
     if (!nextStepPlanningService) {
       throw new Error('NextStepPlanningService not available');
@@ -2258,14 +1847,22 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     let finalMessage = '';
 
     while (workflowContext.currentStep <= workflowContext.maxSteps) {
+      console.log(`🔄 MASTER AGENT: Planning step ${workflowContext.currentStep}...`);
       // Plan next step
       const nextStep = await nextStepPlanningService.planNextStep(workflowContext);
 
       // If no more steps, we're done
       if (!nextStep) {
+        console.log('✅ MASTER AGENT: No more steps, workflow complete!');
         finalMessage = `Task completed successfully! I have processed your request: "${workflowContext.originalRequest}"`;
         break;
       }
+
+      console.log(`⚡ MASTER AGENT: Executing step ${nextStep.stepNumber}...`);
+      console.log(`📊 Step Description: ${nextStep.description}`);
+      console.log(`📊 Agent: ${nextStep.agent}`);
+      console.log(`📊 Operation: ${nextStep.operation}`);
+      console.log(`📊 Parameters:`, JSON.stringify(nextStep.parameters, null, 2));
 
       EnhancedLogger.debug('Executing step', {
         correlationId: `step-${workflowContext.currentStep}`,
@@ -2288,7 +1885,11 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
           }
         };
 
+        console.log(`🔧 MASTER AGENT: Executing tool call...`);
+        console.log(`📊 Tool Call:`, JSON.stringify(toolCall, null, 2));
         const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId);
+        console.log(`✅ MASTER AGENT: Tool execution completed`);
+        console.log(`📊 Tool Result:`, JSON.stringify(toolResult, null, 2));
 
         // Create step result
         const stepResult: NextStepResult = {
@@ -2386,6 +1987,148 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
         workflowAction: 'step_by_step_completed'
       }
     };
+  }
+
+  /**
+   * Process intent using autonomous agents for natural language communication
+   * This is the new architecture where agents receive natural language intents
+   * instead of rigid parameters and provide intelligent responses
+   */
+  async processAutonomousIntent(
+    intent: string,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `autonomous-intent-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'processAutonomousIntent',
+      metadata: {
+        intentLength: intent.length,
+        hasSlackContext: !!slackContext
+      }
+    };
+
+    try {
+      EnhancedLogger.requestStart('Processing autonomous intent', logContext);
+
+      // Step 1: Determine which autonomous agent should handle this intent
+      const selectedAgent = await this.selectAutonomousAgent(intent);
+
+      if (!selectedAgent) {
+        // Fallback to traditional workflow if no autonomous agent can handle it
+        EnhancedLogger.debug('No autonomous agent available, falling back to traditional workflow', logContext);
+        return await this.executeStepByStep(intent, sessionId, userId, slackContext);
+      }
+
+      // Step 2: Build agent context
+      const agentContext: AgentContext = {
+        userId,
+        workflowContext: {
+          sessionId,
+          originalRequest: intent,
+          timestamp: new Date()
+        },
+        conversationHistory: [], // Could be populated from workflow cache
+        userPreferences: {}, // Could be populated from user settings
+        domainContext: slackContext ? { slackContext } : {}
+      };
+
+      // Step 3: Let the autonomous agent process the intent
+      EnhancedLogger.debug('Processing intent with autonomous agent', {
+        ...logContext,
+        metadata: {
+          ...logContext.metadata,
+          selectedAgent: selectedAgent.agentName,
+          confidence: await selectedAgent.assessCapability(intent)
+        }
+      });
+
+      const agentResponse = await selectedAgent.processIntent(intent, agentContext);
+
+      // Step 4: Convert autonomous agent response to MasterAgent response format
+      const masterResponse: MasterAgentResponse = {
+        message: agentResponse.naturalResponse,
+        executionMetadata: {
+          autonomousAgent: selectedAgent.agentName,
+          reasoning: agentResponse.reasoning,
+          suggestions: agentResponse.suggestions,
+          needsFollowup: agentResponse.needsFollowup,
+          strategiesAttempted: agentResponse.metadata.strategiesAttempted,
+          executionTime: agentResponse.metadata.executionTime,
+          workflowAction: agentResponse.success ? 'autonomous_success' : 'autonomous_error'
+        }
+      };
+
+      // Log successful autonomous processing
+      EnhancedLogger.requestEnd('Autonomous intent processing completed', logContext);
+
+      return masterResponse;
+
+    } catch (error) {
+      EnhancedLogger.error('Autonomous intent processing failed', error as Error, logContext);
+
+      // Fallback to traditional workflow on error
+      EnhancedLogger.debug('Falling back to traditional workflow due to autonomous processing error', logContext);
+      return await this.executeStepByStep(intent, sessionId, userId, slackContext);
+    }
+  }
+
+  /**
+   * Select the most appropriate autonomous agent for the given intent
+   */
+  private async selectAutonomousAgent(intent: string): Promise<AutonomousAgent | null> {
+    // For now, only email agent is implemented
+    // In the future, this could use LLM to analyze intent and select best agent
+
+    const emailCapability = await this.autonomousEmailAgent.assessCapability(intent);
+
+    // If email agent has high confidence, use it
+    if (emailCapability >= 0.3) {
+      return this.autonomousEmailAgent;
+    }
+
+    // Future: Add other autonomous agents (calendar, contacts, etc.)
+    // const calendarCapability = await this.autonomousCalendarAgent.assessCapability(intent);
+    // const contactCapability = await this.autonomousContactAgent.assessCapability(intent);
+
+    return null; // No suitable autonomous agent found
+  }
+
+  /**
+   * Enhanced processUserInput that can use either autonomous or traditional workflow
+   */
+  async processUserInputWithAutonomy(
+    userInput: string,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext,
+    useAutonomous: boolean = true
+  ): Promise<MasterAgentResponse> {
+    // For email-related intents, try autonomous processing first
+    if (useAutonomous) {
+      const emailCapability = await this.autonomousEmailAgent.assessCapability(userInput);
+
+      if (emailCapability >= 0.3) {
+        try {
+          return await this.processAutonomousIntent(userInput, sessionId, userId, slackContext);
+        } catch (error) {
+          EnhancedLogger.warn('Autonomous processing failed, falling back to traditional', {
+            correlationId: `fallback-${sessionId}`,
+            operation: 'autonomous_fallback',
+            metadata: {
+              error: error instanceof Error ? error.message : 'Unknown error'
+            }
+          });
+        }
+      }
+    }
+
+    // Fallback to traditional step-by-step workflow
+    return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
   }
 
   public cleanup(): void {

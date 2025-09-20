@@ -71,6 +71,10 @@ export class SlackEventHandler extends BaseService {
    * Process a Slack event with validation and deduplication
    */
   async processEvent(event: unknown, teamId: string): Promise<SlackEventProcessingResult> {
+    console.log('🎯 SlackEventHandler.processEvent called');
+    console.log('📊 Event:', JSON.stringify(event, null, 2));
+    console.log('📊 Team ID:', teamId);
+    
     const startTime = Date.now();
     const metadata: SlackEventMetadata = {
       eventId: '',
@@ -80,6 +84,7 @@ export class SlackEventHandler extends BaseService {
     };
 
     try {
+      console.log('✅ Starting event validation...');
       // Validate event structure
       const validationResult = await this.validateEvent(event);
       if (!validationResult.isValid) {

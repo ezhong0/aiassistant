@@ -15,13 +15,11 @@ import { AIClassificationService } from './ai-classification.service';
 import { SlackEventHandler } from './slack/slack-event-handler.service';
 import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack/slack-message-processor.service';
-import { SlackResponseFormatter } from './slack/slack-response-formatter.service';
 import { SlackEventValidator } from './slack/slack-event-validator.service';
 import { SlackContextExtractor } from './slack/slack-context-extractor.service';
 import { EmailOperationHandler } from './email/email-operation-handler.service';
 import { ContactResolver } from './email/contact-resolver.service';
 import { EmailValidator } from './email/email-validator.service';
-import { EmailFormatter } from './email/email-formatter.service';
 import { CalendarEventManager } from './calendar/calendar-event-manager.service';
 import { CalendarAvailabilityChecker } from './calendar/calendar-availability-checker.service';
 import { CalendarFormatter } from './calendar/calendar-formatter.service';
@@ -34,12 +32,7 @@ import { GmailCacheService } from './email/gmail-cache.service';
 import { ContactCacheService } from './contact/contact-cache.service';
 import { SlackCacheService } from './slack/slack-cache.service';
 import { CachePerformanceMonitoringService } from './cache-performance-monitoring.service';
-import { JobQueueService } from './job-queue.service';
 import { CalendarCacheService } from './calendar/calendar-cache.service';
-import { CacheInvalidationService } from './cache-invalidation.service';
-import { CacheConsistencyService } from './cache-consistency.service';
-import { CacheWarmingService } from './cache-warming.service';
-import { ResponsePersonalityService } from './response-personality.service';
 import { WorkflowCacheService } from './workflow-cache.service';
 import { IntentAnalysisService } from './intent-analysis.service';
 import { SequentialExecutionService } from './sequential-execution.service';
@@ -60,21 +53,10 @@ import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 export const initializeAllCoreServices = async (): Promise<void> => {
   // Check if core services are already registered (not just any services)
   if (serviceManager.getService('tokenStorageService')) {
-    EnhancedLogger.debug('Core services already registered', {
-      correlationId: `service-init-${Date.now()}`,
-      operation: 'service_initialization',
-      metadata: { status: 'already_registered' }
-    });
     return;
   }
 
   try {
-    EnhancedLogger.debug('Registering core services...', {
-      correlationId: `service-init-${Date.now()}`,
-      operation: 'service_initialization',
-      metadata: { phase: 'registration' }
-    });
-
     // Register core services with dependencies
     await registerCoreServices();
 
@@ -176,39 +158,12 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 3. CacheService - No dependencies, high priority (optional)
-    // Only register if Redis is available or explicitly enabled
-    if (process.env.DISABLE_REDIS !== 'true') {
-      // Check for Railway Redis environment variables
-      const hasRedisConfig = !!(
-        process.env.REDIS_URL || 
-        process.env.REDISCLOUD_URL || 
-        process.env.REDIS_PRIVATE_URL ||
-        process.env.REDIS_PUBLIC_URL ||
-        process.env.RAILWAY_REDIS_URL
-      );
-      
-      if (hasRedisConfig || ENVIRONMENT.nodeEnv === 'development') {
-        const cacheService = new CacheService();
-        serviceManager.registerService('cacheService', cacheService, {
-          priority: 6,
-          autoStart: true
-        });
-        // CacheService registered
-      } else {
-        EnhancedLogger.warn('CacheService skipped - no Redis configuration found', {
-          correlationId: `service-init-${Date.now()}`,
-          operation: 'service_registration',
-          metadata: { service: 'cacheService', reason: 'no_redis_config' }
-        });
-      }
-    } else {
-      EnhancedLogger.debug('CacheService disabled via DISABLE_REDIS environment variable', {
-        correlationId: `service-init-${Date.now()}`,
-        operation: 'service_registration',
-        metadata: { service: 'cacheService', reason: 'disabled_env_var' }
-      });
-    }
+    // 3. CacheService - Always register, handles DISABLE_REDIS internally
+    const cacheService = new CacheService();
+    serviceManager.registerService('cacheService', cacheService, {
+      priority: 6,
+      autoStart: true
+    });
 
     // 4. TokenStorageService - Depends on databaseService (replaces SessionService)
     const tokenStorageService = new TokenStorageService();
@@ -347,25 +302,12 @@ const registerCoreServices = async (): Promise<void> => {
         enableAsyncProcessing: true
       });
       serviceManager.registerService('slackMessageProcessor', slackMessageProcessor, {
-        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService', 'asyncRequestClassifierService', 'responsePersonalityService', 'jobQueueService'],
+        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService', 'asyncRequestClassifierService'],
         priority: 81,
         autoStart: true
       });
     }
 
-    // 16. SlackResponseFormatter - Focused service for response formatting
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackResponseFormatter = new SlackResponseFormatter({
-        enableRichFormatting: true,
-        maxTextLength: 3800,
-        enableProposalFormatting: true
-      });
-      serviceManager.registerService('slackResponseFormatter', slackResponseFormatter, {
-        dependencies: ['emailFormatter'],
-        priority: 82,
-        autoStart: true
-      });
-    }
 
     // 17. SlackEventValidator - Focused service for event validation and deduplication
     if (ENV_VALIDATION.isSlackConfigured()) {
@@ -420,12 +362,6 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 18. EmailFormatter - Focused service for email response formatting
-    const emailFormatter = new EmailFormatter();
-    serviceManager.registerService('emailFormatter', emailFormatter, {
-      priority: 88,
-      autoStart: true
-    });
 
     // 19. CalendarEventManager - Focused service for calendar event operations
     const calendarEventManager = new CalendarEventManager();
@@ -528,46 +464,10 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 31. CacheInvalidationService - Event-based cache invalidation
-    const cacheInvalidationService = new CacheInvalidationService();
-    serviceManager.registerService('cacheInvalidationService', cacheInvalidationService, {
-      dependencies: ['cacheService', 'gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService'],
-      priority: 102,
-      autoStart: true
-    });
 
-    // 32. CacheConsistencyService - Cache consistency level management
-    const cacheConsistencyService = new CacheConsistencyService();
-    serviceManager.registerService('cacheConsistencyService', cacheConsistencyService, {
-      dependencies: ['cacheService'],
-      priority: 103,
-      autoStart: true
-    });
 
-    // 33. CacheWarmingService - Proactive cache warming
-    const cacheWarmingService = new CacheWarmingService();
-    serviceManager.registerService('cacheWarmingService', cacheWarmingService, {
-      dependencies: ['cacheService', 'gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService', 'tokenStorageService'],
-      priority: 104,
-      autoStart: true
-    });
 
-    // 34. JobQueueService - Async job processing for better response times
-    const jobQueueService = new JobQueueService();
-    serviceManager.registerService('jobQueueService', jobQueueService, {
-      dependencies: ['cacheService'],
-      priority: 85, // High priority for job processing
-      autoStart: true
-    });
 
-    // 35. ResponsePersonalityService - Dynamic LLM-generated responses
-    const personalityConfig = getPersonalityConfig();
-    const responsePersonalityService = new ResponsePersonalityService(personalityConfig);
-    serviceManager.registerService('responsePersonalityService', responsePersonalityService, {
-      dependencies: ['openaiService', 'cacheService'],
-      priority: 70, // Before response formatting services
-      autoStart: true
-    });
 
     // 36. AsyncRequestClassifierService - LLM-based async request classification
     const { AsyncRequestClassifierService } = await import('./async-request-classifier.service');
@@ -582,7 +482,7 @@ const registerCoreServices = async (): Promise<void> => {
     // 36. CachePerformanceMonitoringService - Monitor all cache performance (Enhanced)
     const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
     serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService, {
-      dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService', 'cacheInvalidationService', 'cacheConsistencyService', 'cacheWarmingService'],
+      dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService'],
       priority: 105,
       autoStart: true
     });

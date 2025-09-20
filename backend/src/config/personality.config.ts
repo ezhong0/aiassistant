@@ -1,4 +1,13 @@
-import { PersonalityConfig } from '../services/response-personality.service';
+
+/**
+ * Personality configuration interface
+ */
+export interface PersonalityConfig {
+  personality: 'cute' | 'professional' | 'friendly' | 'casual';
+  useEmojis: boolean;
+  enthusiasmLevel: 'low' | 'medium' | 'high';
+  cacheResponses: boolean;
+}
 
 /**
  * Personality configuration based on environment

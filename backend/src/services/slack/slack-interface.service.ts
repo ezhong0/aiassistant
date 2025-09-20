@@ -4,7 +4,6 @@ import { ServiceManager } from '../service-manager';
 import { SlackEventHandler } from './slack-event-handler.service';
 import { SlackOAuthManager } from './slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack-message-processor.service';
-import { SlackResponseFormatter } from './slack-response-formatter.service';
 import { SlackEventValidator } from './slack-event-validator.service';
 import { SlackContextExtractor } from './slack-context-extractor.service';
 import { 
@@ -46,7 +45,7 @@ export class SlackInterfaceService extends BaseService {
   private slackEventHandler: SlackEventHandler | null = null;
   private slackOAuthManager: SlackOAuthManager | null = null;
   private slackMessageProcessor: SlackMessageProcessor | null = null;
-  private slackResponseFormatter: SlackResponseFormatter | null = null;
+  private slackResponseFormatter: any | null = null;
   private slackEventValidator: SlackEventValidator | null = null;
   private slackContextExtractor: SlackContextExtractor | null = null;
 
@@ -170,14 +169,21 @@ export class SlackInterfaceService extends BaseService {
    * ```
    */
   async handleEvent(event: SlackEvent, teamId: string): Promise<void> {
+    console.log('🎯 SlackInterfaceService.handleEvent called');
+    console.log('📊 Event type:', this.getEventType(event));
+    console.log('📊 Team ID:', teamId);
+    console.log('📊 Event data:', JSON.stringify(event, null, 2));
+    
     this.assertReady();
 
     try {
       // Use SlackEventHandler for proper event processing
       if (this.slackEventHandler) {
+        console.log('✅ Using SlackEventHandler for processing...');
         const processingResult = await this.slackEventHandler.processEvent(event, teamId);
         
         if (!processingResult.success) {
+          console.error('❌ Event processing failed:', processingResult.error);
           this.logWarn('Event processing failed via SlackEventHandler', {
             eventId: processingResult.eventId,
             error: processingResult.error
@@ -185,9 +191,11 @@ export class SlackInterfaceService extends BaseService {
           return;
         }
 
+        console.log('✅ Event processing successful, extracting context...');
         // Extract Slack context from the processed event
         const slackContext = await this.extractSlackContext(event, teamId);
         
+        console.log('✅ Context extracted, routing event...');
         // Route to appropriate handler based on event type
         const eventType = this.determineEventType(event);
         if (!eventType) {
@@ -548,13 +556,7 @@ export class SlackInterfaceService extends BaseService {
       this.logInfo('Successfully retrieved shared SlackMessageProcessor with async processing enabled');
     }
 
-    // Initialize SlackResponseFormatter
-    this.slackResponseFormatter = new SlackResponseFormatter({
-      enableRichFormatting: true,
-      maxTextLength: 3800,
-      enableProposalFormatting: true
-    });
-    await this.slackResponseFormatter.initialize();
+    // SlackResponseFormatter service removed - using direct response generation
 
     // Initialize SlackEventValidator
     this.slackEventValidator = new SlackEventValidator({

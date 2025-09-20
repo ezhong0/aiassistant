@@ -59,7 +59,7 @@ export class NextStepPlanningService extends BaseService {
       parameters: ['query', 'recipient', 'subject', 'body', 'timeRange', 'maxResults', 'operation']
     },
     calendarAgent: {
-      capabilities: ['search', 'create', 'update', 'delete', 'check_availability', 'suggest_times'],
+      capabilities: ['search', 'create', 'update', 'delete', 'check_availability', 'suggest_times', 'retrieve_events', 'list_events'],
       description: 'Google Calendar operations for event management and scheduling',
       parameters: ['title', 'startTime', 'endTime', 'attendees', 'duration', 'query', 'operation']
     },
@@ -106,28 +106,36 @@ export class NextStepPlanningService extends BaseService {
    * Plan the next step in the workflow based on current context
    */
   async planNextStep(context: WorkflowContext): Promise<NextStepPlan | null> {
+    console.log('📋 PLANNING: Starting next step planning...');
+    console.log('📊 Planning Context:', JSON.stringify(context, null, 2));
+    
     if (!this.openaiService) {
       throw new Error('OpenAIService not available');
     }
 
     try {
+      console.log('🔍 PLANNING: Creating planning prompt...');
       const planningPrompt = this.createNextStepPrompt(context);
 
+      console.log('🤖 PLANNING: Calling OpenAI for step planning...');
       const response = await this.openaiService.generateText(
         planningPrompt,
         'You are an intelligent workflow planner. Plan the next logical step based on context. Return only valid JSON.',
         { temperature: 0.2, maxTokens: 2000 }
       );
 
+      console.log('📋 PLANNING: Raw OpenAI response:', response);
       let nextStep;
       try {
         nextStep = JSON.parse(response);
+        console.log('✅ PLANNING: Parsed next step:', JSON.stringify(nextStep, null, 2));
       } catch (parseError) {
         throw new Error(`LLM returned invalid JSON for step planning: ${response.substring(0, 200)}... Parse error: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
       }
 
       // If the task is marked as complete, return null
       if (nextStep.isComplete) {
+        console.log('✅ PLANNING: Task marked as complete, returning null');
         EnhancedLogger.debug('Workflow marked as complete', {
           correlationId: `next-step-complete-${Date.now()}`,
           operation: 'next_step_complete',
@@ -141,7 +149,9 @@ export class NextStepPlanningService extends BaseService {
       }
 
       // Validate and enhance the next step
+      console.log('🔧 PLANNING: Validating and enhancing next step...');
       const validatedStep = this.validateNextStep(nextStep, context);
+      console.log('🎉 PLANNING: Final validated step:', JSON.stringify(validatedStep, null, 2));
 
       EnhancedLogger.debug('Next step planned', {
         correlationId: `next-step-planned-${Date.now()}`,

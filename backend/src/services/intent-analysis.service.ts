@@ -104,23 +104,33 @@ export class IntentAnalysisService extends BaseService {
    * Analyze user intent and dynamically create execution plan
    */
   async analyzeIntent(userInput: string, context?: any): Promise<IntentAnalysis> {
+    console.log('🎯 INTENT ANALYSIS: Starting intent analysis...');
+    console.log('📊 User Input:', userInput);
+    console.log('📊 Context:', context ? JSON.stringify(context, null, 2) : 'No context provided');
+    
     if (!this.openaiService) {
       throw new Error('OpenAIService not available');
     }
 
     try {
+      console.log('🔍 INTENT ANALYSIS: Creating dynamic analysis prompt...');
       const analysisPrompt = this.createDynamicAnalysisPrompt(userInput, context);
 
+      console.log('🤖 INTENT ANALYSIS: Calling OpenAI for intent analysis...');
       const response = await this.openaiService.generateText(
         analysisPrompt,
         'You are an advanced AI planner. Create intelligent, context-aware execution plans. Return only valid JSON.',
         { temperature: 0.2, maxTokens: 3000 }
       );
 
+      console.log('📋 INTENT ANALYSIS: Raw OpenAI response:', response);
       const analysis = JSON.parse(response);
+      console.log('✅ INTENT ANALYSIS: Parsed analysis:', JSON.stringify(analysis, null, 2));
 
       // Validate and enhance the analysis
+      console.log('🔧 INTENT ANALYSIS: Enhancing analysis...');
       const enhancedAnalysis = await this.enhanceAnalysis(analysis, userInput, context);
+      console.log('🎉 INTENT ANALYSIS: Final enhanced analysis:', JSON.stringify(enhancedAnalysis, null, 2));
 
       EnhancedLogger.debug('Dynamic intent analysis completed', {
         correlationId: `intent-analysis-${Date.now()}`,

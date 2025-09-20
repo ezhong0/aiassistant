@@ -115,6 +115,10 @@ export class SequentialExecutionService extends BaseService {
    * Execute a single workflow step with reevaluation
    */
   async executeStep(workflowId: string, stepNumber: number): Promise<StepResult> {
+    console.log(`⚡ STEP EXECUTION: Starting step ${stepNumber} execution...`);
+    console.log('📊 Workflow ID:', workflowId);
+    console.log('📊 Step Number:', stepNumber);
+    
     const correlationId = `execute-step-${workflowId}-${stepNumber}`;
     const logContext: LogContext = {
       correlationId,
@@ -130,10 +134,12 @@ export class SequentialExecutionService extends BaseService {
       }
 
       // Get workflow state
+      console.log('🔍 STEP EXECUTION: Retrieving workflow state...');
       const workflow = await this.workflowCacheService.getWorkflow(workflowId);
       if (!workflow) {
         throw new Error(`Workflow ${workflowId} not found`);
       }
+      console.log('📋 STEP EXECUTION: Workflow state retrieved');
 
       // Get the step to execute
       const step = workflow.plan.find(s => s.stepNumber === stepNumber);
@@ -157,24 +163,33 @@ export class SequentialExecutionService extends BaseService {
         metadata: { workflowId, stepNumber }
       };
 
+      console.log('🔧 STEP EXECUTION: Executing tool call...');
+      console.log('📊 Tool Call:', JSON.stringify(toolCall, null, 2));
       const toolResult = await this.toolExecutorService.executeTools(
         [toolCall],
         executionContext,
         undefined, // No access token needed for internal workflow execution
         { preview: false } // Execute for real, not preview
       );
+      console.log('✅ STEP EXECUTION: Tool execution completed');
+      console.log('📊 Tool Result:', JSON.stringify(toolResult, null, 2));
 
       const executionTime = Date.now() - startTime;
 
       // Analyze the result and determine if plan needs modification
+      console.log('🔄 REASSESSMENT: Starting plan reevaluation...');
       const planModification = await this.reevaluatePlan(workflow, step, toolResult);
+      console.log('📊 REASSESSMENT: Plan modification result:', JSON.stringify(planModification, null, 2));
 
       // Generate natural language response
+      console.log('💬 COMMUNICATION: Generating natural language response...');
       const naturalResponse = await this.generateNaturalLanguageResponse(
         step,
         toolResult,
         planModification
       );
+      console.log('✅ COMMUNICATION: Natural language response generated');
+      console.log('📊 Response:', naturalResponse);
 
       // Create step result
       const firstResult = toolResult.length > 0 ? toolResult[0] : null;
@@ -237,6 +252,9 @@ export class SequentialExecutionService extends BaseService {
    * Execute an entire workflow sequentially
    */
   async executeWorkflow(workflowId: string): Promise<WorkflowResult> {
+    console.log('⚡ EXECUTION: Starting workflow execution...');
+    console.log('📊 Workflow ID:', workflowId);
+    
     const correlationId = `execute-workflow-${workflowId}`;
     const logContext: LogContext = {
       correlationId,
@@ -251,10 +269,12 @@ export class SequentialExecutionService extends BaseService {
         throw new Error('WorkflowCacheService not available');
       }
 
+      console.log('🔍 EXECUTION: Retrieving workflow from cache...');
       const workflow = await this.workflowCacheService.getWorkflow(workflowId);
       if (!workflow) {
         throw new Error(`Workflow ${workflowId} not found`);
       }
+      console.log('📋 EXECUTION: Workflow retrieved:', JSON.stringify(workflow, null, 2));
 
       const startTime = Date.now();
       const results: StepResult[] = [];

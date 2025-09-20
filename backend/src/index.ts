@@ -26,8 +26,6 @@ import protectedRoutes from './routes/protected.routes';
 import assistantRoutes from './routes/assistant.routes';
 import healthRoutes from './routes/health';
 import enhancedHealthRoutes from './routes/enhanced-health.routes';
-import jobRoutes from './routes/jobs.routes';
-import asyncRequestRoutes from './routes/async-requests.routes';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
@@ -44,10 +42,9 @@ const initializeApplication = async (): Promise<void> => {
 
     // Initialize AgentFactory after services
     initializeAgentFactory();
-
     
   } catch (error) {
-    
+    console.error('❌ Application initialization failed:', error);
     throw error; // Don't continue with broken services in production
   }
 }
@@ -91,26 +88,24 @@ app.use('/health', enhancedHealthRoutes);
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 app.use('/api/assistant', assistantRoutes);
-app.use('/api/jobs', jobRoutes);
-app.use('/api/async', asyncRequestRoutes);
 
 // Slack routes - pass global interfaces for event handling
 app.use('/slack', createSlackRoutes(serviceManager, () => globalInterfaces));
 
-// Slack interface integration
+// Slack interface integration (runs in background, completely optional)
 const setupSlackInterface = async () => {
   try {
+    console.log('🔗 Setting up Slack interface...');
     globalInterfaces = await initializeInterfaces(serviceManager);
     if (globalInterfaces.slackInterface) {
-      // Only initialize the SlackInterface service without mounting Bolt routes
-      // The manual /slack/events endpoint handles all Slack events directly
       await startInterfaces(globalInterfaces);
-      
+      console.log('✅ Slack interface initialized successfully');
     } else {
-      
+      console.log('⚠️ Slack interface not available, continuing without it');
     }
   } catch (error) {
-    
+    console.error('❌ Slack interface setup failed:', error);
+    console.log('⚠️ Continuing without Slack interface');
   }
 };
 
@@ -151,22 +146,33 @@ const startServer = async (): Promise<void> => {
     // Initialize application services
     await initializeApplication();
     
-    // Set up Slack interface after services are initialized
-    await setupSlackInterface();
+    // Set up Slack interface in background (non-blocking)
+    setupSlackInterface().catch(error => {
+      console.error('❌ Background Slack setup failed:', error);
+    });
 
     // Start the server
     const server = app.listen(port, () => {
+      console.log(`🚀 Server running on port ${port}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+      console.log(`📊 Health check: http://localhost:${port}/healthz`);
     });
 
     // Enhanced error handling
     server.on('error', (err: NodeJS.ErrnoException) => {
+      console.error('❌ Server error:', err);
       if (err.code === 'EADDRINUSE') {
-        
+        console.error('❌ Port already in use');
         process.exit(1);
       } else {
-        
+        console.error('❌ Unknown server error');
         process.exit(1);
       }
+    });
+    
+    // Add logging for server events
+    server.on('listening', () => {
+      console.log('👂 Server is listening for connections');
     });
 
     // Add keep-alive for Railway
@@ -175,21 +181,21 @@ const startServer = async (): Promise<void> => {
 
     // Graceful shutdown handling
     const gracefulShutdown = async (signal: string) => {
-      
+      console.log(`🛑 Received ${signal}, starting graceful shutdown...`);
       
       server.close((err) => {
         if (err) {
-          
+          console.error('❌ Error during server close:', err);
           process.exit(1);
         } else {
-          
+          console.log('✅ Server closed gracefully');
           process.exit(0);
         }
       });
 
       // Force exit after 30 seconds
       setTimeout(() => {
-        
+        console.log('⏰ Force exit after 30 seconds');
         process.exit(1);
       }, 30000);
     };
@@ -199,14 +205,16 @@ const startServer = async (): Promise<void> => {
     
     // Handle unhandled errors to prevent crashes
     process.on('unhandledRejection', (reason, promise) => {
-      
+      console.error('❌ Unhandled rejection:', reason);
       // Don't exit on unhandled rejection in production
     });
     
     process.on('uncaughtException', (error) => {
-      
+      console.error('❌ Uncaught exception:', error);
       gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
+    
+    console.log('✅ All event handlers registered');
 
   } catch (error) {
     

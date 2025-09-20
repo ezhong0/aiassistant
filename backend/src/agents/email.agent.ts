@@ -4,7 +4,6 @@ import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAss
 import { ServiceManager } from '../services/service-manager';
 import { EmailOperationHandler } from '../services/email/email-operation-handler.service';
 import { EmailValidator } from '../services/email/email-validator.service';
-import { EmailFormatter } from '../services/email/email-formatter.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
 import {
   SendEmailRequest,
@@ -102,7 +101,7 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   // Focused component services
   private emailOps: EmailOperationHandler | null = null;
   private emailValidator: EmailValidator | null = null;
-  private emailFormatter: EmailFormatter | null = null;
+  private emailFormatter: any | null = null;
 
   /**
    * Initialize EmailAgent with AI planning capabilities
@@ -146,7 +145,7 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
       this.emailValidator = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_VALIDATOR) as EmailValidator;
     }
     if (!this.emailFormatter) {
-      this.emailFormatter = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_FORMATTER) as EmailFormatter;
+      this.emailFormatter = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_FORMATTER) as any;
     }
   }
 

@@ -344,12 +344,10 @@ export class ServiceManager {
     }
 
     if (registration.service.state === ServiceState.READY) {
-      
       return;
     }
 
     if (registration.service.state === ServiceState.INITIALIZING && registration.service.isReady()) {
-      // Service already ready
       return;
     }
 

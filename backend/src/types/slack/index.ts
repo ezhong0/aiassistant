@@ -42,7 +42,7 @@ export const initializeInterfaces = async (
       };
 
       interfaces.slackInterface = new SlackInterfaceService(slackConfig);
-      await interfaces.slackInterface.initialize();
+      // Don't initialize here - let startInterfaces handle it
       
     } else {
       

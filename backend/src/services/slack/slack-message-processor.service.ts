@@ -4,10 +4,8 @@ import { ToolExecutorService } from '../tool-executor.service';
 import { TokenManager } from '../token-manager';
 import { AIClassificationService } from '../ai-classification.service';
 import { AsyncRequestClassifierService, ClassificationContext } from '../async-request-classifier.service';
-import { ResponsePersonalityService, ResponseContext } from '../response-personality.service';
 import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
-import { JobQueueService } from '../job-queue.service';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface AsyncSlackResponse {
@@ -37,8 +35,8 @@ export class SlackMessageProcessor extends BaseService {
   private toolExecutorService: ToolExecutorService | null = null;
   private aiClassificationService: AIClassificationService | null = null;
   private asyncRequestClassifierService: AsyncRequestClassifierService | null = null;
-  private responsePersonalityService: ResponsePersonalityService | null = null;
-  private jobQueueService: JobQueueService | null = null;
+  private responsePersonalityService: any | null = null;
+  private jobQueueService: any | null = null;
 
   constructor(config: SlackMessageProcessorConfig) {
     super('SlackMessageProcessor');
@@ -93,15 +91,22 @@ export class SlackMessageProcessor extends BaseService {
    * Process a Slack message - with optional async classification
    */
   async processMessage(message: string, context: SlackContext, eventType: SlackEventType): Promise<SlackMessageProcessingResult> {
+    console.log('🎯 SLACK MESSAGE PROCESSOR: Starting message processing...');
+    console.log('📊 Message:', message);
+    console.log('📊 Context:', JSON.stringify(context, null, 2));
+    console.log('📊 Event Type:', eventType);
+    
     const startTime = Date.now();
 
     try {
       // Check if async processing is enabled and should be used
       if (this.config.enableAsyncProcessing && this.shouldUseAsyncProcessing(message, context)) {
+        console.log('🔄 SLACK MESSAGE PROCESSOR: Using async processing...');
         return await this.handleAsyncRequest(message, context, eventType);
       }
 
       // Fall back to sync processing
+      console.log('⚡ SLACK MESSAGE PROCESSOR: Using sync processing...');
       return await this.processMessageInternal(message, context, eventType);
 
     } catch (error) {
@@ -975,7 +980,7 @@ export class SlackMessageProcessor extends BaseService {
       throw new Error('ToolExecutorService is required but not available');
     }
 
-    this.jobQueueService = serviceManager.getService('jobQueueService') as JobQueueService;
+    this.jobQueueService = serviceManager.getService('jobQueueService') as any;
     if (!this.jobQueueService) {
       this.logWarn('JobQueueService not available - will process requests synchronously');
     }
@@ -990,8 +995,8 @@ export class SlackMessageProcessor extends BaseService {
       this.logWarn('AsyncRequestClassifierService not available - async processing will be disabled');
     }
 
-    this.responsePersonalityService = serviceManager.getService('responsePersonalityService') as ResponsePersonalityService;
-    this.jobQueueService = serviceManager.getService('jobQueueService') as JobQueueService;
+    this.responsePersonalityService = serviceManager.getService('responsePersonalityService') as any;
+    this.jobQueueService = serviceManager.getService('jobQueueService') as any;
 
     if (this.config.enableAsyncProcessing && (!this.asyncRequestClassifierService || !this.jobQueueService)) {
       this.logWarn('Async processing services not available - async processing will be disabled');
@@ -1448,7 +1453,7 @@ export class SlackMessageProcessor extends BaseService {
         return this.getFallbackImmediateResponse(classification);
       }
 
-      const responseContext: ResponseContext = {
+      const responseContext: any = {
         action: 'processing_async_request',
         success: true,
         details: {

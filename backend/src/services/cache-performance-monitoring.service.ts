@@ -19,9 +19,6 @@ import { GmailCacheService } from './email/gmail-cache.service';
 import { ContactCacheService } from './contact/contact-cache.service';
 import { SlackCacheService } from './slack/slack-cache.service';
 import { CalendarCacheService } from './calendar/calendar-cache.service';
-import { CacheInvalidationService } from './cache-invalidation.service';
-import { CacheConsistencyService } from './cache-consistency.service';
-import { CacheWarmingService } from './cache-warming.service';
 import { ServiceManager } from './service-manager';
 
 export interface OverallCacheMetrics {
@@ -95,9 +92,9 @@ export class CachePerformanceMonitoringService extends BaseService {
   private contactCacheService: ContactCacheService | null = null;
   private slackCacheService: SlackCacheService | null = null;
   private calendarCacheService: CalendarCacheService | null = null;
-  private cacheInvalidationService: CacheInvalidationService | null = null;
-  private cacheConsistencyService: CacheConsistencyService | null = null;
-  private cacheWarmingService: CacheWarmingService | null = null;
+  private cacheInvalidationService: any | null = null;
+  private cacheConsistencyService: any | null = null;
+  private cacheWarmingService: any | null = null;
 
   constructor() {
     super('CachePerformanceMonitoringService');
@@ -117,9 +114,9 @@ export class CachePerformanceMonitoringService extends BaseService {
       this.contactCacheService = serviceManager.getService<ContactCacheService>('contactCacheService') || null;
       this.slackCacheService = serviceManager.getService<SlackCacheService>('slackCacheService') || null;
       this.calendarCacheService = serviceManager.getService<CalendarCacheService>('calendarCacheService') || null;
-      this.cacheInvalidationService = serviceManager.getService<CacheInvalidationService>('cacheInvalidationService') || null;
-      this.cacheConsistencyService = serviceManager.getService<CacheConsistencyService>('cacheConsistencyService') || null;
-      this.cacheWarmingService = serviceManager.getService<CacheWarmingService>('cacheWarmingService') || null;
+      this.cacheInvalidationService = serviceManager.getService<any>('cacheInvalidationService') || null;
+      this.cacheConsistencyService = serviceManager.getService<any>('cacheConsistencyService') || null;
+      this.cacheWarmingService = serviceManager.getService<any>('cacheWarmingService') || null;
 
       this.logInfo('Enhanced Cache Performance Monitoring Service initialized successfully', {
         availableServices: {

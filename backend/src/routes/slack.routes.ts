@@ -168,6 +168,14 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   });
 
   /**
+   * Test endpoint to verify Slack routes are working
+   */
+  router.get('/test', (req, res) => {
+    console.log('🧪 Slack test endpoint reached!');
+    res.json({ status: 'ok', message: 'Slack routes are working', timestamp: new Date().toISOString() });
+  });
+
+  /**
    * Slack Event Subscription endpoint - handles URL verification challenge
    * This is the main endpoint that Slack calls for all events
    */
@@ -232,10 +240,10 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         if (interfaces?.slackInterface) {
           // Process in background - don't block the response
           interfaces.slackInterface.handleEvent(event, team_id).catch((processError: unknown) => {
-            
+            console.error('❌ Event processing failed:', processError);
           });
         } else {
-          
+          console.log('⚠️ No Slack interface available - event not processed');
         }
         return;
       }
