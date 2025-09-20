@@ -4,6 +4,7 @@ import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRisk
 import { CalendarService, CalendarEvent } from '../services/calendar/calendar.service';
 import { resolveCalendarService } from '../services/service-resolver';
 import { getService, serviceManager } from '../services/service-manager';
+import { OperationDetectionService } from '../services/operation-detection.service';
 import { TokenManager } from '../services/token-manager';
 import { APP_CONSTANTS } from '../config/constants';
 import { CALENDAR_SERVICE_CONSTANTS } from '../config/calendar-service-constants';
@@ -347,36 +348,23 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       return params.action;
     }
 
-    // Detect operation from query or parameters
-    if (params.query) {
-      const queryLower = params.query.toLowerCase();
-      if (queryLower.includes('list') || queryLower.includes('show') || queryLower.includes('what') || queryLower.includes('events')) {
-        return 'list';
-      } else if (queryLower.includes('create') || queryLower.includes('schedule') || queryLower.includes('add') || queryLower.includes('book')) {
-        return 'create';
-      } else if (queryLower.includes('update') || queryLower.includes('change') || queryLower.includes('modify') || queryLower.includes('edit')) {
-        return 'update';
-      } else if (queryLower.includes('delete') || queryLower.includes('remove') || queryLower.includes('cancel')) {
-        return 'delete';
-      } else if (queryLower.includes('available') || queryLower.includes('free') || queryLower.includes('busy')) {
-        return 'check_availability';
-      } else if (queryLower.includes('find') && (queryLower.includes('slot') || queryLower.includes('time'))) {
-        return 'find_slots';
+    try {
+      const operationDetectionService = serviceManager.getService<OperationDetectionService>('operationDetectionService');
+      if (!operationDetectionService) {
+        throw new Error('OperationDetectionService not available');
       }
-    }
 
-    // Check for list operation indicators
-    if ((params as any).timeMin || (params as any).timeMax || (params as any).maxResults) {
-      return 'list';
-    }
+      const userQuery = params.query || 'Calendar operation';
+      const detection = await operationDetectionService.detectOperation(
+        'calendarAgent',
+        userQuery,
+        params
+      );
 
-    // Check for create operation indicators
-    if (params.summary || params.start || params.end) {
-      return 'create';
+      return detection.operation;
+    } catch (error) {
+      throw new Error(`Failed to detect calendar operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    // Default to list for calendar operations (safer than create)
-    return 'list';
   }
 
   /**
@@ -1157,36 +1145,24 @@ Always return structured execution status with event details, scheduling insight
   }
 
   /**
-   * Detect calendar operation from query text
+   * Detect calendar operation from query text using LLM intelligence
    */
   private async detectCalendarOperation(query: string): Promise<string> {
     try {
-      const queryLower = query.toLowerCase();
-
-      // Simple keyword-based detection (could be enhanced with AI)
-      if (queryLower.includes('create') || queryLower.includes('schedule') || queryLower.includes('add') || queryLower.includes('book')) {
-        return 'create';
-      } else if (queryLower.includes('list') || queryLower.includes('show') || queryLower.includes('get') || queryLower.includes('what')) {
-        return 'list';
-      } else if (queryLower.includes('update') || queryLower.includes('change') || queryLower.includes('modify') || queryLower.includes('edit')) {
-        return 'update';
-      } else if (queryLower.includes('delete') || queryLower.includes('remove') || queryLower.includes('cancel')) {
-        return 'delete';
-      } else if (queryLower.includes('available') || queryLower.includes('free') || queryLower.includes('busy')) {
-        return 'check_availability';
-      } else if (queryLower.includes('find') && (queryLower.includes('slot') || queryLower.includes('time'))) {
-        return 'find_slots';
+      const operationDetectionService = serviceManager.getService<OperationDetectionService>('operationDetectionService');
+      if (!operationDetectionService) {
+        throw new Error('OperationDetectionService not available');
       }
 
-      // Default to create for calendar operations
-      return 'create';
+      const detection = await operationDetectionService.detectOperation(
+        'calendarAgent',
+        query,
+        {}
+      );
+
+      return detection.operation;
     } catch (error) {
-      EnhancedLogger.warn('Failed to detect calendar operation, defaulting to create', {
-        correlationId: 'calendar-operation-detect',
-        operation: 'operation_detection',
-        metadata: { query, error: error instanceof Error ? error.message : 'Unknown error' }
-      });
-      return 'create';
+      throw new Error(`Failed to detect calendar operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

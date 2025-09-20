@@ -40,6 +40,13 @@ import { CacheInvalidationService } from './cache-invalidation.service';
 import { CacheConsistencyService } from './cache-consistency.service';
 import { CacheWarmingService } from './cache-warming.service';
 import { ResponsePersonalityService } from './response-personality.service';
+import { WorkflowCacheService } from './workflow-cache.service';
+import { IntentAnalysisService } from './intent-analysis.service';
+import { SequentialExecutionService } from './sequential-execution.service';
+import { PlanModificationService } from './plan-modification.service';
+import { ContextAnalysisService } from './context-analysis.service';
+import { NextStepPlanningService } from './next-step-planning.service';
+import { OperationDetectionService } from './operation-detection.service';
 import { getPersonalityConfig } from '../config/personality.config';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
@@ -583,6 +590,62 @@ const registerCoreServices = async (): Promise<void> => {
     // 26. SlackAgent - Main Slack agent for context gathering and operations
     // Note: SlackAgent is not a service but an agent, so we'll register it differently
     // It will be instantiated by AgentFactory instead
+
+    // 37. WorkflowCacheService - Redis-based workflow state management
+    const workflowCacheService = new WorkflowCacheService();
+    serviceManager.registerService('workflowCacheService', workflowCacheService, {
+      dependencies: ['cacheService'],
+      priority: 50, // High priority for workflow management
+      autoStart: true
+    });
+
+    // 38. IntentAnalysisService - Enhanced intent understanding and plan creation
+    const intentAnalysisService = new IntentAnalysisService();
+    serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
+      dependencies: ['openaiService'],
+      priority: 55, // After OpenAI service, before workflow execution
+      autoStart: true
+    });
+
+    // 39. SequentialExecutionService - Core step-by-step execution engine with reevaluation
+    const sequentialExecutionService = new SequentialExecutionService();
+    serviceManager.registerService('sequentialExecutionService', sequentialExecutionService, {
+      dependencies: ['toolExecutorService', 'workflowCacheService', 'openaiService'],
+      priority: 60, // After all dependencies, core workflow execution
+      autoStart: true
+    });
+
+    // 40. PlanModificationService - Advanced dynamic plan adaptation with LLM intelligence
+    const planModificationService = new PlanModificationService();
+    serviceManager.registerService('planModificationService', planModificationService, {
+      dependencies: ['openaiService', 'workflowCacheService'],
+      priority: 58, // Before sequential execution, for plan optimization
+      autoStart: true
+    });
+
+    // 41. ContextAnalysisService - Intelligent conversation flow and interruption handling
+    const contextAnalysisService = new ContextAnalysisService();
+    serviceManager.registerService('contextAnalysisService', contextAnalysisService, {
+      dependencies: ['openaiService', 'workflowCacheService'],
+      priority: 57, // High priority for context management
+      autoStart: true
+    });
+
+    // 42. NextStepPlanningService - Dynamic step-by-step workflow planning
+    const nextStepPlanningService = new NextStepPlanningService();
+    serviceManager.registerService('nextStepPlanningService', nextStepPlanningService, {
+      dependencies: ['openaiService'],
+      priority: 58, // High priority for step planning
+      autoStart: true
+    });
+
+    // 43. OperationDetectionService - LLM-driven operation detection
+    const operationDetectionService = new OperationDetectionService();
+    serviceManager.registerService('operationDetectionService', operationDetectionService, {
+      dependencies: ['openaiService'],
+      priority: 59, // High priority for operation detection
+      autoStart: true
+    });
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

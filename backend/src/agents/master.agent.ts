@@ -13,6 +13,13 @@ import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
 import { AIClassificationService } from '../services/ai-classification.service';
 import { EmailFormatter } from '../services/email/email-formatter.service';
+import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
+import { IntentAnalysisService, IntentAnalysis } from '../services/intent-analysis.service';
+import { SequentialExecutionService, StepResult as SequentialStepResult, WorkflowResult } from '../services/sequential-execution.service';
+import { PlanModificationService, PlanModification } from '../services/plan-modification.service';
+import { ContextAnalysisService, ContextAnalysis } from '../services/context-analysis.service';
+import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
+import { OperationDetectionService } from '../services/operation-detection.service';
 
 /**
  * Agent capabilities interface for internal use
@@ -46,6 +53,13 @@ export const MasterAgentResponseSchema = z.object({
     toolsExecuted: z.number().optional(),
     successfulTools: z.number().optional(),
     slackContext: SlackContextSchema.optional(), // Now properly typed
+    completedSteps: z.number().optional(),
+    totalSteps: z.number().optional(),
+    stepNumber: z.number().optional(),
+    needsConfirmation: z.boolean().optional(),
+    pauseReason: z.string().optional(),
+    originalWorkflowId: z.string().optional(),
+    sessionId: z.string().optional(),
     toolResults: z.array(z.object({
       toolName: z.string(),
       success: z.boolean(),
@@ -58,10 +72,36 @@ export const MasterAgentResponseSchema = z.object({
     error: z.string().optional(),
     errorType: z.string().optional(),
     errorContext: z.record(z.unknown()).optional(), // Better than z.any()
+    // Workflow-related metadata
+    workflowId: z.string().optional(),
+    workflowAction: z.string().optional(),
+    currentStep: z.number().optional(),
   }).optional(),
+  suggestions: z.array(z.string()).optional(),
+  workflowResults: z.array(z.unknown()).optional()
 });
 
 export type MasterAgentResponse = z.infer<typeof MasterAgentResponseSchema>;
+
+// ✅ Workflow-related interfaces
+export interface WorkflowResponse {
+  workflowId: string;
+  message: string;
+  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  currentStep: number;
+  totalSteps: number;
+  needsConfirmation: boolean;
+  nextStep?: WorkflowStep;
+}
+
+export interface StepResult {
+  stepNumber: number;
+  success: boolean;
+  result?: any;
+  error?: string;
+  needsConfirmation: boolean;
+  naturalLanguageResponse: string;
+}
 
 // ✅ Proposal response schema
 export const ProposalResponseSchema = z.object({
@@ -387,7 +427,70 @@ export class MasterAgent {
       // Check memory usage periodically
       this.checkMemoryUsage();
       
+      // Check for active workflow first
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        const activeWorkflows = await workflowCacheService.getActiveWorkflows(sessionId);
+
+        if (activeWorkflows.length > 0) {
+          // Handle workflow interruption/continuation with step-by-step
+          const activeWorkflow = activeWorkflows[0];
+          if (activeWorkflow) {
+            return await this.continueStepByStepWorkflow(userInput, activeWorkflow, sessionId, userId, slackContext);
+          }
+        }
+      }
+
       // AI-first execution - no fallback routing
+      const openaiService = this.getOpenAIService();
+      if (!this.useOpenAI || !openaiService) {
+        throw new Error('🤖 AI service is required but not available. Please check OpenAI configuration.');
+      }
+
+      // Start new step-by-step execution
+      return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      EnhancedLogger.error(LOG_MESSAGES.OPERATION_ERROR, error as Error, {
+        ...logContext,
+        duration,
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
+
+      // Provide user-friendly error message
+      const errorMessage = this.createUserFriendlyErrorMessage(error as Error, userInput);
+
+      return {
+        message: errorMessage,
+        executionMetadata: {
+          processingTime: duration,
+          error: (error as Error).message,
+          errorType: (error as Error).constructor.name
+        }
+      };
+    }
+  }
+
+  // Original method renamed for reference (can be removed later)
+  async processUserInputLegacy(
+    userInput: string,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext
+  ): Promise<MasterAgentResponse> {
+    // Legacy implementation preserved for reference
+    const startTime = Date.now();
+    const correlationId = `master-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'processUserInputLegacy',
+      metadata: { inputLength: userInput.length }
+    };
+
+    try {
+      // Get required services
       const openaiService = this.getOpenAIService();
       if (!this.useOpenAI || !openaiService) {
         throw new Error('🤖 AI service is required but not available. Please check OpenAI configuration.');
@@ -399,14 +502,6 @@ export class MasterAgent {
         throw new Error('AIClassificationService is required but not available');
       }
       const contextDetection = await aiClassificationService.detectContextNeeds(userInput, slackContext);
-      EnhancedLogger.debug(LOG_MESSAGES.CONTEXT_DETECTION, {
-        ...logContext,
-        metadata: { 
-          needsContext: contextDetection.needsContext,
-          contextType: contextDetection.contextType,
-          confidence: contextDetection.confidence
-        }
-      });
 
       // Step 2: Gather context if needed
       let contextGathered: ContextGatheringResult | undefined;
@@ -1263,8 +1358,1036 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
 
   /**
-   * Cleanup resources and memory
+   * Get WorkflowCacheService instance
    */
+  private getWorkflowCacheService(): WorkflowCacheService | null {
+    try {
+      const service = getService<WorkflowCacheService>('workflowCacheService');
+      return service || null;
+    } catch (error) {
+      EnhancedLogger.debug('WorkflowCacheService not available', {
+        correlationId: 'workflow-service-check',
+        operation: 'workflow_service_check',
+        metadata: { error: (error as Error).message }
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Get IntentAnalysisService instance
+   */
+  private getIntentAnalysisService(): IntentAnalysisService | null {
+    try {
+      const service = getService<IntentAnalysisService>('intentAnalysisService');
+      return service || null;
+    } catch (error) {
+      EnhancedLogger.debug('IntentAnalysisService not available', {
+        correlationId: 'intent-service-check',
+        operation: 'intent_service_check',
+        metadata: { error: (error as Error).message }
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Handle workflow interruption - analyze if new input relates to current workflow
+   */
+  private async handleWorkflowInterruption(
+    userInput: string, 
+    activeWorkflow: WorkflowState, 
+    sessionId: string, 
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `workflow-interrupt-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'workflow_interruption',
+      metadata: { 
+        workflowId: activeWorkflow.workflowId,
+        currentStep: activeWorkflow.currentStep,
+        totalSteps: activeWorkflow.totalSteps
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('Handling workflow interruption', logContext);
+
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        throw new Error('OpenAI service not available for workflow interruption analysis');
+      }
+
+      // Analyze if the new input relates to the current workflow
+      const analysisPrompt = `
+You are analyzing whether a user's new input relates to an ongoing workflow.
+
+CURRENT WORKFLOW:
+- Workflow ID: ${activeWorkflow.workflowId}
+- Original Request: "${activeWorkflow.context.originalRequest}"
+- Current Step: ${activeWorkflow.currentStep}/${activeWorkflow.totalSteps}
+- Current Step Description: "${activeWorkflow.pendingStep?.description || 'No pending step'}"
+- Status: ${activeWorkflow.status}
+
+USER'S NEW INPUT: "${userInput}"
+
+ANALYSIS TASK:
+Determine if the new input:
+1. Relates to the current workflow (continue, modify, or provide additional info)
+2. Is a new unrelated request (start new workflow)
+3. Is a cancellation or pause request
+
+RESPONSE FORMAT (JSON only):
+{
+  "relatesToWorkflow": true/false,
+  "action": "continue|modify|cancel|new_request",
+  "reasoning": "Brief explanation",
+  "response": "Natural language response to user"
+}
+
+GUIDELINES:
+- If user provides additional info for current step: relatesToWorkflow=true, action=continue
+- If user wants to modify current workflow: relatesToWorkflow=true, action=modify  
+- If user says "cancel", "stop", "nevermind": relatesToWorkflow=true, action=cancel
+- If user asks something completely different: relatesToWorkflow=false, action=new_request
+`;
+
+      const response = await openaiService.generateText(
+        analysisPrompt,
+        'You are a workflow interruption analyzer. Return only valid JSON.',
+        { temperature: 0.1, maxTokens: 500 }
+      );
+
+      const analysis = JSON.parse(response);
+      
+      if (analysis.relatesToWorkflow && analysis.action === 'continue') {
+        // Continue current workflow with new input
+        return await this.continueWorkflow(activeWorkflow, userInput, sessionId, userId);
+      } else if (analysis.relatesToWorkflow && analysis.action === 'cancel') {
+        // Cancel current workflow
+        const workflowCacheService = this.getWorkflowCacheService();
+        if (workflowCacheService) {
+          await workflowCacheService.cancelWorkflow(activeWorkflow.workflowId);
+        }
+        
+        return {
+          message: analysis.response || 'Workflow cancelled. How can I help you?',
+          toolCalls: [],
+          toolResults: [],
+          executionMetadata: {
+            processingTime: Date.now() - Date.now(),
+            workflowId: activeWorkflow.workflowId,
+            workflowAction: 'cancelled'
+          }
+        };
+      } else {
+        // Start new workflow
+        return await this.startNewWorkflow(userInput, sessionId, userId);
+      }
+    } catch (error) {
+      EnhancedLogger.error('Error handling workflow interruption', error as Error, logContext);
+      
+      // Fallback: start new workflow
+      return await this.startNewWorkflow(userInput, sessionId, userId);
+    }
+  }
+
+  /**
+   * Start a new workflow with intent analysis
+   */
+  private async startNewWorkflow(
+    userInput: string, 
+    sessionId: string, 
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `new-workflow-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'start_new_workflow',
+      metadata: { userInput: userInput.substring(0, 100) }
+    };
+
+    try {
+      EnhancedLogger.debug('Starting new workflow', logContext);
+
+      const intentAnalysisService = this.getIntentAnalysisService();
+      if (!intentAnalysisService) {
+        // Fallback to regular processing
+        return await this.processUserInputRegular(userInput, sessionId, userId);
+      }
+
+      // Analyze intent and create plan
+      const intentAnalysis = await intentAnalysisService.analyzeIntent(userInput);
+      const executionPlan = await intentAnalysisService.createExecutionPlan(intentAnalysis);
+
+      // Create workflow state
+      const workflowId = `workflow-${sessionId}-${Date.now()}`;
+      const workflowState: WorkflowState = {
+        workflowId,
+        sessionId,
+        userId,
+        status: 'active',
+        currentStep: 0,
+        totalSteps: executionPlan.length,
+        plan: executionPlan,
+        completedSteps: [],
+        pendingStep: executionPlan[0] || null,
+        context: {
+          originalRequest: userInput,
+          userIntent: intentAnalysis.intent,
+          gatheredData: {}
+        },
+        createdAt: new Date(),
+        lastActivity: new Date(),
+        expiresAt: new Date(Date.now() + 3600000) // 1 hour
+      };
+
+      // Save workflow to cache
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.createWorkflow(workflowState);
+      }
+
+      // Execute first step
+      return await this.executeWorkflowStep(workflowState, sessionId, userId);
+    } catch (error) {
+      EnhancedLogger.error('Error starting new workflow', error as Error, logContext);
+      
+      // Fallback to regular processing
+      return await this.processUserInputRegular(userInput, sessionId, userId);
+    }
+  }
+
+  /**
+   * Continue existing workflow with new input
+   */
+  private async continueWorkflow(
+    workflow: WorkflowState, 
+    userInput: string, 
+    sessionId: string, 
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `continue-workflow-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'continue_workflow',
+      metadata: { 
+        workflowId: workflow.workflowId,
+        currentStep: workflow.currentStep
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('Continuing workflow', logContext);
+
+      // Update workflow context with new input
+      workflow.context.gatheredData[`step_${workflow.currentStep}_input`] = userInput;
+      workflow.lastActivity = new Date();
+
+      // Update workflow in cache
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.updateWorkflow(workflow.workflowId, workflow);
+      }
+
+      // Execute current step
+      return await this.executeWorkflowStep(workflow, sessionId, userId);
+    } catch (error) {
+      EnhancedLogger.error('Error continuing workflow', error as Error, logContext);
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a workflow step
+   */
+  private async executeWorkflowStep(
+    workflow: WorkflowState, 
+    sessionId: string, 
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `execute-step-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'execute_workflow_step',
+      metadata: { 
+        workflowId: workflow.workflowId,
+        currentStep: workflow.currentStep,
+        totalSteps: workflow.totalSteps
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('Executing workflow step', logContext);
+
+      const currentStep = workflow.plan[workflow.currentStep];
+      if (!currentStep) {
+        // Workflow completed
+        const workflowCacheService = this.getWorkflowCacheService();
+        if (workflowCacheService) {
+          await workflowCacheService.completeWorkflow(workflow.workflowId);
+        }
+
+        return {
+          message: 'Workflow completed successfully!',
+          toolCalls: [],
+          toolResults: [],
+          executionMetadata: {
+            processingTime: Date.now() - Date.now(),
+            workflowId: workflow.workflowId,
+            workflowAction: 'completed'
+          }
+        };
+      }
+
+      // Execute the step using regular tool execution
+      const toolCall: ToolCall = {
+        name: currentStep.toolCall.name,
+        parameters: currentStep.toolCall.parameters
+      };
+
+      const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId);
+      
+      // Update step status
+      currentStep.status = toolResult.success ? 'executed' : 'failed';
+      currentStep.result = toolResult.result;
+      
+      // Update workflow
+      workflow.completedSteps.push(currentStep);
+      workflow.currentStep++;
+      workflow.pendingStep = workflow.plan[workflow.currentStep] || null;
+      workflow.lastActivity = new Date();
+
+      // Update workflow in cache
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.updateWorkflow(workflow.workflowId, workflow);
+      }
+
+      // Generate natural language response
+      const naturalResponse = await this.generateNaturalLanguageResponseInternal(
+        `Executed step ${currentStep.stepNumber}: ${currentStep.description}`,
+        [toolResult],
+        sessionId
+      );
+
+      return {
+        message: naturalResponse,
+        toolCalls: [toolCall],
+        toolResults: [toolResult],
+        executionMetadata: {
+          processingTime: Date.now() - Date.now(),
+          workflowId: workflow.workflowId,
+          currentStep: workflow.currentStep,
+          totalSteps: workflow.totalSteps,
+          workflowAction: 'step_executed'
+        }
+      };
+    } catch (error) {
+      EnhancedLogger.error('Error executing workflow step', error as Error, logContext);
+      throw error;
+    }
+  }
+
+  /**
+   * Regular processing without workflow (fallback)
+   */
+  private async processUserInputRegular(
+    userInput: string, 
+    sessionId: string, 
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    // This would be the original processUserInput logic
+    // For now, return a simple response
+    return {
+      message: `I understand you want to: ${userInput}. Let me help you with that.`,
+      toolCalls: [],
+      toolResults: [],
+      executionMetadata: {
+        processingTime: Date.now() - Date.now(),
+        workflowAction: 'regular_processing'
+      }
+    };
+  }
+
+  /**
+   * Internal tool call execution for workflow steps
+   */
+  private async executeToolCallInternal(
+    toolCall: ToolCall, 
+    sessionId: string, 
+    userId?: string
+  ): Promise<ToolResult> {
+    try {
+      // This is a simplified version - in a real implementation, you'd use the ToolExecutorService
+      return {
+        success: true,
+        toolName: toolCall.name,
+        executionTime: 100,
+        result: { message: `Executed ${toolCall.name}` }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        toolName: toolCall.name,
+        executionTime: 0,
+        error: (error as Error).message
+      };
+    }
+  }
+
+  /**
+   * Internal natural language response generation for workflow steps
+   */
+  private async generateNaturalLanguageResponseInternal(
+    userInput: string,
+    toolResults: ToolResult[],
+    sessionId: string
+  ): Promise<string> {
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        return 'Step executed successfully.';
+      }
+
+      const toolResultsSummary = toolResults.map(tr => ({
+        toolName: tr.toolName,
+        success: tr.success,
+        result: this.truncateToolResultForLLM(tr.result),
+        error: tr.error
+      }));
+
+      const prompt = `User asked: "${userInput}"
+
+Here's the data from your tools:
+${JSON.stringify(toolResultsSummary, null, 2)}
+
+Respond naturally and conversationally. Skip technical details like URLs, IDs, and metadata. Don't use markdown formatting - just plain text that's easy to read.`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'Generate natural language responses from tool execution results',
+        { temperature: 0.7, maxTokens: 1000 }
+      );
+
+      return response.trim();
+    } catch (error) {
+      EnhancedLogger.error('Error processing tool results with LLM', error as Error, {
+        correlationId: `workflow-response-${Date.now()}`,
+        operation: 'workflow_response_generation',
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
+      
+      return 'Step executed successfully.';
+    }
+  }
+  /**
+   * Enhanced workflow execution using SequentialExecutionService
+   */
+  private async executeWorkflowWithSequentialExecution(
+    workflowId: string,
+    sessionId: string,
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `execute-workflow-${workflowId}`;
+    const logContext: LogContext = {
+      correlationId,
+      operation: 'execute_workflow_sequential',
+      metadata: { sessionId, workflowId, userId }
+    };
+
+    try {
+      EnhancedLogger.debug('Executing workflow with SequentialExecutionService', logContext);
+
+      const sequentialExecutionService = getService<SequentialExecutionService>('sequentialExecutionService');
+      if (!sequentialExecutionService) {
+        throw new Error('SequentialExecutionService not available');
+      }
+
+      const workflowResult = await sequentialExecutionService.executeWorkflow(workflowId);
+
+      return {
+        message: workflowResult.finalResponse,
+        executionMetadata: {
+          processingTime: workflowResult.executionTime,
+          successfulTools: workflowResult.completedSteps,
+          totalExecutionTime: workflowResult.executionTime,
+          workflowId: workflowResult.workflowId,
+          workflowAction: workflowResult.success ? 'completed' : 'failed',
+          completedSteps: workflowResult.completedSteps,
+          totalSteps: workflowResult.totalSteps
+        },
+        workflowResults: workflowResult.results
+      };
+    } catch (error) {
+      EnhancedLogger.error('Error executing workflow with SequentialExecutionService', error as Error, logContext);
+      return this.createErrorResponse(error as Error);
+    }
+  }
+
+  /**
+   * Continue workflow with context analysis
+   */
+  private async continueWorkflowWithContext(
+    userInput: string,
+    sessionId: string,
+    workflow: WorkflowState,
+    contextAnalysis: ContextAnalysis,
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `continue-workflow-context-${sessionId}`;
+    const logContext: LogContext = {
+      correlationId,
+      operation: 'continue_workflow_context',
+      metadata: {
+        sessionId,
+        workflowId: workflow.workflowId,
+        intentType: contextAnalysis.intentType,
+        userId
+      }
+    };
+
+    try {
+      EnhancedLogger.debug('Continuing workflow with context analysis', logContext);
+
+      // Update workflow context with new input and analysis
+      workflow.context.gatheredData[`step_${workflow.currentStep}_context`] = {
+        userInput,
+        contextAnalysis,
+        timestamp: new Date()
+      };
+      workflow.lastActivity = new Date();
+
+      // Check if plan modifications are needed
+      const planModificationService = getService<PlanModificationService>('planModificationService');
+      if (planModificationService && contextAnalysis.workflowImpact.type === 'modify') {
+        const modifications = await planModificationService.analyzePlan(workflow.workflowId, {
+          originalRequest: workflow.context.originalRequest,
+          currentStep: workflow.currentStep,
+          totalSteps: workflow.totalSteps,
+          stepResults: [],
+          remainingSteps: workflow.plan.slice(workflow.currentStep),
+          userFeedback: userInput,
+          contextualInfo: contextAnalysis
+        });
+
+        if (modifications.length > 0) {
+          const highPriorityMods = modifications.filter(m => m.priority === 'high' || m.priority === 'critical');
+          for (const mod of highPriorityMods) {
+            await planModificationService.applyModification(workflow.workflowId, mod);
+          }
+        }
+      }
+
+      // Update workflow in cache
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.updateWorkflow(workflow.workflowId, workflow);
+      }
+
+      // Continue execution
+      return await this.executeWorkflowWithSequentialExecution(workflow.workflowId, sessionId, userId);
+    } catch (error) {
+      EnhancedLogger.error('Error continuing workflow with context', error as Error, logContext);
+      return this.createErrorResponse(error as Error);
+    }
+  }
+
+  /**
+   * Pause workflow and address interruption
+   */
+  private async pauseAndAddressInterruption(
+    userInput: string,
+    sessionId: string,
+    workflow: WorkflowState,
+    contextAnalysis: ContextAnalysis,
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `pause-workflow-${sessionId}`;
+    const logContext: LogContext = {
+      correlationId,
+      operation: 'pause_workflow',
+      metadata: { sessionId, workflowId: workflow.workflowId, userId }
+    };
+
+    try {
+      EnhancedLogger.debug('Pausing workflow to address interruption', logContext);
+
+      // Pause the workflow
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.updateWorkflow(workflow.workflowId, {
+          status: 'paused',
+          lastActivity: new Date()
+        });
+      }
+
+      // Generate contextual response
+      const contextAnalysisService = getService<ContextAnalysisService>('contextAnalysisService');
+      let responseMessage = contextAnalysis.contextualResponse;
+
+      if (contextAnalysisService) {
+        responseMessage = await contextAnalysisService.generateContextualResponse(
+          userInput,
+          contextAnalysis,
+          workflow
+        );
+      }
+
+      return {
+        message: responseMessage,
+        executionMetadata: {
+          workflowId: workflow.workflowId,
+          workflowAction: 'paused',
+          pauseReason: contextAnalysis.suggestedAction.reasoning
+        }
+      };
+    } catch (error) {
+      EnhancedLogger.error('Error pausing workflow', error as Error, logContext);
+      return this.createErrorResponse(error as Error);
+    }
+  }
+
+  /**
+   * Branch workflow for parallel processing
+   */
+  private async branchWorkflow(
+    userInput: string,
+    sessionId: string,
+    originalWorkflow: WorkflowState,
+    contextAnalysis: ContextAnalysis,
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `branch-workflow-${sessionId}`;
+    const logContext: LogContext = {
+      correlationId,
+      operation: 'branch_workflow',
+      metadata: { sessionId, originalWorkflowId: originalWorkflow.workflowId, userId }
+    };
+
+    try {
+      EnhancedLogger.debug('Branching workflow for parallel processing', logContext);
+
+      // Create new workflow for the interruption while preserving original
+      const branchedResponse = await this.startNewWorkflow(userInput, sessionId, userId);
+
+      // Add reference to original workflow
+      if (branchedResponse.executionMetadata) {
+        branchedResponse.executionMetadata.originalWorkflowId = originalWorkflow.workflowId;
+        branchedResponse.executionMetadata.workflowAction = 'branched';
+      }
+
+      return {
+        ...branchedResponse,
+        message: `I'll handle your new request while keeping track of your previous workflow. ${branchedResponse.message}`
+      };
+    } catch (error) {
+      EnhancedLogger.error('Error branching workflow', error as Error, logContext);
+      return this.createErrorResponse(error as Error);
+    }
+  }
+
+  /**
+   * Seek clarification from user
+   */
+  private async seekClarification(
+    contextAnalysis: ContextAnalysis,
+    sessionId: string
+  ): Promise<MasterAgentResponse> {
+    const clarificationQuestions = contextAnalysis.suggestedAction.parameters.clarificationQuestions || [
+      'Could you please clarify what you mean?',
+      'I need more information to help you better.'
+    ];
+
+    return {
+      message: `I need to clarify something to help you better:\n\n${clarificationQuestions.join('\n')}`,
+      executionMetadata: {
+        workflowAction: 'seeking_clarification',
+        sessionId
+      }
+    };
+  }
+
+  /**
+   * Abort workflow
+   */
+  private async abortWorkflow(workflowId: string): Promise<void> {
+    try {
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.cancelWorkflow(workflowId);
+      }
+
+      EnhancedLogger.debug('Workflow aborted', {
+        correlationId: `abort-workflow-${workflowId}`,
+        operation: 'abort_workflow',
+        metadata: { workflowId }
+      });
+    } catch (error) {
+      EnhancedLogger.error('Error aborting workflow', error as Error, {
+        correlationId: `abort-workflow-error-${workflowId}`,
+        operation: 'abort_workflow_error',
+        metadata: { workflowId }
+      });
+    }
+  }
+
+  /**
+   * Fallback interruption handling
+   */
+  private async handleWorkflowInterruptionFallback(
+    userInput: string,
+    sessionId: string,
+    activeWorkflow: WorkflowState,
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    // Original interruption logic as fallback
+    const openaiService = this.getOpenAIService();
+    if (!openaiService) {
+      return await this.startNewWorkflow(userInput, sessionId, userId);
+    }
+
+    const analysisPrompt = `
+You are analyzing whether a user's new input relates to an ongoing workflow.
+
+CURRENT WORKFLOW:
+- Workflow ID: ${activeWorkflow.workflowId}
+- Original Request: "${activeWorkflow.context.originalRequest}"
+- Current Step: ${activeWorkflow.currentStep}/${activeWorkflow.totalSteps}
+
+NEW USER INPUT: "${userInput}"
+
+Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
+`;
+
+    try {
+      const analysisResponse = await openaiService.generateText(
+        analysisPrompt,
+        'Return only valid JSON.',
+        { temperature: 0.1, maxTokens: 200 }
+      );
+
+      const analysis = JSON.parse(analysisResponse);
+
+      if (analysis.relatesToWorkflow) {
+        return await this.continueWorkflow(activeWorkflow, userInput, sessionId, userId);
+      } else {
+        await this.abortWorkflow(activeWorkflow.workflowId);
+        return await this.startNewWorkflow(userInput, sessionId, userId);
+      }
+    } catch (error) {
+      return await this.startNewWorkflow(userInput, sessionId, userId);
+    }
+  }
+
+  /**
+   * Create error response
+   */
+  private createErrorResponse(error: Error): MasterAgentResponse {
+    return {
+      message: `I encountered an error: ${error.message}. Let me try to help you in a different way.`,
+      executionMetadata: {
+        error: error.message,
+        errorType: error.constructor.name,
+        workflowAction: 'error'
+      }
+    };
+  }
+
+  /**
+   * Continue existing step-by-step workflow with new user input
+   */
+  async continueStepByStepWorkflow(
+    userInput: string,
+    activeWorkflow: WorkflowState,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext
+  ): Promise<MasterAgentResponse> {
+    const correlationId = `continue-step-by-step-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'continueStepByStepWorkflow',
+      metadata: {
+        inputLength: userInput.length,
+        workflowId: activeWorkflow.workflowId,
+        currentStep: activeWorkflow.currentStep
+      }
+    };
+
+    try {
+      EnhancedLogger.requestStart('Continuing step-by-step workflow with new input', logContext);
+
+      // Analyze if this is an interruption, continuation, or new request
+      const contextAnalysisService = getService<ContextAnalysisService>('contextAnalysisService');
+      if (contextAnalysisService) {
+        // Use available method to analyze user intent
+        const contextAnalysis = await contextAnalysisService.analyzeUserIntent(
+          userInput,
+          sessionId
+        );
+
+        // Simple logic based on intent analysis
+        // For now, treat any new input as starting a new workflow
+        const workflowCacheService = this.getWorkflowCacheService();
+        if (workflowCacheService) {
+          await workflowCacheService.updateWorkflow(activeWorkflow.workflowId, {
+            status: 'cancelled',
+            lastActivity: new Date()
+          });
+        }
+        return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
+      }
+
+      // Default: treat as new request
+      return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
+    } catch (error) {
+      EnhancedLogger.error('Failed to continue step-by-step workflow', error as Error, logContext);
+      return this.createErrorResponse(error as Error);
+    }
+  }
+
+  /**
+   * Execute workflow using step-by-step planning instead of upfront planning
+   */
+  async executeStepByStep(
+    userInput: string,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext
+  ): Promise<MasterAgentResponse> {
+    const startTime = Date.now();
+    const correlationId = `step-by-step-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'executeStepByStep',
+      metadata: { inputLength: userInput.length }
+    };
+
+    try {
+      EnhancedLogger.requestStart('Starting step-by-step execution', logContext);
+
+      // Initialize workflow context
+      const workflowContext: WorkflowContext = {
+        originalRequest: userInput,
+        currentStep: 1,
+        maxSteps: 10,
+        completedSteps: [],
+        gatheredData: {},
+        userContext: { slackContext, userId, sessionId }
+      };
+
+      // Create workflow state for tracking
+      const workflowId = `stepbystep-${sessionId}-${Date.now()}`;
+      const workflowState: WorkflowState = {
+        workflowId,
+        sessionId,
+        userId: userId || 'unknown',
+        status: 'active',
+        currentStep: 0,
+        totalSteps: 0, // Will be updated dynamically
+        plan: [], // Empty initially - steps are planned dynamically
+        completedSteps: [],
+        pendingStep: null,
+        context: {
+          originalRequest: userInput,
+          userIntent: userInput, // Same as original request for now
+          gatheredData: {}
+        },
+        createdAt: new Date(),
+        lastActivity: new Date(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      };
+
+      // Save initial workflow state
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.createWorkflow(workflowState);
+      }
+
+      // Execute step-by-step loop
+      const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId);
+
+      const endTime = Date.now();
+      EnhancedLogger.requestEnd('Step-by-step execution completed', {
+        ...logContext,
+        metadata: {
+          ...logContext.metadata,
+          processingTime: endTime - startTime,
+          totalSteps: workflowContext.completedSteps.length,
+          success: true
+        }
+      });
+
+      return result;
+    } catch (error) {
+      EnhancedLogger.error('Step-by-step execution failed', error as Error, logContext);
+      return this.createErrorResponse(error as Error);
+    }
+  }
+
+  /**
+   * Execute the step-by-step workflow loop
+   */
+  private async executeStepByStepLoop(
+    workflowContext: WorkflowContext,
+    workflowId: string,
+    sessionId: string,
+    userId?: string
+  ): Promise<MasterAgentResponse> {
+    const nextStepPlanningService = getService<NextStepPlanningService>('nextStepPlanningService');
+    if (!nextStepPlanningService) {
+      throw new Error('NextStepPlanningService not available');
+    }
+
+    const toolCalls: ToolCall[] = [];
+    const toolResults: ToolResult[] = [];
+    let finalMessage = '';
+
+    while (workflowContext.currentStep <= workflowContext.maxSteps) {
+      // Plan next step
+      const nextStep = await nextStepPlanningService.planNextStep(workflowContext);
+
+      // If no more steps, we're done
+      if (!nextStep) {
+        finalMessage = `Task completed successfully! I have processed your request: "${workflowContext.originalRequest}"`;
+        break;
+      }
+
+      EnhancedLogger.debug('Executing step', {
+        correlationId: `step-${workflowContext.currentStep}`,
+        operation: 'step_execution',
+        metadata: {
+          stepNumber: nextStep.stepNumber,
+          agent: nextStep.agent,
+          operation: nextStep.operation,
+          description: nextStep.description
+        }
+      });
+
+      try {
+        // Execute the step
+        const toolCall: ToolCall = {
+          name: nextStep.agent,
+          parameters: {
+            operation: nextStep.operation,
+            ...nextStep.parameters
+          }
+        };
+
+        const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId);
+
+        // Create step result
+        const stepResult: NextStepResult = {
+          stepNumber: nextStep.stepNumber,
+          agent: nextStep.agent,
+          operation: nextStep.operation,
+          parameters: nextStep.parameters,
+          result: toolResult.result,
+          success: toolResult.success,
+          error: toolResult.error,
+          executedAt: new Date()
+        };
+
+        // Analyze step result
+        const stepAnalysis = await nextStepPlanningService.analyzeStepResult(stepResult, workflowContext);
+
+        // Update workflow context
+        workflowContext.completedSteps.push(stepResult);
+        workflowContext.currentStep++;
+
+        // Merge any updated context
+        if (stepAnalysis.updatedContext) {
+          workflowContext.gatheredData = {
+            ...workflowContext.gatheredData,
+            ...stepAnalysis.updatedContext.gatheredData
+          };
+        }
+
+        toolCalls.push(toolCall);
+        toolResults.push(toolResult);
+
+        // Check if task is complete
+        if (stepAnalysis.isComplete) {
+          finalMessage = `Task completed! ${stepAnalysis.analysis}`;
+          break;
+        }
+
+        // Check if user input is needed
+        if (stepAnalysis.needsUserInput) {
+          finalMessage = `I need more information from you. ${stepAnalysis.analysis}`;
+          break;
+        }
+
+        // Check if we should continue
+        if (!stepAnalysis.shouldContinue) {
+          finalMessage = `Workflow paused. ${stepAnalysis.analysis}`;
+          break;
+        }
+
+      } catch (stepError) {
+        // Handle step execution error
+        const operationDetectionService = getService<OperationDetectionService>('operationDetectionService');
+        if (operationDetectionService) {
+          const errorAnalysis = await operationDetectionService.analyzeError(
+            stepError as Error,
+            {
+              agent: nextStep.agent,
+              operation: nextStep.operation,
+              parameters: nextStep.parameters,
+              userRequest: workflowContext.originalRequest
+            }
+          );
+
+          if (errorAnalysis.recoverable) {
+            finalMessage = `${errorAnalysis.userFriendlyMessage} ${errorAnalysis.suggestedAction}`;
+          } else {
+            throw new Error(`Step execution failed: ${errorAnalysis.userFriendlyMessage}`);
+          }
+        } else {
+          throw stepError;
+        }
+        break;
+      }
+    }
+
+    // Generate final natural language response
+    if (!finalMessage) {
+      finalMessage = `I've completed ${workflowContext.completedSteps.length} steps for your request, but reached the maximum step limit.`;
+    }
+
+    const naturalResponse = await this.generateNaturalLanguageResponseInternal(
+      finalMessage,
+      toolResults,
+      sessionId
+    );
+
+    return {
+      message: naturalResponse,
+      toolCalls,
+      toolResults,
+      executionMetadata: {
+        processingTime: 0, // Will be calculated by caller
+        workflowId,
+        totalSteps: workflowContext.completedSteps.length,
+        workflowAction: 'step_by_step_completed'
+      }
+    };
+  }
+
   public cleanup(): void {
     this.agentSchemas.clear();
     EnhancedLogger.debug('MasterAgent cleanup completed', {

@@ -5,6 +5,7 @@ import { ServiceManager } from '../services/service-manager';
 import { EmailOperationHandler } from '../services/email/email-operation-handler.service';
 import { EmailValidator } from '../services/email/email-validator.service';
 import { EmailFormatter } from '../services/email/email-formatter.service';
+import { OperationDetectionService } from '../services/operation-detection.service';
 import {
   SendEmailRequest,
   SearchEmailsRequest,
@@ -419,7 +420,7 @@ You are a specialized email management agent powered by Gmail API.
   }
 
   /**
-   * Detect operation type from email parameters
+   * Detect operation type from email parameters using LLM intelligence
    */
   protected async detectOperation(params: EmailAgentRequest): Promise<string> {
     // Check if operation is explicitly specified
@@ -427,27 +428,23 @@ You are a specialized email management agent powered by Gmail API.
       return params.operation;
     }
 
-    // Detect operation from query or parameters
-    if (params.query) {
-      const queryLower = params.query.toLowerCase();
-      if (queryLower.includes('send') || queryLower.includes('email')) {
-        return 'send';
-      } else if (queryLower.includes('search') || queryLower.includes('find')) {
-        return 'search';
-      } else if (queryLower.includes('reply')) {
-        return 'reply';
-      } else if (queryLower.includes('get') || queryLower.includes('read')) {
-        return 'get';
+    try {
+      const operationDetectionService = ServiceManager.getInstance().getService<OperationDetectionService>('operationDetectionService');
+      if (!operationDetectionService) {
+        throw new Error('OperationDetectionService not available');
       }
-    }
 
-    // Check for recipients (indicates send operation)
-    if ((params as any).recipients || params.contactEmail || params.subject || params.body) {
-      return 'send';
-    }
+      const userQuery = params.query || 'Email operation';
+      const detection = await operationDetectionService.detectOperation(
+        'emailAgent',
+        userQuery,
+        params
+      );
 
-    // Default to send if we have email-related parameters
-    return 'send';
+      return detection.operation;
+    } catch (error) {
+      throw new Error(`Failed to detect email operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
