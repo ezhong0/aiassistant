@@ -11,14 +11,10 @@ import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
-import { AIClassificationService } from './ai-classification.service';
 import { SlackEventHandler } from './slack/slack-event-handler.service';
 import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack/slack-message-processor.service';
 import { SlackEventValidator } from './slack/slack-event-validator.service';
-import { SlackContextExtractor } from './slack/slack-context-extractor.service';
-import { EmailOperationHandler } from './email/email-operation-handler.service';
-import { ContactResolver } from './email/contact-resolver.service';
 import { EmailValidator } from './email/email-validator.service';
 import { CalendarEventManager } from './calendar/calendar-event-manager.service';
 import { CalendarAvailabilityChecker } from './calendar/calendar-availability-checker.service';
@@ -28,11 +24,6 @@ import { SlackMessageAnalyzer } from './slack/slack-message-analyzer.service';
 import { SlackDraftManager } from './slack/slack-draft-manager.service';
 import { SlackFormatter } from './slack/slack-formatter.service';
 import { SlackInterfaceService } from './slack/slack-interface.service';
-import { GmailCacheService } from './email/gmail-cache.service';
-import { ContactCacheService } from './contact/contact-cache.service';
-import { SlackCacheService } from './slack/slack-cache.service';
-import { CachePerformanceMonitoringService } from './cache-performance-monitoring.service';
-import { CalendarCacheService } from './calendar/calendar-cache.service';
 import { WorkflowCacheService } from './workflow-cache.service';
 import { IntentAnalysisService } from './intent-analysis.service';
 import { SequentialExecutionService } from './sequential-execution.service';
@@ -244,22 +235,7 @@ const registerCoreServices = async (): Promise<void> => {
     });
 
 
-    // 10. AIClassificationService - Depends on OpenAI service
-    const aiClassificationService = new AIClassificationService();
-    serviceManager.registerService('aiClassificationService', aiClassificationService, {
-      dependencies: ['openaiService'],
-      priority: 17, // Just after circuit breaker
-      autoStart: true
-    });
 
-    // 10.5. ToolRoutingService - AI-powered tool selection
-    const { ToolRoutingService } = await import('./tool-routing.service');
-    const toolRoutingService = new ToolRoutingService();
-    serviceManager.registerService('toolRoutingService', toolRoutingService, {
-      dependencies: ['openaiService', 'aiClassificationService'],
-      priority: 18, // After AI classification service
-      autoStart: true
-    });
 
     // 11. SlackEventHandler - Focused service for Slack event processing
     if (ENV_VALIDATION.isSlackConfigured()) {
@@ -286,7 +262,7 @@ const registerCoreServices = async (): Promise<void> => {
         scopes: ['chat:write', 'im:write', 'im:read']
       });
       serviceManager.registerService('slackOAuthManager', slackOAuthManager, {
-        dependencies: ['tokenManager', 'aiClassificationService'],
+        dependencies: ['tokenManager'],
         priority: 75,
         autoStart: true
       });
@@ -302,7 +278,7 @@ const registerCoreServices = async (): Promise<void> => {
         enableAsyncProcessing: true
       });
       serviceManager.registerService('slackMessageProcessor', slackMessageProcessor, {
-        dependencies: ['tokenManager', 'toolExecutorService', 'aiClassificationService', 'asyncRequestClassifierService'],
+        dependencies: ['tokenManager', 'toolExecutorService'],
         priority: 81,
         autoStart: true
       });
@@ -323,37 +299,11 @@ const registerCoreServices = async (): Promise<void> => {
       });
     }
 
-    // 18. SlackContextExtractor - Focused service for context extraction
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const { WebClient } = await import('@slack/web-api');
-      const client = new WebClient(ENVIRONMENT.slack.botToken);
-      const slackContextExtractor = new SlackContextExtractor({
-        enableUserInfoFetching: true,
-        enableEmailExtraction: true,
-        maxRetries: 3,
-        retryDelay: 1000
-      }, client);
-      serviceManager.registerService('slackContextExtractor', slackContextExtractor, {
-        priority: 84,
-        autoStart: true
-      });
-    }
+    // SlackContextExtractor removed during cleanup
 
-    // 15. EmailOperationHandler - Focused service for Gmail API operations
-    const emailOperationHandler = new EmailOperationHandler();
-    serviceManager.registerService('emailOperationHandler', emailOperationHandler, {
-      dependencies: ['gmailService'],
-      priority: 85,
-      autoStart: true
-    });
+    // EmailOperationHandler removed during cleanup
 
-    // 16. ContactResolver - Focused service for contact resolution
-    const contactResolver = new ContactResolver();
-    serviceManager.registerService('contactResolver', contactResolver, {
-      dependencies: ['contactService'],
-      priority: 86,
-      autoStart: true
-    });
+    // ContactResolver removed during cleanup
 
     // 17. EmailValidator - Focused service for email validation
     const emailValidator = new EmailValidator();
@@ -432,60 +382,17 @@ const registerCoreServices = async (): Promise<void> => {
       });
     }
 
-    // 27. GmailCacheService - Smart caching for Gmail API calls
-    const gmailCacheService = new GmailCacheService();
-    serviceManager.registerService('gmailCacheService', gmailCacheService, {
-      dependencies: ['cacheService', 'gmailService'],
-      priority: 98,
-      autoStart: true
-    });
-
-    // 28. ContactCacheService - Smart caching for contact resolution
-    const contactCacheService = new ContactCacheService();
-    serviceManager.registerService('contactCacheService', contactCacheService, {
-      dependencies: ['cacheService', 'contactService'],
-      priority: 99,
-      autoStart: true
-    });
-
-    // 29. SlackCacheService - Smart caching for Slack API calls
-    const slackCacheService = new SlackCacheService();
-    serviceManager.registerService('slackCacheService', slackCacheService, {
-      dependencies: ['cacheService'],
-      priority: 100,
-      autoStart: true
-    });
-
-    // 30. CalendarCacheService - Smart caching for Calendar API calls
-    const calendarCacheService = new CalendarCacheService();
-    serviceManager.registerService('calendarCacheService', calendarCacheService, {
-      dependencies: ['cacheService', 'calendarService'],
-      priority: 101,
-      autoStart: true
-    });
 
 
 
 
 
 
-    // 36. AsyncRequestClassifierService - LLM-based async request classification
-    const { AsyncRequestClassifierService } = await import('./async-request-classifier.service');
-    const asyncRequestClassifierService = new AsyncRequestClassifierService();
-    serviceManager.registerService('asyncRequestClassifierService', asyncRequestClassifierService, {
-      dependencies: ['openaiService', 'aiConfigService'],
-      priority: 60, // Before job processing
-      autoStart: true
-    });
 
 
-    // 36. CachePerformanceMonitoringService - Monitor all cache performance (Enhanced)
-    const cachePerformanceMonitoringService = new CachePerformanceMonitoringService();
-    serviceManager.registerService('cachePerformanceMonitoringService', cachePerformanceMonitoringService, {
-      dependencies: ['gmailCacheService', 'contactCacheService', 'slackCacheService', 'calendarCacheService'],
-      priority: 105,
-      autoStart: true
-    });
+
+
+
 
     // 26. SlackAgent - Main Slack agent for context gathering and operations
     // Note: SlackAgent is not a service but an agent, so we'll register it differently
@@ -546,6 +453,7 @@ const registerCoreServices = async (): Promise<void> => {
       priority: 59, // High priority for operation detection
       autoStart: true
     });
+
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

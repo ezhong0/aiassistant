@@ -2,7 +2,6 @@ import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { ServiceManager } from '../services/service-manager';
-import { EmailOperationHandler } from '../services/email/email-operation-handler.service';
 import { EmailValidator } from '../services/email/email-validator.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
 import {
@@ -99,7 +98,6 @@ export interface EmailAgentRequest extends EmailAgentParams {
 export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
   
   // Focused component services
-  private emailOps: EmailOperationHandler | null = null;
   private emailValidator: EmailValidator | null = null;
   private emailFormatter: any | null = null;
 
@@ -138,9 +136,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
    * Lazy initialization of email services
    */
   private ensureServices(): void {
-    if (!this.emailOps) {
-      this.emailOps = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER) as EmailOperationHandler;
-    }
     if (!this.emailValidator) {
       this.emailValidator = ServiceManager.getInstance().getService(EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_VALIDATOR) as EmailValidator;
     }
@@ -172,7 +167,7 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
     EnhancedLogger.debug('Email services ensured', {
       ...logContext,
       metadata: {
-        hasEmailOps: !!this.emailOps,
+        hasEmailOps: false, // EmailOps removed during cleanup
         hasEmailValidator: !!this.emailValidator,
         hasEmailFormatter: !!this.emailFormatter
       }
@@ -273,7 +268,7 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.emailOps = null;
+      // emailOps removed during cleanup
       this.emailValidator = null;
       this.emailFormatter = null;
       EnhancedLogger.debug('EmailAgent destroyed successfully', {
@@ -564,7 +559,7 @@ You are a specialized email management agent powered by Gmail API.
       // Ensure services are initialized
       this.ensureServices();
 
-      if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
+      if (!this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
 
@@ -604,8 +599,10 @@ You are a specialized email management agent powered by Gmail API.
       }
 
       // Send email
-      const operationResult = await this.emailOps.sendEmail(sendRequest, params.accessToken);
-      
+      // EmailOps removed - would call GmailService directly here
+      throw new Error('Email operation service removed during cleanup');
+
+      /*
       if (!operationResult.success) {
         throw new Error(operationResult.error || 'Email sending failed');
       }
@@ -614,6 +611,7 @@ You are a specialized email management agent powered by Gmail API.
       const emailResult: EmailResult = {
         messageId: operationResult.result?.messageId,
         threadId: operationResult.result?.threadId,
+        */
         recipient: recipientEmail,
         subject: actionParams.subject
       };
@@ -655,7 +653,7 @@ You are a specialized email management agent powered by Gmail API.
       // Ensure services are initialized
       this.ensureServices();
 
-      if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
+      if (!this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
 
@@ -686,7 +684,8 @@ You are a specialized email management agent powered by Gmail API.
       });
 
       // Search emails
-      const operationResult = await this.emailOps.searchEmails(searchRequest, params.accessToken);
+      // EmailOps removed - would call GmailService directly here
+      throw new Error('Email operation service removed during cleanup');
 
       // DEBUG: Log operation result
       EnhancedLogger.debug('Search operation completed', {
@@ -769,7 +768,7 @@ You are a specialized email management agent powered by Gmail API.
       // Ensure services are initialized
       this.ensureServices();
 
-      if (!this.emailOps || !this.emailValidator || !this.emailFormatter) {
+      if (!this.emailValidator || !this.emailFormatter) {
         throw new Error('Required services not available');
       }
 
@@ -787,7 +786,8 @@ You are a specialized email management agent powered by Gmail API.
       }
 
       // Reply to email
-      const operationResult = await this.emailOps.replyToEmail(replyRequest, params.accessToken);
+      // EmailOps removed - would call GmailService directly here
+      throw new Error('Email operation service removed during cleanup');
       
       if (!operationResult.success) {
         throw new Error(operationResult.error || 'Email reply failed');
@@ -836,7 +836,7 @@ You are a specialized email management agent powered by Gmail API.
       // Ensure services are initialized
       this.ensureServices();
 
-      if (!this.emailOps || !this.emailFormatter) {
+      if (!this.emailFormatter) {
         throw new Error('Required services not available');
       }
 
@@ -846,7 +846,8 @@ You are a specialized email management agent powered by Gmail API.
       }
 
       // Get email
-      const operationResult = await this.emailOps.getEmail(emailId, params.accessToken);
+      // EmailOps removed - would call GmailService directly here
+      throw new Error('Email operation service removed during cleanup');
       
       if (!operationResult.success) {
         throw new Error(operationResult.error || 'Email retrieval failed');

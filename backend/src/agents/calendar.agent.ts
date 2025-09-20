@@ -179,7 +179,11 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         EnhancedLogger.debug('Routing to retrieve events', { ...logContext, metadata: { operation: 'retrieve_events' } });
         return await this.handleListEvents(params as unknown as ToolParameters, context);
 
-      case 'list_events':
+          case 'retrieve_suggested_times':
+            EnhancedLogger.debug('Routing to retrieve suggested times', { ...logContext, metadata: { operation: 'retrieve_suggested_times' } });
+            return await this.handleListEvents(params as unknown as ToolParameters, context);
+
+          case 'list_events':
         EnhancedLogger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list_events' } });
         return await this.handleListEvents(params as unknown as ToolParameters, context);
 

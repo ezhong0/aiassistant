@@ -2,9 +2,11 @@ import { BaseService } from '../base-service';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../../types/slack/slack.types';
 import { ToolExecutorService } from '../tool-executor.service';
 import { TokenManager } from '../token-manager';
-// AI services removed during cleanup
+import { AIClassificationService } from '../ai-classification.service';
+import { AsyncRequestClassifierService, ClassificationContext } from '../async-request-classifier.service';
 import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
+import { IntentDrivenWorkflowService } from '../intent-driven-workflow.service';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface AsyncSlackResponse {
@@ -746,29 +748,54 @@ export class SlackMessageProcessor extends BaseService {
       
       // Initialize MasterAgent
       const { createMasterAgent } = await import('../../config/agent-factory-init');
-      const masterAgent = createMasterAgent({ 
-        openaiApiKey: process.env.OPENAI_API_KEY || 'dummy-key' 
-      });
+      // Get IntentDrivenWorkflowService for complete Intent → Plan → Sequential Execution flow
+      const intentDrivenWorkflowService = serviceManager.getService<IntentDrivenWorkflowService>('intentDrivenWorkflowService');
+      if (!intentDrivenWorkflowService) {
+        throw new Error('IntentDrivenWorkflowService not available');
+      }
       
-      // Route to MasterAgent for intent parsing with Slack context
-      const masterResponse = await masterAgent.processUserInput(
+      // Route to IntentDrivenWorkflowService for complete workflow processing
+      console.log('🎯 SLACK MESSAGE PROCESSOR: Routing to IntentDrivenWorkflowService...');
+      const workflowResult = await intentDrivenWorkflowService.processUserInput(
         request.message,
         sessionId,
         request.context.userId,
         request.context
       );
 
-      // Execute tools in preview mode to check for confirmation needs
-      if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
-        const executionContext: ToolExecutionContext = {
-          sessionId,
-          userId: request.context.userId,
-          timestamp: new Date(),
-          metadata: {
-            teamId: request.context.teamId,
-            channelId: request.context.channelId
-          }
-        };
+      // IntentDrivenWorkflowService handles the complete Intent → Plan → Sequential Execution flow
+      // No need for manual tool execution or confirmation handling - it's all built-in!
+      console.log('✅ SLACK MESSAGE PROCESSOR: IntentDrivenWorkflowService completed');
+      console.log('📊 Workflow Success:', workflowResult.success);
+      console.log('📊 Final Message:', workflowResult.message);
+
+      const processingTime = Date.now() - startTime;
+      
+      return {
+        success: workflowResult.success,
+        response: {
+          text: workflowResult.message
+        },
+        shouldRespond: true,
+        executionMetadata: {
+          processingTime,
+          workflowId: workflowResult.workflowId,
+          intentAnalysis: workflowResult.intentAnalysis?.intent,
+          confidence: workflowResult.intentAnalysis?.confidence,
+          totalSteps: workflowResult.executionResult?.totalSteps,
+          completedSteps: workflowResult.executionResult?.completedSteps,
+          executionTime: workflowResult.executionResult?.executionTime,
+          workflowAction: 'intent_driven_completed'
+        }
+      };
+      
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      this.logError('Error routing to agent', error, {
+        processingTimeMs: processingTime,
+        userId: request.context.userId,
+        sessionId: sessionId
+      });
         
         this.logInfo('Starting preview mode execution for Slack', {
           toolCalls: masterResponse.toolCalls.map(tc => ({ name: tc.name, hasParams: !!tc.parameters })),

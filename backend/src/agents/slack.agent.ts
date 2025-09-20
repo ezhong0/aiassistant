@@ -6,7 +6,6 @@ import { getService, serviceManager } from '../services/service-manager';
 import { SlackInterfaceService } from '../services/slack/slack-interface.service';
 import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack/slack.types';
 import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack/slack-message-reader.types';
-import { AIClassificationService } from '../services/ai-classification.service';
 import { SLACK_CONSTANTS } from '../config/constants';
 import { SLACK_SERVICE_CONSTANTS } from '../config/slack-service-constants';
 import {

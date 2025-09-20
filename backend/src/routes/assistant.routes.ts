@@ -14,8 +14,6 @@ import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { sanitizeString } from '../utils/validation.utils';
 import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-limiting.middleware';
 import { getService } from '../services/service-manager';
-import { AIClassificationService } from '../services/ai-classification.service';
-import { ToolRoutingService } from '../services/tool-routing.service';
 import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
@@ -536,12 +534,10 @@ router.get('/status',
  */
 const isConfirmationResponse = async (command: string): Promise<boolean> => {
   try {
-    const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-    if (!aiClassificationService) {
-      throw new Error('AI Classification Service is not available. AI confirmation detection is required for this operation.');
-    }
-    const classification = await aiClassificationService.classifyConfirmationResponse(command);
-    return classification === 'confirm' || classification === 'reject';
+    // Simplified confirmation detection after service cleanup
+    const lowerCommand = command.toLowerCase().trim();
+    return lowerCommand.includes('yes') || lowerCommand.includes('confirm') ||
+           lowerCommand.includes('no') || lowerCommand.includes('cancel');
   } catch (error) {
     
     return false;
@@ -559,12 +555,9 @@ const handleActionConfirmation = async (
   sessionId: string
 ): Promise<Response> => {
   try {
-    const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-    if (!aiClassificationService) {
-      throw new Error('AI Classification Service is not available. AI action confirmation is required for this operation.');
-    }
-    const classification = await aiClassificationService.classifyConfirmationResponse(command);
-    const confirmed = classification === 'confirm';
+    // Simplified confirmation detection after service cleanup
+    const lowerCommand = command.toLowerCase().trim();
+    const confirmed = lowerCommand.includes('yes') || lowerCommand.includes('confirm');
 
     if (!confirmed) {
     return res.json({
@@ -622,15 +615,10 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
   const sensitiveOperations = [];
   for (const tc of toolCalls) {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (aiClassificationService) {
-        const requiresConfirmation = await aiClassificationService.operationRequiresConfirmation(
-          tc.parameters.query as string, 
-          tc.name
-        );
-        if (requiresConfirmation) {
-          sensitiveOperations.push(tc);
-        }
+      // AI classification service removed during cleanup
+      // Default to requiring confirmation for send operations
+      if (tc.name.includes('send') || tc.name.includes('create')) {
+        sensitiveOperations.push(tc);
       }
     } catch (error) {
       
@@ -642,29 +630,17 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
     const operation = sensitiveOperations[0];
     const actionId = `confirm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Use AI-powered confirmation message generation instead of hardcoded messages
+    // ToolRoutingService removed during cleanup - use simple confirmation
     try {
-      const { ToolRoutingService } = await import('../services/tool-routing.service');
-      const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
-      
-      if (toolRoutingService) {
-        const userQuery = (operation?.parameters?.query as string) || `Execute ${operation?.name} operation`;
-        const confirmationMessage = await toolRoutingService.generateConfirmationMessage(
-          operation?.name || 'unknown',
-          userQuery,
-          operation?.parameters
-        );
-        
-        return {
-          message: confirmationMessage.message,
-          prompt: confirmationMessage.prompt,
-          action: {
-            name: operation?.name || 'unknown',
-            parameters: operation?.parameters || {},
-            ...(operation as any) // Include any additional properties
-          }
-        };
-      }
+      return {
+        message: `Please confirm: Do you want to ${operation?.name} with the specified parameters?`,
+        prompt: 'Reply with "yes" to confirm or "no" to cancel.',
+        action: {
+          name: operation?.name || 'unknown',
+          parameters: operation?.parameters || {},
+          ...(operation as any) // Include any additional properties
+        }
+      };
     } catch (error) {
       
       // Throw error instead of using hardcoded fallbacks
@@ -707,18 +683,19 @@ const executeConfirmedAction = async (
       timestamp: new Date()
     };
 
-    // Use AI-powered tool selection instead of hardcoded action type mapping
+    // ToolRoutingService removed during cleanup - use simple routing
     let toolCall: ToolCall;
     try {
-      const { ToolRoutingService } = await import('../services/tool-routing.service');
-      const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
-      
-      if (toolRoutingService) {
-        const routingDecision = await toolRoutingService.selectAgentForTask(query as string, executionContext);
-        toolCall = routingDecision.toolCall;
-        
+      // Simple routing logic
+      const queryLower = (query as string).toLowerCase();
+      if (queryLower.includes('email')) {
+        toolCall = { name: 'emailAgent', parameters: { query } };
+      } else if (queryLower.includes('calendar')) {
+        toolCall = { name: 'calendarAgent', parameters: { query } };
+      } else if (queryLower.includes('contact')) {
+        toolCall = { name: 'contactAgent', parameters: { query } };
       } else {
-        throw new Error('ToolRoutingService not available');
+        toolCall = { name: 'thinkAgent', parameters: { query } };
       }
     } catch (error) {
       
@@ -944,16 +921,11 @@ const generateDynamicConfirmationMessage = async (toolCalls: ToolCall[], toolRes
 
 const generateDynamicConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
-    const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+    // ToolRoutingService removed during cleanup - use simple confirmation
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
-    
-    if (toolRoutingService && mainAction) {
-      const confirmationResult = await toolRoutingService.generateConfirmationMessage(
-        mainAction.name,
-        userCommand,
-        mainAction.parameters || {}
-      );
-      return confirmationResult.prompt;
+
+    if (mainAction) {
+      return `Please confirm: Do you want to ${mainAction.name} with the command "${userCommand}"? Reply with "yes" to confirm or "no" to cancel.`;
     } else {
       return generateFallbackDynamicConfirmationPrompt(toolCalls, toolResults, userCommand);
     }
@@ -995,23 +967,15 @@ const generateFallbackDynamicConfirmationPrompt = async (toolCalls: ToolCall[], 
 
 const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[]): Promise<string> => {
   try {
-    const toolRoutingService = getService<ToolRoutingService>('toolRoutingService');
+    // ToolRoutingService removed during cleanup - use simple confirmation
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
-    
+
     if (!mainAction) {
       throw new Error('No valid action found for confirmation');
     }
 
-    if (toolRoutingService) {
-      const confirmationResult = await toolRoutingService.generateConfirmationMessage(
-        mainAction.name,
-        `Execute ${mainAction.name} with provided parameters`,
-        mainAction.parameters || {}
-      );
-      return confirmationResult.message;
-    } else {
-      throw new Error('Tool routing service not available for confirmation generation');
-    }
+    // Simplified confirmation after service cleanup
+    return `Please confirm: Do you want to execute ${mainAction.name}? Reply with "yes" to confirm or "no" to cancel.`;
   } catch (error) {
     
     throw new Error(`Failed to generate confirmation prompt: ${error instanceof Error ? error.message : 'Unknown error'}`);

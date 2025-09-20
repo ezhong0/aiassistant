@@ -11,7 +11,6 @@ import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
-import { AIClassificationService } from '../services/ai-classification.service';
 import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
 import { IntentAnalysisService, IntentAnalysis } from '../services/intent-analysis.service';
 import { SequentialExecutionService, StepResult as SequentialStepResult, WorkflowResult } from '../services/sequential-execution.service';
@@ -19,8 +18,7 @@ import { PlanModificationService, PlanModification } from '../services/plan-modi
 import { ContextAnalysisService, ContextAnalysis } from '../services/context-analysis.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
-import { AutonomousEmailAgent } from './autonomous-email.agent';
-import { AutonomousAgent, AgentResponse, AgentContext } from '../interfaces/autonomous-agent.interface';
+import { ToolExecutorService } from '../services/tool-executor.service';
 
 /**
  * Agent capabilities interface for internal use
@@ -175,8 +173,6 @@ export class MasterAgent {
   private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
 
-  // Autonomous agent instances
-  private autonomousEmailAgent: AutonomousEmailAgent;
 
   /**
    * Initialize MasterAgent with optional configuration
@@ -212,8 +208,6 @@ export class MasterAgent {
       });
     });
 
-    // Initialize autonomous agents
-    this.autonomousEmailAgent = new AutonomousEmailAgent();
     
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
@@ -335,14 +329,6 @@ export class MasterAgent {
     return AgentFactory.getAgent('contactAgent') as ContactAgent | null;
   }
 
-  /**
-   * Get AIClassificationService for AI classification operations
-   * 
-   * @returns AIClassificationService instance or null if not available
-   */
-  private getAIClassificationService(): AIClassificationService | null {
-    return getService('aiClassificationService') as AIClassificationService | null;
-  }
 
 
   /**
@@ -1286,34 +1272,42 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
 
   /**
-   * Internal tool call execution for workflow steps
+   * Internal tool call execution for workflow steps - now uses real ToolExecutorService
    */
   private async executeToolCallInternal(
-    toolCall: ToolCall, 
-    sessionId: string, 
+    toolCall: ToolCall,
+    sessionId: string,
     userId?: string
   ): Promise<ToolResult> {
-    console.log(`⚡ TOOL EXECUTION: Starting tool execution...`);
+    console.log(`⚡ TOOL EXECUTION: Starting real tool execution...`);
     console.log(`📊 Tool Name: ${toolCall.name}`);
     console.log(`📊 Parameters:`, JSON.stringify(toolCall.parameters, null, 2));
-    
+
     try {
-      // This is a simplified version - in a real implementation, you'd use the ToolExecutorService
-      const result = {
-        success: true,
-        toolName: toolCall.name,
-        executionTime: 100,
-        result: { message: `Executed ${toolCall.name}` }
+      // Use real ToolExecutorService instead of mock implementation
+      const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
+      if (!toolExecutorService) {
+        throw new Error('ToolExecutorService not available');
+      }
+
+      // Create execution context
+      const context: ToolExecutionContext = {
+        sessionId,
+        userId: userId || 'unknown',
+        timestamp: new Date()
       };
-      
-      console.log(`✅ TOOL EXECUTION: Tool execution successful`);
+
+      // Execute real tool call
+      const result = await toolExecutorService.executeTool(toolCall, context);
+
+      console.log(`✅ TOOL EXECUTION: Real tool execution successful`);
       console.log(`📊 Result:`, JSON.stringify(result, null, 2));
-      
+
       return result;
     } catch (error) {
-      console.log(`❌ TOOL EXECUTION: Tool execution failed`);
+      console.log(`❌ TOOL EXECUTION: Real tool execution failed`);
       console.log(`📊 Error:`, error);
-      
+
       return {
         success: false,
         toolName: toolCall.name,
@@ -1989,147 +1983,6 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     };
   }
 
-  /**
-   * Process intent using autonomous agents for natural language communication
-   * This is the new architecture where agents receive natural language intents
-   * instead of rigid parameters and provide intelligent responses
-   */
-  async processAutonomousIntent(
-    intent: string,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `autonomous-intent-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'processAutonomousIntent',
-      metadata: {
-        intentLength: intent.length,
-        hasSlackContext: !!slackContext
-      }
-    };
-
-    try {
-      EnhancedLogger.requestStart('Processing autonomous intent', logContext);
-
-      // Step 1: Determine which autonomous agent should handle this intent
-      const selectedAgent = await this.selectAutonomousAgent(intent);
-
-      if (!selectedAgent) {
-        // Fallback to traditional workflow if no autonomous agent can handle it
-        EnhancedLogger.debug('No autonomous agent available, falling back to traditional workflow', logContext);
-        return await this.executeStepByStep(intent, sessionId, userId, slackContext);
-      }
-
-      // Step 2: Build agent context
-      const agentContext: AgentContext = {
-        userId,
-        workflowContext: {
-          sessionId,
-          originalRequest: intent,
-          timestamp: new Date()
-        },
-        conversationHistory: [], // Could be populated from workflow cache
-        userPreferences: {}, // Could be populated from user settings
-        domainContext: slackContext ? { slackContext } : {}
-      };
-
-      // Step 3: Let the autonomous agent process the intent
-      EnhancedLogger.debug('Processing intent with autonomous agent', {
-        ...logContext,
-        metadata: {
-          ...logContext.metadata,
-          selectedAgent: selectedAgent.agentName,
-          confidence: await selectedAgent.assessCapability(intent)
-        }
-      });
-
-      const agentResponse = await selectedAgent.processIntent(intent, agentContext);
-
-      // Step 4: Convert autonomous agent response to MasterAgent response format
-      const masterResponse: MasterAgentResponse = {
-        message: agentResponse.naturalResponse,
-        executionMetadata: {
-          autonomousAgent: selectedAgent.agentName,
-          reasoning: agentResponse.reasoning,
-          suggestions: agentResponse.suggestions,
-          needsFollowup: agentResponse.needsFollowup,
-          strategiesAttempted: agentResponse.metadata.strategiesAttempted,
-          executionTime: agentResponse.metadata.executionTime,
-          workflowAction: agentResponse.success ? 'autonomous_success' : 'autonomous_error'
-        }
-      };
-
-      // Log successful autonomous processing
-      EnhancedLogger.requestEnd('Autonomous intent processing completed', logContext);
-
-      return masterResponse;
-
-    } catch (error) {
-      EnhancedLogger.error('Autonomous intent processing failed', error as Error, logContext);
-
-      // Fallback to traditional workflow on error
-      EnhancedLogger.debug('Falling back to traditional workflow due to autonomous processing error', logContext);
-      return await this.executeStepByStep(intent, sessionId, userId, slackContext);
-    }
-  }
-
-  /**
-   * Select the most appropriate autonomous agent for the given intent
-   */
-  private async selectAutonomousAgent(intent: string): Promise<AutonomousAgent | null> {
-    // For now, only email agent is implemented
-    // In the future, this could use LLM to analyze intent and select best agent
-
-    const emailCapability = await this.autonomousEmailAgent.assessCapability(intent);
-
-    // If email agent has high confidence, use it
-    if (emailCapability >= 0.3) {
-      return this.autonomousEmailAgent;
-    }
-
-    // Future: Add other autonomous agents (calendar, contacts, etc.)
-    // const calendarCapability = await this.autonomousCalendarAgent.assessCapability(intent);
-    // const contactCapability = await this.autonomousContactAgent.assessCapability(intent);
-
-    return null; // No suitable autonomous agent found
-  }
-
-  /**
-   * Enhanced processUserInput that can use either autonomous or traditional workflow
-   */
-  async processUserInputWithAutonomy(
-    userInput: string,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext,
-    useAutonomous: boolean = true
-  ): Promise<MasterAgentResponse> {
-    // For email-related intents, try autonomous processing first
-    if (useAutonomous) {
-      const emailCapability = await this.autonomousEmailAgent.assessCapability(userInput);
-
-      if (emailCapability >= 0.3) {
-        try {
-          return await this.processAutonomousIntent(userInput, sessionId, userId, slackContext);
-        } catch (error) {
-          EnhancedLogger.warn('Autonomous processing failed, falling back to traditional', {
-            correlationId: `fallback-${sessionId}`,
-            operation: 'autonomous_fallback',
-            metadata: {
-              error: error instanceof Error ? error.message : 'Unknown error'
-            }
-          });
-        }
-      }
-    }
-
-    // Fallback to traditional step-by-step workflow
-    return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
-  }
 
   public cleanup(): void {
     this.agentSchemas.clear();

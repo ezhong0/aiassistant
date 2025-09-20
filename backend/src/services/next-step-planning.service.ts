@@ -58,11 +58,11 @@ export class NextStepPlanningService extends BaseService {
       description: 'Gmail operations including search, composition, and management',
       parameters: ['query', 'recipient', 'subject', 'body', 'timeRange', 'maxResults', 'operation']
     },
-    calendarAgent: {
-      capabilities: ['search', 'create', 'update', 'delete', 'check_availability', 'suggest_times', 'retrieve_events', 'list_events'],
-      description: 'Google Calendar operations for event management and scheduling',
-      parameters: ['title', 'startTime', 'endTime', 'attendees', 'duration', 'query', 'operation']
-    },
+        calendarAgent: {
+          capabilities: ['search', 'create', 'update', 'delete', 'check_availability', 'suggest_times', 'retrieve_events', 'list_events', 'retrieve_suggested_times'],
+          description: 'Google Calendar operations for event management and scheduling',
+          parameters: ['title', 'startTime', 'endTime', 'attendees', 'duration', 'query', 'operation']
+        },
     contactAgent: {
       capabilities: ['search', 'create', 'update', 'delete', 'resolve'],
       description: 'Contact management and resolution operations',

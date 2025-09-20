@@ -7,7 +7,7 @@ import {
   AttachmentType 
 } from '../types/email/gmail.types';
 import { getService } from '../services/service-manager';
-import { AIClassificationService } from '../services/ai-classification.service';
+// AIClassificationService removed during cleanup
 import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**

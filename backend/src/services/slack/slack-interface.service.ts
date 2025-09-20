@@ -5,7 +5,7 @@ import { SlackEventHandler } from './slack-event-handler.service';
 import { SlackOAuthManager } from './slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack-message-processor.service';
 import { SlackEventValidator } from './slack-event-validator.service';
-import { SlackContextExtractor } from './slack-context-extractor.service';
+// SlackContextExtractor removed during cleanup
 import { 
   SlackContext, 
   SlackEventType, 
