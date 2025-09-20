@@ -312,11 +312,6 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
         appropriateness: 'correct',
         reason: 'Default assessment after service cleanup'
       };
-      const result = await aiClassificationService.analyzeToolAppropriateness(query, 'contactAgent');
-
-      // Map appropriateness to relevance score
-      const relevance = result.appropriateness === 'correct' ? 0.9 :
-                       result.appropriateness === 'suboptimal' ? 0.6 : 0.3;
 
       return {
         toolName: 'contactAgent',
@@ -341,8 +336,9 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
+      // AIClassificationService removed during cleanup
+      // Service removed, using defaults
+      if (true) {
         return {
           toolName: 'emailAgent',
           appropriateness: 'suboptimal',
@@ -374,8 +370,9 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
+      // AIClassificationService removed during cleanup
+      // Service removed, using defaults
+      if (true) {
         return {
           toolName: 'calendarAgent',
           appropriateness: 'suboptimal',
@@ -407,8 +404,9 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
+      // AIClassificationService removed during cleanup
+      // Service removed, using defaults
+      if (true) {
         return {
           toolName: 'slackAgent',
           appropriateness: 'suboptimal',
@@ -499,8 +497,9 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
 
     // Check for missing contact lookup using AI
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
+      // AIClassificationService removed during cleanup
+      // Service removed, using defaults
+      if (true) {
         return [];
       }
       const contactLookup = await aiClassificationService.extractContactNames(query);
@@ -573,8 +572,9 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    */
   private async suggestToolsForQuery(query: string): Promise<string[]> {
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
+      // AIClassificationService removed during cleanup
+      // Service removed, using defaults
+      if (true) {
         return [];
       }
       

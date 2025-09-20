@@ -288,14 +288,10 @@ Return only the operation name.`;
       return false;
     }
     
-    // Use AI to determine if operation is read-only
+    // Simplified after service cleanup
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
-        throw new Error('AI Classification Service is not available. AI confirmation detection is required for this operation.');
-      }
-      
-      const detectedOperation = await aiClassificationService.detectOperation(operation, agentName);
+      // Default logic for determining confirmation requirement
+      const detectedOperation = operation.toLowerCase().includes('send') ? 'send' : 'read';
       
       if (detectedOperation === 'read' || detectedOperation === 'search' || detectedOperation === 'list') {
         return false;
