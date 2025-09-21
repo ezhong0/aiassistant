@@ -5,6 +5,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodSchema, ZodError } from 'zod';
 import logger from '../utils/logger';
+import { AppError, ErrorFactory, ERROR_CATEGORIES, createErrorContext } from '../utils/app-error';
 
 export interface ValidationOptions {
   body?: ZodSchema;
@@ -98,9 +99,10 @@ export function validateRequest(options: ValidationOptions) {
       }
 
       if (!validationResult.success) {
-        const logContext = createLogContext(req, { operation: 'validation_failed' });
+        const errorContext = createErrorContext(req, { operation: 'validation_failed' });
+        
         logger.warn('Validation failed', {
-          correlationId: logContext.correlationId,
+          correlationId: errorContext.correlationId,
           operation: 'validation_middleware',
           metadata: {
             errors: JSON.stringify(validationResult.errors),
@@ -114,20 +116,24 @@ export function validateRequest(options: ValidationOptions) {
           }
         });
 
-        res.status(400).json({
-          success: false,
-          error: 'Validation failed',
-          details: validationResult.errors,
-          code: 'VALIDATION_ERROR',
+        // Throw AppError instead of sending response directly
+        throw ErrorFactory.validationFailed('request', 'Validation failed').addContext({
+          correlationId: errorContext.correlationId,
+          userId: errorContext.userId,
+          metadata: { 
+            errors: validationResult.errors,
+            path: req.path,
+            method: req.method
+          }
         });
-        return;
       }
 
       next();
     } catch (error) {
-      const logContext = createLogContext(req, { operation: 'validation_error' });
+      const errorContext = createErrorContext(req, { operation: 'validation_error' });
+      
       logger.error('Validation middleware error', error as Error, {
-        correlationId: logContext.correlationId,
+        correlationId: errorContext.correlationId,
         operation: 'validation_middleware',
         metadata: { 
           error: error instanceof Error ? error.message : JSON.stringify(error),
@@ -138,12 +144,17 @@ export function validateRequest(options: ValidationOptions) {
           timestamp: new Date().toISOString()
         }
       });
-      res.status(500).json({
-        success: false,
-        error: 'Internal validation error',
-        code: 'INTERNAL_ERROR',
+      
+      // Throw AppError instead of sending response directly
+      throw ErrorFactory.serviceError('ValidationMiddleware', 'Internal validation error', {
+        correlationId: errorContext.correlationId,
+        userId: errorContext.userId,
+        originalError: error instanceof Error ? error : new Error(String(error)),
+        metadata: {
+          path: req.path,
+          method: req.method
+        }
       });
-      return;
     }
   };
 }

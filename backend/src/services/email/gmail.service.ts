@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { GmailServiceError, SendEmailRequestSchema, SearchEmailsRequestSchema } from '../../types/email/gmail.types';
 import { BaseService } from '../base-service';
+import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../../utils/app-error';
 import { z } from 'zod';
 
 interface GmailHeader {
@@ -205,7 +206,7 @@ export class GmailService extends BaseService {
       });
 
       if (!response.data.id) {
-        throw new GmailServiceError('No response data from Gmail API', 'SEND_FAILED');
+        throw ErrorFactory.externalServiceError('Gmail', 'No response data from Gmail API');
       }
 
       const result = {
@@ -248,7 +249,7 @@ export class GmailService extends BaseService {
       });
 
       if (!response.data) {
-        throw new GmailServiceError(`Email not found: ${messageId}`, 'NOT_FOUND');
+        throw ErrorFactory.notFound(`Email with ID: ${messageId}`);
       }
 
       this.logDebug('Email retrieved successfully', { 
@@ -289,7 +290,7 @@ export class GmailService extends BaseService {
       const originalEmail = await this.getEmail(accessToken, messageId);
       
       if (!originalEmail.payload?.headers) {
-        throw new GmailServiceError('Invalid email format', 'INVALID_EMAIL');
+        throw ErrorFactory.validationFailed('email', 'Invalid email format');
       }
 
       // Extract headers for reply
@@ -340,7 +341,7 @@ export class GmailService extends BaseService {
       });
 
       if (!response.data.id) {
-        throw new GmailServiceError('No response data from Gmail API', 'REPLY_FAILED');
+        throw ErrorFactory.externalServiceError('Gmail', 'No response data from Gmail API for reply');
       }
 
       const result = {
@@ -383,7 +384,7 @@ export class GmailService extends BaseService {
       });
 
       if (!response.data) {
-        throw new GmailServiceError(`Thread not found: ${threadId}`, 'NOT_FOUND');
+        throw ErrorFactory.notFound(`Thread with ID: ${threadId}`);
       }
 
       this.logDebug('Email thread retrieved successfully', { 
@@ -651,7 +652,7 @@ export class GmailService extends BaseService {
 
       const message = response.data;
       if (!message) {
-        throw new GmailServiceError('Message not found', 'MESSAGE_NOT_FOUND');
+        throw ErrorFactory.notFound('Message');
       }
 
       // Extract headers
@@ -902,7 +903,7 @@ export class GmailService extends BaseService {
       });
 
       if (!response.data.data) {
-        throw new GmailServiceError('No attachment data received', 'DOWNLOAD_FAILED');
+        throw ErrorFactory.externalServiceError('Gmail', 'No attachment data received');
       }
 
       const attachment = {

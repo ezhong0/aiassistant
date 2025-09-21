@@ -2,7 +2,7 @@ import { BaseService } from '../base-service';
 import { ServiceManager, serviceManager } from '../service-manager';
 import { SLACK_SERVICE_CONSTANTS } from '../../config/slack-service-constants';
 import { SlackInterfaceService } from './slack-interface.service';
-import { ServiceDependencyError } from '../../errors/error-types';
+import { ErrorFactory, ERROR_CATEGORIES } from '../../utils/app-error';
 
 /**
  * Slack message reading result
@@ -75,7 +75,10 @@ export class SlackMessageAnalyzer extends BaseService {
       });
 
       if (!this.slackInterfaceService) {
-        const error = new ServiceDependencyError('SlackInterfaceService not available - service operating in degraded mode');
+        const error = ErrorFactory.serviceUnavailable('SlackInterfaceService', {
+          operation: 'service_check',
+          metadata: { message: 'Service operating in degraded mode' }
+        });
         this.logWarn('Cannot read message history - SlackInterfaceService dependency unavailable', {
           channelId,
           operation: 'readMessageHistory'
@@ -128,7 +131,10 @@ export class SlackMessageAnalyzer extends BaseService {
       });
 
       if (!this.slackInterfaceService) {
-        const error = new ServiceDependencyError('SlackInterfaceService not available - service operating in degraded mode');
+        const error = ErrorFactory.serviceUnavailable('SlackInterfaceService', {
+          operation: 'service_check',
+          metadata: { message: 'Service operating in degraded mode' }
+        });
         this.logWarn('Cannot read thread messages - SlackInterfaceService dependency unavailable', {
           channelId,
           threadTs,

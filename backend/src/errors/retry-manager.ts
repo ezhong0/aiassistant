@@ -5,7 +5,19 @@
  * circuit breaker integration, and comprehensive error handling.
  */
 
-import { BaseError, ErrorSeverity, ErrorRecoveryStrategy } from './error-types';
+import { AppError, ERROR_SEVERITY } from '../utils/app-error';
+
+/**
+ * Error recovery strategies
+ */
+export enum ErrorRecoveryStrategy {
+  RETRY = 'retry',
+  FALLBACK = 'fallback',
+  DEGRADE = 'degrade',
+  FAIL_FAST = 'fail_fast',
+  CIRCUIT_BREAKER = 'circuit_breaker',
+  MANUAL_INTERVENTION = 'manual_intervention'
+}
 
 /**
  * Retry strategy configuration
@@ -449,7 +461,7 @@ export class RetryManager {
     error: Error,
     context?: { service?: string; operation?: string }
   ): ErrorRecoveryStrategy {
-    if (error instanceof BaseError) {
+    if (error instanceof AppError) {
       return error.recoveryStrategy;
     }
 

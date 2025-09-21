@@ -7,13 +7,7 @@ import {
   TokenValidationResult,
   JWTPayload
 } from '../types/auth.types';
-import {
-  AuthErrors,
-  handleOAuthError,
-  validateTokenFormat,
-  validateGoogleUserInfo,
-  retryOAuthOperation
-} from '../utils/auth-errors';
+import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { serviceManager } from './service-manager';
 import { ConfigService } from '../config/config.service';
 import { BaseService } from './base-service';

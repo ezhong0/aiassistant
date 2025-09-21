@@ -1,6 +1,7 @@
 import { ServiceState, IService } from './service-manager';
-import { BaseError, ServiceError, ServiceDependencyError, ErrorFactory, ErrorCategory } from '../errors/error-types';
+import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { retryManager, RetryConfig } from '../errors/retry-manager';
+import logger from '../utils/logger';
 
 /**
  * Base service class that provides common functionality and lifecycle management
@@ -108,7 +109,10 @@ export abstract class BaseService implements IService {
     }
 
     if (this.destroyed) {
-      throw new Error(`Cannot initialize destroyed service: ${this.name}`);
+      throw ErrorFactory.serviceError(this.name, `Cannot initialize destroyed service: ${this.name}`, {
+        operation: 'initialize',
+        metadata: { serviceState: this._state }
+      });
     }
 
     try {
@@ -188,7 +192,10 @@ export abstract class BaseService implements IService {
    */
   protected assertReady(): void {
     if (!this.isReady()) {
-      throw new Error(`Service ${this.name} is not ready. Current state: ${this._state}`);
+      throw ErrorFactory.serviceError(this.name, `Service ${this.name} is not ready. Current state: ${this._state}`, {
+        operation: 'service_check',
+        metadata: { serviceState: this._state }
+      });
     }
   }
 
@@ -197,7 +204,10 @@ export abstract class BaseService implements IService {
    */
   protected assertNotDestroyed(): void {
     if (this.destroyed) {
-      throw new Error(`Service ${this.name} has been destroyed`);
+      throw ErrorFactory.serviceError(this.name, `Service ${this.name} has been destroyed`, {
+        operation: 'service_check',
+        metadata: { serviceState: this._state }
+      });
     }
   }
 
@@ -205,41 +215,71 @@ export abstract class BaseService implements IService {
    * Enhanced error handling with structured error classification
    */
   protected handleError(error: Error | unknown, operation: string): never {
-    let structuredError: BaseError;
+    let appError: AppError;
 
-    if (error instanceof BaseError) {
-      structuredError = error;
+    if (error instanceof AppError) {
+      appError = error.addContext({
+        service: this.name,
+        operation
+      });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
-      structuredError = ErrorFactory.wrapError(errorInstance, ErrorCategory.SERVICE, this.name, operation);
+      appError = ErrorFactory.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
+        service: this.name,
+        operation
+      });
     }
 
-    // Set context
-    structuredError.setContext(this.name, operation);
+    // Auto-log with Winston
+    logger.error(appError.message, {
+      error: appError.code,
+      statusCode: appError.statusCode,
+      severity: appError.severity,
+      category: appError.category,
+      service: this.name,
+      operation,
+      correlationId: appError.correlationId,
+      metadata: appError.metadata,
+      stack: appError.stack
+    });
 
-    // Log with appropriate severity
-    this.logStructuredError(structuredError);
-
-    throw structuredError;
+    throw appError;
   }
 
   /**
    * Handle non-fatal errors with graceful degradation
    */
-  protected handleNonFatalError(error: Error | unknown, operation: string): BaseError {
-    let structuredError: BaseError;
+  protected handleNonFatalError(error: Error | unknown, operation: string): AppError {
+    let appError: AppError;
 
-    if (error instanceof BaseError) {
-      structuredError = error;
+    if (error instanceof AppError) {
+      appError = error.addContext({
+        service: this.name,
+        operation,
+        severity: 'low'
+      });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
-      structuredError = ErrorFactory.wrapError(errorInstance, ErrorCategory.SERVICE, this.name, operation);
+      appError = ErrorFactory.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
+        service: this.name,
+        operation,
+        severity: 'low'
+      });
     }
 
-    structuredError.setContext(this.name, operation);
-    this.logStructuredError(structuredError);
+    // Log as warning for non-fatal errors
+    logger.warn(appError.message, {
+      error: appError.code,
+      statusCode: appError.statusCode,
+      severity: appError.severity,
+      category: appError.category,
+      service: this.name,
+      operation,
+      correlationId: appError.correlationId,
+      metadata: appError.metadata
+    });
 
-    return structuredError;
+    return appError;
   }
 
   /**
@@ -312,30 +352,16 @@ export abstract class BaseService implements IService {
   }
 
   /**
-   * Log structured error with appropriate level
+   * Simple error logging method (deprecated - use Winston directly)
+   * @deprecated Use logger directly instead
    */
-  private logStructuredError(error: BaseError): void {
-    const logData = {
-      ...error.toJSON(),
-      serviceState: this._state
-    };
-
-    switch (error.severity) {
-      case 'critical':
-        
-        break;
-      case 'high':
-        
-        break;
-      case 'medium':
-        
-        break;
-      case 'low':
-        
-        break;
-      default:
-        
-    }
+  protected logError(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void {
+    logger.error(message, {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      service: this.name,
+      metadata: meta
+    });
   }
 
   /**

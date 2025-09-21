@@ -1,4 +1,5 @@
 import logger from '../utils/logger';
+import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { OpenAIService } from '../services/openai.service';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
@@ -468,7 +469,12 @@ export class MasterAgent {
       // AI-first execution - no fallback routing
       const openaiService = this.getOpenAIService();
       if (!this.useOpenAI || !openaiService) {
-        throw new Error('🤖 AI service is required but not available. Please check OpenAI configuration.');
+        throw ErrorFactory.serviceUnavailable('OpenAI', {
+          correlationId: logContext.correlationId,
+          userId: logContext.userId,
+          operation: 'ai_service_check',
+          metadata: { message: 'AI service is required but not available. Please check OpenAI configuration.' }
+        });
       }
 
       // Start new step-by-step execution
@@ -530,7 +536,11 @@ export class MasterAgent {
       // 1. Get DraftManager service
       const draftManager = this.getDraftManager();
       if (!draftManager) {
-        throw new Error('DraftManager service not available');
+        throw ErrorFactory.serviceUnavailable('DraftManager', {
+          correlationId: logContext.correlationId,
+          userId: logContext.userId,
+          operation: 'draft_manager_check'
+        });
       }
 
       // 2. Check for existing drafts first
@@ -579,7 +589,12 @@ export class MasterAgent {
   private async comprehensiveIntentAnalysis(context: AnalysisContext): Promise<IntentAnalysis> {
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
-      throw new Error('OpenAI service not available for intent analysis');
+      throw ErrorFactory.serviceUnavailable('OpenAI', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'intent_analysis',
+        metadata: { message: 'OpenAI service not available for intent analysis' }
+      });
     }
 
     const prompt = `Analyze user intent comprehensively and return structured JSON:
@@ -683,7 +698,12 @@ Return JSON with this structure:
         error: (error as Error).message,
         stack: (error as Error).stack
       });
-      throw new Error('Failed to analyze user intent');
+      throw ErrorFactory.serviceError('OpenAI', 'Failed to analyze user intent', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'intent_analysis',
+        originalError: error
+      });
     }
   }
 
@@ -783,7 +803,11 @@ Return JSON with this structure:
   ): Promise<ToolResult[]> {
     const toolExecutorService = this.getToolExecutorService();
     if (!toolExecutorService) {
-      throw new Error('ToolExecutorService not available');
+      throw ErrorFactory.serviceUnavailable('ToolExecutorService', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'tool_executor_check'
+      });
     }
 
     const results: ToolResult[] = [];
@@ -1213,7 +1237,12 @@ GUIDELINES:
     try {
       const openaiService = this.getOpenAIService();
       if (!openaiService) {
-        throw new Error('OpenAI service is required for intent parsing');
+        throw ErrorFactory.serviceUnavailable('OpenAI', {
+          correlationId: logContext.correlationId,
+          userId: logContext.userId,
+          operation: 'intent_parsing',
+          metadata: { message: 'OpenAI service is required for intent parsing' }
+        });
       }
 
       // Extract contact names that need resolution
@@ -1564,7 +1593,12 @@ Be helpful, professional, and take intelligent action rather than asking for cla
   ): Promise<string> {
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
-      throw new Error('OpenAI service is not available. AI natural language processing is required for this operation.');
+      throw ErrorFactory.serviceUnavailable('OpenAI', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'ai_processing',
+        metadata: { message: 'AI natural language processing is required for this operation' }
+      });
     }
 
     try {
@@ -1613,10 +1647,20 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
           operation: 'tool_result_processing',
           metadata: { errorType: 'context_length_exceeded' }
         });
-        throw new Error('🤖 AI service encountered a context length limit. Please try with a simpler request or break it into smaller parts.');
+        throw ErrorFactory.serviceError('OpenAI', 'AI service encountered a context length limit', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'ai_context_limit',
+        metadata: { message: 'Please try with a simpler request or break it into smaller parts' }
+      });
       }
       
-      throw new Error('🤖 AI natural language processing failed. Please check your OpenAI configuration.');
+      throw ErrorFactory.serviceError('OpenAI', 'AI natural language processing failed', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'ai_processing_error',
+        metadata: { message: 'Please check your OpenAI configuration' }
+      });
     }
   }
 
@@ -1712,7 +1756,11 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       // Use real ToolExecutorService instead of mock implementation
       const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
       if (!toolExecutorService) {
-        throw new Error('ToolExecutorService not available');
+        throw ErrorFactory.serviceUnavailable('ToolExecutorService', {
+          correlationId: logContext.correlationId,
+          userId: logContext.userId,
+          operation: 'tool_executor_execution'
+        });
       }
 
       // Create execution context
@@ -2045,7 +2093,11 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     
     const nextStepPlanningService = getService<NextStepPlanningService>('nextStepPlanningService');
     if (!nextStepPlanningService) {
-      throw new Error('NextStepPlanningService not available');
+      throw ErrorFactory.serviceUnavailable('NextStepPlanningService', {
+        correlationId: logContext.correlationId,
+        userId: logContext.userId,
+        operation: 'step_planning'
+      });
     }
 
     const toolCalls: ToolCall[] = [];
@@ -2198,7 +2250,16 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
           if (errorAnalysis.recoverable) {
             finalMessage = `${errorAnalysis.userFriendlyMessage} ${errorAnalysis.suggestedAction}`;
           } else {
-            throw new Error(`Step execution failed: ${errorAnalysis.userFriendlyMessage}`);
+            throw ErrorFactory.businessRuleViolation('step_execution_failed', {
+              correlationId: logContext.correlationId,
+              userId: logContext.userId,
+              operation: 'step_execution',
+              metadata: { 
+                errorMessage: errorAnalysis.userFriendlyMessage,
+                agent: nextStep.agent,
+                operation: nextStep.operation
+              }
+            });
           }
         } else {
           throw stepError;

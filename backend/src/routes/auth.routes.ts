@@ -17,10 +17,10 @@ import {
   TokenRefreshRequest
 } from '../types/auth.types';
 import {
-  AuthenticationError,
-  formatAuthErrorResponse,
-  handleOAuthError
-} from '../utils/auth-errors';
+  AppError,
+  ErrorFactory,
+  ERROR_CATEGORIES
+} from '../utils/app-error';
 import {
   validateGoogleCallback,
   validateTokenRefresh,
@@ -768,8 +768,8 @@ router.get('/callback',
         `);
       }
       
-      const authError = handleOAuthError('token_exchange', new Error(error), { error_description });
-      const errorResponse = formatAuthErrorResponse(authError);
+      const authError = ErrorFactory.unauthorized(`Token exchange failed: ${error_description || error}`);
+      const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(authError.statusCode).json(errorResponse);
     }
 
@@ -790,12 +790,12 @@ router.get('/callback',
         `);
       }
       
-      const authError = new AuthenticationError(
+      const authError = ErrorFactory.unauthorized(
         'INVALID_GRANT' as any,
         'Missing authorization code',
         400
       );
-      const errorResponse = formatAuthErrorResponse(authError);
+      const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(400).json(errorResponse);
     }
 
@@ -934,10 +934,10 @@ router.get('/callback',
       `);
     }
     
-    const authError = error instanceof AuthenticationError 
+    const authError = error instanceof AppError 
       ? error 
-      : handleOAuthError('token_exchange', error);
-    const errorResponse = formatAuthErrorResponse(authError);
+      : ErrorFactory.unauthorized('Token exchange failed');
+    const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
     return res.status(authError.statusCode || 500).json(errorResponse);
   }
 });
@@ -954,12 +954,12 @@ router.post('/refresh',
     const { refresh_token }: TokenRefreshRequest = req.body;
 
     if (!refresh_token || typeof refresh_token !== 'string') {
-      const authError = new AuthenticationError(
+      const authError = ErrorFactory.unauthorized(
         'MISSING_TOKEN' as any,
         'Missing or invalid refresh token',
         400
       );
-      const errorResponse = formatAuthErrorResponse(authError);
+      const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(400).json(errorResponse);
     }
 
@@ -997,10 +997,10 @@ router.post('/refresh',
 
   } catch (error) {
     
-    const authError = error instanceof AuthenticationError 
+    const authError = error instanceof AppError 
       ? error 
-      : handleOAuthError('token_refresh', error);
-    const errorResponse = formatAuthErrorResponse(authError);
+      : ErrorFactory.unauthorized('Token refresh failed');
+    const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
     return res.status(authError.statusCode || 401).json(errorResponse);
   }
 });
@@ -1037,10 +1037,10 @@ router.post('/logout',
 
   } catch (error) {
     
-    const authError = error instanceof AuthenticationError 
+    const authError = error instanceof AppError 
       ? error 
-      : new AuthenticationError('UNKNOWN_ERROR' as any, 'Logout failed', 500);
-    const errorResponse = formatAuthErrorResponse(authError);
+      : ErrorFactory.unauthorized('UNKNOWN_ERROR' as any, 'Logout failed', 500);
+    const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
     return res.status(authError.statusCode || 500).json(errorResponse);
   }
 });
@@ -1105,12 +1105,12 @@ router.post('/exchange-mobile-tokens',
     } = req.body;
 
     if (!access_token || typeof access_token !== 'string') {
-      const authError = new AuthenticationError(
+      const authError = ErrorFactory.unauthorized(
         'MISSING_TOKEN' as any,
         'Missing or invalid access token',
         400
       );
-      const errorResponse = formatAuthErrorResponse(authError);
+      const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(400).json(errorResponse);
     }
 
@@ -1122,12 +1122,12 @@ router.post('/exchange-mobile-tokens',
     
     const tokenValidation = await authService.validateGoogleToken(access_token);
     if (!tokenValidation.valid) {
-      const authError = new AuthenticationError(
+      const authError = ErrorFactory.unauthorized(
         'INVALID_TOKEN' as any,
         'Invalid access token',
         401
       );
-      const errorResponse = formatAuthErrorResponse(authError);
+      const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(401).json(errorResponse);
     }
 
@@ -1151,10 +1151,10 @@ router.post('/exchange-mobile-tokens',
 
   } catch (error) {
     
-    const authError = error instanceof AuthenticationError 
+    const authError = error instanceof AppError 
       ? error 
-      : handleOAuthError('token_exchange', error);
-    const errorResponse = formatAuthErrorResponse(authError);
+      : ErrorFactory.unauthorized('Token exchange failed');
+    const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
     return res.status(authError.statusCode || 500).json(errorResponse);
   }
 });
