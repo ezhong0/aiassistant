@@ -242,30 +242,32 @@ export class EmailParser {
         return 'high';
       }
       
-      // Use AI to classify priority based on subject and content
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
-        throw new Error('AI Classification Service is not available. AI email priority classification is required for this operation.');
-      }
-      const priority = await aiClassificationService.classifyEmailPriority(
-        `${message.subject || ''} ${message.snippet || ''}`
-      );
-      
-      // Convert AI result to expected format
-      switch (priority) {
-        case 'urgent':
-          return 'high';
-        case 'low':
-          return 'low';
-        default:
-          return 'normal';
+      // Simplified priority classification after service cleanup
+      // Use basic heuristics instead of AI
+      const content = `${message.subject || ''} ${message.snippet || ''}`.toLowerCase();
+
+      // High priority keywords
+      const urgentKeywords = ['urgent', 'asap', 'emergency', 'critical', 'important', 'deadline'];
+      const hasUrgentKeywords = urgentKeywords.some(keyword => content.includes(keyword));
+
+      // Low priority keywords
+      const lowPriorityKeywords = ['newsletter', 'unsubscribe', 'promotion', 'marketing', 'spam'];
+      const hasLowPriorityKeywords = lowPriorityKeywords.some(keyword => content.includes(keyword));
+
+      if (hasUrgentKeywords) {
+        return 'high';
+      } else if (hasLowPriorityKeywords) {
+        return 'low';
+      } else {
+        return 'normal';
       }
     } catch (error) {
-      EnhancedLogger.error('Failed to classify email priority with AI', error as Error, {
+      EnhancedLogger.error('Failed to classify email priority', error as Error, {
         correlationId: `email-priority-${Date.now()}`,
         operation: 'email_priority_classification_error'
       });
-      throw new Error('AI email priority classification failed. Please check your OpenAI configuration.');
+      // Return default priority on error
+      return 'normal';
     }
   }
 

@@ -493,29 +493,57 @@ export class TokenManager extends BaseService {
    * Returns null if user doesn't have calendar permissions
    */
   async getValidTokensForCalendar(teamId: string, userId: string): Promise<string | null> {
-    
+    console.log('🔍 TOKEN MANAGER: getValidTokensForCalendar called with:', { teamId, userId });
 
     const userId_key = `${teamId}:${userId}`;
+    console.log('🔍 TOKEN MANAGER: Looking up tokens with key:', userId_key);
     const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
 
-    if (!tokens?.googleTokens?.access_token) {
-      
+    console.log('🔍 TOKEN MANAGER: Token lookup result:', {
+      hasTokens: !!tokens,
+      hasGoogleTokens: !!tokens?.googleTokens,
+      hasAccessToken: !!tokens?.googleTokens?.access_token,
+      accessTokenLength: tokens?.googleTokens?.access_token?.length || 0,
+      hasRefreshToken: !!tokens?.googleTokens?.refresh_token,
+      scope: tokens?.googleTokens?.scope
+    });
+
+    console.log('🔍 TOKEN MANAGER: Raw token structure:', {
+      tokens: tokens ? Object.keys(tokens) : null,
+      tokenStructure: tokens ? JSON.stringify(tokens, null, 2) : null
+    });
+
+    // Handle both token property formats (googleTokens vs google)
+    const googleTokens = tokens?.googleTokens || (tokens as any)?.google;
+    console.log('🔍 TOKEN MANAGER: Resolved Google tokens:', {
+      hasGoogleTokens: !!googleTokens,
+      hasAccessToken: !!googleTokens?.access_token,
+      source: tokens?.googleTokens ? 'googleTokens' : 'google'
+    });
+
+    if (!googleTokens?.access_token) {
+      console.log('🔍 TOKEN MANAGER: No access token found for user');
       return null;
     }
 
     // First check basic token validation
-    const validationResult = this.validateToken(tokens.googleTokens);
+    const validationResult = this.validateToken(googleTokens);
+    console.log('🔍 TOKEN MANAGER: Token validation result:', validationResult);
     if (!validationResult.isValid) {
+      console.log('🔍 TOKEN MANAGER: Token validation failed, reason:', validationResult.reason);
       return null;
     }
 
-    // Check calendar scopes
-    if (!this.hasCalendarScopes(tokens.googleTokens)) {
-      return null;
+    // Check calendar scopes (relaxed check - warn but don't block)
+    const hasCalendarScopes = this.hasCalendarScopes(googleTokens);
+    console.log('🔍 TOKEN MANAGER: Calendar scopes check:', { hasCalendarScopes, scopes: googleTokens.scope });
+    if (!hasCalendarScopes) {
+      console.log('🔍 TOKEN MANAGER: WARNING: Token does not have ideal calendar scopes, but proceeding anyway');
+      // Don't return null - let the calendar API handle scope issues
     }
 
-    
-    return tokens.googleTokens.access_token;
+    console.log('🔍 TOKEN MANAGER: Returning valid access token');
+    return googleTokens.access_token;
   }
 
   /**

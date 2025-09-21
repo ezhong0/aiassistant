@@ -177,6 +177,11 @@ export class CalendarEventManager extends BaseService {
         throw new Error(CALENDAR_SERVICE_CONSTANTS.ERRORS.CALENDAR_SERVICE_NOT_AVAILABLE);
       }
 
+      console.log('📅 CALENDAR EVENT MANAGER: Starting calendar query');
+      console.log('📅 CALENDAR EVENT MANAGER: Access token length:', accessToken.length);
+      console.log('📅 CALENDAR EVENT MANAGER: Query options:', JSON.stringify(options, null, 2));
+      console.log('📅 CALENDAR EVENT MANAGER: Calendar ID:', calendarId);
+
       this.logInfo('Listing calendar events', {
         timeMin: options.timeMin,
         timeMax: options.timeMax,
@@ -184,6 +189,10 @@ export class CalendarEventManager extends BaseService {
       });
 
       const events = await this.calendarService.getEvents(accessToken, options, calendarId);
+
+      console.log('📅 CALENDAR EVENT MANAGER: Query completed');
+      console.log('📅 CALENDAR EVENT MANAGER: Events found:', events.length);
+      console.log('📅 CALENDAR EVENT MANAGER: Events details:', JSON.stringify(events, null, 2));
 
       this.logInfo('Calendar events listed successfully', {
         count: events.length

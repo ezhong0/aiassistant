@@ -47,7 +47,7 @@ export class SlackInterfaceService extends BaseService {
   private slackMessageProcessor: SlackMessageProcessor | null = null;
   private slackResponseFormatter: any | null = null;
   private slackEventValidator: SlackEventValidator | null = null;
-  private slackContextExtractor: SlackContextExtractor | null = null;
+  // slackContextExtractor removed during cleanup
 
   /**
    * Initialize SlackInterface service with configuration
@@ -107,7 +107,7 @@ export class SlackInterfaceService extends BaseService {
         hasSlackMessageProcessor: !!this.slackMessageProcessor,
         hasSlackResponseFormatter: !!this.slackResponseFormatter,
         hasSlackEventValidator: !!this.slackEventValidator,
-        hasSlackContextExtractor: !!this.slackContextExtractor
+        hasSlackContextExtractor: false // removed during cleanup
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -146,10 +146,7 @@ export class SlackInterfaceService extends BaseService {
         this.slackEventValidator = null;
       }
       
-      if (this.slackContextExtractor) {
-        await this.slackContextExtractor.destroy();
-        this.slackContextExtractor = null;
-      }
+      // slackContextExtractor removed during cleanup
 
       this.logInfo('SlackInterface destroyed successfully');
     } catch (error) {
@@ -372,10 +369,9 @@ export class SlackInterfaceService extends BaseService {
    * @returns Extracted Slack context
    */
   private async extractSlackContext(event: SlackEvent, teamId: string): Promise<SlackContext> {
-    if (this.slackContextExtractor) {
-      return await this.slackContextExtractor.extractSlackContext(event, teamId);
-    } else {
-      // Fallback to basic context extraction
+    // slackContextExtractor removed during cleanup - use basic extraction
+    {
+      // Basic context extraction
       return {
         userId: this.getEventUser(event) || 'unknown',
         channelId: this.getEventChannel(event) || 'unknown',
@@ -390,10 +386,9 @@ export class SlackInterfaceService extends BaseService {
    * Clean Slack message (remove mentions, normalize whitespace)
    */
   private cleanMessage(text: string): string {
-    if (this.slackContextExtractor) {
-      return this.slackContextExtractor.cleanMessage(text);
-    } else {
-      // Fallback to basic cleaning
+    // slackContextExtractor removed during cleanup - use basic cleaning
+    {
+      // Basic cleaning
       if (!text) return '';
       return text
         .replace(/<@[UW][A-Z0-9]+>/g, '')
@@ -567,14 +562,7 @@ export class SlackInterfaceService extends BaseService {
     });
     await this.slackEventValidator.initialize();
 
-    // Initialize SlackContextExtractor
-    this.slackContextExtractor = new SlackContextExtractor({
-      enableUserInfoFetching: true,
-      enableEmailExtraction: true,
-      maxRetries: 3,
-      retryDelay: 1000
-    }, this.client);
-    await this.slackContextExtractor.initialize();
+    // SlackContextExtractor removed during cleanup
   }
 
   /**
@@ -622,7 +610,7 @@ export class SlackInterfaceService extends BaseService {
           slackMessageProcessor: !!this.slackMessageProcessor,
           slackResponseFormatter: !!this.slackResponseFormatter,
           slackEventValidator: !!this.slackEventValidator,
-          slackContextExtractor: !!this.slackContextExtractor
+          slackContextExtractor: false // removed during cleanup
         }
       }
     };

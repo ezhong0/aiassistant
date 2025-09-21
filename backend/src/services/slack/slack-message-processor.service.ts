@@ -3,6 +3,13 @@ import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } f
 import { ToolExecutorService } from '../tool-executor.service';
 import { TokenManager } from '../token-manager';
 // AI services removed during cleanup
+
+// Define ClassificationContext locally since the service was removed
+interface ClassificationContext {
+  userInput: string;
+  requestType: string;
+  systemLoad: any;
+}
 import { ToolExecutionContext } from '../../types/tools';
 import { serviceManager } from '../service-manager';
 import { v4 as uuidv4 } from 'uuid';
@@ -32,8 +39,7 @@ export class SlackMessageProcessor extends BaseService {
   private config: SlackMessageProcessorConfig;
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
-  private aiClassificationService: AIClassificationService | null = null;
-  private asyncRequestClassifierService: AsyncRequestClassifierService | null = null;
+  // AI services removed during cleanup
   private responsePersonalityService: any | null = null;
   private jobQueueService: any | null = null;
 
@@ -58,8 +64,8 @@ export class SlackMessageProcessor extends BaseService {
         enableDMOnlyMode: this.config.enableDMOnlyMode,
         hasTokenManager: !!this.tokenManager,
         hasToolExecutor: !!this.toolExecutorService,
-        hasAIClassification: !!this.aiClassificationService,
-        hasAsyncClassifier: !!this.asyncRequestClassifierService,
+        hasAIClassification: false, // removed during cleanup
+        hasAsyncClassifier: false, // removed during cleanup
         hasPersonalityService: !!this.responsePersonalityService,
         hasJobQueue: !!this.jobQueueService,
         enableAsyncProcessing: !!this.config.enableAsyncProcessing
@@ -76,8 +82,7 @@ export class SlackMessageProcessor extends BaseService {
     try {
       this.tokenManager = null;
       this.toolExecutorService = null;
-      this.aiClassificationService = null;
-      this.asyncRequestClassifierService = null;
+      // aiClassificationService and asyncRequestClassifierService removed during cleanup
       this.responsePersonalityService = null;
       this.jobQueueService = null;
       this.logInfo('SlackMessageProcessor destroyed successfully');
@@ -281,11 +286,12 @@ export class SlackMessageProcessor extends BaseService {
     response?: any;
   }> {
     try {
-      if (!this.aiClassificationService || !this.tokenManager) {
+      if (!this.tokenManager) {
         return { requiresOAuth: false };
       }
 
-      const oauthRequirement = await this.aiClassificationService.detectOAuthRequirement(message);
+      // OAuth detection simplified after service cleanup
+      const oauthRequirement = 'none';
       
       if (oauthRequirement !== 'none') {
         const hasOAuth = await this.tokenManager.hasValidOAuthTokens(context.teamId, context.userId);
@@ -320,9 +326,12 @@ export class SlackMessageProcessor extends BaseService {
     response?: any;
   }> {
     try {
-      if (!this.aiClassificationService) {
-        return { isConfirmation: false };
-      }
+      // aiClassificationService removed during cleanup - simplified detection
+      // Simple heuristic: check for common confirmation keywords
+      const confirmationKeywords = ['yes', 'confirm', 'proceed', 'ok', 'approve', 'send', 'go ahead'];
+      const isSimpleConfirmation = confirmationKeywords.some(keyword =>
+        message.toLowerCase().includes(keyword)
+      );
 
       // First check if there are any pending actions for this user
       const sessionId = `user:${context.teamId}:${context.userId}`;
@@ -347,9 +356,9 @@ export class SlackMessageProcessor extends BaseService {
         return { isConfirmation: false };
       }
 
-      // Now check if the message is actually a confirmation
-      const classification = await this.aiClassificationService.classifyConfirmationResponse(message);
-      const isConfirmation = classification === 'confirm' || classification === 'reject';
+      // Now check if the message is actually a confirmation - simplified
+      const classification = isSimpleConfirmation ? 'confirm' : 'unknown';
+      const isConfirmation = classification === 'confirm';
 
       this.logInfo('Confirmation classification result', {
         message: message.substring(0, 50),
@@ -485,8 +494,14 @@ export class SlackMessageProcessor extends BaseService {
         awaitingConfirmation: pendingAction.awaitingConfirmation
       });
 
-      // Determine if this is a confirmation or rejection
-      const classification = await this.aiClassificationService?.classifyConfirmationResponse(message);
+      // Determine if this is a confirmation or rejection - simplified
+      const confirmationKeywords = ['yes', 'confirm', 'proceed', 'ok', 'approve', 'send', 'go ahead'];
+      const rejectionKeywords = ['no', 'cancel', 'stop', 'abort', 'reject', 'deny'];
+
+      const hasConfirmationKeywords = confirmationKeywords.some(keyword => message.toLowerCase().includes(keyword));
+      const hasRejectionKeywords = rejectionKeywords.some(keyword => message.toLowerCase().includes(keyword));
+
+      const classification = hasConfirmationKeywords ? 'confirm' : hasRejectionKeywords ? 'reject' : 'unknown';
       const isConfirmation = classification === 'confirm';
       const isRejection = classification === 'reject';
 
@@ -984,20 +999,13 @@ export class SlackMessageProcessor extends BaseService {
       this.logWarn('JobQueueService not available - will process requests synchronously');
     }
 
-    this.aiClassificationService = serviceManager.getService('aiClassificationService') as AIClassificationService;
-    if (!this.aiClassificationService) {
-      this.logWarn('AIClassificationService not available - some features will be limited');
-    }
-
-    this.asyncRequestClassifierService = serviceManager.getService('asyncRequestClassifierService') as AsyncRequestClassifierService;
-    if (!this.asyncRequestClassifierService) {
-      this.logWarn('AsyncRequestClassifierService not available - async processing will be disabled');
-    }
+    // AI services removed during cleanup
+    this.logWarn('AI Classification services removed during cleanup - using simplified logic');
 
     this.responsePersonalityService = serviceManager.getService('responsePersonalityService') as any;
     this.jobQueueService = serviceManager.getService('jobQueueService') as any;
 
-    if (this.config.enableAsyncProcessing && (!this.asyncRequestClassifierService || !this.jobQueueService)) {
+    if (this.config.enableAsyncProcessing && !this.jobQueueService) {
       this.logWarn('Async processing services not available - async processing will be disabled');
     }
   }
@@ -1193,13 +1201,17 @@ export class SlackMessageProcessor extends BaseService {
         systemLoad: await this.getSystemLoad() as any
       };
 
-      // Try quick classification first
-      let classification = this.asyncRequestClassifierService!.quickClassify(message);
-
-      // If no quick match, use LLM classification
-      if (!classification) {
-        classification = await this.asyncRequestClassifierService!.classifyRequest(classificationContext);
-      }
+      // Simplified classification after service cleanup
+      // Default to sync processing for now
+      let classification = {
+        shouldProcessAsync: false,
+        priority: 'normal',
+        estimatedProcessingTime: 1000,
+        confidence: 0.5,
+        suggestedJobType: 'message_processing',
+        complexity: 'low',
+        estimatedDuration: 'short'
+      };
 
       // If should process sync, return early
       if (!classification.shouldProcessAsync) {
@@ -1310,7 +1322,7 @@ export class SlackMessageProcessor extends BaseService {
    * Check if async processing should be considered for this message
    */
   private shouldUseAsyncProcessing(message: string, context: SlackContext): boolean {
-    if (!this.asyncRequestClassifierService || !this.jobQueueService) return false;
+    if (!this.jobQueueService) return false;
 
     // Quick heuristics for obvious sync cases
     const syncPatterns = [
@@ -1550,7 +1562,7 @@ export class SlackMessageProcessor extends BaseService {
         dependencies: {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
-          aiClassificationService: !!this.aiClassificationService,
+          aiClassificationService: false, // removed during cleanup
           responsePersonalityService: !!this.responsePersonalityService
         }
       }

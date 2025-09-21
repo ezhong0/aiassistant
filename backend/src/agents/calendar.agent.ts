@@ -127,6 +127,14 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    * Required method to process incoming requests - routes to appropriate handlers
    */
   protected async processQuery(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<any> {
+    console.log('🎯 CALENDAR AGENT: processQuery called with params:', JSON.stringify(params, null, 2));
+    console.log('🎯 CALENDAR AGENT: processQuery called with context:', JSON.stringify({
+      sessionId: context.sessionId,
+      userId: context.userId,
+      hasSlackContext: !!context.slackContext,
+      slackContext: context.slackContext
+    }, null, 2));
+
     const logContext: LogContext = {
       correlationId: `calendar-${context.sessionId}-${Date.now()}`,
       userId: context.userId,
@@ -153,6 +161,94 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       }
     });
 
+    // Get access token from TokenManager using Slack context
+    let accessToken: string | null = null;
+
+    console.log('🔑 CALENDAR AGENT: Attempting to retrieve access token');
+    console.log('🔑 CALENDAR AGENT: Slack context:', {
+      hasSlackContext: !!context.slackContext,
+      teamId: context.slackContext?.teamId,
+      userId: context.slackContext?.userId,
+      hasParamsAccessToken: !!params.accessToken
+    });
+
+    EnhancedLogger.debug('Attempting to retrieve access token', {
+      ...logContext,
+      metadata: {
+        hasSlackContext: !!context.slackContext,
+        teamId: context.slackContext?.teamId,
+        userId: context.slackContext?.userId,
+        hasParamsAccessToken: !!params.accessToken
+      }
+    });
+
+    if (context.slackContext?.teamId && context.slackContext?.userId) {
+      console.log('🔑 CALENDAR AGENT: Found Slack context, looking up TokenManager');
+      const tokenManager = serviceManager.getService<TokenManager>('tokenManager');
+      console.log('🔑 CALENDAR AGENT: TokenManager lookup result:', {
+        hasTokenManager: !!tokenManager,
+        isTokenManagerReady: tokenManager?.isReady()
+      });
+
+      if (tokenManager) {
+        try {
+          console.log('🔑 CALENDAR AGENT: Calling getValidTokensForCalendar with:', {
+            teamId: context.slackContext.teamId,
+            userId: context.slackContext.userId
+          });
+          accessToken = await tokenManager.getValidTokensForCalendar(context.slackContext.teamId, context.slackContext.userId);
+          console.log('🔑 CALENDAR AGENT: Token retrieval result:', {
+            hasAccessToken: !!accessToken,
+            accessTokenLength: accessToken?.length || 0
+          });
+        } catch (error) {
+          console.log('🔑 CALENDAR AGENT: Error retrieving access token:', error);
+          EnhancedLogger.error('Error retrieving access token', error as Error, {
+            ...logContext,
+            metadata: {
+              teamId: context.slackContext.teamId,
+              userId: context.slackContext.userId
+            }
+          });
+        }
+      } else {
+        console.log('🔑 CALENDAR AGENT: TokenManager service not available');
+        console.log('🔑 CALENDAR AGENT: Available services:', Object.keys((serviceManager as any).services || {}));
+      }
+    } else {
+      console.log('🔑 CALENDAR AGENT: Missing Slack context for token retrieval');
+      console.log('🔑 CALENDAR AGENT: Context details:', {
+        hasContext: !!context,
+        hasSlackContext: !!context.slackContext,
+        contextKeys: context ? Object.keys(context) : []
+      });
+    }
+
+    // Also check if access token is provided in parameters (for backwards compatibility)
+    if (!accessToken && params.accessToken) {
+      accessToken = params.accessToken as string;
+      EnhancedLogger.debug('Using access token from parameters', {
+        ...logContext,
+        metadata: { accessTokenLength: accessToken.length }
+      });
+    }
+
+    if (!accessToken) {
+      EnhancedLogger.error('No access token available for calendar operations', new Error('No access token'), {
+        ...logContext,
+        metadata: {
+          hasSlackContext: !!context.slackContext,
+          hasParamsAccessToken: !!params.accessToken,
+          checkedTokenManager: true
+        }
+      });
+      return {
+        success: false,
+        message: 'Calendar access not available. Please authenticate with Google Calendar.',
+        error: 'No access, refresh token, API key or refresh handler callback is set.'
+      };
+    }
+
     // First detect the operation
     const operation = await this.detectOperation(params);
 
@@ -161,7 +257,8 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       metadata: {
         detectedOperation: operation,
         hasAction: !!params.action,
-        hasOperation: !!(params as any).operation
+        hasOperation: !!(params as any).operation,
+        hasAccessToken: !!accessToken
       }
     });
 
@@ -169,46 +266,46 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     switch (operation.toLowerCase()) {
       case 'create':
         EnhancedLogger.debug('Routing to create event', { ...logContext, metadata: { operation: 'create' } });
-        return await this.handleCreateEvent(params as unknown as ToolParameters, context);
+        return await this.handleCreateEvent(params as unknown as ToolParameters, context, accessToken);
 
       case 'list':
         EnhancedLogger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list' } });
-        return await this.handleListEvents(params as unknown as ToolParameters, context);
+        return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
       case 'retrieve_events':
         EnhancedLogger.debug('Routing to retrieve events', { ...logContext, metadata: { operation: 'retrieve_events' } });
-        return await this.handleListEvents(params as unknown as ToolParameters, context);
+        return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
           case 'retrieve_suggested_times':
             EnhancedLogger.debug('Routing to retrieve suggested times', { ...logContext, metadata: { operation: 'retrieve_suggested_times' } });
-            return await this.handleListEvents(params as unknown as ToolParameters, context);
+            return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
           case 'list_events':
         EnhancedLogger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list_events' } });
-        return await this.handleListEvents(params as unknown as ToolParameters, context);
+        return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
       case 'update':
         EnhancedLogger.debug('Routing to update event', { ...logContext, metadata: { operation: 'update' } });
-        return await this.handleUpdateEvent(params as unknown as ToolParameters, context);
+        return await this.handleUpdateEvent(params as unknown as ToolParameters, context, accessToken);
 
       case 'delete':
         EnhancedLogger.debug('Routing to delete event', { ...logContext, metadata: { operation: 'delete' } });
-        return await this.handleDeleteEvent(params as unknown as ToolParameters, context);
+        return await this.handleDeleteEvent(params as unknown as ToolParameters, context, accessToken);
 
       case 'check_availability':
         EnhancedLogger.debug('Routing to check availability', { ...logContext, metadata: { operation: 'check_availability' } });
-        return await this.handleCheckAvailability(params as unknown as ToolParameters, context);
+        return await this.handleCheckAvailability(params as unknown as ToolParameters, context, accessToken);
 
       case 'find_slots':
         EnhancedLogger.debug('Routing to find slots', { ...logContext, metadata: { operation: 'find_slots' } });
-        return await this.handleFindSlots(params as unknown as ToolParameters, context);
+        return await this.handleFindSlots(params as unknown as ToolParameters, context, accessToken);
 
       default:
         EnhancedLogger.warn('Unknown operation, defaulting to create', {
           ...logContext,
           metadata: { detectedOperation: operation, action: params.action }
         });
-        return await this.handleCreateEvent(params as unknown as ToolParameters, context);
+        return await this.handleCreateEvent(params as unknown as ToolParameters, context, accessToken);
     }
   }
 
@@ -544,8 +641,94 @@ Always return structured execution status with event details, scheduling insight
 
     EnhancedLogger.debug('Executing calendar tool', logContext);
 
-    // Ensure we have access token
-    if (!parameters.accessToken) {
+    console.log('🎯 CALENDAR AGENT: executeCustomTool called with parameters:', JSON.stringify(parameters, null, 2));
+    console.log('🎯 CALENDAR AGENT: executeCustomTool called with context:', JSON.stringify({
+      sessionId: context.sessionId,
+      userId: context.userId,
+      hasSlackContext: !!context.slackContext,
+      slackContext: context.slackContext
+    }, null, 2));
+
+    // Get access token from TokenManager using Slack context
+    let accessToken: string | null = null;
+
+    console.log('🔑 CALENDAR AGENT: executeCustomTool - Attempting to retrieve access token');
+    console.log('🔑 CALENDAR AGENT: executeCustomTool - Slack context:', {
+      hasSlackContext: !!context.slackContext,
+      teamId: context.slackContext?.teamId,
+      userId: context.slackContext?.userId,
+      hasParamsAccessToken: !!parameters.accessToken
+    });
+
+    EnhancedLogger.debug('executeCustomTool: Attempting to retrieve access token', {
+      ...logContext,
+      metadata: {
+        hasSlackContext: !!context.slackContext,
+        teamId: context.slackContext?.teamId,
+        userId: context.slackContext?.userId,
+        hasParamsAccessToken: !!parameters.accessToken
+      }
+    });
+
+    if (context.slackContext?.teamId && context.slackContext?.userId) {
+      console.log('🔑 CALENDAR AGENT: executeCustomTool - Found Slack context, looking up TokenManager');
+      const tokenManager = serviceManager.getService<TokenManager>('tokenManager');
+      console.log('🔑 CALENDAR AGENT: executeCustomTool - TokenManager lookup result:', {
+        hasTokenManager: !!tokenManager,
+        isTokenManagerReady: tokenManager?.isReady()
+      });
+
+      if (tokenManager) {
+        try {
+          console.log('🔑 CALENDAR AGENT: executeCustomTool - Calling getValidTokensForCalendar with:', {
+            teamId: context.slackContext.teamId,
+            userId: context.slackContext.userId
+          });
+          accessToken = await tokenManager.getValidTokensForCalendar(context.slackContext.teamId, context.slackContext.userId);
+          console.log('🔑 CALENDAR AGENT: executeCustomTool - Token retrieval result:', {
+            hasAccessToken: !!accessToken,
+            accessTokenLength: accessToken?.length || 0
+          });
+        } catch (error) {
+          console.log('🔑 CALENDAR AGENT: executeCustomTool - Error retrieving access token:', error);
+          EnhancedLogger.error('executeCustomTool: Error retrieving access token', error as Error, {
+            ...logContext,
+            metadata: {
+              teamId: context.slackContext.teamId,
+              userId: context.slackContext.userId
+            }
+          });
+        }
+      } else {
+        console.log('🔑 CALENDAR AGENT: executeCustomTool - TokenManager service not available');
+        console.log('🔑 CALENDAR AGENT: executeCustomTool - Available services:', Object.keys((serviceManager as any).services || {}));
+      }
+    } else {
+      console.log('🔑 CALENDAR AGENT: executeCustomTool - Missing Slack context for token retrieval');
+      console.log('🔑 CALENDAR AGENT: executeCustomTool - Context details:', {
+        hasContext: !!context,
+        hasSlackContext: !!context.slackContext,
+        contextKeys: context ? Object.keys(context) : []
+      });
+    }
+
+    // Also check if access token is provided in parameters (for backwards compatibility)
+    if (!accessToken && parameters.accessToken) {
+      accessToken = parameters.accessToken as string;
+      EnhancedLogger.debug('executeCustomTool: Using access token from parameters', {
+        ...logContext,
+        metadata: { accessTokenLength: accessToken.length }
+      });
+    }
+
+    if (!accessToken) {
+      EnhancedLogger.error('executeCustomTool: No access token available', new Error('No access token'), {
+        ...logContext,
+        metadata: {
+          hasSlackContext: !!context.slackContext,
+          hasParamsAccessToken: !!parameters.accessToken
+        }
+      });
       return {
         success: false,
         error: CALENDAR_SERVICE_CONSTANTS.ERRORS.NO_ACCESS_TOKEN
@@ -592,23 +775,23 @@ Always return structured execution status with event details, scheduling insight
       });
 
       if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CREATE || detectedOperation === 'create') {
-        return await this.handleCreateEvent(parameters, context);
+        return await this.handleCreateEvent(parameters, context, accessToken);
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.LIST || detectedOperation === 'list') {
-        return await this.handleListEvents(parameters, context);
+        return await this.handleListEvents(parameters, context, accessToken);
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.UPDATE || detectedOperation === 'update') {
-        return await this.handleUpdateEvent(parameters, context);
+        return await this.handleUpdateEvent(parameters, context, accessToken);
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.DELETE || detectedOperation === 'delete') {
-        return await this.handleDeleteEvent(parameters, context);
+        return await this.handleDeleteEvent(parameters, context, accessToken);
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.CHECK_AVAILABILITY || detectedOperation === 'check_availability') {
-        return await this.handleCheckAvailability(parameters, context);
+        return await this.handleCheckAvailability(parameters, context, accessToken);
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.FIND_SLOTS || detectedOperation === 'find_slots') {
-        return await this.handleFindSlots(parameters, context);
+        return await this.handleFindSlots(parameters, context, accessToken);
       } else {
         EnhancedLogger.warn('Unknown operation, defaulting to create', {
           ...logContext,
           metadata: { detectedOperation }
         });
-        return await this.handleCreateEvent(parameters, context);
+        return await this.handleCreateEvent(parameters, context, accessToken);
       }
     } catch (error) {
       EnhancedLogger.error('Error executing calendar tool', error as Error, {
@@ -625,7 +808,7 @@ Always return structured execution status with event details, scheduling insight
   /**
    * Handle create event operation
    */
-  private async handleCreateEvent(parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private async handleCreateEvent(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Validate event data
       const validationResult = this.calendarValidator!.validateEventData({
@@ -656,7 +839,7 @@ Always return structured execution status with event details, scheduling insight
 
       const result = await this.calendarEventManager!.createEvent(
         event,
-        parameters.accessToken as string,
+        accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
@@ -702,7 +885,7 @@ Always return structured execution status with event details, scheduling insight
   /**
    * Handle list events operation
    */
-  private async handleListEvents(parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private async handleListEvents(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Validate query options
       const validationResult = this.calendarValidator!.validateQueryOptions({
@@ -720,7 +903,7 @@ Always return structured execution status with event details, scheduling insight
 
       // List events
       const result = await this.calendarEventManager!.listEvents(
-        parameters.accessToken as string,
+        accessToken,
         {
           timeMin: parameters.timeMin as string,
           timeMax: parameters.timeMax as string,
@@ -768,7 +951,7 @@ Always return structured execution status with event details, scheduling insight
   /**
    * Handle update event operation
    */
-  private async handleUpdateEvent(parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private async handleUpdateEvent(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Validate event ID
       const eventIdValidation = this.calendarValidator!.validateEventId(parameters.eventId as string);
@@ -809,7 +992,7 @@ Always return structured execution status with event details, scheduling insight
       const result = await this.calendarEventManager!.updateEvent(
         parameters.eventId as string,
         eventUpdate,
-        parameters.accessToken as string,
+        accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
@@ -855,7 +1038,7 @@ Always return structured execution status with event details, scheduling insight
   /**
    * Handle delete event operation
    */
-  private async handleDeleteEvent(parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private async handleDeleteEvent(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Validate event ID
       const eventIdValidation = this.calendarValidator!.validateEventId(parameters.eventId as string);
@@ -869,7 +1052,7 @@ Always return structured execution status with event details, scheduling insight
       // Delete event
       const result = await this.calendarEventManager!.deleteEvent(
         parameters.eventId as string,
-        parameters.accessToken as string,
+        accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
@@ -902,13 +1085,13 @@ Always return structured execution status with event details, scheduling insight
   /**
    * Handle check availability operation
    */
-  private async handleCheckAvailability(parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private async handleCheckAvailability(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Check availability
       const result = await this.calendarAvailabilityChecker!.checkAvailability(
         parameters.startTime as string,
         parameters.endTime as string,
-        parameters.accessToken as string,
+        accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
@@ -951,14 +1134,14 @@ Always return structured execution status with event details, scheduling insight
   /**
    * Handle find slots operation
    */
-  private async handleFindSlots(parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private async handleFindSlots(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Find available slots
       const result = await this.calendarAvailabilityChecker!.findAvailableSlots(
         parameters.startDate as string,
         parameters.endDate as string,
         parameters.durationMinutes as number,
-        parameters.accessToken as string,
+        accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 

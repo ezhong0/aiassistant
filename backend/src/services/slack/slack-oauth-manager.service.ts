@@ -22,7 +22,7 @@ import {
 export class SlackOAuthManager extends BaseService {
   private config: SlackOAuthConfig;
   private tokenManager: TokenManager | null = null;
-  private aiClassificationService: AIClassificationService | null = null;
+  // aiClassificationService removed during cleanup
   private successMessageCache = new Map<string, number>(); // Track shown success messages
 
   constructor(config: SlackOAuthConfig) {
@@ -45,7 +45,7 @@ export class SlackOAuthManager extends BaseService {
         redirectUri: this.config.redirectUri,
         scopes: this.config.scopes,
         hasTokenManager: !!this.tokenManager,
-        hasAIClassification: !!this.aiClassificationService
+        hasAIClassification: false // removed during cleanup
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -59,7 +59,7 @@ export class SlackOAuthManager extends BaseService {
     try {
       this.successMessageCache.clear();
       this.tokenManager = null;
-      this.aiClassificationService = null;
+      // aiClassificationService removed during cleanup
       this.logInfo('SlackOAuthManager destroyed successfully');
     } catch (error) {
       this.logError('Error during SlackOAuthManager destruction', error);
@@ -92,23 +92,13 @@ export class SlackOAuthManager extends BaseService {
    */
   async detectOAuthRequirement(message: string): Promise<SlackOAuthRequirementResult> {
     try {
-      if (!this.aiClassificationService) {
-        this.logWarn('AIClassificationService not available for OAuth detection');
-        return {
-          requiresOAuth: false,
-          oauthType: 'none',
-          confidence: 0,
-          reasoning: 'AI classification service not available'
-        };
-      }
-
-      const oauthRequirement = await this.aiClassificationService.detectOAuthRequirement(message);
-      
+      // AI service removed during cleanup - simplified logic
+      this.logWarn('AIClassificationService removed during cleanup');
       return {
-        requiresOAuth: oauthRequirement !== 'none',
-        oauthType: oauthRequirement,
-        confidence: 0.8, // AI classification confidence
-        reasoning: `AI detected ${oauthRequirement} requirement`
+        requiresOAuth: false,
+        oauthType: 'none',
+        confidence: 0,
+        reasoning: 'AI classification service removed during cleanup'
       };
     } catch (error) {
       this.logError('Error detecting OAuth requirement', error);
@@ -343,7 +333,7 @@ export class SlackOAuthManager extends BaseService {
       this.tokenManager = serviceManager.getService('tokenManager') as TokenManager;
       
       // Get AIClassificationService from service registry
-      this.aiClassificationService = serviceManager.getService('aiClassificationService') as AIClassificationService;
+      // aiClassificationService removed during cleanup
     } catch (error) {
       this.logWarn('Some dependencies not available during initialization', { error });
     }
@@ -405,7 +395,7 @@ export class SlackOAuthManager extends BaseService {
       successMessageCacheSize: this.successMessageCache.size,
       config: this.config,
       hasTokenManager: !!this.tokenManager,
-      hasAIClassification: !!this.aiClassificationService
+      hasAIClassification: false // removed during cleanup
     };
   }
 }

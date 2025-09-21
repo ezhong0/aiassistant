@@ -291,13 +291,15 @@ Return only the operation name.`;
     // Simplified after service cleanup
     try {
       // Default logic for determining confirmation requirement
-      const detectedOperation = operation.toLowerCase().includes('send') ? 'send' : 'read';
-      
-      if (detectedOperation === 'read' || detectedOperation === 'search' || detectedOperation === 'list') {
+      const lowerOp = operation.toLowerCase();
+
+      // Read-only operations don't need confirmation
+      if (lowerOp.includes('read') || lowerOp.includes('search') || lowerOp.includes('list') || lowerOp.includes('check')) {
         return false;
       }
-      
-      return true; // Assume write operations need confirmation
+
+      // Write operations need confirmation
+      return true;
     } catch (error) {
       
       return true; // Default to requiring confirmation if AI fails
@@ -315,20 +317,16 @@ Return only the operation name.`;
     }
 
     try {
-      const aiClassificationService = getService<AIClassificationService>('aiClassificationService');
-      if (!aiClassificationService) {
-        throw new Error('AI Classification Service is not available. AI confirmation reason detection is required for this operation.');
-      }
+      // AI Classification Service removed during cleanup - use simplified logic
+      const writeOperations = ['send', 'create', 'update', 'delete', 'write'];
+      const isWriteOperation = writeOperations.some(op => operation.toLowerCase().includes(op));
 
-      const requiresConfirmation = await aiClassificationService.operationRequiresConfirmation(operation, agentName);
-      
-      if (requiresConfirmation) {
+      if (isWriteOperation) {
         return 'Write operation requires confirmation for safety';
       } else {
         return 'Read-only operation, no confirmation needed';
       }
     } catch (error) {
-      
       return 'Operation requires confirmation for safety';
     }
   },

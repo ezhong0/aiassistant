@@ -312,12 +312,6 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
         appropriateness: 'correct',
         reason: 'Default assessment after service cleanup'
       };
-
-      return {
-        toolName: 'contactAgent',
-        appropriateness: result.appropriateness,
-        reason: result.reason
-      };
     } catch (error) {
       return {
         toolName: 'contactAgent',
@@ -338,19 +332,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     try {
       // AIClassificationService removed during cleanup
       // Service removed, using defaults
-      if (true) {
-        return {
-          toolName: 'emailAgent',
-          appropriateness: 'suboptimal',
-          reason: 'AI service unavailable'
-        };
-      }
-      const result = await aiClassificationService.analyzeToolAppropriateness(query, 'emailAgent');
-      
+      // AI service removed during cleanup - simplified assessment
       return {
         toolName: 'emailAgent',
-        appropriateness: result.appropriateness,
-        reason: result.reason
+        appropriateness: 'correct',
+        reason: 'Default assessment after service cleanup'
       };
     } catch (error) {
       return {
@@ -370,21 +356,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      // AIClassificationService removed during cleanup
-      // Service removed, using defaults
-      if (true) {
-        return {
-          toolName: 'calendarAgent',
-          appropriateness: 'suboptimal',
-          reason: 'AI service unavailable'
-        };
-      }
-      const result = await aiClassificationService.analyzeToolAppropriateness(query, 'calendarAgent');
-      
+      // AI service removed during cleanup - simplified assessment
       return {
         toolName: 'calendarAgent',
-        appropriateness: result.appropriateness,
-        reason: result.reason
+        appropriateness: 'correct',
+        reason: 'Default assessment after service cleanup'
       };
     } catch (error) {
       return {
@@ -406,19 +382,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     try {
       // AIClassificationService removed during cleanup
       // Service removed, using defaults
-      if (true) {
-        return {
-          toolName: 'slackAgent',
-          appropriateness: 'suboptimal',
-          reason: 'AI service unavailable'
-        };
-      }
-      const result = await aiClassificationService.analyzeToolAppropriateness(query, 'slackAgent');
-      
+      // AI service removed during cleanup - simplified assessment
       return {
         toolName: 'slackAgent',
-        appropriateness: result.appropriateness,
-        reason: result.reason
+        appropriateness: 'correct',
+        reason: 'Default assessment after service cleanup'
       };
     } catch (error) {
       return {
@@ -495,21 +463,18 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
       suggestions.push(`Consider alternative approaches for: ${suboptimalTools.map(t => t.toolName).join(', ')}`);
     }
 
-    // Check for missing contact lookup using AI
+    // Check for missing contact lookup - simplified after service cleanup
     try {
-      // AIClassificationService removed during cleanup
-      // Service removed, using defaults
-      if (true) {
-        return [];
-      }
-      const contactLookup = await aiClassificationService.extractContactNames(query);
+      // Basic heuristic: check if query mentions person names without email addresses
+      const hasPersonNames = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query);
+      const hasEmailAddresses = /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query);
       const hasContactAgent = toolAnalysis.some(t => t.toolName === 'contactAgent');
 
-      if (contactLookup.needed && !hasContactAgent) {
+      if (hasPersonNames && !hasEmailAddresses && !hasContactAgent) {
         suggestions.push('Consider adding contactAgent to resolve contact names to email addresses');
       }
     } catch (error) {
-      // Fallback to basic suggestion if AI fails
+      // Fallback to basic suggestion if analysis fails
       suggestions.push('Consider whether contact lookup is needed for this query');
     }
 
@@ -572,48 +537,43 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    */
   private async suggestToolsForQuery(query: string): Promise<string[]> {
     try {
-      // AIClassificationService removed during cleanup
-      // Service removed, using defaults
-      if (true) {
-        return [];
-      }
-      
-      // Use AI to detect operations and suggest appropriate tools
-      const emailOperation = await aiClassificationService.detectOperation(query, 'emailAgent');
-      const calendarOperation = await aiClassificationService.detectOperation(query, 'calendarAgent');
-      const contactOperation = await aiClassificationService.detectOperation(query, 'contactAgent');
-      const slackOperation = await aiClassificationService.detectOperation(query, 'slackAgent');
-      
+      // AI service removed during cleanup - use simplified heuristics
       const suggestions: string[] = [];
-      
-      if (emailOperation !== 'unknown') {
+
+      // Basic heuristic: check for email-related keywords
+      if (/\b(email|send|message|mail|reply)\b/i.test(query)) {
         suggestions.push('Consider using emailAgent for email operations');
-        
-        // Check if contact lookup is needed
-        const contactLookup = await aiClassificationService.extractContactNames(query);
-        if (contactLookup.needed) {
+
+        // Check if contact lookup is needed (person names without email addresses)
+        const hasPersonNames = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query);
+        const hasEmailAddresses = /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query);
+        if (hasPersonNames && !hasEmailAddresses) {
           suggestions.push('Add contactAgent to resolve contact names to email addresses');
         }
       }
-      
-      if (calendarOperation !== 'unknown') {
+
+      // Basic heuristic: check for calendar-related keywords
+      if (/\b(meeting|schedule|calendar|event|appointment)\b/i.test(query)) {
         suggestions.push('Consider using calendarAgent for calendar operations');
-        
+
         // Check if attendees need to be resolved
-        const contactLookup = await aiClassificationService.extractContactNames(query);
-        if (contactLookup.needed) {
+        const hasPersonNames = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query);
+        const hasEmailAddresses = /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query);
+        if (hasPersonNames && !hasEmailAddresses) {
           suggestions.push('Add contactAgent to resolve attendee names');
         }
       }
-      
-      if (contactOperation !== 'unknown') {
+
+      // Basic heuristic: check for contact-related keywords
+      if (/\b(contact|find|lookup|people|address)\b/i.test(query)) {
         suggestions.push('Consider using contactAgent for contact lookup');
       }
-      
-      if (slackOperation !== 'unknown') {
+
+      // Basic heuristic: check for Slack-related keywords
+      if (/\b(slack|message|thread|channel)\b/i.test(query)) {
         suggestions.push('Consider using slackAgent for Slack message operations');
       }
-      
+
       return suggestions;
     } catch (error) {
       return ['Unable to analyze query for tool suggestions'];

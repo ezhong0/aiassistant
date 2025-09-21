@@ -1277,7 +1277,8 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
   private async executeToolCallInternal(
     toolCall: ToolCall,
     sessionId: string,
-    userId?: string
+    userId?: string,
+    slackContext?: SlackContext
   ): Promise<ToolResult> {
     console.log(`⚡ TOOL EXECUTION: Starting real tool execution...`);
     console.log(`📊 Tool Name: ${toolCall.name}`);
@@ -1294,7 +1295,8 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       const context: ToolExecutionContext = {
         sessionId,
         userId: userId || 'unknown',
-        timestamp: new Date()
+        timestamp: new Date(),
+        slackContext
       };
 
       // Execute real tool call
@@ -1797,7 +1799,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       }
 
       // Execute step-by-step loop
-      const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId);
+      const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, slackContext);
 
       const endTime = Date.now();
       EnhancedLogger.requestEnd('Step-by-step execution completed', {
@@ -1824,7 +1826,8 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     workflowContext: WorkflowContext,
     workflowId: string,
     sessionId: string,
-    userId?: string
+    userId?: string,
+    slackContext?: SlackContext
   ): Promise<MasterAgentResponse> {
     console.log('🔄 MASTER AGENT: Starting step-by-step loop...');
     console.log('📊 Workflow ID:', workflowId);
@@ -1881,7 +1884,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
         console.log(`🔧 MASTER AGENT: Executing tool call...`);
         console.log(`📊 Tool Call:`, JSON.stringify(toolCall, null, 2));
-        const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId);
+        const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId, slackContext);
         console.log(`✅ MASTER AGENT: Tool execution completed`);
         console.log(`📊 Tool Result:`, JSON.stringify(toolResult, null, 2));
 
