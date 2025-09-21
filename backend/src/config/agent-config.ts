@@ -102,32 +102,6 @@ export const AGENT_CONFIG = {
   }
 };
 
-/** Natural language patterns for agent routing */
-export const ROUTING_PATTERNS = {
-  /** Patterns that require contact lookup before main action */
-  needsContactLookup: {
-    /** Patterns for email operations that mention person names */
-    email: [
-      /(?:email|send|message).*?(?:to|with)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i,
-      /send.*?(?:to|with)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i
-    ],
-    /** Patterns for calendar operations with attendees */
-    calendar: [
-      /(?:meeting|schedule|event).*?(?:with|invite)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i,
-      /schedule.*?(?:with|invite)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i
-    ]
-  },
-  
-  /** Patterns that indicate email addresses are already provided */
-  hasEmailAddress: /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
-  
-  /** Patterns for extracting contact names */
-  contactName: [
-    /(?:email|send|to|with)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i,
-    /(?:meeting with|schedule with|invite)\s+([A-Za-z]+(?:\s+[A-Za-z]+)*)/i
-  ]
-};
-
 /** Agent operation types */
 export const AGENT_OPERATIONS = {
   contact: {

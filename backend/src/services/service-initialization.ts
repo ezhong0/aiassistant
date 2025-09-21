@@ -16,8 +16,6 @@ import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack/slack-message-processor.service';
 import { SlackEventValidator } from './slack/slack-event-validator.service';
 import { EmailValidator } from './email/email-validator.service';
-import { CalendarEventManager } from './calendar/calendar-event-manager.service';
-import { CalendarAvailabilityChecker } from './calendar/calendar-availability-checker.service';
 import { CalendarFormatter } from './calendar/calendar-formatter.service';
 import { CalendarValidator } from './calendar/calendar-validator.service';
 import { SlackMessageAnalyzer } from './slack/slack-message-analyzer.service';
@@ -309,38 +307,21 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-
-    // 19. CalendarEventManager - Focused service for calendar event operations
-    const calendarEventManager = new CalendarEventManager();
-    serviceManager.registerService('calendarEventManager', calendarEventManager, {
-      dependencies: ['calendarService'],
-      priority: 90,
-      autoStart: true
-    });
-
-    // 20. CalendarAvailabilityChecker - Focused service for calendar availability operations
-    const calendarAvailabilityChecker = new CalendarAvailabilityChecker();
-    serviceManager.registerService('calendarAvailabilityChecker', calendarAvailabilityChecker, {
-      dependencies: ['calendarService'],
-      priority: 91,
-      autoStart: true
-    });
-
-    // 21. CalendarFormatter - Focused service for calendar response formatting
+    // 19. CalendarFormatter - Focused service for calendar response formatting
     const calendarFormatter = new CalendarFormatter();
     serviceManager.registerService('calendarFormatter', calendarFormatter, {
       priority: 92,
       autoStart: true
     });
 
-    // 22. CalendarValidator - Focused service for calendar event validation
+    // 20. CalendarValidator - Focused service for calendar event validation
     const calendarValidator = new CalendarValidator();
     serviceManager.registerService('calendarValidator', calendarValidator, {
       priority: 93,
       autoStart: true
     });
 
-    // 23. SlackInterfaceService - Central coordinator for all Slack operations
+    // 21. SlackInterfaceService - Central coordinator for all Slack operations
     if (ENV_VALIDATION.isSlackConfigured()) {
       const slackInterfaceService = new SlackInterfaceService({
         signingSecret: ENVIRONMENT.slack.signingSecret,

@@ -3,6 +3,7 @@ import { ToolExecutionContext, SlackAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveSlackService } from '../services/service-resolver';
 import { getService, serviceManager } from '../services/service-manager';
+import { OpenAIService } from '../services/openai.service';
 import { SlackInterfaceService } from '../services/slack/slack-interface.service';
 import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack/slack.types';
 import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack/slack-message-reader.types';
@@ -586,16 +587,10 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
 
-      // Simple confirmation detection logic
-      const message = (parameters.message as string).toLowerCase();
-      const isConfirmation = message.includes('yes') || 
-                           message.includes('confirm') || 
-                           message.includes('approve') ||
-                           message.includes('ok') ||
-                           message.includes('sure') ||
-                           message.includes('go ahead');
-
-      const confirmationType = isConfirmation ? 'positive' : 'negative';
+      // AI-powered confirmation detection
+      const confirmationAnalysis = await this.analyzeConfirmation(parameters.message as string);
+      const isConfirmation = confirmationAnalysis.isConfirmation;
+      const confirmationType = confirmationAnalysis.type;
 
       // Format the result
       const slackResult: SlackResult = {
@@ -948,6 +943,63 @@ You are a specialized Slack workspace management agent focused on reading and un
       word.length > 2 && 
       !['the', 'and', 'or', 'but', 'for', 'with', 'about', 'from', 'that', 'this'].includes(word)
     );
+  }
+
+  /**
+   * AI-powered confirmation analysis
+   */
+  private async analyzeConfirmation(message: string): Promise<{
+    isConfirmation: boolean;
+    type: 'positive' | 'negative';
+    confidence: number;
+  }> {
+    try {
+      const openaiService = getService<OpenAIService>('openaiService');
+      if (!openaiService) {
+        // Fallback to simple detection if AI service unavailable
+        const lowerMessage = message.toLowerCase();
+        const isPositive = lowerMessage.includes('yes') || lowerMessage.includes('confirm');
+        return {
+          isConfirmation: isPositive || lowerMessage.includes('no') || lowerMessage.includes('cancel'),
+          type: isPositive ? 'positive' : 'negative',
+          confidence: 0.5
+        };
+      }
+
+      const prompt = `Analyze this message to determine if it's a confirmation/response and what type:
+
+Message: "${message}"
+
+Determine:
+1. Is this a confirmation/response to a previous request? (true/false)
+2. If it is a confirmation, is it positive (agreeing/accepting) or negative (declining/rejecting)?
+3. Confidence level (0.0 to 1.0)
+
+Examples:
+- "Yes, send that email" → confirmation: true, type: positive, confidence: 0.95
+- "No thanks" → confirmation: true, type: negative, confidence: 0.9
+- "Cancel that" → confirmation: true, type: negative, confidence: 0.9
+- "What's the weather?" → confirmation: false, type: negative, confidence: 0.1
+
+Return only JSON: {"isConfirmation": boolean, "type": "positive"|"negative", "confidence": number}`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You are an expert at analyzing user messages for confirmation intent. Return only valid JSON.',
+        { temperature: 0.1, maxTokens: 100 }
+      );
+
+      return JSON.parse(response);
+    } catch (error) {
+      // Fallback to simple detection on error
+      const lowerMessage = message.toLowerCase();
+      const isPositive = lowerMessage.includes('yes') || lowerMessage.includes('confirm');
+      return {
+        isConfirmation: isPositive || lowerMessage.includes('no') || lowerMessage.includes('cancel'),
+        type: isPositive ? 'positive' : 'negative',
+        confidence: 0.3
+      };
+    }
   }
 
   /**

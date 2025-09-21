@@ -12,6 +12,7 @@ import {
   ThinkAnalysisResult
 } from '../types/agents/agent-specific-parameters';
 import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
+import { OpenAIService } from '../services/openai.service';
 
 export interface ThinkAgentResponse extends AgentResponse {
   data?: {
@@ -528,52 +529,125 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
   }
 
   /**
-   * Suggest appropriate tools for a given query using AI
-   * Replaces string matching with AI analysis
+   * Suggest appropriate tools for a given query using AI-powered analysis
+   * Replaces keyword-based patterns with intelligent intent detection
    */
   private async suggestToolsForQuery(query: string): Promise<string[]> {
     try {
-      // Use simplified heuristics
-      const suggestions: string[] = [];
-
-      // Basic heuristic: check for email-related keywords
-      if (/\b(email|send|message|mail|reply)\b/i.test(query)) {
-        suggestions.push('Consider using emailAgent for email operations');
-
-        // Check if contact lookup is needed (person names without email addresses)
-        const hasPersonNames = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query);
-        const hasEmailAddresses = /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query);
-        if (hasPersonNames && !hasEmailAddresses) {
-          suggestions.push('Add contactAgent to resolve contact names to email addresses');
-        }
-      }
-
-      // Basic heuristic: check for calendar-related keywords
-      if (/\b(meeting|schedule|calendar|event|appointment)\b/i.test(query)) {
-        suggestions.push('Consider using calendarAgent for calendar operations');
-
-        // Check if attendees need to be resolved
-        const hasPersonNames = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query);
-        const hasEmailAddresses = /@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query);
-        if (hasPersonNames && !hasEmailAddresses) {
-          suggestions.push('Add contactAgent to resolve attendee names');
-        }
-      }
-
-      // Basic heuristic: check for contact-related keywords
-      if (/\b(contact|find|lookup|people|address)\b/i.test(query)) {
-        suggestions.push('Consider using contactAgent for contact lookup');
-      }
-
-      // Basic heuristic: check for Slack-related keywords
-      if (/\b(slack|message|thread|channel)\b/i.test(query)) {
-        suggestions.push('Consider using slackAgent for Slack message operations');
-      }
-
+      // Use AI-powered analysis instead of keyword matching
+      const suggestions = await this.analyzeQueryForToolSuggestions(query);
       return suggestions;
     } catch (error) {
       return ['Unable to analyze query for tool suggestions'];
     }
+  }
+
+  /**
+   * AI-powered query analysis for tool suggestions
+   * Replaces hardcoded keyword patterns with intelligent analysis
+   */
+  private async analyzeQueryForToolSuggestions(query: string): Promise<string[]> {
+    try {
+      const openaiService = getService<OpenAIService>('openaiService');
+      if (!openaiService) {
+        // Fallback to simplified analysis if AI service unavailable
+        return this.fallbackToolSuggestions(query);
+      }
+
+      const prompt = `Analyze this user query and suggest appropriate tools/agents based on the intent:
+
+Query: "${query}"
+
+Available tools:
+- emailAgent: For sending, searching, and managing emails
+- contactAgent: For looking up contact information, resolving names to email addresses
+- calendarAgent: For scheduling meetings, creating events, checking availability
+- slackAgent: For reading Slack messages and managing conversations
+
+Analysis guidelines:
+- Detect if the user mentions person names that need contact resolution
+- Identify email operations (send, search, reply)
+- Recognize calendar operations (schedule, meeting, event)
+- Spot contact lookup needs (find person, get email address)
+- Note if person names are mentioned without email addresses
+
+Return JSON array of suggestions:
+["Consider using emailAgent for email operations", "Add contactAgent to resolve contact names"]`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You are an expert at analyzing user intent for tool selection. Return only a JSON array of suggestion strings.',
+        { temperature: 0.1, maxTokens: 200 }
+      );
+
+      try {
+        const suggestions = JSON.parse(response.trim());
+        if (Array.isArray(suggestions)) {
+          console.log('AI-powered tool suggestions generated', {
+            query: query,
+            suggestionCount: suggestions.length
+          });
+          return suggestions;
+        }
+      } catch (parseError) {
+        console.error('Failed to parse AI tool suggestions', parseError);
+      }
+
+      // Fallback if AI response parsing fails
+      return this.fallbackToolSuggestions(query);
+
+    } catch (error) {
+      console.error('AI tool suggestion analysis failed', error);
+
+      // Fallback to basic analysis on error
+      return this.fallbackToolSuggestions(query);
+    }
+  }
+
+  /**
+   * Fallback tool suggestions using basic patterns
+   * Used when AI service is unavailable
+   */
+  private fallbackToolSuggestions(query: string): string[] {
+    const suggestions: string[] = [];
+    const lowerQuery = query.toLowerCase();
+
+    // Basic email detection
+    if (/\b(email|send|message|mail|reply)\b/i.test(query)) {
+      suggestions.push('Consider using emailAgent for email operations');
+
+      // Basic person name detection (fallback pattern)
+      if (/\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query) && !/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query)) {
+        suggestions.push('Add contactAgent to resolve contact names to email addresses');
+      }
+    }
+
+    // Basic calendar detection
+    if (/\b(meeting|schedule|calendar|event|appointment)\b/i.test(query)) {
+      suggestions.push('Consider using calendarAgent for calendar operations');
+
+      // Basic attendee name detection (fallback pattern)
+      if (/\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query) && !/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query)) {
+        suggestions.push('Add contactAgent to resolve attendee names');
+      }
+    }
+
+    // Basic contact detection
+    if (/\b(contact|find|lookup|people|address)\b/i.test(query)) {
+      suggestions.push('Consider using contactAgent for contact lookup');
+    }
+
+    // Basic Slack detection
+    if (/\b(slack|message|thread|channel)\b/i.test(query)) {
+      suggestions.push('Consider using slackAgent for Slack message operations');
+    }
+
+    console.log('Fallback tool suggestions generated', {
+      query: query,
+      suggestionCount: suggestions.length
+    });
+
+    return suggestions;
   }
 
   /**

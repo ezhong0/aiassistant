@@ -18,6 +18,7 @@ import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
 import { MasterAgent } from '../agents/master.agent';
 import { ToolExecutorService } from '../services/tool-executor.service';
+import { OpenAIService } from '../services/openai.service';
 import { TokenStorageService } from '../services/token-storage.service';
 import { ToolExecutionContext, ToolResult, ToolCall } from '../types/tools';
 import { 
@@ -534,15 +535,144 @@ router.get('/status',
  */
 const isConfirmationResponse = async (command: string): Promise<boolean> => {
   try {
-    // Simplified confirmation detection
+    const openaiService = getService<OpenAIService>('openaiService');
+    if (!openaiService) {
+      // Fallback to simple detection if AI service unavailable
+      const lowerCommand = command.toLowerCase().trim();
+      return lowerCommand.includes('yes') || lowerCommand.includes('confirm') ||
+             lowerCommand.includes('no') || lowerCommand.includes('cancel');
+    }
+
+    const prompt = `Is this message a confirmation or response to a previous request?
+
+Message: "${command}"
+
+Examples of confirmations:
+- "Yes" → true
+- "No" → true
+- "Cancel" → true
+- "Confirm" → true
+- "Go ahead" → true
+- "Hello there" → false
+- "What's the weather?" → false
+
+Return only true or false.`;
+
+    const response = await openaiService.generateText(
+      prompt,
+      'You are an expert at detecting confirmation messages. Return only true or false.',
+      { temperature: 0.1, maxTokens: 10 }
+    );
+
+    return response.trim().toLowerCase() === 'true';
+  } catch (error) {
+    // Fallback to simple detection on error
     const lowerCommand = command.toLowerCase().trim();
     return lowerCommand.includes('yes') || lowerCommand.includes('confirm') ||
            lowerCommand.includes('no') || lowerCommand.includes('cancel');
-  } catch (error) {
-    
-    return false;
   }
 }
+
+/**
+ * Check if command is a positive confirmation (yes/confirm vs no/cancel)
+ */
+const isPositiveConfirmation = async (command: string): Promise<boolean> => {
+  try {
+    const openaiService = getService<OpenAIService>('openaiService');
+    if (!openaiService) {
+      // Fallback to simple detection if AI service unavailable
+      const lowerCommand = command.toLowerCase().trim();
+      return lowerCommand.includes('yes') || lowerCommand.includes('confirm');
+    }
+
+    const prompt = `Is this a positive confirmation (agreeing/accepting) or negative (declining/rejecting)?
+
+Message: "${command}"
+
+Examples:
+- "Yes" → true (positive)
+- "No" → false (negative)
+- "Cancel" → false (negative)
+- "Confirm" → true (positive)
+- "Go ahead" → true (positive)
+- "Don't send it" → false (negative)
+
+Return only true for positive confirmation, false for negative.`;
+
+    const response = await openaiService.generateText(
+      prompt,
+      'You are an expert at detecting positive vs negative confirmations. Return only true or false.',
+      { temperature: 0.1, maxTokens: 10 }
+    );
+
+    return response.trim().toLowerCase() === 'true';
+  } catch (error) {
+    // Fallback to simple detection on error
+    const lowerCommand = command.toLowerCase().trim();
+    return lowerCommand.includes('yes') || lowerCommand.includes('confirm');
+  }
+};
+
+/**
+ * AI-powered agent routing based on query intent
+ */
+const determineAgentForQuery = async (query: string): Promise<string> => {
+  try {
+    const openaiService = getService<OpenAIService>('openaiService');
+    if (!openaiService) {
+      // Fallback to simple keyword detection if AI service unavailable
+      const queryLower = query.toLowerCase();
+      if (queryLower.includes('email')) return 'emailAgent';
+      if (queryLower.includes('calendar')) return 'calendarAgent';
+      if (queryLower.includes('contact')) return 'contactAgent';
+      return 'thinkAgent';
+    }
+
+    const prompt = `Analyze this user query and determine which agent should handle it:
+
+Query: "${query}"
+
+Available agents:
+- emailAgent: Send, reply to, search, and manage emails using Gmail
+- calendarAgent: Create, update, and manage calendar events and scheduling
+- contactAgent: Search and manage contacts from Google Contacts
+- thinkAgent: Analyze and reason about requests, general questions
+
+Examples:
+- "Send an email to John" → emailAgent
+- "Schedule a meeting tomorrow" → calendarAgent
+- "Find Sarah's contact info" → contactAgent
+- "What's the weather like?" → thinkAgent
+- "Analyze this data" → thinkAgent
+
+Return only the agent name (emailAgent, calendarAgent, contactAgent, or thinkAgent).`;
+
+    const response = await openaiService.generateText(
+      prompt,
+      'You are an expert at routing user queries to the appropriate agent. Return only the agent name.',
+      { temperature: 0.1, maxTokens: 20 }
+    );
+
+    const agentName = response.trim();
+
+    // Validate the response is one of our known agents
+    const validAgents = ['emailAgent', 'calendarAgent', 'contactAgent', 'thinkAgent'];
+    if (validAgents.includes(agentName)) {
+      return agentName;
+    }
+
+    // Fallback to thinkAgent if response is invalid
+    return 'thinkAgent';
+
+  } catch (error) {
+    // Fallback to simple keyword detection on error
+    const queryLower = query.toLowerCase();
+    if (queryLower.includes('email')) return 'emailAgent';
+    if (queryLower.includes('calendar')) return 'calendarAgent';
+    if (queryLower.includes('contact')) return 'contactAgent';
+    return 'thinkAgent';
+  }
+};
 
 /**
  * Handle action confirmation from natural language
@@ -555,9 +685,8 @@ const handleActionConfirmation = async (
   sessionId: string
 ): Promise<Response> => {
   try {
-    // Simplified confirmation detection
-    const lowerCommand = command.toLowerCase().trim();
-    const confirmed = lowerCommand.includes('yes') || lowerCommand.includes('confirm');
+    // AI-powered confirmation detection
+    const confirmed = await isPositiveConfirmation(command);
 
     if (!confirmed) {
     return res.json({
@@ -682,20 +811,12 @@ const executeConfirmedAction = async (
       timestamp: new Date()
     };
 
-    // Use simple routing
+    // Use AI-powered routing
     let toolCall: ToolCall;
     try {
-      // Simple routing logic
-      const queryLower = (query as string).toLowerCase();
-      if (queryLower.includes('email')) {
-        toolCall = { name: 'emailAgent', parameters: { query } };
-      } else if (queryLower.includes('calendar')) {
-        toolCall = { name: 'calendarAgent', parameters: { query } };
-      } else if (queryLower.includes('contact')) {
-        toolCall = { name: 'contactAgent', parameters: { query } };
-      } else {
-        toolCall = { name: 'thinkAgent', parameters: { query } };
-      }
+      // AI-powered agent routing
+      const agentName = await determineAgentForQuery(query as string);
+      toolCall = { name: agentName, parameters: { query } };
     } catch (error) {
       
       

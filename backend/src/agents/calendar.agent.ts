@@ -20,8 +20,6 @@ import {
 } from '../types/agents/agent-specific-parameters';
 
 // Import focused services
-import { CalendarEventManager, CalendarEventManagementResult } from '../services/calendar/calendar-event-manager.service';
-import { CalendarAvailabilityChecker, AvailabilityCheckResult } from '../services/calendar/calendar-availability-checker.service';
 import { CalendarFormatter, CalendarFormattingResult, CalendarResult } from '../services/calendar/calendar-formatter.service';
 import { CalendarValidator, CalendarValidationResult } from '../services/calendar/calendar-validator.service';
 import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
@@ -79,8 +77,7 @@ export interface CalendarAgentResponse {
 export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentResponse> {
   
   // Focused service dependencies
-  private calendarEventManager: CalendarEventManager | null = null;
-  private calendarAvailabilityChecker: CalendarAvailabilityChecker | null = null;
+  private calendarService: CalendarService | null = null;
   private calendarFormatter: CalendarFormatter | null = null;
   private calendarValidator: CalendarValidator | null = null;
 
@@ -109,11 +106,8 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    * Lazy initialization of calendar services
    */
   private ensureServices(): void {
-    if (!this.calendarEventManager) {
-      this.calendarEventManager = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_EVENT_MANAGER) as CalendarEventManager;
-    }
-    if (!this.calendarAvailabilityChecker) {
-      this.calendarAvailabilityChecker = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_AVAILABILITY_CHECKER) as CalendarAvailabilityChecker;
+    if (!this.calendarService) {
+      this.calendarService = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_SERVICE) as CalendarService;
     }
     if (!this.calendarFormatter) {
       this.calendarFormatter = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_FORMATTER) as CalendarFormatter;
@@ -154,8 +148,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     EnhancedLogger.debug('Calendar services ensured', {
       ...logContext,
       metadata: {
-        hasCalendarEventManager: !!this.calendarEventManager,
-        hasCalendarAvailabilityChecker: !!this.calendarAvailabilityChecker,
+        hasCalendarService: !!this.calendarService,
         hasCalendarFormatter: !!this.calendarFormatter,
         hasCalendarValidator: !!this.calendarValidator
       }
@@ -319,8 +312,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         operation: 'agent_destroy',
         metadata: { service: 'CalendarAgent' }
       });
-      this.calendarEventManager = null;
-      this.calendarAvailabilityChecker = null;
+      this.calendarService = null;
       this.calendarFormatter = null;
       this.calendarValidator = null;
       EnhancedLogger.debug('CalendarAgent destroyed successfully', {
@@ -837,38 +829,31 @@ Always return structured execution status with event details, scheduling insight
         location: parameters.location as string
       };
 
-      const result = await this.calendarEventManager!.createEvent(
+      const createdEvent = await this.calendarService!.createEvent(
         event,
         accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
-      if (result.success) {
-        // Format the result
-        const calendarResult: CalendarResult = {
-          event: result.event,
-          summary: result.event?.summary,
-          start: result.event?.start,
-          end: result.event?.end,
-          location: result.event?.location,
-          attendees: result.event?.attendees?.map((att: any) => att.email)
-        };
+      // Format the result
+      const calendarResult: CalendarResult = {
+        event: createdEvent,
+        summary: createdEvent?.summary || undefined,
+        start: createdEvent?.start?.dateTime || undefined,
+        end: createdEvent?.end?.dateTime || undefined,
+        location: createdEvent?.location || undefined,
+        attendees: createdEvent?.attendees?.map((att: any) => att.email)
+      };
 
-        const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
-        
-        return {
-          success: true,
-          data: {
-            event: result.event,
-            message: formattingResult.formattedText
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_CREATION_FAILED
-        };
-      }
+      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+
+      return {
+        success: true,
+        data: {
+          event: createdEvent,
+          message: formattingResult.formattedText
+        }
+      };
     } catch (error) {
       EnhancedLogger.error('Error handling create event', error as Error, {
         correlationId: 'calendar-create',
@@ -902,7 +887,7 @@ Always return structured execution status with event details, scheduling insight
       }
 
       // List events
-      const result = await this.calendarEventManager!.listEvents(
+      const events = await this.calendarService!.getEvents(
         accessToken,
         {
           timeMin: parameters.timeMin as string,
@@ -912,29 +897,22 @@ Always return structured execution status with event details, scheduling insight
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
-      if (result.success) {
-        // Format the result
-        const calendarResult: CalendarResult = {
-          events: result.events,
-          count: result.count
-        };
+      // Format the result
+      const calendarResult: CalendarResult = {
+        events: events,
+        count: events.length
+      };
 
-        const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
-        
-        return {
-          success: true,
-          data: {
-            events: result.events,
-            count: result.count,
-            message: formattingResult.formattedText
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_LISTING_FAILED
-        };
-      }
+      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+
+      return {
+        success: true,
+        data: {
+          events: events,
+          count: events.length,
+          message: formattingResult.formattedText
+        }
+      };
     } catch (error) {
       EnhancedLogger.error('Error handling list events', error as Error, {
         correlationId: 'calendar-list',
@@ -989,39 +967,32 @@ Always return structured execution status with event details, scheduling insight
         location: parameters.location as string
       };
 
-      const result = await this.calendarEventManager!.updateEvent(
+      const updatedEvent = await this.calendarService!.updateEvent(
         parameters.eventId as string,
         eventUpdate,
         accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
-      if (result.success) {
-        // Format the result
-        const calendarResult: CalendarResult = {
-          event: result.event,
-          summary: result.event?.summary,
-          start: result.event?.start,
-          end: result.event?.end,
-          location: result.event?.location,
-          attendees: result.event?.attendees?.map((att: any) => att.email)
-        };
+      // Format the result
+      const calendarResult: CalendarResult = {
+        event: updatedEvent,
+        summary: updatedEvent?.summary || undefined,
+        start: updatedEvent?.start?.dateTime || undefined,
+        end: updatedEvent?.end?.dateTime || undefined,
+        location: updatedEvent?.location || undefined,
+        attendees: updatedEvent?.attendees?.map((att: any) => att.email)
+      };
 
-        const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
-        
-        return {
-          success: true,
-          data: {
-            event: result.event,
-            message: formattingResult.formattedText
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_UPDATE_FAILED
-        };
-      }
+      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+
+      return {
+        success: true,
+        data: {
+          event: updatedEvent,
+          message: formattingResult.formattedText
+        }
+      };
     } catch (error) {
       EnhancedLogger.error('Error handling update event', error as Error, {
         correlationId: 'calendar-update',
@@ -1050,25 +1021,18 @@ Always return structured execution status with event details, scheduling insight
       }
 
       // Delete event
-      const result = await this.calendarEventManager!.deleteEvent(
+      await this.calendarService!.deleteEvent(
         parameters.eventId as string,
         accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
       );
 
-      if (result.success) {
-        return {
-          success: true,
-          data: {
-            message: CALENDAR_SERVICE_CONSTANTS.SUCCESS.EVENT_DELETED
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || CALENDAR_SERVICE_CONSTANTS.ERRORS.EVENT_DELETION_FAILED
-        };
-      }
+      return {
+        success: true,
+        data: {
+          message: CALENDAR_SERVICE_CONSTANTS.SUCCESS.EVENT_DELETED
+        }
+      };
     } catch (error) {
       EnhancedLogger.error('Error handling delete event', error as Error, {
         correlationId: 'calendar-delete',
@@ -1088,36 +1052,29 @@ Always return structured execution status with event details, scheduling insight
   private async handleCheckAvailability(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Check availability
-      const result = await this.calendarAvailabilityChecker!.checkAvailability(
+      const availabilityResult = await this.calendarService!.checkAvailability(
+        accessToken,
         parameters.startTime as string,
         parameters.endTime as string,
-        accessToken,
-        (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
+        [(parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID]
       );
 
-      if (result.success) {
-        // Format the result
-        const calendarResult: CalendarResult = {
-          isAvailable: result.isAvailable,
-          conflictingEvents: result.conflictingEvents
-        };
+      // Format the result
+      const calendarResult: CalendarResult = {
+        isAvailable: !availabilityResult.busy,
+        conflictingEvents: availabilityResult.conflicts
+      };
 
-        const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
-        
-        return {
-          success: true,
-          data: {
-            isAvailable: result.isAvailable,
-            conflictingEvents: result.conflictingEvents,
-            message: formattingResult.formattedText
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || CALENDAR_SERVICE_CONSTANTS.ERRORS.AVAILABILITY_CHECK_FAILED
-        };
-      }
+      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+
+      return {
+        success: true,
+        data: {
+          isAvailable: !availabilityResult.busy,
+          conflictingEvents: availabilityResult.conflicts,
+          message: formattingResult.formattedText
+        }
+      };
     } catch (error) {
       EnhancedLogger.error('Error handling check availability', error as Error, {
         correlationId: 'calendar-availability',
@@ -1137,35 +1094,28 @@ Always return structured execution status with event details, scheduling insight
   private async handleFindSlots(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
       // Find available slots
-      const result = await this.calendarAvailabilityChecker!.findAvailableSlots(
+      const availableSlots = await this.calendarService!.findAvailableSlots(
+        accessToken,
         parameters.startDate as string,
         parameters.endDate as string,
         parameters.durationMinutes as number,
-        accessToken,
-        (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
+        [(parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID]
       );
 
-      if (result.success) {
-        // Format the result
-        const calendarResult: CalendarResult = {
-          availableSlots: result.availableSlots
-        };
+      // Format the result
+      const calendarResult: CalendarResult = {
+        availableSlots: availableSlots
+      };
 
-        const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
-        
-        return {
-          success: true,
-          data: {
-            availableSlots: result.availableSlots,
-            message: formattingResult.formattedText
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: result.error || CALENDAR_SERVICE_CONSTANTS.ERRORS.TIME_SLOT_SEARCH_FAILED
-        };
-      }
+      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+
+      return {
+        success: true,
+        data: {
+          availableSlots: availableSlots,
+          message: formattingResult.formattedText
+        }
+      };
     } catch (error) {
       EnhancedLogger.error('Error handling find slots', error as Error, {
         correlationId: 'calendar-find-slots',

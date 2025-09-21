@@ -7,6 +7,7 @@ import {
   AttachmentType 
 } from '../types/email/gmail.types';
 import { getService } from '../services/service-manager';
+import { OpenAIService } from '../services/openai.service';
 import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**
@@ -35,7 +36,7 @@ export class EmailParser {
         to: this.parseEmailAddresses(message.to),
         cc: message.cc ? this.parseEmailAddresses(message.cc) : undefined,
         date: new Date(message.date),
-        body: this.parseEmailBody(message.body, defaultOptions),
+        body: await this.parseEmailBody(message.body, defaultOptions),
         attachments: defaultOptions.parseAttachments ? message.attachments : [],
         isUnread: message.isUnread,
         labels: message.labelIds,
@@ -145,7 +146,7 @@ export class EmailParser {
   /**
    * Parse email body into text and HTML
    */
-  static parseEmailBody(body: string, options: EmailParsingOptions): { text?: string; html?: string } {
+  static async parseEmailBody(body: string, options: EmailParsingOptions): Promise<{ text?: string; html?: string }> {
     if (!body) return {};
 
     const result: { text?: string; html?: string } = {};
@@ -163,7 +164,7 @@ export class EmailParser {
         result.html = truncatedBody;
       }
       if (options.extractPlainText) {
-        result.text = this.htmlToText(truncatedBody);
+        result.text = await this.htmlToText(truncatedBody);
       }
     } else {
       if (options.extractPlainText) {
@@ -180,7 +181,62 @@ export class EmailParser {
   /**
    * Convert HTML to plain text
    */
-  static htmlToText(html: string): string {
+  /**
+   * AI-powered HTML to text conversion with intelligent content analysis
+   */
+  static async htmlToText(html: string): Promise<string> {
+    try {
+      const openaiService = getService<OpenAIService>('openaiService');
+      if (!openaiService) {
+        // Fallback to basic processing if AI service unavailable
+        return this.fallbackHtmlToText(html);
+      }
+
+      const prompt = `Convert this HTML content to clean, readable plain text while preserving important structure and content:
+
+HTML Content:
+${html.substring(0, 2000)}${html.length > 2000 ? '...' : ''}
+
+Guidelines:
+- Preserve paragraph breaks and section structure
+- Convert lists to readable bullet points or numbered lists
+- Extract important text content while removing formatting
+- Maintain logical reading flow
+- Remove scripts, styles, and navigation elements
+- Convert links to readable format like "Text (URL)"
+- Preserve important whitespace and line breaks
+- Remove excessive whitespace and empty lines
+
+Return only the clean plain text content.`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You are an expert at converting HTML to clean, readable plain text while preserving content structure and meaning.',
+        { temperature: 0.1, maxTokens: 1000 }
+      );
+
+      const cleanText = response.trim();
+
+      console.log('AI-powered HTML to text conversion completed', {
+        originalLength: html.length,
+        processedLength: cleanText.length
+      });
+
+      return cleanText;
+
+    } catch (error) {
+      console.error('AI HTML processing failed, using fallback', error);
+
+      // Fallback to basic regex processing on error
+      return this.fallbackHtmlToText(html);
+    }
+  }
+
+  /**
+   * Fallback HTML to text conversion using basic regex patterns
+   * Used when AI service is unavailable
+   */
+  private static fallbackHtmlToText(html: string): string {
     return html
       // Remove script and style elements
       .replace(/<(script|style)[^>]*>.*?<\/\1>/gis, '')
@@ -241,25 +297,8 @@ export class EmailParser {
         return 'high';
       }
       
-      // Simplified priority classification
-      // Use basic heuristics instead of AI
-      const content = `${message.subject || ''} ${message.snippet || ''}`.toLowerCase();
-
-      // High priority keywords
-      const urgentKeywords = ['urgent', 'asap', 'emergency', 'critical', 'important', 'deadline'];
-      const hasUrgentKeywords = urgentKeywords.some(keyword => content.includes(keyword));
-
-      // Low priority keywords
-      const lowPriorityKeywords = ['newsletter', 'unsubscribe', 'promotion', 'marketing', 'spam'];
-      const hasLowPriorityKeywords = lowPriorityKeywords.some(keyword => content.includes(keyword));
-
-      if (hasUrgentKeywords) {
-        return 'high';
-      } else if (hasLowPriorityKeywords) {
-        return 'low';
-      } else {
-        return 'normal';
-      }
+      // AI-powered priority classification
+      return await this.classifyEmailPriorityWithAI(message);
     } catch (error) {
       EnhancedLogger.error('Failed to classify email priority', error as Error, {
         correlationId: `email-priority-${Date.now()}`,
@@ -371,8 +410,8 @@ export class EmailParser {
   /**
    * Generate email preview text
    */
-  static generatePreview(body: string, maxLength: number = 150): string {
-    const text = typeof body === 'string' ? this.htmlToText(body) : body;
+  static async generatePreview(body: string, maxLength: number = 150): Promise<string> {
+    const text = typeof body === 'string' ? await this.htmlToText(body) : body;
     return text.length > maxLength 
       ? text.substring(0, maxLength).trim() + '...'
       : text.trim();
@@ -412,6 +451,72 @@ export class EmailParser {
     
     const fromEmail = email.from.email.toLowerCase();
     return automatedIndicators.some(indicator => fromEmail.includes(indicator));
+  }
+
+  /**
+   * AI-powered email priority classification
+   */
+  private static async classifyEmailPriorityWithAI(message: GmailMessage): Promise<'high' | 'normal' | 'low'> {
+    try {
+      const openaiService = getService<OpenAIService>('openaiService');
+      if (!openaiService) {
+        // Fallback to simple keyword detection if AI service unavailable
+        const content = `${message.subject || ''} ${message.snippet || ''}`.toLowerCase();
+        const urgentKeywords = ['urgent', 'asap', 'emergency', 'critical', 'important', 'deadline'];
+        const lowPriorityKeywords = ['newsletter', 'unsubscribe', 'promotion', 'marketing', 'spam'];
+
+        if (urgentKeywords.some(keyword => content.includes(keyword))) return 'high';
+        if (lowPriorityKeywords.some(keyword => content.includes(keyword))) return 'low';
+        return 'normal';
+      }
+
+      const content = `Subject: ${message.subject || '(no subject)'}
+From: ${message.from || '(unknown sender)'}
+Preview: ${message.snippet || '(no preview)'}`;
+
+      const prompt = `Analyze this email and classify its priority level:
+
+${content}
+
+Priority levels:
+- high: Urgent, time-sensitive, important business matters, deadlines, emergencies
+- normal: Regular business communication, personal emails, general inquiries
+- low: Newsletters, promotions, automated emails, spam, marketing
+
+Examples:
+- "URGENT: Server down" → high
+- "Meeting tomorrow at 2pm" → normal
+- "Weekly newsletter" → low
+- "Password reset" → normal
+- "Limited time offer!" → low
+
+Return only: high, normal, or low`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You are an expert at classifying email priority. Return only the priority level.',
+        { temperature: 0.1, maxTokens: 10 }
+      );
+
+      const priority = response.trim().toLowerCase();
+
+      // Validate response
+      if (['high', 'normal', 'low'].includes(priority)) {
+        return priority as 'high' | 'normal' | 'low';
+      }
+
+      return 'normal'; // Default fallback
+
+    } catch (error) {
+      // Fallback to simple keyword detection on error
+      const content = `${message.subject || ''} ${message.snippet || ''}`.toLowerCase();
+      const urgentKeywords = ['urgent', 'asap', 'emergency', 'critical', 'important', 'deadline'];
+      const lowPriorityKeywords = ['newsletter', 'unsubscribe', 'promotion', 'marketing', 'spam'];
+
+      if (urgentKeywords.some(keyword => content.includes(keyword))) return 'high';
+      if (lowPriorityKeywords.some(keyword => content.includes(keyword))) return 'low';
+      return 'normal';
+    }
   }
 }
 

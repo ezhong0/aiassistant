@@ -1,8 +1,9 @@
 import { AIAgent } from '../framework/ai-agent';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api/api.types';
-import { ServiceManager } from '../services/service-manager';
+import { ServiceManager, getService } from '../services/service-manager';
 import { EmailValidator } from '../services/email/email-validator.service';
+import { OpenAIService } from '../services/openai.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
 import {
   SendEmailRequest,
@@ -254,7 +255,7 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
           ...logContext,
           metadata: { operation: params.operation }
         });
-        const preprocessedQuery = this.preprocessEmailQuery(params.query || 'in:inbox');
+        const preprocessedQuery = await this.preprocessEmailQuery(params.query || 'in:inbox');
         return await this.handleSearchEmails(params, {
           query: preprocessedQuery,
           maxResults: params.maxResults || 10
@@ -648,7 +649,7 @@ You are a specialized email management agent powered by Gmail API.
       }
 
       // Preprocess query to convert natural language to Gmail API syntax
-      const processedQuery = this.preprocessEmailQuery(actionParams.query || '');
+      const processedQuery = await this.preprocessEmailQuery(actionParams.query || '');
 
       // Create search request
       const searchRequest: SearchEmailsRequest = {
@@ -846,96 +847,123 @@ You are a specialized email management agent powered by Gmail API.
   }
 
   /**
-   * Preprocess email query to convert natural language time expressions to Gmail API syntax
+   * AI-powered email query preprocessing to convert natural language to Gmail API syntax
    */
-  private preprocessEmailQuery(query: string): string {
-    let processedQuery = query.toLowerCase().trim();
-    
-    // First, detect and extract time expressions
-    let timeFilter = '';
-    const timeConversions = [
-      // Recently/recent = last 7 days
-      { patterns: ['recently', 'recent'], replacement: 'newer_than:7d' },
-
-      // Today
-      { patterns: ['today', 'this morning', 'this afternoon'], replacement: 'newer_than:1d' },
-
-      // Yesterday
-      { patterns: ['yesterday'], replacement: `after:${this.getDateString(-1)} before:${this.getDateString(0)}` },
-
-      // This week
-      { patterns: ['this week', 'past week'], replacement: 'newer_than:7d' },
-
-      // Last week
-      { patterns: ['last week'], replacement: `after:${this.getDateString(-14)} before:${this.getDateString(-7)}` },
-
-      // This month
-      { patterns: ['this month', 'past month'], replacement: 'newer_than:30d' },
-
-      // Last few days
-      { patterns: ['last few days', 'past few days'], replacement: 'newer_than:3d' },
-
-      // Last 24 hours
-      { patterns: ['last 24 hours', 'past 24 hours'], replacement: 'newer_than:1d' }
-    ];
-
-    // Apply time conversions
-    for (const conversion of timeConversions) {
-      for (const pattern of conversion.patterns) {
-        if (processedQuery.includes(pattern)) {
-          timeFilter = conversion.replacement;
-          processedQuery = processedQuery.replace(new RegExp(pattern, 'gi'), '').trim();
-          break;
-        }
+  private async preprocessEmailQuery(query: string): Promise<string> {
+    try {
+      const openaiService = getService<OpenAIService>('openaiService');
+      if (!openaiService) {
+        // Fallback to basic processing if AI service unavailable
+        return this.fallbackPreprocessEmailQuery(query);
       }
+
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+      const prompt = `Convert this natural language email query into Gmail API search syntax:
+
+Query: "${query}"
+
+Gmail Search Operators:
+- Time filters: newer_than:1d, older_than:1d, after:YYYY/MM/DD, before:YYYY/MM/DD
+- From/To: from:email@domain.com, to:email@domain.com
+- Subject: subject:"text"
+- Has attachment: has:attachment
+- Labels: label:inbox, label:sent, label:unread
+- Keywords: exact phrases in quotes
+
+Today's date: ${currentDate}
+
+Time expressions mapping:
+- "today" → newer_than:1d
+- "yesterday" → after:${this.getDateString(-1)} before:${this.getDateString(0)}
+- "this week" → newer_than:7d
+- "last week" → after:${this.getDateString(-14)} before:${this.getDateString(-7)}
+- "this month" → newer_than:30d
+- "recently" → newer_than:7d
+
+Examples:
+- "emails from John today" → from:john newer_than:1d in:inbox
+- "show me unread emails" → is:unread in:inbox
+- "emails about project yesterday" → subject:"project" after:${this.getDateString(-1)} before:${this.getDateString(0)} in:inbox
+- "attachments from last week" → has:attachment after:${this.getDateString(-14)} before:${this.getDateString(-7)} in:inbox
+
+Always include "in:inbox" unless specifically asking for sent emails (then use "in:sent").
+Return only the Gmail search query syntax.`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You are an expert at converting natural language to Gmail search syntax. Return only the search query.',
+        { temperature: 0.1, maxTokens: 100 }
+      );
+
+      const processedQuery = response.trim();
+
+      EnhancedLogger.debug('AI-powered email query preprocessed', {
+        correlationId: 'email-query-preprocess',
+        operation: 'ai_query_preprocessing',
+        metadata: {
+          originalQuery: query,
+          processedQuery: processedQuery
+        }
+      });
+
+      return processedQuery;
+
+    } catch (error) {
+      EnhancedLogger.error('AI query preprocessing failed, using fallback', error as Error, {
+        correlationId: 'email-query-preprocess',
+        operation: 'ai_query_preprocessing_error'
+      });
+
+      // Fallback to simple processing on error
+      return this.fallbackPreprocessEmailQuery(query);
+    }
+  }
+
+  /**
+   * Fallback email query preprocessing using basic pattern matching
+   * Used when AI service is unavailable
+   */
+  private fallbackPreprocessEmailQuery(query: string): string {
+    let processedQuery = query.toLowerCase();
+
+    // Basic time expressions
+    processedQuery = processedQuery.replace(/\btoday\b/g, 'newer_than:1d');
+    processedQuery = processedQuery.replace(/\byesterday\b/g, `after:${this.getDateString(-1)} before:${this.getDateString(0)}`);
+    processedQuery = processedQuery.replace(/\bthis week\b/g, 'newer_than:7d');
+    processedQuery = processedQuery.replace(/\blast week\b/g, `after:${this.getDateString(-14)} before:${this.getDateString(-7)}`);
+    processedQuery = processedQuery.replace(/\bthis month\b/g, 'newer_than:30d');
+    processedQuery = processedQuery.replace(/\brecently\b/g, 'newer_than:7d');
+
+    // Basic from/to patterns
+    processedQuery = processedQuery.replace(/\bfrom ([\w@.-]+)\b/g, 'from:$1');
+    processedQuery = processedQuery.replace(/\bto ([\w@.-]+)\b/g, 'to:$1');
+
+    // Basic subject patterns
+    processedQuery = processedQuery.replace(/\babout (.+?)(?:\s|$)/g, 'subject:"$1"');
+
+    // Basic attachment patterns
+    processedQuery = processedQuery.replace(/\bwith attachments?\b/g, 'has:attachment');
+    processedQuery = processedQuery.replace(/\battachments?\b/g, 'has:attachment');
+
+    // Basic unread patterns
+    processedQuery = processedQuery.replace(/\bunread\b/g, 'is:unread');
+
+    // Add default inbox filter if no folder specified
+    if (!processedQuery.includes('in:') && !processedQuery.includes('label:')) {
+      processedQuery += ' in:inbox';
     }
 
-    // Remove all natural language phrases completely
-    const cleanupPatterns = [
-      'what emails did i get',
-      'show me emails',
-      'emails from',
-      'my emails',
-      'emails that',
-      'did i receive',
-      'show me my',
-      'emails',
-      'what',
-      'did',
-      'i',
-      'get',
-      'show',
-      'me',
-      'my'
-    ];
-
-    for (const pattern of cleanupPatterns) {
-      processedQuery = processedQuery.replace(new RegExp(pattern, 'gi'), '').trim();
-    }
-
-    // Build final query
-    let finalQuery = '';
-    if (timeFilter) {
-      finalQuery += timeFilter;
-    }
-    
-    // Always add inbox filter
-    finalQuery += ' in:inbox';
-    
-    // Clean up extra spaces and ensure proper formatting
-    finalQuery = finalQuery.replace(/\s+/g, ' ').trim();
-
-    EnhancedLogger.debug('Email query preprocessed', {
-      correlationId: 'email-query-preprocess',
-      operation: 'query_preprocessing',
+    EnhancedLogger.debug('Fallback email query preprocessed', {
+      correlationId: 'email-query-preprocess-fallback',
+      operation: 'fallback_query_preprocessing',
       metadata: {
         originalQuery: query,
-        processedQuery: finalQuery,
-        timeFilter: timeFilter || 'none'
+        processedQuery: processedQuery
       }
     });
 
-    return finalQuery;
+    return processedQuery.trim();
   }
 
   /**
