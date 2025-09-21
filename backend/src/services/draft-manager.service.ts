@@ -73,6 +73,15 @@ export class DraftManager extends BaseService {
         throw new Error('ToolExecutorService is required for DraftManager');
       }
 
+      // Validate service health
+      if (this.cacheService && typeof this.cacheService.get !== 'function') {
+        throw new Error('CacheService is not properly initialized');
+      }
+
+      if (this.toolExecutorService && typeof this.toolExecutorService.executeTool !== 'function') {
+        throw new Error('ToolExecutorService is not properly initialized');
+      }
+
       this.logInfo('DraftManager initialized successfully');
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -382,13 +391,13 @@ export class DraftManager extends BaseService {
    * Generate cache key for session drafts
    */
   private getDraftsCacheKey(sessionId: string): string {
-    return `drafts:session:${sessionId}`;
+    return `assistantapp:draft:session:${sessionId}`;
   }
 
   /**
    * Generate cache key for individual draft
    */
   private getDraftCacheKey(draftId: string): string {
-    return `draft:${draftId}`;
+    return `assistantapp:draft:individual:${draftId}`;
   }
 }

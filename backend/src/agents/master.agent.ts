@@ -704,6 +704,7 @@ Return JSON with this structure:
         error: (error as Error).message,
         stack: (error as Error).stack
       });
+
       throw ErrorFactory.serviceError('OpenAI', 'Failed to analyze user intent', {
         correlationId: logContext.correlationId,
         operation: 'intent_analysis',
@@ -720,7 +721,14 @@ Return JSON with this structure:
     sessionId: string,
     userId: string
   ): Promise<string> {
-    const draftManager = this.getDraftManager()!;
+    const draftManager = this.getDraftManager();
+    if (!draftManager) {
+      return "❌ System temporarily unavailable. Please try again in a moment.";
+    }
+
+    if (!analysis || !analysis.intentType) {
+      return "❌ I couldn't understand your request. Could you please rephrase it?";
+    }
 
     switch (analysis.intentType) {
       case 'confirmation_positive':
