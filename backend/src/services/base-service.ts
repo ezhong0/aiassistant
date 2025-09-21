@@ -255,8 +255,7 @@ export abstract class BaseService implements IService {
     if (error instanceof AppError) {
       appError = error.addContext({
         service: this.name,
-        operation,
-        severity: 'low'
+        operation
       });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
@@ -298,8 +297,12 @@ export abstract class BaseService implements IService {
 
     if (!result.success) {
       const error = this.handleNonFatalError(result.error!, operationName);
-      error.addDetails('attempts', result.attempts);
-      error.addDetails('totalTime', result.totalTime);
+      error.addContext({
+        metadata: {
+          attempts: result.attempts,
+          totalTime: result.totalTime
+        }
+      });
       throw error;
     }
 
@@ -324,8 +327,12 @@ export abstract class BaseService implements IService {
 
     if (!result.success) {
       const error = this.handleNonFatalError(result.error!, operationName);
-      error.addDetails('attempts', result.attempts);
-      error.addDetails('totalTime', result.totalTime);
+      error.addContext({
+        metadata: {
+          attempts: result.attempts,
+          totalTime: result.totalTime
+        }
+      });
       throw error;
     }
 
@@ -343,9 +350,10 @@ export abstract class BaseService implements IService {
       return service !== null && service !== undefined;
     } catch {
       if (required) {
-        const error = new ServiceDependencyError(`Required dependency '${serviceName}' is not available`);
-        error.setContext(this.name, 'checkDependency');
-        throw error;
+        throw ErrorFactory.serviceUnavailable(serviceName, {
+          service: this.name,
+          operation: 'checkDependency'
+        });
       }
       return false;
     }
@@ -385,9 +393,4 @@ export abstract class BaseService implements IService {
     
   }
 
-  /**
-   * Helper method for consistent error logging
-   */
-  protected logError(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void {
-  }
 }

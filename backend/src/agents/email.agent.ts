@@ -1,5 +1,6 @@
 import { AIAgent } from '../framework/ai-agent';
 import logger from '../utils/logger';
+import { LogContext } from '../utils/log-context';
 import { ToolExecutionContext, EmailAgentParams } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, EmailPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { ServiceManager, getService } from '../services/service-manager';

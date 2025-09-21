@@ -3,6 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { createLogContext } from '../utils/log-context';
 import { z, ZodSchema, ZodError } from 'zod';
 import logger from '../utils/logger';
 import { AppError, ErrorFactory, ERROR_CATEGORIES, createErrorContext } from '../utils/app-error';

@@ -182,9 +182,8 @@ export class AuthService extends BaseService {
       }
 
       // Validate user info
-      const validationResult = validateGoogleUserInfo(userInfo);
-      if (!validationResult.valid) {
-        return { valid: false, error: validationResult.errors.join(', ') };
+      if (!userInfo.sub || !userInfo.email || !userInfo.name) {
+        return { valid: false, error: 'Missing required user info fields' };
       }
 
       this.logDebug('Google token validated successfully', { email: userInfo.email });
@@ -244,9 +243,8 @@ export class AuthService extends BaseService {
     try {
       const config = this.assertConfig();
       // Validate token format first
-      const formatValidation = validateTokenFormat(token);
-      if (!formatValidation.valid) {
-        throw new Error(`Invalid token format: ${formatValidation.error}`);
+      if (!token || typeof token !== 'string' || token.trim().length === 0) {
+        throw new Error('Invalid token format: token must be a non-empty string');
       }
 
       const decoded = jwt.verify(token, config.jwtSecret, {
@@ -373,9 +371,8 @@ export class AuthService extends BaseService {
       }
 
       // Validate user info
-      const validationResult = validateGoogleUserInfo(userInfo);
-      if (!validationResult.valid) {
-        throw new Error(`Invalid user info: ${validationResult.errors.join(', ')}`);
+      if (!userInfo.sub || !userInfo.email || !userInfo.name) {
+        throw new Error('Invalid user info: Missing required user info fields');
       }
 
       this.logDebug('Successfully fetched Google user info', { email: userInfo.email });

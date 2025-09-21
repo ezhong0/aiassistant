@@ -1,12 +1,12 @@
-import { 
-import logger from '../utils/logger';
-  GmailMessage, 
-  ParsedEmail, 
-  EmailContact, 
-  EmailParsingOptions, 
+import {
+  GmailMessage,
+  ParsedEmail,
+  EmailContact,
+  EmailParsingOptions,
   EmailMetadata,
-  AttachmentType 
+  AttachmentType
 } from '../types/email/gmail.types';
+import logger from '../utils/logger';
 import { getService } from '../services/service-manager';
 import { OpenAIService } from '../services/openai.service';
 

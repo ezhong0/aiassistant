@@ -1,5 +1,6 @@
 import { ToolCall, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
 import logger from '../utils/logger';
+import { LogContext } from '../utils/log-context';
 import { AIAgent } from '../framework/ai-agent';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { getService } from '../services/service-manager';

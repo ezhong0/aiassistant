@@ -1,6 +1,7 @@
 import logger from '../utils/logger';
 import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { OpenAIService } from '../services/openai.service';
+import { LogContext } from '../utils/log-context';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
@@ -587,11 +588,16 @@ export class MasterAgent {
    * Comprehensive AI analysis that handles all confirmation scenarios
    */
   private async comprehensiveIntentAnalysis(context: AnalysisContext): Promise<IntentAnalysis> {
+    const logContext: LogContext = {
+      correlationId: `intent-analysis-${Date.now()}`,
+      sessionId: context.sessionId,
+      operation: 'comprehensiveIntentAnalysis'
+    };
+
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
       throw ErrorFactory.serviceUnavailable('OpenAI', {
         correlationId: logContext.correlationId,
-        userId: logContext.userId,
         operation: 'intent_analysis',
         metadata: { message: 'OpenAI service not available for intent analysis' }
       });
@@ -689,7 +695,7 @@ Return JSON with this structure:
           },
           readOperations: { type: 'array' }
         }
-      );
+      });
 
       return response as IntentAnalysis;
 
@@ -700,7 +706,6 @@ Return JSON with this structure:
       });
       throw ErrorFactory.serviceError('OpenAI', 'Failed to analyze user intent', {
         correlationId: logContext.correlationId,
-        userId: logContext.userId,
         operation: 'intent_analysis',
         originalError: error
       });
@@ -760,8 +765,17 @@ Return JSON with this structure:
       case 'new_request':
         // Clear existing drafts and process new request
         await draftManager.clearSessionDrafts(sessionId);
-        // Fall through to new operation handling
-        // eslint-disable-next-line no-fallthrough
+
+        if (!analysis.newOperation) {
+          return "❌ I couldn't understand what you want me to do. Could you be more specific?";
+        }
+
+        try {
+          const draft = await draftManager.createDraft(sessionId, analysis.newOperation);
+          return `🔍 Ready to ${draft.previewData.description}. Reply "yes" to confirm or describe any changes.`;
+        } catch (error) {
+          return `❌ Failed to create draft: ${(error as Error).message}`;
+        }
 
       case 'new_write_operation':
         if (!analysis.newOperation) {
@@ -801,11 +815,16 @@ Return JSON with this structure:
     sessionId: string,
     userId: string
   ): Promise<ToolResult[]> {
+    const logContext: LogContext = {
+      correlationId: `read-ops-${Date.now()}`,
+      sessionId,
+      operation: 'executeReadOperations'
+    };
+
     const toolExecutorService = this.getToolExecutorService();
     if (!toolExecutorService) {
       throw ErrorFactory.serviceUnavailable('ToolExecutorService', {
         correlationId: logContext.correlationId,
-        userId: logContext.userId,
         operation: 'tool_executor_check'
       });
     }
@@ -1757,8 +1776,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
       if (!toolExecutorService) {
         throw ErrorFactory.serviceUnavailable('ToolExecutorService', {
-          correlationId: logContext.correlationId,
-          userId: logContext.userId,
+          correlationId: `tool-exec-${Date.now()}`,
           operation: 'tool_executor_execution'
         });
       }
@@ -2094,8 +2112,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     const nextStepPlanningService = getService<NextStepPlanningService>('nextStepPlanningService');
     if (!nextStepPlanningService) {
       throw ErrorFactory.serviceUnavailable('NextStepPlanningService', {
-        correlationId: logContext.correlationId,
-        userId: logContext.userId,
+        correlationId: `step-loop-${Date.now()}`,
         operation: 'step_planning'
       });
     }
@@ -2137,7 +2154,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
         operation: 'step_execution'
       });
       logger.debug('Step details', {
-        operation: nextStep.operation,
+        stepOperation: nextStep.operation,
         parameters: nextStep.parameters,
         stepNumber: nextStep.stepNumber,
         workflowId,
@@ -2251,8 +2268,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
             finalMessage = `${errorAnalysis.userFriendlyMessage} ${errorAnalysis.suggestedAction}`;
           } else {
             throw ErrorFactory.businessRuleViolation('step_execution_failed', {
-              correlationId: logContext.correlationId,
-              userId: logContext.userId,
+              correlationId: `step-exec-failed-${Date.now()}`,
               operation: 'step_execution',
               metadata: { 
                 errorMessage: errorAnalysis.userFriendlyMessage,

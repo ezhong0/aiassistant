@@ -3,6 +3,7 @@ import { CacheService } from './cache.service';
 import { ToolExecutorService } from './tool-executor.service';
 import { ToolCall, ToolResult, ToolExecutionContext } from '../types/tools';
 import { getService } from './service-manager';
+import { LogContext } from '../utils/log-context';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -95,11 +96,12 @@ export class DraftManager extends BaseService {
    * Create a new draft for a write operation
    */
   async createDraft(sessionId: string, operation: WriteOperation): Promise<Draft> {
-    const logContext: LogContext = {
+    const logMeta = {
       correlationId: `draft-create-${Date.now()}`,
       sessionId,
       operation: 'createDraft',
-      metadata: { operationType: operation.type, operation: operation.operation }
+      operationType: operation.type,
+      operationName: operation.operation
     };
 
     try {
@@ -124,18 +126,15 @@ export class DraftManager extends BaseService {
       await this.storeDraft(draft);
 
       this.logInfo('Draft created successfully', {
-        ...logContext,
-        metadata: {
-          ...logContext.metadata,
-          draftId: draft.id,
-          riskLevel: draft.riskLevel
-        }
+        ...logMeta,
+        draftId: draft.id,
+        riskLevel: draft.riskLevel
       });
 
       return draft;
 
     } catch (error) {
-      this.logError('Failed to create draft', error, logContext);
+      this.logError('Failed to create draft', error, logMeta);
       throw error;
     }
   }
@@ -144,10 +143,10 @@ export class DraftManager extends BaseService {
    * Update an existing draft with new parameters
    */
   async updateDraft(draftId: string, updates: Partial<Draft>): Promise<Draft> {
-    const logContext: LogContext = {
+    const logMeta = {
       correlationId: `draft-update-${Date.now()}`,
       operation: 'updateDraft',
-      metadata: { draftId }
+      draftId
     };
 
     try {
@@ -166,17 +165,14 @@ export class DraftManager extends BaseService {
       await this.storeDraft(updatedDraft);
 
       this.logInfo('Draft updated successfully', {
-        ...logContext,
-        metadata: {
-          ...logContext.metadata,
-          updatedFields: Object.keys(updates)
-        }
+        ...logMeta,
+        updatedFields: Object.keys(updates)
       });
 
       return updatedDraft;
 
     } catch (error) {
-      this.logError('Failed to update draft', error, logContext);
+      this.logError('Failed to update draft', error, logMeta);
       throw error;
     }
   }
@@ -185,10 +181,10 @@ export class DraftManager extends BaseService {
    * Execute a confirmed draft
    */
   async executeDraft(draftId: string): Promise<ToolResult> {
-    const logContext: LogContext = {
+    const logMeta = {
       correlationId: `draft-execute-${Date.now()}`,
       operation: 'executeDraft',
-      metadata: { draftId }
+      draftId
     };
 
     try {
@@ -201,7 +197,7 @@ export class DraftManager extends BaseService {
       const context: ToolExecutionContext = {
         sessionId: draft.sessionId,
         userId: 'system', // Will be overridden by actual execution
-        correlationId: logContext.correlationId!,
+        timestamp: new Date(),
         metadata: {
           draftId: draft.id,
           operationType: draft.type,
@@ -216,18 +212,15 @@ export class DraftManager extends BaseService {
       await this.removeDraft(draftId);
 
       this.logInfo('Draft executed successfully', {
-        ...logContext,
-        metadata: {
-          ...logContext.metadata,
-          success: result.success,
-          operationType: draft.type
-        }
+        ...logMeta,
+        success: result.success,
+        operationType: draft.type
       });
 
       return result;
 
     } catch (error) {
-      this.logError('Failed to execute draft', error, logContext);
+      this.logError('Failed to execute draft', error, logMeta);
       throw error;
     }
   }
@@ -244,8 +237,8 @@ export class DraftManager extends BaseService {
         return [];
       }
 
-      // Parse and return drafts
-      const drafts: Draft[] = JSON.parse(cachedDrafts).map((draft: any) => ({
+      // Parse and return drafts - cache service already returns parsed JSON
+      const drafts: Draft[] = (cachedDrafts as any[]).map((draft: any) => ({
         ...draft,
         createdAt: new Date(draft.createdAt)
       }));
@@ -276,7 +269,8 @@ export class DraftManager extends BaseService {
         return null;
       }
 
-      const draft = JSON.parse(cachedDraft);
+      // Cache service already returns parsed JSON
+      const draft = cachedDraft as any;
       return {
         ...draft,
         createdAt: new Date(draft.createdAt)
@@ -286,7 +280,7 @@ export class DraftManager extends BaseService {
       this.logError('Failed to get draft', error, {
         correlationId: `draft-get-${Date.now()}`,
         operation: 'getDraft',
-        metadata: { draftId }
+        draftId
       });
       return null;
     }
@@ -296,7 +290,7 @@ export class DraftManager extends BaseService {
    * Clear all drafts for a session
    */
   async clearSessionDrafts(sessionId: string): Promise<void> {
-    const logContext: LogContext = {
+    const logMeta = {
       correlationId: `drafts-clear-${Date.now()}`,
       sessionId,
       operation: 'clearSessionDrafts'
@@ -317,12 +311,12 @@ export class DraftManager extends BaseService {
       }
 
       this.logInfo('Session drafts cleared successfully', {
-        ...logContext,
-        metadata: { clearedDraftsCount: existingDrafts.length }
+        ...logMeta,
+        clearedDraftsCount: existingDrafts.length
       });
 
     } catch (error) {
-      this.logError('Failed to clear session drafts', error, logContext);
+      this.logError('Failed to clear session drafts', error, logMeta);
       throw error;
     }
   }
@@ -356,7 +350,7 @@ export class DraftManager extends BaseService {
       this.logError('Failed to remove draft', error, {
         correlationId: `draft-remove-${Date.now()}`,
         operation: 'removeDraft',
-        metadata: { draftId }
+        draftId
       });
       throw error;
     }

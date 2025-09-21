@@ -1,5 +1,6 @@
 import { ToolExecutionContext } from '../types/tools';
 import logger from '../utils/logger';
+import { LogContext } from '../utils/log-context';
 import { AIAgent } from '../framework/ai-agent';
 import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { CalendarService, CalendarEvent } from '../services/calendar/calendar.service';

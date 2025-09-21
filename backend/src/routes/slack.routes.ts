@@ -1,5 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
+import { createLogContext } from '../utils/log-context';
 import { 
   SlackWebhookEventSchema,
   SlackSlashCommandPayloadSchema,

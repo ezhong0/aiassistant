@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import logger from '../utils/logger';
+import { createLogContext } from '../utils/log-context';
 import { z } from 'zod';
 import { GoogleOAuthCallbackSchema, TokenRefreshRequestSchema, LogoutRequestSchema, MobileTokenExchangeSchema } from '../schemas/auth.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
@@ -790,11 +791,7 @@ router.get('/callback',
         `);
       }
       
-      const authError = ErrorFactory.unauthorized(
-        'INVALID_GRANT' as any,
-        'Missing authorization code',
-        400
-      );
+      const authError = ErrorFactory.unauthorized('Missing authorization code');
       const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(400).json(errorResponse);
     }
@@ -954,11 +951,7 @@ router.post('/refresh',
     const { refresh_token }: TokenRefreshRequest = req.body;
 
     if (!refresh_token || typeof refresh_token !== 'string') {
-      const authError = ErrorFactory.unauthorized(
-        'MISSING_TOKEN' as any,
-        'Missing or invalid refresh token',
-        400
-      );
+      const authError = ErrorFactory.unauthorized('Missing or invalid refresh token');
       const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(400).json(errorResponse);
     }
@@ -1039,7 +1032,7 @@ router.post('/logout',
     
     const authError = error instanceof AppError 
       ? error 
-      : ErrorFactory.unauthorized('UNKNOWN_ERROR' as any, 'Logout failed', 500);
+      : ErrorFactory.unauthorized('Logout failed');
     const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
     return res.status(authError.statusCode || 500).json(errorResponse);
   }
@@ -1105,11 +1098,7 @@ router.post('/exchange-mobile-tokens',
     } = req.body;
 
     if (!access_token || typeof access_token !== 'string') {
-      const authError = ErrorFactory.unauthorized(
-        'MISSING_TOKEN' as any,
-        'Missing or invalid access token',
-        400
-      );
+      const authError = ErrorFactory.unauthorized('Missing or invalid access token');
       const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(400).json(errorResponse);
     }
@@ -1122,11 +1111,7 @@ router.post('/exchange-mobile-tokens',
     
     const tokenValidation = await authService.validateGoogleToken(access_token);
     if (!tokenValidation.valid) {
-      const authError = ErrorFactory.unauthorized(
-        'INVALID_TOKEN' as any,
-        'Invalid access token',
-        401
-      );
+      const authError = ErrorFactory.unauthorized('Invalid access token');
       const errorResponse = { success: false, error: { code: authError.code, message: authError.message } };
       return res.status(401).json(errorResponse);
     }

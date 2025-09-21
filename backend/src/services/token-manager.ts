@@ -1,5 +1,6 @@
 import { TokenStorageService } from './token-storage.service';
 import { AuthService } from './auth.service';
+import logger from '../utils/logger';
 import { CacheService } from './cache.service';
 import { GoogleTokens } from '../types/auth.types';
 import { SlackTokens } from './token-storage.service';

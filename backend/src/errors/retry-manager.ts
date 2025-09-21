@@ -462,7 +462,8 @@ export class RetryManager {
     context?: { service?: string; operation?: string }
   ): ErrorRecoveryStrategy {
     if (error instanceof AppError) {
-      return error.recoveryStrategy;
+      // Return a default recovery strategy since recoveryStrategy property doesn't exist
+      return ErrorRecoveryStrategy.RETRY;
     }
 
     const message = error.message.toLowerCase();

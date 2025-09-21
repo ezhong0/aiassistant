@@ -1,5 +1,6 @@
-/**
 import logger from '../utils/logger';
+
+/**
  * Response validation utilities using Zod schemas
  */
 

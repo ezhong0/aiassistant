@@ -85,7 +85,7 @@ export class SlackMessageAnalyzer extends BaseService {
         });
         return {
           success: false,
-          error: error.getUserMessage()
+          error: error.message
         };
       }
 
@@ -142,7 +142,7 @@ export class SlackMessageAnalyzer extends BaseService {
         });
         return {
           success: false,
-          error: error.getUserMessage()
+          error: error.message
         };
       }
 

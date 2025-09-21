@@ -1,5 +1,6 @@
 import { AIAgent } from '../framework/ai-agent';
 import logger from '../utils/logger';
+import { LogContext } from '../utils/log-context';
 import { ToolExecutionContext, SlackAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveSlackService } from '../services/service-resolver';
