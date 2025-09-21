@@ -252,7 +252,7 @@ export class SlackOAuthManager extends BaseService {
       const client = new WebClient(data.tokens.accessToken);
       await client.chat.postMessage({
         channel: data.channelId,
-        text: `🎉 **OAuth Authorization Successful!**\n\nYou're now connected to Google services. You can:\n• Send emails through Gmail\n• Manage your calendar\n• Access your contacts\n\nTry saying: "Send an email to john@example.com about our meeting"`
+        text: `🎉 **OAuth Authorization Successful!**\n\nYou're now connected to Google services. You can:\n• Send emails through Gmail\n• Manage your calendar\n• Access your contacts\n\nTry asking me to help with your communication and scheduling needs!`
       });
 
       this.logInfo('OAuth success message sent', {

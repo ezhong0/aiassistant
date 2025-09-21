@@ -261,8 +261,8 @@ RESPONSE FORMAT (JSON only):
 }
 
 DYNAMIC PLANNING GUIDELINES:
-- Email operations: Include search strategies, composition details, recipient resolution
-- Calendar operations: Handle time parsing, conflict checking, attendee management
+- Communication operations: Include search strategies, composition details, recipient resolution
+- Scheduling operations: Handle time parsing, conflict checking, attendee management
 - Contact operations: Include search strategies, disambiguation, data validation
 - Complex requests: Break into logical steps with verification points
 - Always consider what could go wrong and plan accordingly

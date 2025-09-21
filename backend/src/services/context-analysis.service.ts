@@ -425,14 +425,14 @@ RESPONSE FORMAT (JSON only):
     "action": "continue|pause_and_address|abort_and_restart|branch_workflow|seek_clarification|merge_requests",
     "reasoning": "Why this action is recommended",
     "parameters": {
-      "pauseMessage": "Pausing current workflow to address your question",
-      "clarificationQuestions": ["Which emails specifically?"]
+      "pauseMessage": "Appropriate message for pausing current workflow",
+      "clarificationQuestions": ["Relevant clarifying questions"]
     },
     "estimatedTime": 30,
     "successProbability": 0.9
   },
-  "contextualResponse": "I understand you want to...",
-  "extractedEntities": ["email", "John", "today"],
+  "contextualResponse": "Natural response acknowledging user intent",
+  "extractedEntities": ["relevant", "entities", "from", "request"],
   "urgency": "low|medium|high|immediate"
 }
 

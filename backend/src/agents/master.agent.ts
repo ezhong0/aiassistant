@@ -1007,11 +1007,10 @@ Be helpful, professional, and take intelligent action rather than asking for cla
 - **Default to helpful action**: When in doubt, provide useful information rather than requesting clarification
 
 ## Examples of Tool Usage
-- User: "send an email to john@example.com" → Call emailAgent tool
-- User: "email bananaplum0@gmail.com about dinner" → Call emailAgent tool  
-- User: "find contact for John" → Call contactAgent tool
-- User: "schedule a meeting tomorrow" → Call calendarAgent tool
-- User: "what did I say in Slack?" → Call slackAgent tool
+- User mentions email addresses (@ symbol) → Call emailAgent tool
+- User mentions person names (no @ symbol) → Call contactAgent tool
+- User mentions dates/times/scheduling → Call calendarAgent tool
+- User asks about messages/conversations → Call slackAgent tool
 - After ANY tool call → ALWAYS call Think tool
 
 ## Current Context

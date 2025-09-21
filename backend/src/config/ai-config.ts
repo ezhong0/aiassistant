@@ -97,7 +97,7 @@ export const PROMPT_TEMPLATES: Record<string, PromptTemplate> = {
       \${availableTools}
       
       Rules:
-      1. Call contactAgent first if email/calendar needs contact lookup
+      1. Call contactAgent first if communication/scheduling needs contact lookup
       2. Always call Think tool last to verify actions
       3. Return structured tool calls`,
     variables: ["currentDateTime", "userInput", "availableTools"],

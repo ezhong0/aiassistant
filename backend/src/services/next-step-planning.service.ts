@@ -248,9 +248,8 @@ export class NextStepPlanningService extends BaseService {
       : '';
 
     const currentDate = new Date();
-    const currentDateStr = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+    const currentDateStr = currentDate.toISOString().split('T')[0];
     const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth() + 1; // 0-indexed, so add 1
 
     return `
 You are an advanced AI workflow planner. Plan the next logical step based on the current context.
@@ -258,9 +257,7 @@ You are an advanced AI workflow planner. Plan the next logical step based on the
 CURRENT DATE CONTEXT:
 - Today's date: ${currentDateStr}
 - Current year: ${currentYear}
-- Current month: ${currentMonth}
-- When generating dates, always use the current year (${currentYear}) and appropriate future dates
-- "Next week" means the week starting from ${new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+- Current time: ${currentDate.toISOString()}
 
 ORIGINAL REQUEST: "${context.originalRequest}"
 CURRENT STEP: ${context.currentStep}
@@ -280,9 +277,15 @@ PLANNING RULES:
 6. If maximum steps reached without completion, set isComplete to true
 7. Consider error recovery if previous steps failed
 8. Be intelligent about step dependencies and order
-9. CRITICAL: Always use current year (${currentYear}) when generating dates
-10. For calendar operations, use proper ISO 8601 format with current year: ${currentYear}-MM-DDTHH:mm:ssZ
-11. "Next week" should be calculated from today (${currentDateStr}) into the future, not the past
+9. Always use current year (${currentYear}) when generating dates
+10. Use proper ISO 8601 format for dates: YYYY-MM-DDTHH:mm:ssZ
+
+OPERATION EFFICIENCY RULES:
+- Consolidate similar operations into single comprehensive calls
+- Avoid redundant requests for the same data or time periods
+- Check completed steps to prevent duplicate operations
+- Use appropriate parameters to filter and scope requests
+- Plan steps that build upon previous results rather than repeating work
 
 RESPONSE FORMAT (JSON only):
 {
