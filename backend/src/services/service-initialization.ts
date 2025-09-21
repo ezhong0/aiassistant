@@ -299,11 +299,8 @@ const registerCoreServices = async (): Promise<void> => {
       });
     }
 
-    // SlackContextExtractor removed during cleanup
 
-    // EmailOperationHandler removed during cleanup
 
-    // ContactResolver removed during cleanup
 
     // 17. EmailValidator - Focused service for email validation
     const emailValidator = new EmailValidator();

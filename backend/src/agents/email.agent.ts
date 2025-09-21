@@ -167,7 +167,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
     EnhancedLogger.debug('Email services ensured', {
       ...logContext,
       metadata: {
-        hasEmailOps: false, // EmailOps removed during cleanup
         hasEmailValidator: !!this.emailValidator,
         hasEmailFormatter: !!this.emailFormatter
       }
@@ -268,7 +267,6 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
    */
   protected async onDestroy(): Promise<void> {
     try {
-      // emailOps removed during cleanup
       this.emailValidator = null;
       this.emailFormatter = null;
       EnhancedLogger.debug('EmailAgent destroyed successfully', {
@@ -1071,7 +1069,7 @@ You are a specialized email management agent powered by Gmail API.
   } {
     return {
       agentName: EMAIL_SERVICE_CONSTANTS.SERVICE_NAMES.EMAIL_OPERATION_HANDLER,
-      hasEmailOps: false, // emailOps removed during cleanup
+      hasEmailOps: false,
       hasEmailValidator: !!this.emailValidator,
       hasEmailFormatter: !!this.emailFormatter
     };

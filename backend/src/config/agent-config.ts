@@ -270,7 +270,7 @@ Return only the operation name.`;
    * Replaces hardcoded operation validation arrays
    */
   validateOperation: async (operation: string, agentName: string): Promise<boolean> => {
-    // Simplified validation - always return true after service cleanup
+    // Simplified validation - always return true
     return true;
   },
 
@@ -288,7 +288,7 @@ Return only the operation name.`;
       return false;
     }
     
-    // Simplified after service cleanup
+    // Simplified
     try {
       // Default logic for determining confirmation requirement
       const lowerOp = operation.toLowerCase();
@@ -317,7 +317,7 @@ Return only the operation name.`;
     }
 
     try {
-      // AI Classification Service removed during cleanup - use simplified logic
+      // Use simplified logic
       const writeOperations = ['send', 'create', 'update', 'delete', 'write'];
       const isWriteOperation = writeOperations.some(op => operation.toLowerCase().includes(op));
 

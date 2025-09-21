@@ -306,11 +306,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      // Simplified after service cleanup - return default assessment
+      // Return default assessment
       return {
         toolName: 'contactAgent',
         appropriateness: 'correct',
-        reason: 'Default assessment after service cleanup'
+        reason: 'Default assessment'
       };
     } catch (error) {
       return {
@@ -330,13 +330,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      // AIClassificationService removed during cleanup
-      // Service removed, using defaults
-      // AI service removed during cleanup - simplified assessment
+      // Using simplified assessment logic
       return {
         toolName: 'emailAgent',
         appropriateness: 'correct',
-        reason: 'Default assessment after service cleanup'
+        reason: 'Default assessment using simplified logic'
       };
     } catch (error) {
       return {
@@ -356,11 +354,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      // AI service removed during cleanup - simplified assessment
+      // Simplified assessment
       return {
         toolName: 'calendarAgent',
         appropriateness: 'correct',
-        reason: 'Default assessment after service cleanup'
+        reason: 'Default assessment'
       };
     } catch (error) {
       return {
@@ -380,13 +378,11 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     try {
-      // AIClassificationService removed during cleanup
-      // Service removed, using defaults
-      // AI service removed during cleanup - simplified assessment
+      // Using simplified assessment logic
       return {
         toolName: 'slackAgent',
         appropriateness: 'correct',
-        reason: 'Default assessment after service cleanup'
+        reason: 'Default assessment using simplified logic'
       };
     } catch (error) {
       return {
@@ -463,7 +459,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
       suggestions.push(`Consider alternative approaches for: ${suboptimalTools.map(t => t.toolName).join(', ')}`);
     }
 
-    // Check for missing contact lookup - simplified after service cleanup
+    // Check for missing contact lookup - simplified
     try {
       // Basic heuristic: check if query mentions person names without email addresses
       const hasPersonNames = /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query);
@@ -537,7 +533,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
    */
   private async suggestToolsForQuery(query: string): Promise<string[]> {
     try {
-      // AI service removed during cleanup - use simplified heuristics
+      // Use simplified heuristics
       const suggestions: string[] = [];
 
       // Basic heuristic: check for email-related keywords

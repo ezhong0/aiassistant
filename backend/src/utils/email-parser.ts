@@ -7,7 +7,6 @@ import {
   AttachmentType 
 } from '../types/email/gmail.types';
 import { getService } from '../services/service-manager';
-// AIClassificationService removed during cleanup
 import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**
@@ -242,7 +241,7 @@ export class EmailParser {
         return 'high';
       }
       
-      // Simplified priority classification after service cleanup
+      // Simplified priority classification
       // Use basic heuristics instead of AI
       const content = `${message.subject || ''} ${message.snippet || ''}`.toLowerCase();
 

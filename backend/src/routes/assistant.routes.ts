@@ -534,7 +534,7 @@ router.get('/status',
  */
 const isConfirmationResponse = async (command: string): Promise<boolean> => {
   try {
-    // Simplified confirmation detection after service cleanup
+    // Simplified confirmation detection
     const lowerCommand = command.toLowerCase().trim();
     return lowerCommand.includes('yes') || lowerCommand.includes('confirm') ||
            lowerCommand.includes('no') || lowerCommand.includes('cancel');
@@ -555,7 +555,7 @@ const handleActionConfirmation = async (
   sessionId: string
 ): Promise<Response> => {
   try {
-    // Simplified confirmation detection after service cleanup
+    // Simplified confirmation detection
     const lowerCommand = command.toLowerCase().trim();
     const confirmed = lowerCommand.includes('yes') || lowerCommand.includes('confirm');
 
@@ -615,7 +615,6 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
   const sensitiveOperations = [];
   for (const tc of toolCalls) {
     try {
-      // AI classification service removed during cleanup
       // Default to requiring confirmation for send operations
       if (tc.name.includes('send') || tc.name.includes('create')) {
         sensitiveOperations.push(tc);
@@ -630,7 +629,7 @@ const checkForConfirmationRequirements = async (toolCalls: ToolCall[], command: 
     const operation = sensitiveOperations[0];
     const actionId = `confirm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // ToolRoutingService removed during cleanup - use simple confirmation
+    // Use simple confirmation
     try {
       return {
         message: `Please confirm: Do you want to ${operation?.name} with the specified parameters?`,
@@ -683,7 +682,7 @@ const executeConfirmedAction = async (
       timestamp: new Date()
     };
 
-    // ToolRoutingService removed during cleanup - use simple routing
+    // Use simple routing
     let toolCall: ToolCall;
     try {
       // Simple routing logic
@@ -921,7 +920,7 @@ const generateDynamicConfirmationMessage = async (toolCalls: ToolCall[], toolRes
 
 const generateDynamicConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[], userCommand: string): Promise<string> => {
   try {
-    // ToolRoutingService removed during cleanup - use simple confirmation
+    // Use simple confirmation
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
 
     if (mainAction) {
@@ -967,14 +966,14 @@ const generateFallbackDynamicConfirmationPrompt = async (toolCalls: ToolCall[], 
 
 const generateConfirmationPrompt = async (toolCalls: ToolCall[], toolResults: ToolResult[]): Promise<string> => {
   try {
-    // ToolRoutingService removed during cleanup - use simple confirmation
+    // Use simple confirmation
     const mainAction = toolCalls.find(tc => tc.name === 'emailAgent' || tc.name === 'calendarAgent' || tc.name === 'contactAgent');
 
     if (!mainAction) {
       throw new Error('No valid action found for confirmation');
     }
 
-    // Simplified confirmation after service cleanup
+    // Simplified confirmation
     return `Please confirm: Do you want to execute ${mainAction.name}? Reply with "yes" to confirm or "no" to cancel.`;
   } catch (error) {
     

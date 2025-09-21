@@ -2,7 +2,6 @@ import { BaseService } from '../base-service';
 import { SlackContext, SlackEventType, SlackAgentRequest, SlackAgentResponse } from '../../types/slack/slack.types';
 import { ToolExecutorService } from '../tool-executor.service';
 import { TokenManager } from '../token-manager';
-// AI services removed during cleanup
 
 // Define ClassificationContext locally since the service was removed
 interface ClassificationContext {
@@ -39,8 +38,7 @@ export class SlackMessageProcessor extends BaseService {
   private config: SlackMessageProcessorConfig;
   private tokenManager: TokenManager | null = null;
   private toolExecutorService: ToolExecutorService | null = null;
-  // AI services removed during cleanup
-  private responsePersonalityService: any | null = null;
+    private responsePersonalityService: any | null = null;
   private jobQueueService: any | null = null;
 
   constructor(config: SlackMessageProcessorConfig) {
@@ -64,8 +62,6 @@ export class SlackMessageProcessor extends BaseService {
         enableDMOnlyMode: this.config.enableDMOnlyMode,
         hasTokenManager: !!this.tokenManager,
         hasToolExecutor: !!this.toolExecutorService,
-        hasAIClassification: false, // removed during cleanup
-        hasAsyncClassifier: false, // removed during cleanup
         hasPersonalityService: !!this.responsePersonalityService,
         hasJobQueue: !!this.jobQueueService,
         enableAsyncProcessing: !!this.config.enableAsyncProcessing
@@ -82,7 +78,6 @@ export class SlackMessageProcessor extends BaseService {
     try {
       this.tokenManager = null;
       this.toolExecutorService = null;
-      // aiClassificationService and asyncRequestClassifierService removed during cleanup
       this.responsePersonalityService = null;
       this.jobQueueService = null;
       this.logInfo('SlackMessageProcessor destroyed successfully');
@@ -290,7 +285,7 @@ export class SlackMessageProcessor extends BaseService {
         return { requiresOAuth: false };
       }
 
-      // OAuth detection simplified after service cleanup
+      // OAuth detection simplified
       const oauthRequirement = 'none';
       
       if (oauthRequirement !== 'none') {
@@ -326,7 +321,7 @@ export class SlackMessageProcessor extends BaseService {
     response?: any;
   }> {
     try {
-      // aiClassificationService removed during cleanup - simplified detection
+      // Simplified detection
       // Simple heuristic: check for common confirmation keywords
       const confirmationKeywords = ['yes', 'confirm', 'proceed', 'ok', 'approve', 'send', 'go ahead'];
       const isSimpleConfirmation = confirmationKeywords.some(keyword =>
@@ -999,8 +994,7 @@ export class SlackMessageProcessor extends BaseService {
       this.logWarn('JobQueueService not available - will process requests synchronously');
     }
 
-    // AI services removed during cleanup
-    this.logWarn('AI Classification services removed during cleanup - using simplified logic');
+        this.logWarn('Using simplified logic');
 
     this.responsePersonalityService = serviceManager.getService('responsePersonalityService') as any;
     this.jobQueueService = serviceManager.getService('jobQueueService') as any;
@@ -1201,7 +1195,7 @@ export class SlackMessageProcessor extends BaseService {
         systemLoad: await this.getSystemLoad() as any
       };
 
-      // Simplified classification after service cleanup
+      // Simplified classification
       // Default to sync processing for now
       let classification = {
         shouldProcessAsync: false,
@@ -1562,7 +1556,6 @@ export class SlackMessageProcessor extends BaseService {
         dependencies: {
           tokenManager: !!this.tokenManager,
           toolExecutorService: !!this.toolExecutorService,
-          aiClassificationService: false, // removed during cleanup
           responsePersonalityService: !!this.responsePersonalityService
         }
       }

@@ -13,7 +13,6 @@ import {
   SlackOAuthUrlParams,
   SlackOAuthSuccessMessageData
 } from '../../types/slack/slack-oauth-types';
-// AIClassificationService removed during cleanup
 
 /**
  * SlackOAuthManager - Focused service for Slack OAuth handling
@@ -22,7 +21,6 @@ import {
 export class SlackOAuthManager extends BaseService {
   private config: SlackOAuthConfig;
   private tokenManager: TokenManager | null = null;
-  // aiClassificationService removed during cleanup
   private successMessageCache = new Map<string, number>(); // Track shown success messages
 
   constructor(config: SlackOAuthConfig) {
@@ -44,8 +42,7 @@ export class SlackOAuthManager extends BaseService {
         clientId: this.config.clientId,
         redirectUri: this.config.redirectUri,
         scopes: this.config.scopes,
-        hasTokenManager: !!this.tokenManager,
-        hasAIClassification: false // removed during cleanup
+        hasTokenManager: !!this.tokenManager
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -59,7 +56,6 @@ export class SlackOAuthManager extends BaseService {
     try {
       this.successMessageCache.clear();
       this.tokenManager = null;
-      // aiClassificationService removed during cleanup
       this.logInfo('SlackOAuthManager destroyed successfully');
     } catch (error) {
       this.logError('Error during SlackOAuthManager destruction', error);
@@ -87,29 +83,6 @@ export class SlackOAuthManager extends BaseService {
     }
   }
 
-  /**
-   * Detect if request requires OAuth using AI classification
-   */
-  async detectOAuthRequirement(message: string): Promise<SlackOAuthRequirementResult> {
-    try {
-      // AI service removed during cleanup - simplified logic
-      this.logWarn('AIClassificationService removed during cleanup');
-      return {
-        requiresOAuth: false,
-        oauthType: 'none',
-        confidence: 0,
-        reasoning: 'AI classification service removed during cleanup'
-      };
-    } catch (error) {
-      this.logError('Error detecting OAuth requirement', error);
-      return {
-        requiresOAuth: false,
-        oauthType: 'none',
-        confidence: 0,
-        reasoning: 'Error in OAuth detection'
-      };
-    }
-  }
 
   /**
    * Generate OAuth authorization URL
@@ -331,9 +304,6 @@ export class SlackOAuthManager extends BaseService {
       // Get TokenManager from service registry
       const serviceManager = ServiceManager.getInstance();
       this.tokenManager = serviceManager.getService('tokenManager') as TokenManager;
-      
-      // Get AIClassificationService from service registry
-      // aiClassificationService removed during cleanup
     } catch (error) {
       this.logWarn('Some dependencies not available during initialization', { error });
     }
@@ -389,13 +359,11 @@ export class SlackOAuthManager extends BaseService {
     successMessageCacheSize: number;
     config: SlackOAuthConfig;
     hasTokenManager: boolean;
-    hasAIClassification: boolean;
   } {
     return {
       successMessageCacheSize: this.successMessageCache.size,
       config: this.config,
-      hasTokenManager: !!this.tokenManager,
-      hasAIClassification: false // removed during cleanup
+      hasTokenManager: !!this.tokenManager
     };
   }
 }

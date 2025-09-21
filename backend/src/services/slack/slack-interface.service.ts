@@ -5,7 +5,6 @@ import { SlackEventHandler } from './slack-event-handler.service';
 import { SlackOAuthManager } from './slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack-message-processor.service';
 import { SlackEventValidator } from './slack-event-validator.service';
-// SlackContextExtractor removed during cleanup
 import { 
   SlackContext, 
   SlackEventType, 
@@ -47,7 +46,6 @@ export class SlackInterfaceService extends BaseService {
   private slackMessageProcessor: SlackMessageProcessor | null = null;
   private slackResponseFormatter: any | null = null;
   private slackEventValidator: SlackEventValidator | null = null;
-  // slackContextExtractor removed during cleanup
 
   /**
    * Initialize SlackInterface service with configuration
@@ -107,7 +105,6 @@ export class SlackInterfaceService extends BaseService {
         hasSlackMessageProcessor: !!this.slackMessageProcessor,
         hasSlackResponseFormatter: !!this.slackResponseFormatter,
         hasSlackEventValidator: !!this.slackEventValidator,
-        hasSlackContextExtractor: false // removed during cleanup
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -146,8 +143,7 @@ export class SlackInterfaceService extends BaseService {
         this.slackEventValidator = null;
       }
       
-      // slackContextExtractor removed during cleanup
-
+    
       this.logInfo('SlackInterface destroyed successfully');
     } catch (error) {
       this.logError('Error during SlackInterface destruction', error);
@@ -369,7 +365,7 @@ export class SlackInterfaceService extends BaseService {
    * @returns Extracted Slack context
    */
   private async extractSlackContext(event: SlackEvent, teamId: string): Promise<SlackContext> {
-    // slackContextExtractor removed during cleanup - use basic extraction
+    // Use basic extraction
     {
       // Basic context extraction
       return {
@@ -386,7 +382,7 @@ export class SlackInterfaceService extends BaseService {
    * Clean Slack message (remove mentions, normalize whitespace)
    */
   private cleanMessage(text: string): string {
-    // slackContextExtractor removed during cleanup - use basic cleaning
+    // Use basic cleaning
     {
       // Basic cleaning
       if (!text) return '';
@@ -562,8 +558,7 @@ export class SlackInterfaceService extends BaseService {
     });
     await this.slackEventValidator.initialize();
 
-    // SlackContextExtractor removed during cleanup
-  }
+      }
 
   /**
    * Test Slack client connection
@@ -610,7 +605,6 @@ export class SlackInterfaceService extends BaseService {
           slackMessageProcessor: !!this.slackMessageProcessor,
           slackResponseFormatter: !!this.slackResponseFormatter,
           slackEventValidator: !!this.slackEventValidator,
-          slackContextExtractor: false // removed during cleanup
         }
       }
     };
