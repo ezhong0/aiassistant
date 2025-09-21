@@ -1,10 +1,10 @@
 /**
+import logger from '../utils/logger';
  * Response validation utilities using Zod schemas
  */
 
 import { Response } from 'express';
 import { z } from 'zod';
-import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**
  * Validate and send a response using a Zod schema
@@ -20,7 +20,7 @@ export function validateAndSendResponse<T>(
     res.status(statusCode).json(validatedData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      EnhancedLogger.error('Response validation failed', error as Error, {
+      logger.error('Response validation failed', error as Error, {
         correlationId: `response-validation-${Date.now()}`,
         operation: 'response_validation_error',
         metadata: {
@@ -40,7 +40,7 @@ export function validateAndSendResponse<T>(
         }))
       });
     } else {
-      EnhancedLogger.error('Unexpected response validation error', error as Error, {
+      logger.error('Unexpected response validation error', error as Error, {
         correlationId: `response-validation-${Date.now()}`,
         operation: 'response_validation_unexpected_error'
       });

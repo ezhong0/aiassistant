@@ -1,7 +1,7 @@
 import { BaseService } from './base-service';
+import logger from '../utils/logger';
 import { OpenAIService } from './openai.service';
 import { getService } from './service-manager';
-import { EnhancedLogger } from '../utils/enhanced-logger';
 
 /**
  * Operation detection result
@@ -109,7 +109,7 @@ export class OperationDetectionService extends BaseService {
       throw new Error('OpenAIService is required for OperationDetectionService');
     }
 
-    EnhancedLogger.debug('OperationDetectionService initialized', {
+    logger.debug('OperationDetectionService initialized', {
       correlationId: `operation-detection-init-${Date.now()}`,
       operation: 'operation_detection_init',
       metadata: {
@@ -169,7 +169,7 @@ export class OperationDetectionService extends BaseService {
         throw new Error(`Invalid confidence score: ${detection.confidence}`);
       }
 
-      EnhancedLogger.debug('Operation detected', {
+      logger.debug('Operation detected', {
         correlationId: `operation-detection-${Date.now()}`,
         operation: 'operation_detection',
         metadata: {
@@ -182,7 +182,7 @@ export class OperationDetectionService extends BaseService {
 
       return detection;
     } catch (error) {
-      EnhancedLogger.error('Failed to detect operation', error as Error, {
+      logger.error('Failed to detect operation', error as Error, {
         correlationId: `operation-detection-error-${Date.now()}`,
         operation: 'operation_detection_error',
         metadata: {
@@ -227,7 +227,7 @@ export class OperationDetectionService extends BaseService {
 
       const analysis = JSON.parse(response);
 
-      EnhancedLogger.debug('Error analyzed', {
+      logger.debug('Error analyzed', {
         correlationId: `error-analysis-${Date.now()}`,
         operation: 'error_analysis',
         metadata: {
@@ -241,7 +241,7 @@ export class OperationDetectionService extends BaseService {
 
       return analysis;
     } catch (analysisError) {
-      EnhancedLogger.error('Failed to analyze error', analysisError as Error, {
+      logger.error('Failed to analyze error', analysisError as Error, {
         correlationId: `error-analysis-error-${Date.now()}`,
         operation: 'error_analysis_error',
         metadata: {
@@ -362,7 +362,7 @@ Provide helpful, actionable analysis!
   }
 
   protected async onDestroy(): Promise<void> {
-    EnhancedLogger.debug('OperationDetectionService destroyed', {
+    logger.debug('OperationDetectionService destroyed', {
       correlationId: `operation-detection-destroy-${Date.now()}`,
       operation: 'operation_detection_destroy',
       metadata: { service: 'operationDetectionService' }

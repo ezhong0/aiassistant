@@ -1,4 +1,5 @@
 import { ToolCall, ThinkParams, AgentResponse, ToolExecutionContext } from '../types/tools';
+import logger from '../utils/logger';
 import { AIAgent } from '../framework/ai-agent';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { getService } from '../services/service-manager';
@@ -11,7 +12,6 @@ import {
   ThinkAnalysisParams,
   ThinkAnalysisResult
 } from '../types/agents/agent-specific-parameters';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { OpenAIService } from '../services/openai.service';
 
 export interface ThinkAgentResponse extends AgentResponse {
@@ -176,7 +176,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     };
 
     try {
-      EnhancedLogger.debug('ThinkAgent processing verification query', logContext);
+      logger.debug('ThinkAgent processing verification query', logContext);
 
       // Analyze the query and previous actions
       const analysis = await this.analyzeToolUsage(params);
@@ -188,7 +188,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
       };
 
     } catch (error) {
-      EnhancedLogger.error('Error in ThinkAgent.processQuery', error as Error, {
+      logger.error('Error in ThinkAgent.processQuery', error as Error, {
         ...logContext,
         metadata: { query: params.query }
       });

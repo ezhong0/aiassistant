@@ -1,4 +1,4 @@
-import { EnhancedLogger, LOG_MESSAGES, LogContext } from '../utils/enhanced-logger';
+import logger from '../utils/logger';
 import { OpenAIService } from '../services/openai.service';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
@@ -227,7 +227,9 @@ export class MasterAgent {
     
     // Initialize agent schemas for OpenAI function calling
     this.initializeAgentSchemas().catch(error => {
-      EnhancedLogger.error('Agent schema initialization failed', error, {
+      logger.error('Agent schema initialization failed', {
+        error: error.message,
+        stack: error.stack,
         correlationId: 'init',
         operation: 'agent_schema_init',
         metadata: { service: 'MasterAgent' }
@@ -238,13 +240,13 @@ export class MasterAgent {
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
       this.useOpenAI = true;
-      EnhancedLogger.debug('MasterAgent initialized with OpenAI integration', {
+      logger.debug('MasterAgent initialized with OpenAI integration', {
         correlationId: 'init',
         operation: 'agent_init',
         metadata: { hasOpenAI: true, hasContextGathering: true }
       });
     } else {
-      EnhancedLogger.debug('MasterAgent initialized with rule-based routing only', {
+      logger.debug('MasterAgent initialized with rule-based routing only', {
         correlationId: 'init',
         operation: 'agent_init',
         metadata: { hasOpenAI: false, hasContextGathering: false }
@@ -268,7 +270,7 @@ export class MasterAgent {
       this.agentSchemas.set('contactAgent', ContactAgent.getOpenAIFunctionSchema() as any);
       this.agentSchemas.set('calendarAgent', CalendarAgent.getOpenAIFunctionSchema());
       
-      EnhancedLogger.debug('Agent schemas initialized for OpenAI function calling', {
+      logger.debug('Agent schemas initialized for OpenAI function calling', {
         correlationId: 'init',
         operation: 'agent_schema_init',
         metadata: { 
@@ -277,7 +279,9 @@ export class MasterAgent {
         }
       });
     } catch (error) {
-      EnhancedLogger.error('Agent schema initialization failed', error as Error, {
+      logger.error('Agent schema initialization failed', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
         correlationId: 'init',
         operation: 'agent_schema_init',
         metadata: { service: 'MasterAgent' }
@@ -321,7 +325,9 @@ export class MasterAgent {
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Failed to get agent capabilities', error as Error, {
+      logger.error('Failed to get agent capabilities', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
         correlationId: 'init',
         operation: 'agent_capabilities',
         metadata: { service: 'MasterAgent' }
@@ -337,7 +343,7 @@ export class MasterAgent {
     try {
       return AgentFactory.getAgent('slackAgent') as SlackAgent;
     } catch (error) {
-      EnhancedLogger.warn('SlackAgent not available from AgentFactory', {
+      logger.warn('SlackAgent not available from AgentFactory', {
         correlationId: 'init',
         operation: 'agent_resolution',
         metadata: { requestedAgent: 'SlackAgent' }
@@ -365,7 +371,7 @@ export class MasterAgent {
     
     const openaiService = getService<OpenAIService>('openaiService');
     if (!openaiService) {
-      EnhancedLogger.warn('OpenAI service not available from service registry', {
+      logger.warn('OpenAI service not available from service registry', {
         correlationId: 'init',
         operation: 'service_resolution',
         metadata: { requestedService: 'OpenAIService' }
@@ -440,7 +446,7 @@ export class MasterAgent {
     };
 
     try {
-      EnhancedLogger.requestStart(LOG_MESSAGES.REQUEST_START, logContext);
+      logger.info('Request started', logContext);
       
       // Check memory usage periodically
       this.checkMemoryUsage();
@@ -469,7 +475,9 @@ export class MasterAgent {
       return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
     } catch (error) {
       const duration = Date.now() - startTime;
-      EnhancedLogger.error(LOG_MESSAGES.OPERATION_ERROR, error as Error, {
+      logger.error('Operation failed', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
         ...logContext,
         duration,
         metadata: { userInput: userInput.substring(0, 100) }
@@ -517,7 +525,7 @@ export class MasterAgent {
     };
 
     try {
-      EnhancedLogger.requestStart('Starting unified intent analysis', logContext);
+      logger.info('Starting unified intent analysis', logContext);
 
       // 1. Get DraftManager service
       const draftManager = this.getDraftManager();
@@ -552,7 +560,9 @@ export class MasterAgent {
 
     } catch (error) {
       const duration = Date.now() - startTime;
-      EnhancedLogger.error('Unified intent analysis failed', error as Error, {
+      logger.error('Unified intent analysis failed', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
         ...logContext,
         duration,
         metadata: { userInput: userInput.substring(0, 100) }
@@ -669,7 +679,10 @@ Return JSON with this structure:
       return response as IntentAnalysis;
 
     } catch (error) {
-      EnhancedLogger.error('Failed to parse intent analysis', error as Error);
+      logger.error('Failed to parse intent analysis', {
+        error: (error as Error).message,
+        stack: (error as Error).stack
+      });
       throw new Error('Failed to analyze user intent');
     }
   }
@@ -941,7 +954,7 @@ GUIDELINES:
       // Check if agent exists and is enabled using tool name mapping
       const agent = AgentFactory.getAgentByToolName(toolCall.name);
       if (!agent) {
-        EnhancedLogger.warn('Tool call for disabled/missing agent', {
+        logger.warn('Tool call for disabled/missing agent', {
           correlationId: logContext.correlationId,
           operation: 'tool_validation',
           metadata: { toolName: toolCall.name }
@@ -1013,7 +1026,9 @@ GUIDELINES:
           enhancedParameters.recipients = resolvedRecipients;
           
         } catch (error) {
-          EnhancedLogger.error('Contact resolution failed', error as Error, {
+          logger.error('Contact resolution failed', {
+            error: (error as Error).message,
+            stack: (error as Error).stack,
             correlationId: logContext.correlationId,
             operation: 'contact_resolution',
             metadata: { toolName, recipients: enhancedParameters.recipients }
@@ -1066,7 +1081,7 @@ GUIDELINES:
         // Call ContactAgent to resolve the contact name
         const contactAgent = this.getContactAgent();
         if (!contactAgent) {
-          EnhancedLogger.warn('ContactAgent not available for contact resolution', {
+          logger.warn('ContactAgent not available for contact resolution', {
             correlationId: 'contact-resolution',
             operation: 'contact_resolution',
             metadata: { recipient }
@@ -1247,7 +1262,9 @@ GUIDELINES:
         intent: userInput
       };
     } catch (error) {
-      EnhancedLogger.error('Failed to parse intent and resolve dependencies', error as Error, {
+      logger.error('Failed to parse intent and resolve dependencies', {
+        error: (error as Error).message,
+        stack: (error as Error).stack,
         correlationId: logContext.correlationId,
         operation: 'intent_parsing',
         metadata: { userInput: userInput.substring(0, 100) }
@@ -1282,7 +1299,7 @@ GUIDELINES:
         }
         
         // If all else fails, return default structure
-        EnhancedLogger.warn('Failed to parse JSON from OpenAI response', {
+        logger.warn('Failed to parse JSON from OpenAI response', {
           correlationId: 'json-parsing',
           operation: 'json_extraction',
           metadata: { 
@@ -1297,7 +1314,9 @@ GUIDELINES:
           emails: []
         };
       } catch (extractError) {
-        EnhancedLogger.error('Failed to extract JSON from response', extractError as Error, {
+        logger.error('Failed to extract JSON from response', {
+          error: (extractError as Error).message,
+          stack: (extractError as Error).stack,
           correlationId: 'json-parsing',
           operation: 'json_extraction',
           metadata: { 
@@ -1482,7 +1501,7 @@ Be helpful, professional, and take intelligent action rather than asking for cla
     const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
     const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
     
-    EnhancedLogger.debug('Memory usage check', {
+    logger.debug('Memory usage check', {
       correlationId: 'memory-check',
       operation: 'memory_monitoring',
       metadata: {
@@ -1495,7 +1514,7 @@ Be helpful, professional, and take intelligent action rather than asking for cla
 
     // If heap usage exceeds threshold, trigger garbage collection and cleanup
     if (heapUsedMB > APP_CONSTANTS.MEMORY_WARNING_THRESHOLD_MB) {
-      EnhancedLogger.warn('High memory usage detected, triggering cleanup', {
+      logger.warn('High memory usage detected, triggering cleanup', {
         correlationId: 'memory-check',
         operation: 'memory_cleanup',
         metadata: {
@@ -1510,13 +1529,13 @@ Be helpful, professional, and take intelligent action rather than asking for cla
         this.agentSchemas.clear();
         // Reinitialize immediately to maintain functionality
         this.initializeAgentSchemas().catch(error => {
-          EnhancedLogger.error('Failed to reinitialize agent schemas', error, {
+          logger.error('Failed to reinitialize agent schemas', error, {
             correlationId: 'memory-cleanup',
             operation: 'schema_reinit',
             metadata: { previousSize: schemasSize }
           });
         });
-        EnhancedLogger.debug('Agent schemas cleared and reinitialized', {
+        logger.debug('Agent schemas cleared and reinitialized', {
           correlationId: 'memory-cleanup',
           operation: 'schema_reinit',
           metadata: { previousSize: schemasSize }
@@ -1526,7 +1545,7 @@ Be helpful, professional, and take intelligent action rather than asking for cla
       // Force garbage collection if available
       if (global.gc) {
         global.gc();
-        EnhancedLogger.debug('Forced garbage collection completed', {
+        logger.debug('Forced garbage collection completed', {
           correlationId: 'memory-cleanup',
           operation: 'garbage_collection'
         });
@@ -1556,7 +1575,7 @@ Be helpful, professional, and take intelligent action rather than asking for cla
         error: tr.error
       }));
 
-      EnhancedLogger.debug('Processing tool results with LLM', {
+      logger.debug('Processing tool results with LLM', {
         correlationId: logContext.correlationId,
         operation: 'tool_result_processing',
         metadata: {
@@ -1581,7 +1600,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
       return response.trim();
     } catch (error) {
-      EnhancedLogger.error('Error processing tool results with LLM', error as Error, {
+      logger.error('Error processing tool results with LLM', error as Error, {
         correlationId: logContext.correlationId,
         operation: 'tool_result_processing',
         metadata: { userInput: userInput.substring(0, 100) }
@@ -1589,7 +1608,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       
       // Check if it's a context length error
       if (error instanceof Error && error.message.includes('maximum context length')) {
-        EnhancedLogger.warn('Context length exceeded - AI processing failed', {
+        logger.warn('Context length exceeded - AI processing failed', {
           correlationId: logContext.correlationId,
           operation: 'tool_result_processing',
           metadata: { errorType: 'context_length_exceeded' }
@@ -1656,7 +1675,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       const service = getService<WorkflowCacheService>('workflowCacheService');
       return service || null;
     } catch (error) {
-      EnhancedLogger.debug('WorkflowCacheService not available', {
+      logger.debug('WorkflowCacheService not available', {
         correlationId: 'workflow-service-check',
         operation: 'workflow_service_check',
         metadata: { error: (error as Error).message }
@@ -1681,9 +1700,13 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     userId?: string,
     slackContext?: SlackContext
   ): Promise<ToolResult> {
-    console.log(`⚡ TOOL EXECUTION: Starting real tool execution...`);
-    console.log(`📊 Tool Name: ${toolCall.name}`);
-    console.log(`📊 Parameters:`, JSON.stringify(toolCall.parameters, null, 2));
+    logger.info('Tool execution started', {
+      toolName: toolCall.name,
+      parameters: toolCall.parameters,
+      sessionId,
+      userId,
+      operation: 'tool_execution_start'
+    });
 
     try {
       // Use real ToolExecutorService instead of mock implementation
@@ -1703,13 +1726,24 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       // Execute real tool call
       const result = await toolExecutorService.executeTool(toolCall, context);
 
-      console.log(`✅ TOOL EXECUTION: Real tool execution successful`);
-      console.log(`📊 Result:`, JSON.stringify(result, null, 2));
+      logger.info('Tool execution successful', {
+        toolName: toolCall.name,
+        result: result,
+        sessionId,
+        userId,
+        operation: 'tool_execution_success'
+      });
 
       return result;
     } catch (error) {
-      console.log(`❌ TOOL EXECUTION: Real tool execution failed`);
-      console.log(`📊 Error:`, error);
+      logger.error('Tool execution failed', {
+        toolName: toolCall.name,
+        error: (error as Error).message,
+        stack: (error as Error).stack,
+        sessionId,
+        userId,
+        operation: 'tool_execution_error'
+      });
 
       return {
         success: false,
@@ -1756,7 +1790,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
       return response.trim();
     } catch (error) {
-      EnhancedLogger.error('Error processing tool results with LLM', error as Error, {
+      logger.error('Error processing tool results with LLM', error as Error, {
         correlationId: `workflow-response-${Date.now()}`,
         operation: 'workflow_response_generation',
         metadata: { userInput: userInput.substring(0, 100) }
@@ -1784,13 +1818,13 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
         await workflowCacheService.cancelWorkflow(workflowId);
       }
 
-      EnhancedLogger.debug('Workflow aborted', {
+      logger.debug('Workflow aborted', {
         correlationId: `abort-workflow-${workflowId}`,
         operation: 'abort_workflow',
         metadata: { workflowId }
       });
     } catch (error) {
-      EnhancedLogger.error('Error aborting workflow', error as Error, {
+      logger.error('Error aborting workflow', error as Error, {
         correlationId: `abort-workflow-error-${workflowId}`,
         operation: 'abort_workflow_error',
         metadata: { workflowId }
@@ -1884,7 +1918,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     };
 
     try {
-      EnhancedLogger.requestStart('Continuing step-by-step workflow with new input', logContext);
+      logger.info('Continuing step-by-step workflow with new input', logContext);
 
       // Simplified workflow interruption handling - treat any new input as starting a new workflow
       const workflowCacheService = this.getWorkflowCacheService();
@@ -1896,7 +1930,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       }
       return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
     } catch (error) {
-      EnhancedLogger.error('Failed to continue step-by-step workflow', error as Error, logContext);
+      logger.error('Failed to continue step-by-step workflow', error as Error, logContext);
       return this.createErrorResponse(error as Error);
     }
   }
@@ -1910,11 +1944,13 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     userId?: string,
     slackContext?: SlackContext
   ): Promise<MasterAgentResponse> {
-    console.log('🎯 MASTER AGENT: Starting step-by-step execution...');
-    console.log('📊 User Input:', userInput);
-    console.log('📊 Session ID:', sessionId);
-    console.log('📊 User ID:', userId);
-    console.log('📊 Slack Context:', slackContext ? 'Present' : 'None');
+    logger.info('Starting step-by-step execution', {
+      userInput,
+      sessionId,
+      userId,
+      hasSlackContext: !!slackContext,
+      operation: 'step_by_step_execution_start'
+    });
     
     const startTime = Date.now();
     const correlationId = `step-by-step-${sessionId}-${Date.now()}`;
@@ -1927,7 +1963,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     };
 
     try {
-      EnhancedLogger.requestStart('Starting step-by-step execution', logContext);
+      logger.info('Starting step-by-step execution', logContext);
 
       // Initialize workflow context
       const workflowContext: WorkflowContext = {
@@ -1971,7 +2007,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, slackContext);
 
       const endTime = Date.now();
-      EnhancedLogger.requestEnd('Step-by-step execution completed', {
+      logger.info('Step-by-step execution completed', {
         ...logContext,
         metadata: {
           ...logContext.metadata,
@@ -1983,7 +2019,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
       return result;
     } catch (error) {
-      EnhancedLogger.error('Step-by-step execution failed', error as Error, logContext);
+      logger.error('Step-by-step execution failed', error as Error, logContext);
       return this.createErrorResponse(error as Error);
     }
   }
@@ -1998,10 +2034,14 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     userId?: string,
     slackContext?: SlackContext
   ): Promise<MasterAgentResponse> {
-    console.log('🔄 MASTER AGENT: Starting step-by-step loop...');
-    console.log('📊 Workflow ID:', workflowId);
-    console.log('📊 Current Step:', workflowContext.currentStep);
-    console.log('📊 Max Steps:', workflowContext.maxSteps);
+    logger.info('Starting step-by-step loop', {
+      workflowId,
+      currentStep: workflowContext.currentStep,
+      maxSteps: workflowContext.maxSteps,
+      sessionId,
+      userId,
+      operation: 'step_by_step_loop_start'
+    });
     
     const nextStepPlanningService = getService<NextStepPlanningService>('nextStepPlanningService');
     if (!nextStepPlanningService) {
@@ -2013,24 +2053,48 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     let finalMessage = '';
 
     while (workflowContext.currentStep <= workflowContext.maxSteps) {
-      console.log(`🔄 MASTER AGENT: Planning step ${workflowContext.currentStep}...`);
+      logger.debug('Planning step', {
+        stepNumber: workflowContext.currentStep,
+        workflowId,
+        sessionId,
+        userId,
+        operation: 'step_planning'
+      });
       // Plan next step
       const nextStep = await nextStepPlanningService.planNextStep(workflowContext);
 
       // If no more steps, we're done
       if (!nextStep) {
-        console.log('✅ MASTER AGENT: No more steps, workflow complete!');
+        logger.info('Workflow complete - no more steps', {
+          workflowId,
+          sessionId,
+          userId,
+          operation: 'workflow_complete'
+        });
         finalMessage = `Task completed successfully! I have processed your request: "${workflowContext.originalRequest}"`;
         break;
       }
 
-      console.log(`⚡ MASTER AGENT: Executing step ${nextStep.stepNumber}...`);
-      console.log(`📊 Step Description: ${nextStep.description}`);
-      console.log(`📊 Agent: ${nextStep.agent}`);
-      console.log(`📊 Operation: ${nextStep.operation}`);
-      console.log(`📊 Parameters:`, JSON.stringify(nextStep.parameters, null, 2));
+      logger.info('Executing step', {
+        stepNumber: nextStep.stepNumber,
+        description: nextStep.description,
+        agent: nextStep.agent,
+        workflowId,
+        sessionId,
+        userId,
+        operation: 'step_execution'
+      });
+      logger.debug('Step details', {
+        operation: nextStep.operation,
+        parameters: nextStep.parameters,
+        stepNumber: nextStep.stepNumber,
+        workflowId,
+        sessionId,
+        userId,
+        operation: 'step_details'
+      });
 
-      EnhancedLogger.debug('Executing step', {
+      logger.debug('Executing step', {
         correlationId: `step-${workflowContext.currentStep}`,
         operation: 'step_execution',
         metadata: {
@@ -2051,11 +2115,23 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
           }
         };
 
-        console.log(`🔧 MASTER AGENT: Executing tool call...`);
-        console.log(`📊 Tool Call:`, JSON.stringify(toolCall, null, 2));
+        logger.debug('Executing tool call', {
+          toolCall: toolCall,
+          stepNumber: nextStep.stepNumber,
+          workflowId,
+          sessionId,
+          userId,
+          operation: 'tool_call_execution'
+        });
         const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId, slackContext);
-        console.log(`✅ MASTER AGENT: Tool execution completed`);
-        console.log(`📊 Tool Result:`, JSON.stringify(toolResult, null, 2));
+        logger.debug('Tool execution completed', {
+          toolResult: toolResult,
+          stepNumber: nextStep.stepNumber,
+          workflowId,
+          sessionId,
+          userId,
+          operation: 'tool_execution_completed'
+        });
 
         // Create step result
         const stepResult: NextStepResult = {
@@ -2158,7 +2234,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
   public cleanup(): void {
     this.agentSchemas.clear();
-    EnhancedLogger.debug('MasterAgent cleanup completed', {
+    logger.debug('MasterAgent cleanup completed', {
       correlationId: 'cleanup',
       operation: 'agent_cleanup',
       metadata: { service: 'MasterAgent' }

@@ -1,7 +1,7 @@
 import { BaseService } from './base-service';
+import logger from '../utils/logger';
 import { OpenAIService } from './openai.service';
 import { getService } from './service-manager';
-import { EnhancedLogger } from '../utils/enhanced-logger';
 
 /**
  * Workflow context for step-by-step planning
@@ -91,7 +91,7 @@ export class NextStepPlanningService extends BaseService {
       throw new Error('OpenAIService is required for NextStepPlanningService');
     }
 
-    EnhancedLogger.debug('NextStepPlanningService initialized', {
+    logger.debug('NextStepPlanningService initialized', {
       correlationId: `next-step-planning-init-${Date.now()}`,
       operation: 'next_step_planning_init',
       metadata: {
@@ -136,7 +136,7 @@ export class NextStepPlanningService extends BaseService {
       // If the task is marked as complete, return null
       if (nextStep.isComplete) {
         console.log('✅ PLANNING: Task marked as complete, returning null');
-        EnhancedLogger.debug('Workflow marked as complete', {
+        logger.debug('Workflow marked as complete', {
           correlationId: `next-step-complete-${Date.now()}`,
           operation: 'next_step_complete',
           metadata: {
@@ -153,7 +153,7 @@ export class NextStepPlanningService extends BaseService {
       const validatedStep = this.validateNextStep(nextStep, context);
       console.log('🎉 PLANNING: Final validated step:', JSON.stringify(validatedStep, null, 2));
 
-      EnhancedLogger.debug('Next step planned', {
+      logger.debug('Next step planned', {
         correlationId: `next-step-planned-${Date.now()}`,
         operation: 'next_step_planned',
         metadata: {
@@ -166,7 +166,7 @@ export class NextStepPlanningService extends BaseService {
 
       return validatedStep;
     } catch (error) {
-      EnhancedLogger.error('Failed to plan next step', error as Error, {
+      logger.error('Failed to plan next step', error as Error, {
         correlationId: `next-step-planning-error-${Date.now()}`,
         operation: 'next_step_planning_error',
         metadata: {
@@ -203,7 +203,7 @@ export class NextStepPlanningService extends BaseService {
 
       const analysis = JSON.parse(response);
 
-      EnhancedLogger.debug('Step result analyzed', {
+      logger.debug('Step result analyzed', {
         correlationId: `step-analysis-${Date.now()}`,
         operation: 'step_result_analysis',
         metadata: {
@@ -217,7 +217,7 @@ export class NextStepPlanningService extends BaseService {
 
       return analysis;
     } catch (error) {
-      EnhancedLogger.error('Failed to analyze step result', error as Error, {
+      logger.error('Failed to analyze step result', error as Error, {
         correlationId: `step-analysis-error-${Date.now()}`,
         operation: 'step_analysis_error',
         metadata: {
@@ -392,7 +392,7 @@ Analyze intelligently and provide actionable insights!
   }
 
   protected async onDestroy(): Promise<void> {
-    EnhancedLogger.debug('NextStepPlanningService destroyed', {
+    logger.debug('NextStepPlanningService destroyed', {
       correlationId: `next-step-planning-destroy-${Date.now()}`,
       operation: 'next_step_planning_destroy',
       metadata: { service: 'nextStepPlanningService' }

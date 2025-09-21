@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { EnhancedLogger, LogContext } from './enhanced-logger';
+import logger from '../utils/logger';
 
 /**
  * Crypto utilities for token encryption/decryption
@@ -26,12 +26,12 @@ export class CryptoUtil {
         if (this.encryptionKey.length !== this.KEY_LENGTH) {
           throw new Error(`Invalid key length: ${this.encryptionKey.length}, expected ${this.KEY_LENGTH}`);
         }
-        EnhancedLogger.debug('Using provided token encryption key', {
+        logger.debug('Using provided token encryption key', {
           correlationId: `crypto-init-${Date.now()}`,
           operation: 'crypto_initialization'
         });
       } catch (error) {
-        EnhancedLogger.warn('Invalid TOKEN_ENCRYPTION_KEY format, generating new key', {
+        logger.warn('Invalid TOKEN_ENCRYPTION_KEY format, generating new key', {
           correlationId: `crypto-init-${Date.now()}`,
           operation: 'crypto_key_generation',
           metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
@@ -42,7 +42,7 @@ export class CryptoUtil {
       // Generate a new key (will be lost on restart - should use env var in production)
       this.encryptionKey = crypto.randomBytes(this.KEY_LENGTH);
       const keyBase64 = this.encryptionKey.toString('base64');
-      EnhancedLogger.warn('No TOKEN_ENCRYPTION_KEY provided, generated temporary key. Set TOKEN_ENCRYPTION_KEY=' + keyBase64 + ' in production', {
+      logger.warn('No TOKEN_ENCRYPTION_KEY provided, generated temporary key. Set TOKEN_ENCRYPTION_KEY=' + keyBase64 + ' in production', {
         correlationId: `crypto-init-${Date.now()}`,
         operation: 'crypto_temp_key_generation'
       });
@@ -74,7 +74,7 @@ export class CryptoUtil {
       const combined = Buffer.concat([iv, tag, Buffer.from(encrypted, 'hex')]);
       return combined.toString('base64');
     } catch (error) {
-      EnhancedLogger.error('Token encryption failed', error as Error, {
+      logger.error('Token encryption failed', error as Error, {
         correlationId: `crypto-encrypt-${Date.now()}`,
         operation: 'crypto_encryption_error'
       });
@@ -110,7 +110,7 @@ export class CryptoUtil {
       
       return decrypted;
     } catch (error) {
-      EnhancedLogger.error('Token decryption failed', error as Error, {
+      logger.error('Token decryption failed', error as Error, {
         correlationId: `crypto-decrypt-${Date.now()}`,
         operation: 'crypto_decryption_error'
       });

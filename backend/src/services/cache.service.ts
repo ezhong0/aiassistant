@@ -1,8 +1,8 @@
 import { createClient, RedisClientType } from 'redis';
+import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from './service-manager';
 import { configService } from '../config/config.service';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export class CacheService extends BaseService {
   private client: RedisClientType | null = null;
@@ -22,7 +22,7 @@ export class CacheService extends BaseService {
                      process.env.RAILWAY_REDIS_URL ||
                      'redis://localhost:6379';
     
-    EnhancedLogger.debug('CacheService initializing', {
+    logger.debug('CacheService initializing', {
       correlationId: `cache-init-${Date.now()}`,
       operation: 'cache_service_init',
       metadata: {
@@ -50,7 +50,7 @@ export class CacheService extends BaseService {
     try {
       // Check if Redis should be disabled
       if (process.env.DISABLE_REDIS === 'true') {
-        EnhancedLogger.debug('Redis disabled via DISABLE_REDIS environment variable', {
+        logger.debug('Redis disabled via DISABLE_REDIS environment variable', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { reason: 'disabled_env_var' }
@@ -62,7 +62,7 @@ export class CacheService extends BaseService {
       const redisEnvVars = Object.keys(process.env).filter(key => 
         key.toLowerCase().includes('redis'));
       if (redisEnvVars.length > 0) {
-        EnhancedLogger.debug('Available Redis environment variables', {
+        logger.debug('Available Redis environment variables', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { 
@@ -73,7 +73,7 @@ export class CacheService extends BaseService {
 
       // Skip Redis if we're using localhost and not in development
       if (this.REDIS_URL.includes('localhost') && configService.nodeEnv === 'production') {
-        EnhancedLogger.warn('Skipping Redis connection - localhost URL in production environment', {
+        logger.warn('Skipping Redis connection - localhost URL in production environment', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { reason: 'localhost_in_production' }
@@ -88,7 +88,7 @@ export class CacheService extends BaseService {
           connectTimeout: 10000, // Longer timeout for Railway
           reconnectStrategy: (retries) => {
             if (retries > 3) {
-              EnhancedLogger.error('Redis max reconnection attempts reached', new Error('Max reconnection attempts reached'), {
+              logger.error('Redis max reconnection attempts reached', new Error('Max reconnection attempts reached'), {
                 correlationId: `cache-init-${Date.now()}`,
                 operation: 'cache_service_init',
                 metadata: { retries, maxRetries: 3 }
@@ -105,7 +105,7 @@ export class CacheService extends BaseService {
 
       // Set up event handlers
       this.client.on('error', (error) => {
-        EnhancedLogger.error('Redis client error', error as Error, {
+        logger.error('Redis client error', error as Error, {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { phase: 'client_error' }
@@ -114,7 +114,7 @@ export class CacheService extends BaseService {
       });
 
       this.client.on('connect', () => {
-        EnhancedLogger.debug('Redis client connecting...', {
+        logger.debug('Redis client connecting...', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { phase: 'connecting' }
@@ -122,7 +122,7 @@ export class CacheService extends BaseService {
       });
 
       this.client.on('ready', () => {
-        EnhancedLogger.debug('Redis client connected and ready', {
+        logger.debug('Redis client connected and ready', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { phase: 'ready' }
@@ -131,7 +131,7 @@ export class CacheService extends BaseService {
       });
 
       this.client.on('end', () => {
-        EnhancedLogger.warn('Redis client connection ended', {
+        logger.warn('Redis client connection ended', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { phase: 'connection_ended' }
@@ -140,7 +140,7 @@ export class CacheService extends BaseService {
       });
 
       this.client.on('reconnecting', () => {
-        EnhancedLogger.debug('Redis client reconnecting...', {
+        logger.debug('Redis client reconnecting...', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
           metadata: { phase: 'reconnecting' }
@@ -157,14 +157,14 @@ export class CacheService extends BaseService {
       // Test the connection
       await this.client.ping();
       
-      EnhancedLogger.debug('CacheService initialized successfully', {
+      logger.debug('CacheService initialized successfully', {
         correlationId: `cache-init-${Date.now()}`,
         operation: 'cache_service_init',
         metadata: { phase: 'initialized' }
       });
 
     } catch (error) {
-      EnhancedLogger.error('Failed to initialize CacheService', error as Error, {
+      logger.error('Failed to initialize CacheService', error as Error, {
         correlationId: `cache-init-${Date.now()}`,
         operation: 'cache_service_init',
         metadata: { phase: 'initialization_failed' }
@@ -175,7 +175,7 @@ export class CacheService extends BaseService {
         try {
           this.client.disconnect();
         } catch (disconnectError) {
-          EnhancedLogger.warn('Error disconnecting Redis client', {
+          logger.warn('Error disconnecting Redis client', {
             correlationId: `cache-init-${Date.now()}`,
             operation: 'cache_service_init',
             metadata: { phase: 'disconnect_error', error: disconnectError }
@@ -185,7 +185,7 @@ export class CacheService extends BaseService {
       }
       
       // Always continue without cache rather than failing
-      EnhancedLogger.warn('Redis unavailable - continuing without cache functionality', {
+      logger.warn('Redis unavailable - continuing without cache functionality', {
         correlationId: `cache-init-${Date.now()}`,
         operation: 'cache_service_init',
         metadata: { phase: 'fallback_mode' }

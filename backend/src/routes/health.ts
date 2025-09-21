@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import logger from '../utils/logger';
 import { z } from 'zod';
 import { HealthCheckResponse, ServiceStatus } from '../types/api/api.types';
 import { rateLimitStore } from '../middleware/rate-limiting.middleware';
@@ -6,7 +7,6 @@ import { HealthCheckSchema } from '../schemas/api.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { getEnhancedServiceManager, getServiceHealthReport } from '../services/service-initialization';
 import { ServiceHealth } from '../services/service-dependency-manager';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 
@@ -24,7 +24,7 @@ const checkServiceHealth = async (serviceName: string, checkFunction: () => Prom
       lastCheck: new Date().toISOString()
     };
   } catch (error) {
-    EnhancedLogger.warn(`Health check failed for ${serviceName}`, {
+    logger.warn(`Health check failed for ${serviceName}`, {
       correlationId: `health-check-${serviceName}-${Date.now()}`,
       operation: 'health_check',
       metadata: { serviceName, error: error instanceof Error ? error.message : 'Unknown error' }

@@ -4,7 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodSchema, ZodError } from 'zod';
-import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
+import logger from '../utils/logger';
 
 export interface ValidationOptions {
   body?: ZodSchema;
@@ -99,7 +99,7 @@ export function validateRequest(options: ValidationOptions) {
 
       if (!validationResult.success) {
         const logContext = createLogContext(req, { operation: 'validation_failed' });
-        EnhancedLogger.warn('Validation failed', {
+        logger.warn('Validation failed', {
           correlationId: logContext.correlationId,
           operation: 'validation_middleware',
           metadata: {
@@ -126,7 +126,7 @@ export function validateRequest(options: ValidationOptions) {
       next();
     } catch (error) {
       const logContext = createLogContext(req, { operation: 'validation_error' });
-      EnhancedLogger.error('Validation middleware error', error as Error, {
+      logger.error('Validation middleware error', error as Error, {
         correlationId: logContext.correlationId,
         operation: 'validation_middleware',
         metadata: { 
@@ -184,7 +184,7 @@ export function sanitizeRequest(req: Request, res: Response, next: NextFunction)
     next();
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'sanitization_error' });
-    EnhancedLogger.error('Sanitization middleware error', error as Error, {
+    logger.error('Sanitization middleware error', error as Error, {
       correlationId: logContext.correlationId,
       operation: 'sanitization_middleware',
       metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
@@ -238,7 +238,7 @@ export function validateResponse<T>(schema: ZodSchema<T>) {
       return schema.parse(data);
     } catch (error) {
       if (error instanceof ZodError) {
-        EnhancedLogger.error('Response validation failed', error as Error, {
+        logger.error('Response validation failed', error as Error, {
           correlationId: `response-validation-${Date.now()}`,
           operation: 'response_validation',
           metadata: {

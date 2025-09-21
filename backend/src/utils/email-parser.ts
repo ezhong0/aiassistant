@@ -1,4 +1,5 @@
 import { 
+import logger from '../utils/logger';
   GmailMessage, 
   ParsedEmail, 
   EmailContact, 
@@ -8,7 +9,6 @@ import {
 } from '../types/email/gmail.types';
 import { getService } from '../services/service-manager';
 import { OpenAIService } from '../services/openai.service';
-import { EnhancedLogger, LogContext } from './enhanced-logger';
 
 /**
  * Email parsing and formatting utilities
@@ -43,7 +43,7 @@ export class EmailParser {
         importance: await this.determineImportance(message)
       };
     } catch (error) {
-      EnhancedLogger.error('Failed to parse Gmail message', error as Error, {
+      logger.error('Failed to parse Gmail message', error as Error, {
         correlationId: `email-parse-${Date.now()}`,
         operation: 'email_parsing_error',
         metadata: { messageId: message.id }
@@ -300,7 +300,7 @@ Return only the clean plain text content.`;
       // AI-powered priority classification
       return await this.classifyEmailPriorityWithAI(message);
     } catch (error) {
-      EnhancedLogger.error('Failed to classify email priority', error as Error, {
+      logger.error('Failed to classify email priority', error as Error, {
         correlationId: `email-priority-${Date.now()}`,
         operation: 'email_priority_classification_error'
       });

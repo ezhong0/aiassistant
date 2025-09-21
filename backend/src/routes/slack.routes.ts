@@ -8,7 +8,7 @@ import {
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackInterfaceService } from '../services/slack/slack-interface.service';
-import { EnhancedLogger, LOG_MESSAGES, createLogContext } from '../utils/enhanced-logger';
+import logger from '../utils/logger';
 
 const emptyQuerySchema = z.object({});
 const emptyBodySchema = z.object({});
@@ -33,7 +33,8 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       const { code, state, error } = req.query;
 
       if (error) {
-        EnhancedLogger.error('Slack OAuth error', new Error(error as string), {
+        logger.error('Slack OAuth error', {
+          error: error as string,
           correlationId: logContext.correlationId,
           operation: 'oauth_callback',
           metadata: { error }
@@ -43,7 +44,8 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       }
 
       if (!code) {
-        EnhancedLogger.error('No authorization code received', new Error('Missing authorization code'), {
+        logger.error('No authorization code received', {
+          error: 'Missing authorization code',
           correlationId: logContext.correlationId,
           operation: 'oauth_callback'
         });
@@ -171,7 +173,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Test endpoint to verify Slack routes are working
    */
   router.get('/test', (req, res) => {
-    console.log('🧪 Slack test endpoint reached!');
+    logger.info('Slack test endpoint reached', {
+      operation: 'slack_test_endpoint'
+    });
     res.json({ status: 'ok', message: 'Slack routes are working', timestamp: new Date().toISOString() });
   });
 
@@ -188,7 +192,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
     try {
       const { challenge, type, event, team_id, api_app_id } = req.body;
       
-      EnhancedLogger.requestStart('Slack event received', {
+      logger.info('Slack event received', {
         ...logContext,
         metadata: {
           eventType: type,
@@ -203,7 +207,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
       // Handle URL verification challenge (required for Slack app setup)
       if (type === 'url_verification' && challenge) {
         const responseTime = Date.now() - requestStartTime;
-        EnhancedLogger.debug('URL verification challenge received', {
+        logger.debug('URL verification challenge received', {
           ...logContext,
           duration: responseTime,
           metadata: { challengeLength: challenge.length }
@@ -216,7 +220,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
       // For actual events, handle them directly instead of forwarding
       if (type === 'event_callback' && event) {
-        EnhancedLogger.debug('Event callback processing', {
+        logger.debug('Event callback processing', {
           ...logContext,
           metadata: {
             eventType: event.type,
@@ -228,7 +232,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
         // IMMEDIATELY acknowledge to Slack to prevent retries
         const responseTime = Date.now() - requestStartTime;
-        EnhancedLogger.debug('Sending acknowledgment to Slack', {
+        logger.debug('Sending acknowledgment to Slack', {
           ...logContext,
           duration: responseTime,
           metadata: { eventTs: event.ts }
@@ -240,10 +244,19 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         if (interfaces?.slackInterface) {
           // Process in background - don't block the response
           interfaces.slackInterface.handleEvent(event, team_id).catch((processError: unknown) => {
-            console.error('❌ Event processing failed:', processError);
+            logger.error('Event processing failed', {
+              error: (processError as Error).message,
+              stack: (processError as Error).stack,
+              ...logContext,
+              operation: 'event_processing_error'
+            });
           });
         } else {
-          console.log('⚠️ No Slack interface available - event not processed');
+          logger.warn('No Slack interface available - event not processed', {
+            ...logContext,
+            operation: 'event_processing',
+            metadata: { eventType: event.type }
+          });
         }
         return;
       }

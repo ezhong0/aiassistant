@@ -1,7 +1,7 @@
 import { BaseService } from './base-service';
+import logger from '../utils/logger';
 import { CacheService } from './cache.service';
 import { getService } from './service-manager';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Workflow state interface for Redis-based workflow management
@@ -71,7 +71,7 @@ export class WorkflowCacheService extends BaseService {
         throw new Error('CacheService is required but not available');
       }
 
-      EnhancedLogger.debug('WorkflowCacheService initialized', {
+      logger.debug('WorkflowCacheService initialized', {
         correlationId: `workflow-cache-init-${Date.now()}`,
         operation: 'workflow_cache_init',
         metadata: {
@@ -86,7 +86,7 @@ export class WorkflowCacheService extends BaseService {
         }
       });
     } catch (error) {
-      EnhancedLogger.error('Failed to initialize WorkflowCacheService', error as Error, {
+      logger.error('Failed to initialize WorkflowCacheService', error as Error, {
         correlationId: `workflow-cache-init-error-${Date.now()}`,
         operation: 'workflow_cache_init_error',
         metadata: { service: 'workflowCacheService' }
@@ -110,7 +110,7 @@ export class WorkflowCacheService extends BaseService {
       // Add to session's active workflows list
       await this.addToSessionActiveWorkflows(workflow.sessionId, workflow.workflowId);
       
-      EnhancedLogger.debug('Workflow created in cache', {
+      logger.debug('Workflow created in cache', {
         correlationId: `workflow-create-${Date.now()}`,
         operation: 'workflow_create',
         metadata: {
@@ -121,7 +121,7 @@ export class WorkflowCacheService extends BaseService {
         }
       });
     } catch (error) {
-      EnhancedLogger.error('Failed to create workflow in cache', error as Error, {
+      logger.error('Failed to create workflow in cache', error as Error, {
         correlationId: `workflow-create-error-${Date.now()}`,
         operation: 'workflow_create_error',
         metadata: { workflowId: workflow.workflowId }
@@ -143,7 +143,7 @@ export class WorkflowCacheService extends BaseService {
       const workflow = await this.cacheService.get<WorkflowState>(key);
       
       if (workflow) {
-        EnhancedLogger.debug('Workflow retrieved from cache', {
+        logger.debug('Workflow retrieved from cache', {
           correlationId: `workflow-get-${Date.now()}`,
           operation: 'workflow_get',
           metadata: {
@@ -157,7 +157,7 @@ export class WorkflowCacheService extends BaseService {
       
       return workflow;
     } catch (error) {
-      EnhancedLogger.error('Failed to get workflow from cache', error as Error, {
+      logger.error('Failed to get workflow from cache', error as Error, {
         correlationId: `workflow-get-error-${Date.now()}`,
         operation: 'workflow_get_error',
         metadata: { workflowId }
@@ -189,7 +189,7 @@ export class WorkflowCacheService extends BaseService {
       const key = this.generateWorkflowKey(workflowId);
       await this.cacheService.set(key, updatedWorkflow, this.WORKFLOW_TTL);
       
-      EnhancedLogger.debug('Workflow updated in cache', {
+      logger.debug('Workflow updated in cache', {
         correlationId: `workflow-update-${Date.now()}`,
         operation: 'workflow_update',
         metadata: {
@@ -199,7 +199,7 @@ export class WorkflowCacheService extends BaseService {
         }
       });
     } catch (error) {
-      EnhancedLogger.error('Failed to update workflow in cache', error as Error, {
+      logger.error('Failed to update workflow in cache', error as Error, {
         correlationId: `workflow-update-error-${Date.now()}`,
         operation: 'workflow_update_error',
         metadata: { workflowId }
@@ -229,7 +229,7 @@ export class WorkflowCacheService extends BaseService {
         }
       }
       
-      EnhancedLogger.debug('Active workflows retrieved', {
+      logger.debug('Active workflows retrieved', {
         correlationId: `workflow-active-${Date.now()}`,
         operation: 'workflow_get_active',
         metadata: {
@@ -241,7 +241,7 @@ export class WorkflowCacheService extends BaseService {
       
       return workflows;
     } catch (error) {
-      EnhancedLogger.error('Failed to get active workflows', error as Error, {
+      logger.error('Failed to get active workflows', error as Error, {
         correlationId: `workflow-active-error-${Date.now()}`,
         operation: 'workflow_get_active_error',
         metadata: { sessionId }
@@ -277,7 +277,7 @@ export class WorkflowCacheService extends BaseService {
       const key = this.generateWorkflowKey(workflowId);
       await this.cacheService.set(key, { ...workflow, status: 'completed' }, this.COMPLETED_TTL);
       
-      EnhancedLogger.debug('Workflow completed', {
+      logger.debug('Workflow completed', {
         correlationId: `workflow-complete-${Date.now()}`,
         operation: 'workflow_complete',
         metadata: {
@@ -288,7 +288,7 @@ export class WorkflowCacheService extends BaseService {
         }
       });
     } catch (error) {
-      EnhancedLogger.error('Failed to complete workflow', error as Error, {
+      logger.error('Failed to complete workflow', error as Error, {
         correlationId: `workflow-complete-error-${Date.now()}`,
         operation: 'workflow_complete_error',
         metadata: { workflowId }
@@ -320,7 +320,7 @@ export class WorkflowCacheService extends BaseService {
       // Remove from active workflows
       await this.removeFromSessionActiveWorkflows(workflow.sessionId, workflowId);
       
-      EnhancedLogger.debug('Workflow cancelled', {
+      logger.debug('Workflow cancelled', {
         correlationId: `workflow-cancel-${Date.now()}`,
         operation: 'workflow_cancel',
         metadata: {
@@ -329,7 +329,7 @@ export class WorkflowCacheService extends BaseService {
         }
       });
     } catch (error) {
-      EnhancedLogger.error('Failed to cancel workflow', error as Error, {
+      logger.error('Failed to cancel workflow', error as Error, {
         correlationId: `workflow-cancel-error-${Date.now()}`,
         operation: 'workflow_cancel_error',
         metadata: { workflowId }
@@ -367,7 +367,7 @@ export class WorkflowCacheService extends BaseService {
         await this.cacheService.set(sessionKey, activeWorkflows, this.SESSION_CONTEXT_TTL);
       }
     } catch (error) {
-      EnhancedLogger.error('Failed to add workflow to session active workflows', error as Error, {
+      logger.error('Failed to add workflow to session active workflows', error as Error, {
         correlationId: `workflow-session-add-error-${Date.now()}`,
         operation: 'workflow_session_add_error',
         metadata: { sessionId, workflowId }
@@ -388,7 +388,7 @@ export class WorkflowCacheService extends BaseService {
       const updatedWorkflows = activeWorkflows.filter(id => id !== workflowId);
       await this.cacheService.set(sessionKey, updatedWorkflows, this.SESSION_CONTEXT_TTL);
     } catch (error) {
-      EnhancedLogger.error('Failed to remove workflow from session active workflows', error as Error, {
+      logger.error('Failed to remove workflow from session active workflows', error as Error, {
         correlationId: `workflow-session-remove-error-${Date.now()}`,
         operation: 'workflow_session_remove_error',
         metadata: { sessionId, workflowId }
@@ -401,7 +401,7 @@ export class WorkflowCacheService extends BaseService {
    */
   protected async onDestroy(): Promise<void> {
     // Cleanup any resources if needed
-    EnhancedLogger.debug('WorkflowCacheService destroyed', {
+    logger.debug('WorkflowCacheService destroyed', {
       correlationId: `workflow-cache-destroy-${Date.now()}`,
       operation: 'workflow_cache_destroy',
       metadata: { service: 'workflowCacheService' }

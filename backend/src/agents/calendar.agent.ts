@@ -1,4 +1,5 @@
 import { ToolExecutionContext } from '../types/tools';
+import logger from '../utils/logger';
 import { AIAgent } from '../framework/ai-agent';
 import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRiskAssessment } from '../types/api/api.types';
 import { CalendarService, CalendarEvent } from '../services/calendar/calendar.service';
@@ -22,7 +23,6 @@ import {
 // Import focused services
 import { CalendarFormatter, CalendarFormattingResult, CalendarResult } from '../services/calendar/calendar-formatter.service';
 import { CalendarValidator, CalendarValidationResult } from '../services/calendar/calendar-validator.service';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export interface CalendarAgentRequest {
   action: 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots';
@@ -141,12 +141,12 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       }
     };
 
-    EnhancedLogger.requestStart('Calendar processing started', logContext);
+    logger.info('Calendar processing started', logContext);
 
     // Ensure services are initialized
     this.ensureServices();
 
-    EnhancedLogger.debug('Calendar services ensured', {
+    logger.debug('Calendar services ensured', {
       ...logContext,
       metadata: {
         hasCalendarService: !!this.calendarService,
@@ -166,7 +166,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       hasParamsAccessToken: !!params.accessToken
     });
 
-    EnhancedLogger.debug('Attempting to retrieve access token', {
+    logger.debug('Attempting to retrieve access token', {
       ...logContext,
       metadata: {
         hasSlackContext: !!context.slackContext,
@@ -197,7 +197,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
           });
         } catch (error) {
           console.log('🔑 CALENDAR AGENT: Error retrieving access token:', error);
-          EnhancedLogger.error('Error retrieving access token', error as Error, {
+          logger.error('Error retrieving access token', error as Error, {
             ...logContext,
             metadata: {
               teamId: context.slackContext.teamId,
@@ -221,14 +221,14 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     // Also check if access token is provided in parameters (for backwards compatibility)
     if (!accessToken && params.accessToken) {
       accessToken = params.accessToken as string;
-      EnhancedLogger.debug('Using access token from parameters', {
+      logger.debug('Using access token from parameters', {
         ...logContext,
         metadata: { accessTokenLength: accessToken.length }
       });
     }
 
     if (!accessToken) {
-      EnhancedLogger.error('No access token available for calendar operations', new Error('No access token'), {
+      logger.error('No access token available for calendar operations', new Error('No access token'), {
         ...logContext,
         metadata: {
           hasSlackContext: !!context.slackContext,
@@ -246,7 +246,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     // First detect the operation
     const operation = await this.detectOperation(params);
 
-    EnhancedLogger.debug('Operation detected', {
+    logger.debug('Operation detected', {
       ...logContext,
       metadata: {
         detectedOperation: operation,
@@ -259,43 +259,43 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     // Route to appropriate handler based on detected operation
     switch (operation.toLowerCase()) {
       case 'create':
-        EnhancedLogger.debug('Routing to create event', { ...logContext, metadata: { operation: 'create' } });
+        logger.debug('Routing to create event', { ...logContext, metadata: { operation: 'create' } });
         return await this.handleCreateEvent(params as unknown as ToolParameters, context, accessToken);
 
       case 'list':
-        EnhancedLogger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list' } });
+        logger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list' } });
         return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
       case 'retrieve_events':
-        EnhancedLogger.debug('Routing to retrieve events', { ...logContext, metadata: { operation: 'retrieve_events' } });
+        logger.debug('Routing to retrieve events', { ...logContext, metadata: { operation: 'retrieve_events' } });
         return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
           case 'retrieve_suggested_times':
-            EnhancedLogger.debug('Routing to retrieve suggested times', { ...logContext, metadata: { operation: 'retrieve_suggested_times' } });
+            logger.debug('Routing to retrieve suggested times', { ...logContext, metadata: { operation: 'retrieve_suggested_times' } });
             return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
           case 'list_events':
-        EnhancedLogger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list_events' } });
+        logger.debug('Routing to list events', { ...logContext, metadata: { operation: 'list_events' } });
         return await this.handleListEvents(params as unknown as ToolParameters, context, accessToken);
 
       case 'update':
-        EnhancedLogger.debug('Routing to update event', { ...logContext, metadata: { operation: 'update' } });
+        logger.debug('Routing to update event', { ...logContext, metadata: { operation: 'update' } });
         return await this.handleUpdateEvent(params as unknown as ToolParameters, context, accessToken);
 
       case 'delete':
-        EnhancedLogger.debug('Routing to delete event', { ...logContext, metadata: { operation: 'delete' } });
+        logger.debug('Routing to delete event', { ...logContext, metadata: { operation: 'delete' } });
         return await this.handleDeleteEvent(params as unknown as ToolParameters, context, accessToken);
 
       case 'check_availability':
-        EnhancedLogger.debug('Routing to check availability', { ...logContext, metadata: { operation: 'check_availability' } });
+        logger.debug('Routing to check availability', { ...logContext, metadata: { operation: 'check_availability' } });
         return await this.handleCheckAvailability(params as unknown as ToolParameters, context, accessToken);
 
       case 'find_slots':
-        EnhancedLogger.debug('Routing to find slots', { ...logContext, metadata: { operation: 'find_slots' } });
+        logger.debug('Routing to find slots', { ...logContext, metadata: { operation: 'find_slots' } });
         return await this.handleFindSlots(params as unknown as ToolParameters, context, accessToken);
 
       default:
-        EnhancedLogger.warn('Unknown operation, defaulting to create', {
+        logger.warn('Unknown operation, defaulting to create', {
           ...logContext,
           metadata: { detectedOperation: operation, action: params.action }
         });
@@ -308,7 +308,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    */
   protected async onDestroy(): Promise<void> {
     try {
-      EnhancedLogger.debug('Destroying CalendarAgent', {
+      logger.debug('Destroying CalendarAgent', {
         correlationId: 'calendar-destroy',
         operation: 'agent_destroy',
         metadata: { service: 'CalendarAgent' }
@@ -316,13 +316,13 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       this.calendarService = null;
       this.calendarFormatter = null;
       this.calendarValidator = null;
-      EnhancedLogger.debug('CalendarAgent destroyed successfully', {
+      logger.debug('CalendarAgent destroyed successfully', {
         correlationId: 'calendar-destroy',
         operation: 'agent_destroy',
         metadata: { service: 'CalendarAgent' }
       });
     } catch (error) {
-      EnhancedLogger.error('Error during CalendarAgent destruction', error as Error, {
+      logger.error('Error during CalendarAgent destruction', error as Error, {
         correlationId: 'calendar-destroy',
         operation: 'agent_destroy',
         metadata: { service: 'CalendarAgent' }
@@ -499,7 +499,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     };
 
     try {
-      EnhancedLogger.debug('Generating calendar event preview', logContext);
+      logger.debug('Generating calendar event preview', logContext);
 
       // Create preview data for calendar operations
       const previewData: CalendarPreviewData = {
@@ -536,7 +536,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         previewData
       };
 
-      EnhancedLogger.debug('Calendar preview generated successfully', {
+      logger.debug('Calendar preview generated successfully', {
         ...logContext,
         metadata: {
           actionId,
@@ -551,7 +551,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
         preview: actionPreview
       };
     } catch (error) {
-      EnhancedLogger.error('Failed to generate calendar preview', error as Error, {
+      logger.error('Failed to generate calendar preview', error as Error, {
         ...logContext,
         metadata: { action: params.action }
       });
@@ -632,7 +632,7 @@ Always return structured execution status with event details, scheduling insight
       }
     };
 
-    EnhancedLogger.debug('Executing calendar tool', logContext);
+    logger.debug('Executing calendar tool', logContext);
 
     console.log('🎯 CALENDAR AGENT: executeCustomTool called with parameters:', JSON.stringify(parameters, null, 2));
     console.log('🎯 CALENDAR AGENT: executeCustomTool called with context:', JSON.stringify({
@@ -653,7 +653,7 @@ Always return structured execution status with event details, scheduling insight
       hasParamsAccessToken: !!parameters.accessToken
     });
 
-    EnhancedLogger.debug('executeCustomTool: Attempting to retrieve access token', {
+    logger.debug('executeCustomTool: Attempting to retrieve access token', {
       ...logContext,
       metadata: {
         hasSlackContext: !!context.slackContext,
@@ -684,7 +684,7 @@ Always return structured execution status with event details, scheduling insight
           });
         } catch (error) {
           console.log('🔑 CALENDAR AGENT: executeCustomTool - Error retrieving access token:', error);
-          EnhancedLogger.error('executeCustomTool: Error retrieving access token', error as Error, {
+          logger.error('executeCustomTool: Error retrieving access token', error as Error, {
             ...logContext,
             metadata: {
               teamId: context.slackContext.teamId,
@@ -708,14 +708,14 @@ Always return structured execution status with event details, scheduling insight
     // Also check if access token is provided in parameters (for backwards compatibility)
     if (!accessToken && parameters.accessToken) {
       accessToken = parameters.accessToken as string;
-      EnhancedLogger.debug('executeCustomTool: Using access token from parameters', {
+      logger.debug('executeCustomTool: Using access token from parameters', {
         ...logContext,
         metadata: { accessTokenLength: accessToken.length }
       });
     }
 
     if (!accessToken) {
-      EnhancedLogger.error('executeCustomTool: No access token available', new Error('No access token'), {
+      logger.error('executeCustomTool: No access token available', new Error('No access token'), {
         ...logContext,
         metadata: {
           hasSlackContext: !!context.slackContext,
@@ -736,7 +736,7 @@ Always return structured execution status with event details, scheduling insight
       // Let OpenAI determine the operation from the parameters
       const operation = (parameters as any).operation;
 
-      EnhancedLogger.debug('Operation detection', {
+      logger.debug('Operation detection', {
         ...logContext,
         metadata: {
           toolName,
@@ -754,11 +754,11 @@ Always return structured execution status with event details, scheduling insight
 
       // Default to create if still no operation detected
       if (!detectedOperation) {
-        EnhancedLogger.debug('No operation detected, defaulting to create', { ...logContext, metadata: { detectedOperation } });
+        logger.debug('No operation detected, defaulting to create', { ...logContext, metadata: { detectedOperation } });
         detectedOperation = 'create';
       }
 
-      EnhancedLogger.debug('Using operation', {
+      logger.debug('Using operation', {
         ...logContext,
         metadata: {
           originalOperation: operation,
@@ -780,14 +780,14 @@ Always return structured execution status with event details, scheduling insight
       } else if (detectedOperation === CALENDAR_SERVICE_CONSTANTS.CALENDAR_OPERATIONS.FIND_SLOTS || detectedOperation === 'find_slots') {
         return await this.handleFindSlots(parameters, context, accessToken);
       } else {
-        EnhancedLogger.warn('Unknown operation, defaulting to create', {
+        logger.warn('Unknown operation, defaulting to create', {
           ...logContext,
           metadata: { detectedOperation }
         });
         return await this.handleCreateEvent(parameters, context, accessToken);
       }
     } catch (error) {
-      EnhancedLogger.error('Error executing calendar tool', error as Error, {
+      logger.error('Error executing calendar tool', error as Error, {
         ...logContext,
         metadata: { toolName }
       });
@@ -856,7 +856,7 @@ Always return structured execution status with event details, scheduling insight
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling create event', error as Error, {
+      logger.error('Error handling create event', error as Error, {
         correlationId: 'calendar-create',
         operation: 'calendar_create',
         metadata: { summary: parameters.summary }
@@ -919,7 +919,7 @@ Always return structured execution status with event details, scheduling insight
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling list events', error as Error, {
+      logger.error('Error handling list events', error as Error, {
         correlationId: 'calendar-list',
         operation: 'calendar_list',
         metadata: { query: parameters.query }
@@ -999,7 +999,7 @@ Always return structured execution status with event details, scheduling insight
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling update event', error as Error, {
+      logger.error('Error handling update event', error as Error, {
         correlationId: 'calendar-update',
         operation: 'calendar_update',
         metadata: { eventId: parameters.eventId }
@@ -1039,7 +1039,7 @@ Always return structured execution status with event details, scheduling insight
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling delete event', error as Error, {
+      logger.error('Error handling delete event', error as Error, {
         correlationId: 'calendar-delete',
         operation: 'calendar_delete',
         metadata: { eventId: parameters.eventId }
@@ -1081,7 +1081,7 @@ Always return structured execution status with event details, scheduling insight
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling check availability', error as Error, {
+      logger.error('Error handling check availability', error as Error, {
         correlationId: 'calendar-availability',
         operation: 'calendar_availability',
         metadata: { startTime: parameters.startTime, endTime: parameters.endTime }
@@ -1122,7 +1122,7 @@ Always return structured execution status with event details, scheduling insight
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling find slots', error as Error, {
+      logger.error('Error handling find slots', error as Error, {
         correlationId: 'calendar-find-slots',
         operation: 'calendar_find_slots',
         metadata: { startTime: parameters.startTime, endTime: parameters.endTime }

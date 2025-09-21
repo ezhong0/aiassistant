@@ -48,7 +48,6 @@ type ConfirmationCheck = {
   needsConfirmation: boolean;
   action: ToolCall;
 };
-import { EnhancedLogger, LOG_MESSAGES, createLogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './auth.middleware';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
+import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
 interface RequestLogData {
@@ -91,7 +91,7 @@ export const apiLoggingMiddleware = (options: {
     }
 
     // Log the incoming request
-    EnhancedLogger.requestStart('API Request', {
+    logger.info('API Request', {
       correlationId: requestId,
       userId: (req as AuthenticatedRequest).user?.userId,
       sessionId: req.headers['x-session-id'] as string,
@@ -149,7 +149,8 @@ export const apiLoggingMiddleware = (options: {
       const logMessage = `API Response - ${req.method} ${req.path} - ${res.statusCode} - ${responseTime}ms`;
 
       if (logLevel === 'error') {
-        EnhancedLogger.error(logMessage, new Error('API Response Error'), {
+        logger.error(logMessage, {
+          error: 'API Response Error',
           correlationId: requestId,
           userId: (req as AuthenticatedRequest).user?.userId,
           sessionId: req.headers['x-session-id'] as string,
@@ -160,7 +161,7 @@ export const apiLoggingMiddleware = (options: {
           }
         });
       } else if (logLevel === 'warn') {
-        EnhancedLogger.warn(logMessage, {
+        logger.warn(logMessage, {
           correlationId: requestId,
           userId: (req as AuthenticatedRequest).user?.userId,
           sessionId: req.headers['x-session-id'] as string,
@@ -168,7 +169,7 @@ export const apiLoggingMiddleware = (options: {
           metadata: responseLogData
         });
       } else {
-        EnhancedLogger.requestEnd(logMessage, {
+        logger.info(logMessage, {
           correlationId: requestId,
           userId: (req as AuthenticatedRequest).user?.userId,
           sessionId: req.headers['x-session-id'] as string,
@@ -179,7 +180,7 @@ export const apiLoggingMiddleware = (options: {
 
       // Log additional metrics for monitoring
       if (responseTime > 5000) { // Slow requests > 5 seconds
-        EnhancedLogger.warn('Slow API Response', {
+        logger.warn('Slow API Response', {
           correlationId: requestId,
           userId: (req as AuthenticatedRequest).user?.userId,
           sessionId: req.headers['x-session-id'] as string,

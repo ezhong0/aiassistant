@@ -1,4 +1,5 @@
 import { AIAgent } from '../framework/ai-agent';
+import logger from '../utils/logger';
 import { ToolExecutionContext, ContactAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveContactService } from '../services/service-resolver';
@@ -18,7 +19,6 @@ import {
   ContactSearchParams,
   ContactSearchResult
 } from '../types/agents/agent-specific-parameters';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Contact operation result interface
@@ -273,7 +273,7 @@ You are a specialized contact discovery and management agent.
    * @throws {Error} When contact service is unavailable or API call fails
    */
   protected async executeCustomTool(toolName: string, parameters: ToolParameters, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    EnhancedLogger.debug('Executing contact tool', {
+    logger.debug('Executing contact tool', {
       correlationId: `contact-tool-${context.sessionId}-${Date.now()}`,
       userId: context.userId,
       sessionId: context.sessionId,
@@ -298,7 +298,7 @@ You are a specialized contact discovery and management agent.
           
           // Execute the contact operation directly - planning handled by Master Agent
           const result = await this.processQuery(contactParams, context);
-          EnhancedLogger.debug('Contact tool executed successfully in AI plan', {
+          logger.debug('Contact tool executed successfully in AI plan', {
             correlationId: `contact-tool-${context.sessionId}`,
             operation: 'contact_tool_execution',
             metadata: {
@@ -313,7 +313,7 @@ You are a specialized contact discovery and management agent.
             data: result
           };
         } catch (error) {
-          EnhancedLogger.error('Contact tool execution failed in AI plan', error as Error, {
+          logger.error('Contact tool execution failed in AI plan', error as Error, {
             correlationId: `contact-tool-${context.sessionId}`,
             operation: 'contact_tool_execution',
             metadata: { toolName }
@@ -404,7 +404,7 @@ You are a specialized contact discovery and management agent.
     await super.beforeExecution(params, context);
     
     // Log contact operation start
-    EnhancedLogger.debug('Google Contacts access validated', {
+    logger.debug('Google Contacts access validated', {
       correlationId: `contact-${context.sessionId}`,
       operation: 'contact_validation',
       metadata: {
@@ -421,7 +421,7 @@ You are a specialized contact discovery and management agent.
     await super.afterExecution(result, context);
     
     // Log contact operation metrics
-    EnhancedLogger.debug('Contact operation completed', {
+    logger.debug('Contact operation completed', {
       correlationId: `contact-${context.sessionId}`,
       operation: 'contact_operation',
       metadata: {
@@ -473,7 +473,7 @@ You are a specialized contact discovery and management agent.
       return await contactService.searchContacts(searchRequest.query, params.accessToken);
     });
 
-    EnhancedLogger.debug('Contact search completed successfully', {
+    logger.debug('Contact search completed successfully', {
       correlationId: `contact-search-${Date.now()}`,
       operation: 'contact_search',
       metadata: {
@@ -506,7 +506,7 @@ You are a specialized contact discovery and management agent.
       // Only support search operations - create/update require additional permissions
       return 'search';
     } catch (error) {
-      EnhancedLogger.warn('Failed to determine contact operation via AI, defaulting to search', {
+      logger.warn('Failed to determine contact operation via AI, defaulting to search', {
         correlationId: `contact-ai-${Date.now()}`,
         operation: 'contact_ai_detection',
         metadata: {
@@ -551,7 +551,7 @@ You are a specialized contact discovery and management agent.
         maxResults: maxResults || undefined
       };
     } catch (error) {
-      EnhancedLogger.error('Failed to extract search parameters', error as Error, {
+      logger.error('Failed to extract search parameters', error as Error, {
         correlationId: 'contact-ai-extraction',
         operation: 'contact_ai_extraction',
         metadata: { query }

@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import logger from '../utils/logger';
 import { z } from 'zod';
 import { GoogleOAuthCallbackSchema, TokenRefreshRequestSchema, LogoutRequestSchema, MobileTokenExchangeSchema } from '../schemas/auth.schemas';
 import { validateRequest } from '../middleware/enhanced-validation.middleware';
@@ -26,7 +27,6 @@ import {
   validateMobileTokenExchange,
 } from '../middleware/enhanced-validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
-import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 
 const router = express.Router();
 
@@ -85,7 +85,7 @@ router.get('/google/slack',
     const authUrl = authService.generateAuthUrl(scopes, state);
     
     const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
-    EnhancedLogger.requestStart('Generated Google OAuth URL for Slack user authentication', {
+    logger.info('Generated Google OAuth URL for Slack user authentication', {
       ...logContext,
       metadata: { user_id, team_id }
     });
@@ -93,7 +93,7 @@ router.get('/google/slack',
     return res.redirect(authUrl);
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
-    EnhancedLogger.error('Error initiating Slack OAuth flow', error as Error, logContext);
+    logger.error('Error initiating Slack OAuth flow', error as Error, logContext);
     return res.status(500).send(`
       <html>
         <head><title>Authentication Error</title></head>
@@ -133,12 +133,12 @@ router.get('/google',
     const authUrl = authService.generateAuthUrl(scopes);
     
     const logContext = createLogContext(req, { operation: 'google_oauth_init' });
-    EnhancedLogger.requestStart('Generated Google OAuth URL for user authentication', logContext);
+    logger.info('Generated Google OAuth URL for user authentication', logContext);
     
     return res.redirect(authUrl);
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'google_oauth_init' });
-    EnhancedLogger.error('Error generating Google auth URL', error as Error, logContext);
+    logger.error('Error generating Google auth URL', error as Error, logContext);
     return res.status(500).json({
       error: 'Failed to initiate authentication',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -231,7 +231,7 @@ router.get('/debug/test-oauth-url',
     });
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'test_oauth_url' });
-    EnhancedLogger.error('Error in test OAuth URL endpoint', error as Error, logContext);
+    logger.error('Error in test OAuth URL endpoint', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Test OAuth URL generation failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -267,7 +267,7 @@ router.get('/debug/current-config',
     });
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'current_config_debug' });
-    EnhancedLogger.error('Error in current config debug endpoint', error as Error, logContext);
+    logger.error('Error in current config debug endpoint', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -303,7 +303,7 @@ router.get('/debug/oauth-config',
     });
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'oauth_config_debug' });
-    EnhancedLogger.error('Error in OAuth config debug endpoint', error as Error, logContext);
+    logger.error('Error in OAuth config debug endpoint', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -337,11 +337,11 @@ router.get('/debug/test-token-exchange',
     try {
       // Test token exchange
       const logContext = createLogContext(req, { operation: 'test_token_exchange' });
-      EnhancedLogger.debug('Testing token exchange with provided code', logContext);
+      logger.debug('Testing token exchange with provided code', logContext);
       const tokens = await authService.exchangeCodeForTokens(code);
       
       // Test getting user info
-      EnhancedLogger.debug('Testing user info retrieval', logContext);
+      logger.debug('Testing user info retrieval', logContext);
       const userInfo = await authService.getGoogleUserInfo(tokens.access_token);
       
       return res.json({
@@ -361,7 +361,7 @@ router.get('/debug/test-token-exchange',
       });
     } catch (exchangeError: unknown) {
       const logContext = createLogContext(req, { operation: 'test_token_exchange' });
-      EnhancedLogger.error('Token exchange test failed', exchangeError as Error, {
+      logger.error('Token exchange test failed', exchangeError as Error, {
         ...logContext,
         metadata: { errorType: (exchangeError as any)?.constructor?.name }
       });
@@ -374,7 +374,7 @@ router.get('/debug/test-token-exchange',
     }
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'debug_token_exchange' });
-    EnhancedLogger.error('Debug token exchange endpoint error', error as Error, logContext);
+    logger.error('Debug token exchange endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -411,7 +411,7 @@ router.get('/debug/token-info',
       });
     } catch (tokenError: unknown) {
       const logContext = createLogContext(req, { operation: 'token_info_check' });
-      EnhancedLogger.error('Token info check failed', tokenError as Error, {
+      logger.error('Token info check failed', tokenError as Error, {
         ...logContext,
         metadata: {
           status: (tokenError as any).response?.status,
@@ -427,7 +427,7 @@ router.get('/debug/token-info',
     }
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'debug_token_info' });
-    EnhancedLogger.error('Debug token info endpoint error', error as Error, logContext);
+    logger.error('Debug token info endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -468,7 +468,7 @@ router.get('/debug/detailed-token-test',
     try {
       // Step 1: Exchange code for tokens
       const logContext = createLogContext(req, { operation: 'detailed_token_test' });
-      EnhancedLogger.debug('Step 1: Testing token exchange', logContext);
+      logger.debug('Step 1: Testing token exchange', logContext);
       const tokens = await authService.exchangeCodeForTokens(code);
       results.step1_tokenExchange = {
         success: true,
@@ -481,7 +481,7 @@ router.get('/debug/detailed-token-test',
       };
 
       // Step 2: Validate token with Google's tokeninfo
-      EnhancedLogger.debug('Step 2: Testing token validation', logContext);
+      logger.debug('Step 2: Testing token validation', logContext);
       try {
         const tokenInfoResponse = await axios.get(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${tokens.access_token}`);
         results.step2_tokenValidation = {
@@ -497,7 +497,7 @@ router.get('/debug/detailed-token-test',
       }
 
       // Step 3: Test userinfo endpoints
-      EnhancedLogger.debug('Step 3: Testing userinfo endpoints', logContext);
+      logger.debug('Step 3: Testing userinfo endpoints', logContext);
       const endpoints = [
         'https://openidconnect.googleapis.com/v1/userinfo',
         'https://www.googleapis.com/oauth2/v2/userinfo',
@@ -563,7 +563,7 @@ router.get('/debug/detailed-token-test',
     }
   } catch (error: unknown) {
     const logContext = createLogContext(req, { operation: 'debug_detailed_token_test' });
-    EnhancedLogger.error('Debug detailed token test endpoint error', error as Error, logContext);
+    logger.error('Debug detailed token test endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -629,7 +629,7 @@ router.get('/debug/oauth-validation',
     });
   } catch (error: unknown) {
     const logContext = createLogContext(req, { operation: 'debug_oauth_validation' });
-    EnhancedLogger.error('Debug OAuth validation endpoint error', error as Error, logContext);
+    logger.error('Debug OAuth validation endpoint error', error as Error, logContext);
     return res.status(500).json({ 
       error: 'Debug endpoint failed',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -658,7 +658,7 @@ router.get('/debug/sessions',
     });
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'debug_endpoint' });
-    EnhancedLogger.error('Error in debug endpoint', error as Error, logContext);
+    logger.error('Error in debug endpoint', error as Error, logContext);
     return res.status(500).json({ error: 'Debug endpoint failed' });
   }
 });
@@ -700,7 +700,7 @@ router.get('/init',
     );
     
     const logContext = createLogContext(req, { operation: 'auth_init' });
-    EnhancedLogger.requestStart('Generated Google OAuth URL via /auth/init', {
+    logger.info('Generated Google OAuth URL via /auth/init', {
       ...logContext,
       metadata: {
         isSlackUser: !!slackContext,
@@ -712,7 +712,7 @@ router.get('/init',
     return res.redirect(authUrl);
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'auth_init' });
-    EnhancedLogger.error('Error in /auth/init', error as Error, logContext);
+    logger.error('Error in /auth/init', error as Error, logContext);
     return res.status(500).send(`
       <html>
         <head><title>Authentication Error</title></head>

@@ -6,7 +6,6 @@ import { SlackTokens } from './token-storage.service';
 import { BaseService } from './base-service';
 import { serviceManager } from './service-manager';
 import { AuditLogger } from '../utils/audit-logger';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 export interface OAuthTokens {
   google?: GoogleTokens | undefined;
@@ -73,7 +72,7 @@ export class TokenManager extends BaseService {
         tokenStorageServiceReady: this.tokenStorageService?.isReady() || false,
         authServiceReady: this.authService?.isReady() || false
       };
-      EnhancedLogger.error('TokenManager dependencies not initialized', new Error('Dependencies not initialized'), {
+      logger.error('TokenManager dependencies not initialized', new Error('Dependencies not initialized'), {
         correlationId: `token-mgr-init-${Date.now()}`,
         operation: 'token_manager_init',
         metadata: errorDetails
@@ -81,7 +80,7 @@ export class TokenManager extends BaseService {
       throw new Error(`TokenManager dependencies not initialized: ${JSON.stringify(errorDetails)}`);
     }
     
-    EnhancedLogger.debug(`Getting valid tokens for teamId="${teamId}", userId="${userId}"`, {
+    logger.debug(`Getting valid tokens for teamId="${teamId}", userId="${userId}"`, {
       correlationId: `token-mgr-${Date.now()}`,
       operation: 'token_manager',
       metadata: { teamId, userId, method: 'getValidTokens' }
@@ -290,7 +289,7 @@ export class TokenManager extends BaseService {
         
         return newTokens;
       } else {
-        EnhancedLogger.error('Failed to store refreshed tokens', new Error('Token storage failed'), {
+        logger.error('Failed to store refreshed tokens', new Error('Token storage failed'), {
           correlationId: `token-mgr-${Date.now()}`,
           operation: 'token_manager',
           metadata: { teamId, userId, method: 'refreshTokens' }
@@ -300,7 +299,7 @@ export class TokenManager extends BaseService {
         return null;
       }
     } catch (error: any) {
-      EnhancedLogger.error('Token refresh failed', error as Error, {
+      logger.error('Token refresh failed', error as Error, {
         correlationId: `token-mgr-${Date.now()}`,
         operation: 'token_manager',
         metadata: { teamId, userId, method: 'refreshTokens' }

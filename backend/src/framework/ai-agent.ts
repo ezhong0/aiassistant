@@ -3,7 +3,6 @@ import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ActionPreview, PreviewGenerationResult, ActionRiskAssessment } from '../types/api/api.types';
 import { OpenAIService } from '../services/openai.service';
 import { getService } from '../services/service-manager';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { aiConfigService } from '../config/ai-config';
 import { AGENT_HELPERS } from '../config/agent-config';
 import { setTimeout as sleep } from 'timers/promises';

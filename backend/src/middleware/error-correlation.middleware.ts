@@ -1,4 +1,5 @@
 /**
+import logger from '../utils/logger';
  * Error Correlation Middleware for AI Assistant
  *
  * Provides request correlation IDs, timing metrics, and structured error tracking
@@ -7,7 +8,6 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Extended Request interface with correlation data
@@ -238,7 +238,7 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
   });
 
   // Log request start
-  EnhancedLogger.requestStart('Request started', {
+  logger.info('Request started', {
     correlationId: correlatedReq.correlationId,
     userId: correlatedReq.userId,
     sessionId: correlatedReq.sessionId,
@@ -262,7 +262,7 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
 
     // Log request completion
     if (metrics) {
-      EnhancedLogger.requestEnd('Request completed', {
+      logger.info('Request completed', {
         correlationId: correlatedReq.correlationId,
         userId: correlatedReq.userId,
         sessionId: correlatedReq.sessionId,
@@ -320,7 +320,7 @@ export function errorCorrelationMiddleware(
   }
 
   // Log correlated error
-  EnhancedLogger.error('Correlated error occurred', error as Error, {
+  logger.error('Correlated error occurred', error as Error, {
     correlationId,
     userId: correlatedReq.userId,
     sessionId: correlatedReq.sessionId,
@@ -449,7 +449,7 @@ export function createCorrelationMiddleware(options: {
 
     correlationStore.startRequest(correlatedReq.correlationId, metrics);
 
-    EnhancedLogger.debug('Request started with correlation', {
+    logger.debug('Request started with correlation', {
       correlationId: correlatedReq.correlationId,
       userId: correlatedReq.userId,
       sessionId: correlatedReq.sessionId,

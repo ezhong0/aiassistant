@@ -1,4 +1,5 @@
 import { serviceManager } from './service-manager';
+import logger from '../utils/logger';
 import { serviceDependencyManager, ServiceHealth } from './service-dependency-manager';
 import { TokenStorageService } from './token-storage.service';
 import { TokenManager } from './token-manager';
@@ -33,7 +34,6 @@ import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import { SLACK_SERVICE_CONSTANTS } from '../config/slack-service-constants';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 /**
  * Register and initialize all core application services
@@ -58,7 +58,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
     try {
       const healthCheck = await serviceDependencyManager.healthCheck();
       
-      EnhancedLogger.debug('All services initialized successfully', {
+      logger.debug('All services initialized successfully', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: {
@@ -78,7 +78,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         }));
 
       if (degradedServices.length > 0) {
-        EnhancedLogger.warn('Services running in degraded mode', {
+        logger.warn('Services running in degraded mode', {
           correlationId: `service-init-${Date.now()}`,
           operation: 'service_initialization',
           metadata: { degradedServices }
@@ -91,26 +91,26 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         .map(([name]) => name);
 
       if (disabledServices.length > 0) {
-        EnhancedLogger.debug('Disabled services', {
+        logger.debug('Disabled services', {
           correlationId: `service-init-${Date.now()}`,
           operation: 'service_initialization',
           metadata: { disabledServices }
         });
       }
     } catch (healthError) {
-      EnhancedLogger.warn('Could not retrieve enhanced health information', {
+      logger.warn('Could not retrieve enhanced health information', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: { phase: 'health_check', error: healthError }
       });
-      EnhancedLogger.debug('All services initialized successfully', {
+      logger.debug('All services initialized successfully', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: { phase: 'fallback_success' }
       });
     }
   } catch (error) {
-    EnhancedLogger.error('Failed to initialize core services', error as Error, {
+    logger.error('Failed to initialize core services', error as Error, {
       correlationId: `service-init-${Date.now()}`,
       operation: 'service_initialization',
       metadata: { phase: 'initialization' }
@@ -421,7 +421,7 @@ const registerCoreServices = async (): Promise<void> => {
     // It will be initialized separately in the main application
 
   } catch (error) {
-    EnhancedLogger.error('Failed to register core services', error as Error, {
+    logger.error('Failed to register core services', error as Error, {
       correlationId: `service-init-${Date.now()}`,
       operation: 'service_registration',
       metadata: { phase: 'registration' }
@@ -440,13 +440,13 @@ const setupCircuitBreakerConnections = async (): Promise<void> => {
 
     if (circuitBreaker && openaiService) {
       circuitBreaker.setOpenAIService(openaiService);
-      EnhancedLogger.debug('Circuit breaker connected to OpenAI service', {
+      logger.debug('Circuit breaker connected to OpenAI service', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'circuit_breaker_setup',
         metadata: { status: 'connected' }
       });
     } else {
-      EnhancedLogger.warn('Failed to connect circuit breaker to OpenAI service', {
+      logger.warn('Failed to connect circuit breaker to OpenAI service', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'circuit_breaker_setup',
         metadata: {
@@ -456,7 +456,7 @@ const setupCircuitBreakerConnections = async (): Promise<void> => {
       });
     }
   } catch (error) {
-    EnhancedLogger.error('Failed to setup circuit breaker connections', error as Error, {
+    logger.error('Failed to setup circuit breaker connections', error as Error, {
       correlationId: `service-init-${Date.now()}`,
       operation: 'circuit_breaker_setup',
       metadata: { phase: 'connection' }

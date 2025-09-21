@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import logger from '../utils/logger';
 import { AuthenticatedRequest } from './auth.middleware';
 import { configService } from '../config/config.service';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import { serviceManager, IService, ServiceState } from '../services/service-manager';
@@ -113,7 +113,7 @@ class RateLimitStore implements IService {
     }
     
     if (cleanedCount > 0) {
-      EnhancedLogger.debug('Rate limit cleanup completed', {
+      logger.debug('Rate limit cleanup completed', {
         correlationId: `cleanup-${Date.now()}`,
         operation: 'rate_limit_cleanup',
         metadata: { cleanedCount }
@@ -179,7 +179,7 @@ export const rateLimit = (options: RateLimitOptions) => {
       }
       
       if (data.count > maxRequests) {
-        EnhancedLogger.warn('Rate limit exceeded', {
+        logger.warn('Rate limit exceeded', {
           correlationId: `rate-limit-${Date.now()}`,
           operation: 'rate_limit_exceeded',
           metadata: {
@@ -206,7 +206,7 @@ export const rateLimit = (options: RateLimitOptions) => {
       
       // Log if approaching limit (90% of max)
       if (data.count >= maxRequests * 0.9) {
-        EnhancedLogger.warn('Rate limit warning', {
+        logger.warn('Rate limit warning', {
           correlationId: `rate-limit-warn-${Date.now()}`,
           operation: 'rate_limit_warning',
           metadata: {
@@ -220,7 +220,7 @@ export const rateLimit = (options: RateLimitOptions) => {
       
       next();
     } catch (error) {
-      EnhancedLogger.error('Rate limiting middleware error', error as Error, {
+      logger.error('Rate limiting middleware error', error as Error, {
         correlationId: `rate-limit-error-${Date.now()}`,
         operation: 'rate_limit_middleware_error'
       });

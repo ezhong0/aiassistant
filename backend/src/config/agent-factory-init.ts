@@ -1,5 +1,5 @@
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 import { AgentFactory } from '../framework/agent-factory';
+import logger from '../utils/logger';
 import { MasterAgent } from '../agents/master.agent';
 import { MasterAgentConfig } from '../types/tools';
 
@@ -9,7 +9,7 @@ import { MasterAgentConfig } from '../types/tools';
  */
 export const initializeAgentFactory = (): void => {
   try {
-    EnhancedLogger.debug('Initializing AgentFactory...', {
+    logger.debug('Initializing AgentFactory...', {
       correlationId: `agent-factory-init-${Date.now()}`,
       operation: 'agent_factory_initialization'
     });
@@ -19,7 +19,7 @@ export const initializeAgentFactory = (): void => {
     
     // Log initialization statistics
     const stats = AgentFactory.getStats();
-    EnhancedLogger.debug('AgentFactory initialized successfully', {
+    logger.debug('AgentFactory initialized successfully', {
       correlationId: `agent-factory-init-${Date.now()}`,
       operation: 'agent_factory_initialization_success',
       metadata: {
@@ -35,7 +35,7 @@ export const initializeAgentFactory = (): void => {
 
     // Generate and log OpenAI functions for debugging
     const openAIFunctions = AgentFactory.generateOpenAIFunctions();
-    EnhancedLogger.debug('Generated OpenAI functions', {
+    logger.debug('Generated OpenAI functions', {
       correlationId: `agent-factory-init-${Date.now()}`,
       operation: 'openai_functions_generation',
       metadata: {
@@ -45,7 +45,7 @@ export const initializeAgentFactory = (): void => {
     });
 
   } catch (error) {
-    EnhancedLogger.error('Failed to initialize AgentFactory', error as Error, {
+    logger.error('Failed to initialize AgentFactory', error as Error, {
       correlationId: `agent-factory-init-error-${Date.now()}`,
       operation: 'agent_factory_initialization_error'
     });

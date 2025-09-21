@@ -1,4 +1,5 @@
 import { AIAgent } from '../framework/ai-agent';
+import logger from '../utils/logger';
 import { ToolExecutionContext, SlackAgentParams } from '../types/tools';
 import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveSlackService } from '../services/service-resolver';
@@ -24,7 +25,6 @@ import {
 import { SlackMessageAnalyzer, SlackMessageReadingResult } from '../services/slack/slack-message-analyzer.service';
 import { SlackDraftManager, SlackDraftManagementResult } from '../services/slack/slack-draft-manager.service';
 import { SlackFormatter, SlackFormattingResult, SlackResult } from '../services/slack/slack-formatter.service';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 // Import context gathering interfaces from MasterAgent
 export interface ContextGatheringResult {
@@ -169,7 +169,7 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
    */
   protected async onDestroy(): Promise<void> {
     try {
-      EnhancedLogger.debug('Destroying SlackAgent', {
+      logger.debug('Destroying SlackAgent', {
         correlationId: 'slack-destroy',
         operation: 'agent_destroy',
         metadata: { service: 'SlackAgent' }
@@ -177,13 +177,13 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
       this.slackMessageAnalyzer = null;
       this.slackDraftManager = null;
       this.slackFormatter = null;
-      EnhancedLogger.debug('SlackAgent destroyed successfully', {
+      logger.debug('SlackAgent destroyed successfully', {
         correlationId: 'slack-destroy',
         operation: 'agent_destroy',
         metadata: { service: 'SlackAgent' }
       });
     } catch (error) {
-      EnhancedLogger.error('Error during SlackAgent destruction', error as Error, {
+      logger.error('Error during SlackAgent destruction', error as Error, {
         correlationId: 'slack-destroy',
         operation: 'agent_destroy',
         metadata: { service: 'SlackAgent' }
@@ -274,7 +274,7 @@ You are a specialized Slack workspace management agent focused on reading and un
       }
     };
 
-    EnhancedLogger.debug('Executing Slack tool', logContext);
+    logger.debug('Executing Slack tool', logContext);
 
     try {
       // Route to appropriate handler based on tool name - Intent-agnostic routing
@@ -295,7 +295,7 @@ You are a specialized Slack workspace management agent focused on reading and un
         throw new Error(`Unknown operation: ${operation}`);
       }
     } catch (error) {
-      EnhancedLogger.error('Error executing Slack tool', error as Error, {
+      logger.error('Error executing Slack tool', error as Error, {
         ...logContext,
         metadata: { toolName }
       });
@@ -352,7 +352,7 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
         } catch (error) {
-      EnhancedLogger.error('Error handling read messages', error as Error, {
+      logger.error('Error handling read messages', error as Error, {
         correlationId: 'slack-read-messages',
         operation: 'slack_read_messages',
         metadata: { channel: parameters.channel }
@@ -416,7 +416,7 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
         } catch (error) {
-      EnhancedLogger.error('Error handling read thread', error as Error, {
+      logger.error('Error handling read thread', error as Error, {
         correlationId: 'slack-read-thread',
         operation: 'slack_read_thread',
         metadata: { threadTs: parameters.threadTs }
@@ -475,7 +475,7 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
     } catch (error) {
-      EnhancedLogger.error('Error handling analyze conversation', error as Error, {
+      logger.error('Error handling analyze conversation', error as Error, {
         correlationId: 'slack-analyze-conversation',
         operation: 'slack_analyze_conversation',
         metadata: { channel: parameters.channel }
@@ -564,7 +564,7 @@ You are a specialized Slack workspace management agent focused on reading and un
         };
       }
     } catch (error) {
-      EnhancedLogger.error('Error handling manage drafts', error as Error, {
+      logger.error('Error handling manage drafts', error as Error, {
         correlationId: 'slack-manage-drafts',
         operation: 'slack_manage_drafts',
         metadata: { channel: parameters.channel }
@@ -610,7 +610,7 @@ You are a specialized Slack workspace management agent focused on reading and un
         }
       };
     } catch (error) {
-      EnhancedLogger.error('Error handling detect confirmations', error as Error, {
+      logger.error('Error handling detect confirmations', error as Error, {
         correlationId: 'slack-detect-confirmations',
         operation: 'slack_detect_confirmations',
         metadata: { channel: parameters.channel }
@@ -868,7 +868,7 @@ You are a specialized Slack workspace management agent focused on reading and un
           contextType = 'none';
       }
 
-      EnhancedLogger.debug('Context gathering completed', {
+      logger.debug('Context gathering completed', {
         correlationId: 'slack-context-gathering',
         operation: 'slack_context_gathering',
         metadata: {
@@ -887,7 +887,7 @@ You are a specialized Slack workspace management agent focused on reading and un
       };
 
     } catch (error) {
-      EnhancedLogger.error('Error gathering context', error as Error, {
+      logger.error('Error gathering context', error as Error, {
         correlationId: 'slack-context-gathering',
         operation: 'slack_context_gathering',
         metadata: { userInput: userInput.substring(0, 100) }

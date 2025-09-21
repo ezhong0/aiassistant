@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import logger from '../utils/logger';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
-import { EnhancedLogger, LogContext, createLogContext } from '../utils/enhanced-logger';
 
 /**
  * Authenticated user interface for request context
@@ -59,7 +59,7 @@ export const authenticateToken = (
     
     if (!authHeader) {
       const logContext = createLogContext(req, { operation: 'auth_failed_no_header' });
-      EnhancedLogger.warn('Authentication failed: No authorization header provided', {
+      logger.warn('Authentication failed: No authorization header provided', {
         correlationId: logContext.correlationId,
         operation: 'auth_middleware',
         metadata: {
@@ -79,7 +79,7 @@ export const authenticateToken = (
 
     if (!authHeader.startsWith('Bearer ')) {
       const logContext = createLogContext(req, { operation: 'auth_failed_invalid_format' });
-      EnhancedLogger.warn('Authentication failed: Invalid authorization header format', {
+      logger.warn('Authentication failed: Invalid authorization header format', {
         correlationId: logContext.correlationId,
         operation: 'auth_middleware',
         metadata: {
@@ -101,7 +101,7 @@ export const authenticateToken = (
     
     if (!token) {
       const logContext = createLogContext(req, { operation: 'auth_failed_empty_token' });
-      EnhancedLogger.warn('Authentication failed: Empty token', {
+      logger.warn('Authentication failed: Empty token', {
         correlationId: logContext.correlationId,
         operation: 'auth_middleware',
         metadata: {
@@ -131,7 +131,7 @@ export const authenticateToken = (
     
     if (!payload.sub || !payload.email) {
       const logContext = createLogContext(req, { operation: 'auth_failed_invalid_payload' });
-      EnhancedLogger.warn('Authentication failed: Invalid token payload', {
+      logger.warn('Authentication failed: Invalid token payload', {
         correlationId: logContext.correlationId,
         operation: 'auth_middleware',
         metadata: {
@@ -159,7 +159,7 @@ export const authenticateToken = (
     req.token = token;
 
     const logContext = createLogContext(req, { operation: 'auth_success' });
-    EnhancedLogger.debug('User authenticated successfully', {
+    logger.debug('User authenticated successfully', {
       correlationId: logContext.correlationId,
       operation: 'auth_middleware',
       metadata: {
@@ -172,7 +172,7 @@ export const authenticateToken = (
     next();
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'auth_error' });
-    EnhancedLogger.error('Authentication middleware error', error as Error, {
+    logger.error('Authentication middleware error', error as Error, {
       correlationId: logContext.correlationId,
       operation: 'auth_middleware',
       metadata: {
@@ -236,7 +236,7 @@ export const optionalAuth = (
         req.token = token;
         
         const logContext = createLogContext(req, { operation: 'optional_auth_success' });
-        EnhancedLogger.debug('Optional authentication successful', {
+        logger.debug('Optional authentication successful', {
           correlationId: logContext.correlationId,
           operation: 'optional_auth_middleware',
           metadata: {
@@ -249,7 +249,7 @@ export const optionalAuth = (
     } catch (error) {
       // Token validation failed, but that's okay for optional auth
       const logContext = createLogContext(req, { operation: 'optional_auth_failed' });
-      EnhancedLogger.debug('Optional authentication failed', {
+      logger.debug('Optional authentication failed', {
         correlationId: logContext.correlationId,
         operation: 'optional_auth_middleware',
         metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
@@ -259,7 +259,7 @@ export const optionalAuth = (
     next();
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'optional_auth_error' });
-    EnhancedLogger.error('Optional authentication middleware error', error as Error, {
+    logger.error('Optional authentication middleware error', error as Error, {
       correlationId: logContext.correlationId,
       operation: 'optional_auth_middleware',
       metadata: {
@@ -289,7 +289,7 @@ export const requirePermissions = (permissions: string[]) => {
     // For now, we'll implement basic permission checking
     // In a real app, you'd check against user roles/permissions from database
     const logContext = createLogContext(req, { operation: 'permission_check_passed' });
-    EnhancedLogger.debug('Permission check passed', {
+    logger.debug('Permission check passed', {
       correlationId: logContext.correlationId,
       operation: 'permission_middleware',
       metadata: {
@@ -328,7 +328,7 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
 
     if (req.user.userId !== resourceUserId) {
       const logContext = createLogContext(req, { operation: 'ownership_check_failed' });
-      EnhancedLogger.warn('Ownership check failed', {
+      logger.warn('Ownership check failed', {
         correlationId: logContext.correlationId,
         operation: 'ownership_middleware',
         metadata: {
@@ -346,7 +346,7 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
     }
 
     const logContext = createLogContext(req, { operation: 'ownership_check_passed' });
-    EnhancedLogger.debug('Ownership check passed', {
+    logger.debug('Ownership check passed', {
       correlationId: logContext.correlationId,
       operation: 'ownership_middleware',
       metadata: {
@@ -386,7 +386,7 @@ export const rateLimitAuth = (maxRequests: number = 100, windowMs: number = 15 *
 
     if (userRequests.count >= maxRequests) {
       const logContext = createLogContext(req, { operation: 'rate_limit_exceeded' });
-      EnhancedLogger.warn('Rate limit exceeded', {
+      logger.warn('Rate limit exceeded', {
         correlationId: logContext.correlationId,
         operation: 'rate_limit_middleware',
         metadata: {

@@ -1,4 +1,5 @@
 import { AIAgent } from './ai-agent';
+import logger from '../utils/logger';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agents/agent.types';
 import { EmailAgent } from '../agents/email.agent';
@@ -7,7 +8,6 @@ import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
 import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
 
 // OpenAI Function Schema interface
 export interface OpenAIFunctionSchema {
@@ -45,7 +45,7 @@ export class AgentFactory {
    */
   static registerAgent(name: string, agent: AIAgent): void {
     if (this.agents.has(name)) {
-      EnhancedLogger.warn(`Agent ${name} is already registered, replacing with new instance`, {
+      logger.warn(`Agent ${name} is already registered, replacing with new instance`, {
         correlationId: `agent-register-${Date.now()}`,
         operation: 'agent_registration_warning',
         metadata: { agentName: name }
@@ -57,7 +57,7 @@ export class AgentFactory {
     // Auto-register agent's tools using dynamic discovery
     this.autoRegisterTools(name, agent);
     
-    EnhancedLogger.debug(`Framework agent registered: ${name}`, {
+    logger.debug(`Framework agent registered: ${name}`, {
       correlationId: `agent-register-${Date.now()}`,
       operation: 'agent_registration_success',
       metadata: {
@@ -79,7 +79,7 @@ export class AgentFactory {
       const agent = new AgentClass();
       this.registerAgent(name, agent);
     } catch (error) {
-      EnhancedLogger.error(`Failed to register agent class ${name}`, error as Error, {
+      logger.error(`Failed to register agent class ${name}`, error as Error, {
         correlationId: `agent-register-error-${Date.now()}`,
         operation: 'agent_registration_error',
         metadata: { agentName: name }

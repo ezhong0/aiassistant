@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseError, ErrorSeverity, ErrorCategory, ERROR_MESSAGES } from '../errors/error-types';
 import { errorManager } from '../errors/error-manager.service';
 import { CorrelatedRequest, addCorrelationContext } from './error-correlation.middleware';
-import { EnhancedLogger, LogContext } from '../utils/enhanced-logger';
+import logger from '../utils/logger';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -92,7 +92,7 @@ export const errorHandler = (
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const notFoundHandler = (req: Request, res: Response, _next: NextFunction) => {
-  EnhancedLogger.warn('Route not found', {
+  logger.warn('Route not found', {
     correlationId: `not-found-${Date.now()}`,
     operation: 'route_not_found',
     metadata: {
@@ -254,7 +254,7 @@ function getRetryAfterSeconds(error: BaseError): number {
 export const enhancedNotFoundHandler = (req: Request, res: Response, _next: NextFunction) => {
   const correlatedReq = req as CorrelatedRequest;
 
-  EnhancedLogger.warn('Route not found', {
+  logger.warn('Route not found', {
     correlationId: correlatedReq.correlationId || `not-found-${Date.now()}`,
     userId: correlatedReq.userId,
     sessionId: correlatedReq.sessionId,
