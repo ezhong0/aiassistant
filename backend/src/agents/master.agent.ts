@@ -12,14 +12,6 @@ import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './sl
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
 import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
-// Removed IntentAnalysisService - using only NextStepPlanningService for all planning
-// import { IntentAnalysisService, IntentAnalysis } from '../services/intent-analysis.service';
-// Removed SequentialExecutionService - using only Master Agent step-by-step execution
-// import { SequentialExecutionService, StepResult as SequentialStepResult, WorkflowResult } from '../services/sequential-execution.service';
-// Removed PlanModificationService - using only NextStepPlanningService for all planning
-// import { PlanModificationService, PlanModification } from '../services/plan-modification.service';
-// Removed ContextAnalysisService - using only NextStepPlanningService for all planning
-// import { ContextAnalysisService, ContextAnalysis } from '../services/context-analysis.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
 import { ToolExecutorService } from '../services/tool-executor.service';
