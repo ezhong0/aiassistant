@@ -12,6 +12,7 @@ import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './sl
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
 import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
+import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
 import { ToolExecutorService } from '../services/tool-executor.service';
@@ -115,6 +116,35 @@ export const ProposalResponseSchema = z.object({
 });
 
 export type ProposalResponse = z.infer<typeof ProposalResponseSchema>;
+
+// ✅ Intent Analysis interfaces for unified confirmation system
+export interface IntentAnalysis {
+  intentType: 'confirmation_positive' | 'confirmation_negative' | 'draft_modification' | 'new_request' | 'new_write_operation' | 'read_operation';
+  confidence: number;
+  reasoning: string;
+  targetDraftId?: string;
+  modifications?: {
+    fieldsToUpdate: string[];
+    newValues: Record<string, any>;
+  };
+  newOperation?: WriteOperation;
+  readOperations?: ToolCall[];
+}
+
+export interface AnalysisContext {
+  userInput: string;
+  sessionId: string;
+  hasPendingDrafts: boolean;
+  existingDrafts: {
+    id: string;
+    type: string;
+    description: string;
+    parameters: any;
+    createdAt: Date;
+    riskLevel: string;
+  }[];
+  conversationHistory?: string[];
+}
 
 // ✅ Validation helpers for MasterAgent responses
 export function validateMasterAgentResponse(data: unknown): MasterAgentResponse {
@@ -459,6 +489,397 @@ export class MasterAgent {
     }
   }
 
+  /**
+   * NEW UNIFIED INTENT ANALYSIS - Handles all confirmation logic in single method
+   *
+   * This method replaces the complex multi-service confirmation system with a single
+   * AI-powered analysis that handles:
+   * - Draft checking and confirmation detection
+   * - Write operation detection during planning
+   * - Draft modification requests
+   * - New request handling with draft cleanup
+   *
+   * Returns plain text optimized for Slack instead of complex response objects.
+   */
+  async processUserInputUnified(
+    userInput: string,
+    sessionId: string,
+    userId?: string
+  ): Promise<string> {
+    const startTime = Date.now();
+    const correlationId = `master-unified-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'processUserInputUnified',
+      metadata: { inputLength: userInput.length }
+    };
+
+    try {
+      EnhancedLogger.requestStart('Starting unified intent analysis', logContext);
+
+      // 1. Get DraftManager service
+      const draftManager = this.getDraftManager();
+      if (!draftManager) {
+        throw new Error('DraftManager service not available');
+      }
+
+      // 2. Check for existing drafts first
+      const existingDrafts = await draftManager.getSessionDrafts(sessionId);
+
+      // 3. Build comprehensive context for AI analysis
+      const analysisContext: AnalysisContext = {
+        userInput,
+        sessionId,
+        hasPendingDrafts: existingDrafts.length > 0,
+        existingDrafts: existingDrafts.map(draft => ({
+          id: draft.id,
+          type: draft.type,
+          description: draft.previewData.description,
+          parameters: draft.parameters,
+          createdAt: draft.createdAt,
+          riskLevel: draft.riskLevel
+        })),
+        conversationHistory: await this.getRecentConversation(sessionId)
+      };
+
+      // 4. Single AI call that determines everything
+      const intentAnalysis = await this.comprehensiveIntentAnalysis(analysisContext);
+
+      // 5. Route based on AI analysis
+      return await this.routeBasedOnIntent(intentAnalysis, sessionId, userId || 'unknown');
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      EnhancedLogger.error('Unified intent analysis failed', error as Error, {
+        ...logContext,
+        duration,
+        metadata: { userInput: userInput.substring(0, 100) }
+      });
+
+      // Return user-friendly error message
+      return await this.createUserFriendlyErrorText(error as Error, userInput);
+    }
+  }
+
+  /**
+   * Comprehensive AI analysis that handles all confirmation scenarios
+   */
+  private async comprehensiveIntentAnalysis(context: AnalysisContext): Promise<IntentAnalysis> {
+    const openaiService = this.getOpenAIService();
+    if (!openaiService) {
+      throw new Error('OpenAI service not available for intent analysis');
+    }
+
+    const prompt = `Analyze user intent comprehensively and return structured JSON:
+
+User message: "${context.userInput}"
+
+${context.hasPendingDrafts ? `
+EXISTING PENDING DRAFTS:
+${context.existingDrafts.map(d => `
+- ${d.type} operation: ${d.description}
+- Draft ID: ${d.id}
+- Created: ${d.createdAt}
+- Risk: ${d.riskLevel}
+- Parameters: ${JSON.stringify(d.parameters, null, 2)}
+`).join('\n')}
+
+Recent conversation:
+${context.conversationHistory?.slice(-3).join('\n') || 'None'}
+` : 'No existing drafts.'}
+
+Determine the user's intent:
+
+IF DRAFTS EXIST:
+1. Is this a CONFIRMATION (positive: "yes", "send it", "looks good" / negative: "no", "cancel", "stop")?
+2. Is this a MODIFICATION ("change subject to...", "add John", "make it shorter")?
+3. Is this a NEW REQUEST (completely different topic, ignoring current drafts)?
+
+IF NO DRAFTS:
+4. What does the user want to accomplish?
+5. Does it involve WRITE OPERATIONS (email, calendar, contacts, etc.)?
+
+For WRITE OPERATIONS, analyze:
+- Operation type and parameters needed
+- Risk level (low/medium/high)
+- Why confirmation is needed
+- Preview description
+
+Return JSON with this structure:
+{
+  "intentType": "confirmation_positive|confirmation_negative|draft_modification|new_request|new_write_operation|read_operation",
+  "confidence": 0.9,
+  "reasoning": "Clear explanation of why this classification was chosen",
+  "targetDraftId": "draft-id-if-applicable",
+  "modifications": {
+    "fieldsToUpdate": ["field1", "field2"],
+    "newValues": {"field1": "new-value"}
+  },
+  "newOperation": {
+    "type": "email|calendar|contact|slack|other",
+    "operation": "send_email",
+    "parameters": {...},
+    "toolCall": {...},
+    "confirmationReason": "Why confirmation is needed",
+    "riskLevel": "low|medium|high",
+    "previewDescription": "Send email to john@example.com"
+  },
+  "readOperations": [...]
+}`;
+
+    try {
+      const response = await openaiService.generateStructuredData(
+        context.userInput,
+        prompt,
+        {
+        type: 'object',
+        properties: {
+          intentType: {
+            type: 'string',
+            enum: ['confirmation_positive', 'confirmation_negative', 'draft_modification', 'new_request', 'new_write_operation', 'read_operation']
+          },
+          confidence: { type: 'number' },
+          reasoning: { type: 'string' },
+          targetDraftId: { type: 'string' },
+          modifications: {
+            type: 'object',
+            properties: {
+              fieldsToUpdate: { type: 'array', items: { type: 'string' } },
+              newValues: { type: 'object' }
+            }
+          },
+          newOperation: {
+            type: 'object',
+            properties: {
+              type: { type: 'string' },
+              operation: { type: 'string' },
+              parameters: { type: 'object' },
+              toolCall: { type: 'object' },
+              confirmationReason: { type: 'string' },
+              riskLevel: { type: 'string' },
+              previewDescription: { type: 'string' }
+            }
+          },
+          readOperations: { type: 'array' }
+        }
+      );
+
+      return response as IntentAnalysis;
+
+    } catch (error) {
+      EnhancedLogger.error('Failed to parse intent analysis', error as Error);
+      throw new Error('Failed to analyze user intent');
+    }
+  }
+
+  /**
+   * Route to appropriate action based on unified analysis
+   */
+  private async routeBasedOnIntent(
+    analysis: IntentAnalysis,
+    sessionId: string,
+    userId: string
+  ): Promise<string> {
+    const draftManager = this.getDraftManager()!;
+
+    switch (analysis.intentType) {
+      case 'confirmation_positive':
+        if (!analysis.targetDraftId) {
+          return "❌ I couldn't find the draft to confirm. Please try your request again.";
+        }
+
+        try {
+          const result = await draftManager.executeDraft(analysis.targetDraftId);
+          return result.success
+            ? "✅ Action completed successfully!"
+            : `❌ Failed to complete action: ${result.error || 'Unknown error'}`;
+        } catch (error) {
+          return `❌ Failed to execute action: ${(error as Error).message}`;
+        }
+
+      case 'confirmation_negative':
+        await draftManager.clearSessionDrafts(sessionId);
+        return `❌ Action cancelled. ${analysis.reasoning}`;
+
+      case 'draft_modification':
+        if (!analysis.targetDraftId || !analysis.modifications) {
+          return "❌ I couldn't understand what changes you want to make. Could you be more specific?";
+        }
+
+        try {
+          const updatedDraft = await draftManager.updateDraft(
+            analysis.targetDraftId,
+            {
+              parameters: analysis.modifications.newValues,
+              previewData: {
+                description: `Modified: ${analysis.modifications.fieldsToUpdate.join(', ')}`,
+                details: analysis.modifications.newValues
+              }
+            }
+          );
+          return `🔍 Updated: ${updatedDraft.previewData.description}. Reply "yes" to confirm.`;
+        } catch (error) {
+          return `❌ Failed to update draft: ${(error as Error).message}`;
+        }
+
+      case 'new_request':
+        // Clear existing drafts and process new request
+        await draftManager.clearSessionDrafts(sessionId);
+        // Fall through to new operation handling
+        // eslint-disable-next-line no-fallthrough
+
+      case 'new_write_operation':
+        if (!analysis.newOperation) {
+          return "❌ I couldn't understand what you want me to do. Could you be more specific?";
+        }
+
+        try {
+          const draft = await draftManager.createDraft(sessionId, analysis.newOperation);
+          return `🔍 Ready to ${draft.previewData.description}. Reply "yes" to confirm or describe any changes.`;
+        } catch (error) {
+          return `❌ Failed to create draft: ${(error as Error).message}`;
+        }
+
+      case 'read_operation':
+        if (!analysis.readOperations || analysis.readOperations.length === 0) {
+          return "❌ I couldn't determine what information you're looking for.";
+        }
+
+        try {
+          // Execute read operations immediately (no confirmation needed)
+          const results = await this.executeReadOperations(analysis.readOperations, sessionId, userId);
+          return this.formatReadResults(results);
+        } catch (error) {
+          return `❌ Failed to retrieve information: ${(error as Error).message}`;
+        }
+
+      default:
+        return "❌ I couldn't understand your request. Could you try rephrasing it?";
+    }
+  }
+
+  /**
+   * Execute read operations immediately (no confirmation needed)
+   */
+  private async executeReadOperations(
+    readOperations: ToolCall[],
+    sessionId: string,
+    userId: string
+  ): Promise<ToolResult[]> {
+    const toolExecutorService = this.getToolExecutorService();
+    if (!toolExecutorService) {
+      throw new Error('ToolExecutorService not available');
+    }
+
+    const results: ToolResult[] = [];
+    const context: ToolExecutionContext = {
+      sessionId,
+      userId,
+      timestamp: new Date(),
+      metadata: { operationType: 'read', confirmationStatus: 'not_required' }
+    };
+
+    for (const toolCall of readOperations) {
+      try {
+        const result = await toolExecutorService.executeTool(toolCall, context);
+        results.push(result);
+      } catch (error) {
+        results.push({
+          toolName: toolCall.name,
+          success: false,
+          error: (error as Error).message,
+          result: null,
+          executionTime: 0
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Format read operation results for display
+   */
+  private formatReadResults(results: ToolResult[]): string {
+    if (results.length === 0) {
+      return "📋 No results found.";
+    }
+
+    const successfulResults = results.filter(r => r.success);
+    const failedResults = results.filter(r => !r.success);
+
+    let response = "📋 Here's what I found:\n\n";
+
+    // Format successful results
+    successfulResults.forEach((result, index) => {
+      if (result.result) {
+        // Simple formatting - could be enhanced based on data type
+        if (typeof result.result === 'string') {
+          response += `${result.result}\n\n`;
+        } else {
+          response += `${JSON.stringify(result.result, null, 2)}\n\n`;
+        }
+      }
+    });
+
+    // Add error summary if any failed
+    if (failedResults.length > 0) {
+      response += `\n⚠️ ${failedResults.length} operation(s) failed.`;
+    }
+
+    return response.trim();
+  }
+
+  /**
+   * Get recent conversation history for context
+   */
+  private async getRecentConversation(sessionId: string): Promise<string[]> {
+    // TODO: Implement conversation history retrieval
+    // For now, return empty array
+    return [];
+  }
+
+  /**
+   * Create user-friendly error text for unified system
+   */
+  private async createUserFriendlyErrorText(error: Error, userInput: string): Promise<string> {
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        return '❌ I encountered an unexpected error. Please try again or contact support.';
+      }
+
+      const prompt = `Create a brief, user-friendly error message for this situation:
+
+Error: ${error.message}
+User request: ${userInput}
+
+Return a single line response starting with ❌ that explains what went wrong in simple terms and suggests what to do next.`;
+
+      const response = await openaiService.generateText(userInput, prompt);
+
+      return response.trim() || '❌ Something went wrong. Please try again.';
+
+    } catch {
+      return '❌ I encountered an error. Please try your request again.';
+    }
+  }
+
+  /**
+   * Get DraftManager service
+   */
+  private getDraftManager(): DraftManager | null {
+    return getService('draftManager') as DraftManager;
+  }
+
+  /**
+   * Get ToolExecutorService
+   */
+  private getToolExecutorService(): ToolExecutorService | null {
+    return getService('toolExecutorService') as ToolExecutorService;
+  }
 
   /**
    * Create user-friendly error messages for MasterAgent failures using LLM intelligence

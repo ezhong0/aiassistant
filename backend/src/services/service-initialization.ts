@@ -23,6 +23,7 @@ import { SlackDraftManager } from './slack/slack-draft-manager.service';
 import { SlackFormatter } from './slack/slack-formatter.service';
 import { SlackInterfaceService } from './slack/slack-interface.service';
 import { WorkflowCacheService } from './workflow-cache.service';
+import { DraftManager } from './draft-manager.service';
 // Removed IntentAnalysisService - using only NextStepPlanningService for all planning
 // import { IntentAnalysisService } from './intent-analysis.service';
 import { NextStepPlanningService } from './next-step-planning.service';
@@ -379,6 +380,14 @@ const registerCoreServices = async (): Promise<void> => {
     serviceManager.registerService('workflowCacheService', workflowCacheService, {
       dependencies: ['cacheService'],
       priority: 50, // High priority for workflow management
+      autoStart: true
+    });
+
+    // 38. DraftManager - Draft creation, storage, and execution for confirmation system
+    const draftManager = new DraftManager();
+    serviceManager.registerService('draftManager', draftManager, {
+      dependencies: ['cacheService', 'toolExecutorService'],
+      priority: 51, // After cache and tool executor
       autoStart: true
     });
 
