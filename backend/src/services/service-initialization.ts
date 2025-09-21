@@ -23,7 +23,8 @@ import { SlackDraftManager } from './slack/slack-draft-manager.service';
 import { SlackFormatter } from './slack/slack-formatter.service';
 import { SlackInterfaceService } from './slack/slack-interface.service';
 import { WorkflowCacheService } from './workflow-cache.service';
-import { IntentAnalysisService } from './intent-analysis.service';
+// Removed IntentAnalysisService - using only NextStepPlanningService for all planning
+// import { IntentAnalysisService } from './intent-analysis.service';
 import { SequentialExecutionService } from './sequential-execution.service';
 import { PlanModificationService } from './plan-modification.service';
 import { ContextAnalysisService } from './context-analysis.service';
@@ -384,37 +385,38 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 38. IntentAnalysisService - Enhanced intent understanding and plan creation
-    const intentAnalysisService = new IntentAnalysisService();
-    serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
-      dependencies: ['openaiService'],
-      priority: 55, // After OpenAI service, before workflow execution
-      autoStart: true
-    });
+    // 38. IntentAnalysisService - REMOVED to consolidate planning in NextStepPlanningService
+    // const intentAnalysisService = new IntentAnalysisService();
+    // serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
+    //   dependencies: ['openaiService'],
+    //   priority: 55, // After OpenAI service, before workflow execution
+    //   autoStart: true
+    // });
 
-    // 39. SequentialExecutionService - Core step-by-step execution engine with reevaluation
-    const sequentialExecutionService = new SequentialExecutionService();
-    serviceManager.registerService('sequentialExecutionService', sequentialExecutionService, {
-      dependencies: ['toolExecutorService', 'workflowCacheService', 'openaiService'],
-      priority: 60, // After all dependencies, core workflow execution
-      autoStart: true
-    });
+    // 39. SequentialExecutionService - REMOVED to eliminate dual execution paths
+    // Using only Master Agent's step-by-step execution for consistency
+    // const sequentialExecutionService = new SequentialExecutionService();
+    // serviceManager.registerService('sequentialExecutionService', sequentialExecutionService, {
+    //   dependencies: ['toolExecutorService', 'workflowCacheService', 'openaiService'],
+    //   priority: 60, // After all dependencies, core workflow execution
+    //   autoStart: true
+    // });
 
-    // 40. PlanModificationService - Advanced dynamic plan adaptation with LLM intelligence
-    const planModificationService = new PlanModificationService();
-    serviceManager.registerService('planModificationService', planModificationService, {
-      dependencies: ['openaiService', 'workflowCacheService'],
-      priority: 58, // Before sequential execution, for plan optimization
-      autoStart: true
-    });
+    // 40. PlanModificationService - REMOVED to consolidate planning in NextStepPlanningService
+    // const planModificationService = new PlanModificationService();
+    // serviceManager.registerService('planModificationService', planModificationService, {
+    //   dependencies: ['openaiService', 'workflowCacheService'],
+    //   priority: 58, // Before sequential execution, for plan optimization
+    //   autoStart: true
+    // });
 
-    // 41. ContextAnalysisService - Intelligent conversation flow and interruption handling
-    const contextAnalysisService = new ContextAnalysisService();
-    serviceManager.registerService('contextAnalysisService', contextAnalysisService, {
-      dependencies: ['openaiService', 'workflowCacheService'],
-      priority: 57, // High priority for context management
-      autoStart: true
-    });
+    // 41. ContextAnalysisService - REMOVED to consolidate planning in NextStepPlanningService
+    // const contextAnalysisService = new ContextAnalysisService();
+    // serviceManager.registerService('contextAnalysisService', contextAnalysisService, {
+    //   dependencies: ['openaiService', 'workflowCacheService'],
+    //   priority: 57, // High priority for context management
+    //   autoStart: true
+    // });
 
     // 42. NextStepPlanningService - Dynamic step-by-step workflow planning
     const nextStepPlanningService = new NextStepPlanningService();

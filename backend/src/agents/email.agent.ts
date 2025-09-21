@@ -122,14 +122,15 @@ export class EmailAgent extends AIAgent<EmailAgentRequest, EmailResult> {
       enabled: true,
       timeout: 30000,
       retryCount: 3,
-      aiPlanning: {
-        enableAIPlanning: true,
-        maxPlanningSteps: 5,
-        planningTimeout: 20000,
-        cachePlans: true,
-        planningTemperature: 0.1,
-        planningMaxTokens: 1500
-      }
+      // Removed individual agent AI planning - using only Master Agent NextStepPlanningService
+      // aiPlanning: {
+      //   enableAIPlanning: false,
+      //   maxPlanningSteps: 5,
+      //   planningTimeout: 20000,
+      //   cachePlans: true,
+      //   planningTemperature: 0.1,
+      //   planningMaxTokens: 1500
+      // }
     });
   }
 

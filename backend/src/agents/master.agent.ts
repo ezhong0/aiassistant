@@ -12,10 +12,14 @@ import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './sl
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
 import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
-import { IntentAnalysisService, IntentAnalysis } from '../services/intent-analysis.service';
-import { SequentialExecutionService, StepResult as SequentialStepResult, WorkflowResult } from '../services/sequential-execution.service';
-import { PlanModificationService, PlanModification } from '../services/plan-modification.service';
-import { ContextAnalysisService, ContextAnalysis } from '../services/context-analysis.service';
+// Removed IntentAnalysisService - using only NextStepPlanningService for all planning
+// import { IntentAnalysisService, IntentAnalysis } from '../services/intent-analysis.service';
+// Removed SequentialExecutionService - using only Master Agent step-by-step execution
+// import { SequentialExecutionService, StepResult as SequentialStepResult, WorkflowResult } from '../services/sequential-execution.service';
+// Removed PlanModificationService - using only NextStepPlanningService for all planning
+// import { PlanModificationService, PlanModification } from '../services/plan-modification.service';
+// Removed ContextAnalysisService - using only NextStepPlanningService for all planning
+// import { ContextAnalysisService, ContextAnalysis } from '../services/context-analysis.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 import { OperationDetectionService } from '../services/operation-detection.service';
 import { ToolExecutorService } from '../services/tool-executor.service';
@@ -1248,22 +1252,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     }
   }
 
-  /**
-   * Get IntentAnalysisService instance
-   */
-  private getIntentAnalysisService(): IntentAnalysisService | null {
-    try {
-      const service = getService<IntentAnalysisService>('intentAnalysisService');
-      return service || null;
-    } catch (error) {
-      EnhancedLogger.debug('IntentAnalysisService not available', {
-        correlationId: 'intent-service-check',
-        operation: 'intent_service_check',
-        metadata: { error: (error as Error).message }
-      });
-      return null;
-    }
-  }
+  // Removed getIntentAnalysisService - using only NextStepPlanningService for all planning
 
 
 
@@ -1363,232 +1352,14 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       return 'Step executed successfully.';
     }
   }
-  /**
-   * Enhanced workflow execution using SequentialExecutionService
-   */
-  private async executeWorkflowWithSequentialExecution(
-    workflowId: string,
-    sessionId: string,
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `execute-workflow-${workflowId}`;
-    const logContext: LogContext = {
-      correlationId,
-      operation: 'execute_workflow_sequential',
-      metadata: { sessionId, workflowId, userId }
-    };
+  // Removed executeWorkflowWithSequentialExecution - using only Master Agent step-by-step execution
+  // This eliminates dual execution paths and ensures consistent behavior
 
-    try {
-      EnhancedLogger.debug('Executing workflow with SequentialExecutionService', logContext);
-
-      const sequentialExecutionService = getService<SequentialExecutionService>('sequentialExecutionService');
-      if (!sequentialExecutionService) {
-        throw new Error('SequentialExecutionService not available');
-      }
-
-      const workflowResult = await sequentialExecutionService.executeWorkflow(workflowId);
-
-      return {
-        message: workflowResult.finalResponse,
-        executionMetadata: {
-          processingTime: workflowResult.executionTime,
-          successfulTools: workflowResult.completedSteps,
-          totalExecutionTime: workflowResult.executionTime,
-          workflowId: workflowResult.workflowId,
-          workflowAction: workflowResult.success ? 'completed' : 'failed',
-          completedSteps: workflowResult.completedSteps,
-          totalSteps: workflowResult.totalSteps
-        },
-        workflowResults: workflowResult.results
-      };
-    } catch (error) {
-      EnhancedLogger.error('Error executing workflow with SequentialExecutionService', error as Error, logContext);
-      return this.createErrorResponse(error as Error);
-    }
-  }
-
-  /**
-   * Continue workflow with context analysis
-   */
-  private async continueWorkflowWithContext(
-    userInput: string,
-    sessionId: string,
-    workflow: WorkflowState,
-    contextAnalysis: ContextAnalysis,
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `continue-workflow-context-${sessionId}`;
-    const logContext: LogContext = {
-      correlationId,
-      operation: 'continue_workflow_context',
-      metadata: {
-        sessionId,
-        workflowId: workflow.workflowId,
-        intentType: contextAnalysis.intentType,
-        userId
-      }
-    };
-
-    try {
-      EnhancedLogger.debug('Continuing workflow with context analysis', logContext);
-
-      // Update workflow context with new input and analysis
-      workflow.context.gatheredData[`step_${workflow.currentStep}_context`] = {
-        userInput,
-        contextAnalysis,
-        timestamp: new Date()
-      };
-      workflow.lastActivity = new Date();
-
-      // Check if plan modifications are needed
-      const planModificationService = getService<PlanModificationService>('planModificationService');
-      if (planModificationService && contextAnalysis.workflowImpact.type === 'modify') {
-        const modifications = await planModificationService.analyzePlan(workflow.workflowId, {
-          originalRequest: workflow.context.originalRequest,
-          currentStep: workflow.currentStep,
-          totalSteps: workflow.totalSteps,
-          stepResults: [],
-          remainingSteps: workflow.plan.slice(workflow.currentStep),
-          userFeedback: userInput,
-          contextualInfo: contextAnalysis
-        });
-
-        if (modifications.length > 0) {
-          const highPriorityMods = modifications.filter(m => m.priority === 'high' || m.priority === 'critical');
-          for (const mod of highPriorityMods) {
-            await planModificationService.applyModification(workflow.workflowId, mod);
-          }
-        }
-      }
-
-      // Update workflow in cache
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.updateWorkflow(workflow.workflowId, workflow);
-      }
-
-      // Continue execution
-      return await this.executeWorkflowWithSequentialExecution(workflow.workflowId, sessionId, userId);
-    } catch (error) {
-      EnhancedLogger.error('Error continuing workflow with context', error as Error, logContext);
-      return this.createErrorResponse(error as Error);
-    }
-  }
-
-  /**
-   * Pause workflow and address interruption
-   */
-  private async pauseAndAddressInterruption(
-    userInput: string,
-    sessionId: string,
-    workflow: WorkflowState,
-    contextAnalysis: ContextAnalysis,
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `pause-workflow-${sessionId}`;
-    const logContext: LogContext = {
-      correlationId,
-      operation: 'pause_workflow',
-      metadata: { sessionId, workflowId: workflow.workflowId, userId }
-    };
-
-    try {
-      EnhancedLogger.debug('Pausing workflow to address interruption', logContext);
-
-      // Pause the workflow
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.updateWorkflow(workflow.workflowId, {
-          status: 'paused',
-          lastActivity: new Date()
-        });
-      }
-
-      // Generate contextual response
-      const contextAnalysisService = getService<ContextAnalysisService>('contextAnalysisService');
-      let responseMessage = contextAnalysis.contextualResponse;
-
-      if (contextAnalysisService) {
-        responseMessage = await contextAnalysisService.generateContextualResponse(
-          userInput,
-          contextAnalysis,
-          workflow
-        );
-      }
-
-      return {
-        message: responseMessage,
-        executionMetadata: {
-          workflowId: workflow.workflowId,
-          workflowAction: 'paused',
-          pauseReason: contextAnalysis.suggestedAction.reasoning
-        }
-      };
-    } catch (error) {
-      EnhancedLogger.error('Error pausing workflow', error as Error, logContext);
-      return this.createErrorResponse(error as Error);
-    }
-  }
-
-  /**
-   * Branch workflow for parallel processing
-   */
-  private async branchWorkflow(
-    userInput: string,
-    sessionId: string,
-    originalWorkflow: WorkflowState,
-    contextAnalysis: ContextAnalysis,
-    userId?: string
-  ): Promise<MasterAgentResponse> {
-    const correlationId = `branch-workflow-${sessionId}`;
-    const logContext: LogContext = {
-      correlationId,
-      operation: 'branch_workflow',
-      metadata: { sessionId, originalWorkflowId: originalWorkflow.workflowId, userId }
-    };
-
-    try {
-      EnhancedLogger.debug('Branching workflow for parallel processing', logContext);
-
-      // Create new workflow for the interruption while preserving original
-      const branchedResponse = await this.executeStepByStep(userInput, sessionId, userId);
-
-      // Add reference to original workflow
-      if (branchedResponse.executionMetadata) {
-        branchedResponse.executionMetadata.originalWorkflowId = originalWorkflow.workflowId;
-        branchedResponse.executionMetadata.workflowAction = 'branched';
-      }
-
-      return {
-        ...branchedResponse,
-        message: `I'll handle your new request while keeping track of your previous workflow. ${branchedResponse.message}`
-      };
-    } catch (error) {
-      EnhancedLogger.error('Error branching workflow', error as Error, logContext);
-      return this.createErrorResponse(error as Error);
-    }
-  }
-
-  /**
-   * Seek clarification from user
-   */
-  private async seekClarification(
-    contextAnalysis: ContextAnalysis,
-    sessionId: string
-  ): Promise<MasterAgentResponse> {
-    const clarificationQuestions = contextAnalysis.suggestedAction.parameters.clarificationQuestions || [
-      'Could you please clarify what you mean?',
-      'I need more information to help you better.'
-    ];
-
-    return {
-      message: `I need to clarify something to help you better:\n\n${clarificationQuestions.join('\n')}`,
-      executionMetadata: {
-        workflowAction: 'seeking_clarification',
-        sessionId
-      }
-    };
-  }
+  // Removed unused context analysis methods - consolidated into simplified step-by-step execution
+  // - continueWorkflowWithContext
+  // - pauseAndAddressInterruption
+  // - branchWorkflow
+  // - seekClarification
 
   /**
    * Abort workflow
@@ -1702,28 +1473,14 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     try {
       EnhancedLogger.requestStart('Continuing step-by-step workflow with new input', logContext);
 
-      // Analyze if this is an interruption, continuation, or new request
-      const contextAnalysisService = getService<ContextAnalysisService>('contextAnalysisService');
-      if (contextAnalysisService) {
-        // Use available method to analyze user intent
-        const contextAnalysis = await contextAnalysisService.analyzeUserIntent(
-          userInput,
-          sessionId
-        );
-
-        // Simple logic based on intent analysis
-        // For now, treat any new input as starting a new workflow
-        const workflowCacheService = this.getWorkflowCacheService();
-        if (workflowCacheService) {
-          await workflowCacheService.updateWorkflow(activeWorkflow.workflowId, {
-            status: 'cancelled',
-            lastActivity: new Date()
-          });
-        }
-        return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
+      // Simplified workflow interruption handling - treat any new input as starting a new workflow
+      const workflowCacheService = this.getWorkflowCacheService();
+      if (workflowCacheService) {
+        await workflowCacheService.updateWorkflow(activeWorkflow.workflowId, {
+          status: 'cancelled',
+          lastActivity: new Date()
+        });
       }
-
-      // Default: treat as new request
       return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
     } catch (error) {
       EnhancedLogger.error('Failed to continue step-by-step workflow', error as Error, logContext);

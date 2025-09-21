@@ -88,14 +88,15 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       enabled: true,
       timeout: 30000,
       retryCount: 2,
-      aiPlanning: {
-        enableAIPlanning: true, // Enable AI planning for complex calendar operations
-        maxPlanningSteps: 8,
-        planningTimeout: 25000,
-        cachePlans: true,
-        planningTemperature: 0.1,
-        planningMaxTokens: 2000
-      }
+      // Removed individual agent AI planning - using only Master Agent NextStepPlanningService
+      // aiPlanning: {
+      //   enableAIPlanning: false,
+      //   maxPlanningSteps: 8,
+      //   planningTimeout: 25000,
+      //   cachePlans: true,
+      //   planningTemperature: 0.1,
+      //   planningMaxTokens: 2000
+      // }
     });
 
     // Register calendar-specific tools for AI planning
@@ -872,10 +873,14 @@ Always return structured execution status with event details, scheduling insight
    */
   private async handleListEvents(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
+      // Map parameters from different sources (start_date/end_date from NextStepPlanning, timeMin/timeMax from direct calls)
+      const timeMin = parameters.timeMin as string || parameters.start_date as string;
+      const timeMax = parameters.timeMax as string || parameters.end_date as string;
+      
       // Validate query options
       const validationResult = this.calendarValidator!.validateQueryOptions({
-        timeMin: parameters.timeMin as string,
-        timeMax: parameters.timeMax as string,
+        timeMin: timeMin,
+        timeMax: timeMax,
         maxResults: parameters.maxResults as number
       });
 
@@ -890,8 +895,8 @@ Always return structured execution status with event details, scheduling insight
       const events = await this.calendarService!.getEvents(
         accessToken,
         {
-          timeMin: parameters.timeMin as string,
-          timeMax: parameters.timeMax as string,
+          timeMin: timeMin,
+          timeMax: timeMax,
           maxResults: (parameters.maxResults as number) || 10
         },
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID

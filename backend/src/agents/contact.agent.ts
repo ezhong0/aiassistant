@@ -76,14 +76,15 @@ export class ContactAgent extends AIAgent<ContactAgentRequest, ContactResult> {
         enabled: true,
         timeout: 15000,
         retryCount: 2,
-        aiPlanning: {
-          enableAIPlanning: false, // Disable AI planning for simple contact operations
-          maxPlanningSteps: 3,
-          planningTimeout: 10000,
-          cachePlans: true,
-          planningTemperature: 0.1,
-          planningMaxTokens: 1000
-        }
+        // Removed individual agent AI planning - using only Master Agent NextStepPlanningService
+        // aiPlanning: {
+        //   enableAIPlanning: false,
+        //   maxPlanningSteps: 3,
+        //   planningTimeout: 10000,
+        //   cachePlans: true,
+        //   planningTemperature: 0.1,
+        //   planningMaxTokens: 1000
+        // }
       });
     }
 
@@ -295,8 +296,8 @@ You are a specialized contact discovery and management agent.
             accessToken: parameters.accessToken
           } as ContactAgentRequest;
           
-          // Execute the contact operation using AI planning
-          const result = await this.executeWithAIPlanning(contactParams, context);
+          // Execute the contact operation directly - planning handled by Master Agent
+          const result = await this.processQuery(contactParams, context);
           EnhancedLogger.debug('Contact tool executed successfully in AI plan', {
             correlationId: `contact-tool-${context.sessionId}`,
             operation: 'contact_tool_execution',

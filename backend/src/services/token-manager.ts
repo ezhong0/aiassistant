@@ -181,13 +181,16 @@ export class TokenManager extends BaseService {
     // Check expiry with buffer (refresh 5 minutes early)
     const REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
     
-    // Handle both expiry_date (number) and expires_at (Date)
+    // Handle expiry_date (number), expires_at (Date), and expires_in (seconds)
     let expiryTime: number | null = null;
     if (token.expires_at) {
       const expiresAtDate = this.ensureDate(token.expires_at);
       expiryTime = expiresAtDate ? expiresAtDate.getTime() : null;
     } else if (token.expiry_date) {
       expiryTime = typeof token.expiry_date === 'number' ? token.expiry_date : new Date(token.expiry_date).getTime();
+    } else if (token.expires_in) {
+      // Convert expires_in (seconds) to expiry timestamp
+      expiryTime = Date.now() + (token.expires_in * 1000);
     }
     
     // If we have expiry information, validate it
