@@ -2,504 +2,262 @@
 
 ## Executive Summary
 
-The current confirmation system has a fundamental flaw: **double execution** where tools are run in preview mode AND real mode, causing redundant API calls and poor user experience. This plan outlines a complete overhaul to implement a proper **draft-based confirmation system** that eliminates redundancy and provides a clean separation between planning and execution phases.
+The current confirmation system has a **double execution** problem where tools run in preview mode AND real mode, causing redundant API calls. This plan implements a **draft-based confirmation system** with unified intent analysis to eliminate redundancy and improve user experience.
 
-## Current System Problems
+### **Key Changes:**
+- ✅ **Single AI call** handles all intent analysis (write detection + confirmation + modification)
+- ✅ **Draft-first approach** for write operations (no double execution)
+- ✅ **Master Agent returns plain text** (optimized for Slack, no unnecessary abstraction)
+- ✅ **Simplified ToolExecutorService** (pure execution, no preview mode)
 
-### **1. Double Execution Issue** 🔄
-- **Preview Mode**: Tools executed to check for confirmation needs
-- **Real Mode**: Same tools executed again for actual execution
-- **Result**: Multiple identical API calls (calendar requests executed 3+ times)
+## Problem Analysis
 
-### **2. No Proper Draft System** 📝
-- No persistent storage for draft operations
-- No ability to edit/modify drafts before execution
-- No clear separation between planning and execution phases
+### **Current Issues:**
+1. **Double Execution**: Tools execute in preview mode, then again in real mode
+2. **Multiple AI calls**: Separate services for confirmation detection, write detection, modification
+3. **Complex routing**: Preview mode logic scattered across multiple services
+4. **Inconsistent responses**: Platform-specific formatting in business logic
 
-### **3. Complex Confirmation Logic** 🧠
-- AI-powered confirmation detection is error-prone
-- Multiple confirmation detection systems (Slack, REST API, etc.)
-- Inconsistent confirmation handling across different agents
+### **Root Cause:**
+The system tries to detect confirmation needs AFTER planning tools, requiring preview execution to check if confirmation is needed.
 
-### **4. Poor Cache Management** 💾
-- No centralized draft storage
-- Session-based storage is unreliable
-- No proper cache invalidation strategies
+## Solution Architecture
 
-## New System Architecture
+### **New Flow:**
+```
+User Input → Master Agent Intent Analysis → Draft Creation OR Direct Execution → Slack Response
+```
 
-### **Core Principles**
-
-1. **Single Execution Path**: Tools execute only once - during actual execution
-2. **Draft-First Approach**: All write operations create drafts first
-3. **Clear Phase Separation**: Planning → Draft Creation → Confirmation → Execution
-4. **Centralized Draft Management**: Single source of truth for all drafts
-5. **Intelligent Confirmation**: Simple, reliable confirmation detection
+### **Core Principles:**
+1. **Intent analysis first**: Detect write operations during planning, not execution
+2. **Single AI call**: Master Agent handles confirmation detection with draft context
+3. **Draft-based writes**: Write operations create drafts, never execute immediately
+4. **Plain text responses**: Master Agent returns Slack-optimized text directly
 
 ## Implementation Plan
 
-### **Phase 1: Write Operation Detection Service** 🔍
+### **Phase 1: Master Agent Unified Intent Analysis** 🧠
 
-#### **New Service: WriteOperationDetector**
+Replace multiple services with single comprehensive intent analysis:
 
 ```typescript
-// backend/src/services/write-operation-detector.service.ts
-export class WriteOperationDetector extends BaseService {
+class MasterAgent {
   /**
-   * Detect if a tool call is a write operation that requires confirmation
+   * Single method handles everything:
+   * - Check for existing drafts
+   * - Detect confirmation/modification/new request
+   * - Create drafts for write operations
+   * - Execute confirmed actions
    */
-  async detectWriteOperation(toolCall: ToolCall): Promise<WriteOperationAnalysis> {
-    // AI-powered detection of write operations
-    // Returns: { isWriteOperation: boolean, operationType: string, requiresConfirmation: boolean }
-  }
+  async processUserInput(
+    userInput: string,
+    sessionId: string,
+    userId: string
+  ): Promise<string> {
 
-  /**
-   * Get confirmation reason for a write operation
-   */
-  async getConfirmationReason(toolCall: ToolCall): Promise<string> {
-    // Generate human-readable reason why confirmation is needed
-  }
-}
+    // 1. Check for existing drafts
+    const existingDrafts = await this.draftManager.getSessionDrafts(sessionId);
 
-interface WriteOperationAnalysis {
-  isWriteOperation: boolean;
-  operationType: 'email' | 'calendar' | 'contact' | 'other';
-  requiresConfirmation: boolean;
-  confirmationReason: string;
-  riskLevel: 'low' | 'medium' | 'high';
+    // 2. Single AI call with full context
+    const analysis = await this.analyzeIntentWithDraftContext(
+      userInput,
+      existingDrafts,
+      conversationHistory
+    );
+
+    // 3. Route based on analysis
+    switch (analysis.intentType) {
+      case 'confirmation_positive':
+        const result = await this.executeDraft(analysis.targetDraftId);
+        return "✅ Action completed successfully!";
+
+      case 'confirmation_negative':
+        await this.clearDrafts(sessionId);
+        return "❌ Action cancelled.";
+
+      case 'draft_modification':
+        const updatedDraft = await this.updateDraft(analysis.modifications);
+        return `🔍 Updated: ${updatedDraft.description}. Confirm?`;
+
+      case 'new_write_operation':
+        const draft = await this.createDraft(analysis.operation);
+        return `🔍 Ready to ${draft.description}. Reply "yes" to confirm.`;
+
+      case 'read_operation':
+        const results = await this.executeReadOperation(analysis.operation);
+        return this.formatResults(results);
+    }
+  }
 }
 ```
 
-#### **What to Remove:**
-- `ToolExecutorService.toolNeedsConfirmation()` method
-- `AgentFactory.toolNeedsConfirmationForOperation()` method
-- Complex AI-powered operation detection in ToolExecutorService
-
-#### **What to Add:**
-- New WriteOperationDetector service
-- Simple, rule-based write operation detection
-- Clear confirmation reasons for each operation type
-
----
+**Eliminates:**
+- ConfirmationDetector service
+- WriteOperationDetector service
+- Complex multi-step confirmation flow
+- Multiple AI calls per request
 
 ### **Phase 2: Draft Management System** 📝
 
-#### **New Service: DraftManager**
+Simple draft storage and execution:
 
 ```typescript
-// backend/src/services/draft-manager.service.ts
-export class DraftManager extends BaseService {
-  /**
-   * Create a new draft for a write operation
-   */
-  async createDraft(
-    sessionId: string, 
-    toolCall: ToolCall, 
-    previewData: any,
-    writeAnalysis: WriteOperationAnalysis
-  ): Promise<Draft> {
-    // Store draft in cache with awaitingConfirmation: true
-    // Return draft with unique ID
+class DraftManager extends BaseService {
+  async createDraft(sessionId: string, operation: WriteOperation): Promise<Draft> {
+    // Store draft in cache with confirmation flag
   }
 
-  /**
-   * Update an existing draft
-   */
-  async updateDraft(draftId: string, updates: Partial<Draft>): Promise<Draft> {
-    // Update existing draft parameters
-    // Maintain awaitingConfirmation status
+  async updateDraft(draftId: string, modifications: any): Promise<Draft> {
+    // Update draft parameters
   }
 
-  /**
-   * Execute a confirmed draft
-   */
   async executeDraft(draftId: string): Promise<ToolResult> {
-    // Convert draft to tool call and execute
-    // Remove draft from cache after execution
+    // Execute via ToolExecutorService, then remove from cache
   }
 
-  /**
-   * Get all drafts for a session
-   */
   async getSessionDrafts(sessionId: string): Promise<Draft[]> {
-    // Retrieve all drafts for a user session
-  }
-
-  /**
-   * Clear all drafts for a session
-   */
-  async clearSessionDrafts(sessionId: string): Promise<void> {
-    // Remove all drafts when user starts new request
+    // Get all pending drafts for session
   }
 }
-
-interface Draft {
-  id: string;
-  sessionId: string;
-  type: 'email' | 'calendar' | 'contact';
-  operation: string;
-  parameters: any;
-  previewData: any;
-  writeAnalysis: WriteOperationAnalysis;
-  createdAt: Date;
-  awaitingConfirmation: boolean;
-  confirmationReason: string;
-}
 ```
 
-#### **What to Remove:**
-- `SlackMessageProcessor.storeConfirmationInDatabase()` method
-- Database session `pendingActions` storage
-- Complex preview result processing
+### **Phase 3: Simplified ToolExecutorService** ⚡
 
-#### **What to Add:**
-- New DraftManager service
-- Draft cache structure in WorkflowCacheService
-- Draft CRUD operations
-- Draft execution logic
-
----
-
-### **Phase 3: New Workflow Architecture** 🔄
-
-#### **Current Workflow (Problematic):**
-```
-User Request → Master Agent → Tool Planning → Preview Execution → Confirmation Check → Real Execution
-```
-
-#### **New Workflow (Clean):**
-```
-User Request → Master Agent → Tool Planning → Write Detection → Draft Creation → Confirmation → Draft Execution
-```
-
-#### **Detailed New Workflow:**
-
-1. **Planning Phase**:
-   ```typescript
-   // Master Agent generates tool calls
-   const toolCalls = await masterAgent.planTools(userInput);
-   ```
-
-2. **Write Detection Phase**:
-   ```typescript
-   // Detect which tools are write operations
-   const writeOperations = await writeOperationDetector.analyzeToolCalls(toolCalls);
-   ```
-
-3. **Draft Creation Phase**:
-   ```typescript
-   // Create drafts for write operations
-   const drafts = await draftManager.createDrafts(sessionId, writeOperations);
-   
-   // Execute read operations immediately
-   const readResults = await toolExecutor.executeReadOperations(toolCalls);
-   ```
-
-4. **Confirmation Phase**:
-   ```typescript
-   // Show confirmation for drafts
-   if (drafts.length > 0) {
-     return { needsConfirmation: true, drafts, readResults };
-   }
-   ```
-
-5. **Execution Phase**:
-   ```typescript
-   // Execute confirmed drafts
-   const executionResults = await draftManager.executeDrafts(confirmedDraftIds);
-   ```
-
-#### **What to Remove:**
-- `SlackMessageProcessor` preview mode execution
-- `ToolExecutorService` preview mode logic
-- Double execution paths in all services
-
-#### **What to Add:**
-- New workflow orchestration in Master Agent
-- Write operation detection integration
-- Draft creation in planning phase
-- Clean execution separation
-
----
-
-### **Phase 4: Cache Structure Overhaul** 💾
-
-#### **New Cache Structure:**
+Remove preview mode and confirmation logic:
 
 ```typescript
-// Extend WorkflowCacheService
-interface DraftCache {
-  [sessionId: string]: {
-    drafts: Draft[];
-    lastActivity: Date;
-    awaitingConfirmation: boolean;
-    confirmationMessage?: string;
-  }
-}
-
-// Add to WorkflowCacheService
-class WorkflowCacheService extends BaseService {
-  // Existing methods...
-  
+class ToolExecutorService extends BaseService {
   /**
-   * Draft management methods
+   * Pure execution service - no preview mode, no confirmation logic
    */
-  async storeDraft(sessionId: string, draft: Draft): Promise<void> {
-    // Store draft in Redis cache
-  }
-  
-  async getDrafts(sessionId: string): Promise<Draft[]> {
-    // Retrieve all drafts for session
-  }
-  
-  async updateDraft(draftId: string, updates: Partial<Draft>): Promise<void> {
-    // Update specific draft
-  }
-  
-  async removeDraft(draftId: string): Promise<void> {
-    // Remove draft after execution
-  }
-  
-  async clearSessionDrafts(sessionId: string): Promise<void> {
-    // Clear all drafts for new request
+  async executeTool(toolCall: ToolCall, context: ToolExecutionContext): Promise<ToolResult> {
+    // 1. Validate tool call
+    // 2. Route to appropriate agent
+    // 3. Execute with retry logic
+    // 4. Return result
   }
 }
 ```
 
-#### **What to Remove:**
-- Database session `pendingActions` storage
-- Complex session management for confirmations
-- Multiple cache layers for confirmation data
+**Removes:**
+- `ExecutionMode` interface
+- `toolNeedsConfirmation()` method
+- Preview execution logic
+- Confirmation detection during execution
 
-#### **What to Add:**
-- Draft-specific cache methods
-- Clean cache key structure
-- Proper cache TTL for drafts
+### **Phase 4: Simplified Message Processing** 💬
 
----
-
-### **Phase 5: Agent Integration** 🤖
-
-#### **Update Agent Preview Methods:**
+SlackMessageProcessor becomes a simple text passthrough:
 
 ```typescript
-// Update EmailAgent, CalendarAgent, ContactAgent
-class EmailAgent extends AIAgent {
-  /**
-   * Generate draft preview (not execution)
-   */
-  async generateDraftPreview(params: EmailAgentRequest): Promise<DraftPreview> {
-    // Generate preview data without executing
-    // Return structured preview information
-    return {
-      actionType: 'email',
-      title: 'Send Email',
-      description: `Send email to ${recipients.join(', ')}`,
-      previewData: {
-        recipients,
-        subject: params.subject,
-        body: params.body,
-        attachments: params.attachments
-      },
-      riskAssessment: {
-        level: 'medium',
-        factors: ['external_communication'],
-        warnings: ['Email will be sent to external recipients']
-      }
-    };
-  }
-}
-```
-
-#### **What to Remove:**
-- `generatePreview()` methods that execute operations
-- `awaitingConfirmation` logic in agent execution
-- Complex preview result processing
-
-#### **What to Add:**
-- `generateDraftPreview()` methods
-- Clean preview data structures
-- No execution in preview phase
-
----
-
-### **Phase 6: Confirmation Detection Simplification** ✅
-
-#### **New Service: ConfirmationDetector**
-
-```typescript
-// backend/src/services/confirmation-detector.service.ts
-export class ConfirmationDetector extends BaseService {
-  /**
-   * Simple confirmation detection
-   */
-  async detectConfirmation(message: string, context: SlackContext): Promise<ConfirmationAnalysis> {
-    // Simple keyword-based detection
-    // No complex AI analysis needed
-    const positiveKeywords = ['yes', 'confirm', 'proceed', 'send', 'go ahead', 'approve'];
-    const negativeKeywords = ['no', 'cancel', 'stop', 'abort', 'reject'];
-    
-    const lowerMessage = message.toLowerCase();
-    const isPositive = positiveKeywords.some(keyword => lowerMessage.includes(keyword));
-    const isNegative = negativeKeywords.some(keyword => lowerMessage.includes(keyword));
-    
-    return {
-      isConfirmation: isPositive || isNegative,
-      type: isPositive ? 'positive' : 'negative',
-      confidence: 0.9 // High confidence for simple detection
-    };
-  }
-}
-```
-
-#### **What to Remove:**
-- Complex AI-powered confirmation detection
-- `SlackAgent.analyzeConfirmation()` method
-- Multiple confirmation detection systems
-
-#### **What to Add:**
-- Simple keyword-based confirmation detection
-- Clear confirmation analysis structure
-- Consistent confirmation handling
-
----
-
-### **Phase 7: Slack Integration Overhaul** 💬
-
-#### **Update SlackMessageProcessor:**
-
-```typescript
-// New SlackMessageProcessor workflow
 class SlackMessageProcessor extends BaseService {
-  private async routeToAgent(request: SlackAgentRequest): Promise<SlackAgentResponse> {
-    // 1. Check for existing drafts
-    const existingDrafts = await draftManager.getSessionDrafts(sessionId);
-    
-    if (existingDrafts.length > 0) {
-      // Handle confirmation or draft update
-      return await this.handleDraftConfirmation(request, existingDrafts);
-    }
-    
-    // 2. Process new request
-    const masterResponse = await masterAgent.processUserInput(request.message, sessionId, userId, slackContext);
-    
-    // 3. Check for write operations
-    const writeOperations = await writeOperationDetector.analyzeToolCalls(masterResponse.toolCalls);
-    
-    if (writeOperations.length > 0) {
-      // Create drafts and show confirmation
-      const drafts = await draftManager.createDrafts(sessionId, writeOperations);
-      return await this.showConfirmation(drafts, masterResponse);
-    }
-    
-    // 4. Execute read operations immediately
-    const readResults = await toolExecutor.executeReadOperations(masterResponse.toolCalls);
-    return await this.formatResponse(readResults);
-  }
-  
-  private async handleDraftConfirmation(request: SlackAgentRequest, drafts: Draft[]): Promise<SlackAgentResponse> {
-    const confirmation = await confirmationDetector.detectConfirmation(request.message, request.context);
-    
-    if (confirmation.isConfirmation) {
-      if (confirmation.type === 'positive') {
-        // Execute confirmed drafts
-        const results = await draftManager.executeDrafts(drafts.map(d => d.id));
-        return await this.formatExecutionResponse(results);
-      } else {
-        // Cancel drafts
-        await draftManager.clearSessionDrafts(sessionId);
-        return { text: 'Action cancelled.' };
-      }
-    } else {
-      // Treat as draft update request
-      return await this.handleDraftUpdate(request, drafts);
-    }
+  async processMessage(message: string, context: SlackContext): Promise<SlackResponse> {
+    const { sessionId, userId } = this.extractSessionInfo(context);
+
+    // Master Agent handles everything, returns Slack-optimized text
+    const responseText = await this.masterAgent.processUserInput(
+      message,
+      sessionId,
+      userId
+    );
+
+    return { text: responseText };
   }
 }
 ```
 
-#### **What to Remove:**
-- Preview mode execution in SlackMessageProcessor
-- Complex confirmation storage logic
-- Double execution paths
+**Benefits:**
+- No formatting layer needed
+- Master Agent optimizes text for Slack directly
+- Simple text passthrough
+- Easy to test
 
-#### **What to Add:**
-- Draft-aware message processing
-- Simple confirmation handling
-- Clean execution separation
+### **Phase 5: Agent Preview Updates** 🤖
 
----
+Update agents to generate draft previews without execution:
+
+```typescript
+// Example: EmailAgent
+class EmailAgent extends AIAgent {
+  async generateDraftPreview(params: EmailParams): Promise<string> {
+    // Generate preview description without sending email
+    return `Send email to ${params.recipients.join(', ')} with subject "${params.subject}"`;
+  }
+
+  // Remove executeWithAIPlanning, preview execution methods
+}
+```
 
 ## Implementation Timeline
 
-### **Week 1: Core Services**
-- [ ] Create WriteOperationDetector service
+### **Week 1: Core Changes**
+- [ ] Update Master Agent with unified intent analysis
 - [ ] Create DraftManager service
-- [ ] Update WorkflowCacheService with draft methods
-- [ ] Create ConfirmationDetector service
+- [ ] Update WorkflowCacheService for draft storage
 
-### **Week 2: Agent Integration**
-- [ ] Update EmailAgent with generateDraftPreview()
-- [ ] Update CalendarAgent with generateDraftPreview()
-- [ ] Update ContactAgent with generateDraftPreview()
-- [ ] Remove old preview execution methods
+### **Week 2: Service Cleanup**
+- [ ] Simplify ToolExecutorService (remove preview mode)
+- [ ] Simplify SlackMessageProcessor (text passthrough)
+- [ ] Update agents with draft preview methods
 
-### **Week 3: Workflow Integration**
-- [ ] Update Master Agent workflow
-- [ ] Update SlackMessageProcessor
-- [ ] Update ToolExecutorService
-- [ ] Remove double execution paths
+### **Week 3: Integration & Testing**
+- [ ] End-to-end testing of new flow
+- [ ] Performance testing (should be faster)
+- [ ] Remove deprecated confirmation services
 
-### **Week 4: Testing & Cleanup**
-- [ ] Test new confirmation flow
-- [ ] Remove deprecated code
+### **Week 4: Cleanup**
+- [ ] Remove old preview/confirmation code
 - [ ] Update documentation
-- [ ] Performance optimization
+- [ ] Monitor production performance
 
 ## Expected Results
 
-### **Immediate Benefits:**
-✅ **No More Double Execution**: Tools execute only once
-✅ **Faster Response Times**: No redundant API calls
-✅ **Cleaner Architecture**: Clear separation of concerns
-✅ **Better User Experience**: Proper draft management
-✅ **Easier Debugging**: Single execution path
+### **Performance Improvements:**
+- ✅ **50% fewer API calls**: No double execution
+- ✅ **Faster responses**: Single AI call vs multiple service calls
+- ✅ **Reduced complexity**: Fewer services and routing decisions
 
-### **Long-term Benefits:**
-✅ **Scalable Confirmation System**: Easy to add new operation types
-✅ **Better Error Handling**: Clear error boundaries
-✅ **Improved Performance**: Reduced API calls and processing
-✅ **Maintainable Code**: Simpler, more focused services
-✅ **User-Friendly**: Intuitive draft editing and confirmation
+### **User Experience:**
+- ✅ **Consistent confirmation flow**: Same logic across all requests
+- ✅ **Better draft editing**: Proper modification support
+- ✅ **Cleaner responses**: Slack-optimized formatting
+
+### **Developer Experience:**
+- ✅ **Easier debugging**: All decision logic in Master Agent
+- ✅ **Simpler testing**: Test intent analysis in isolation
+- ✅ **Better maintainability**: Fewer services to coordinate
+
+## Architecture Benefits
+
+### **Before (Complex):**
+```
+User Input → WriteDetector → ConfirmationDetector → PreviewExecution → RealExecution
+```
+
+### **After (Simple):**
+```
+User Input → Master Agent Intent Analysis → Draft OR Execution → Response
+```
+
+**Key Insight:** By detecting write operations during intent analysis (not execution), we eliminate the need for preview mode entirely.
 
 ## Risk Mitigation
 
-### **Backward Compatibility:**
-- Keep old confirmation system as fallback during transition
-- Gradual migration of different operation types
-- Feature flags to enable/disable new system
+- **Gradual rollout**: Implement behind feature flag
+- **Backward compatibility**: Keep old services commented out temporarily
+- **Testing**: Comprehensive testing of new flow before removing old code
+- **Monitoring**: Track performance improvements and error rates
 
-### **Testing Strategy:**
-- Unit tests for each new service
-- Integration tests for new workflow
-- End-to-end tests for confirmation flow
-- Performance tests to verify improvement
+## Success Metrics
 
-### **Rollback Plan:**
-- Keep old code commented out, not deleted
-- Database migration scripts for draft storage
-- Configuration flags to switch between systems
-- Monitoring to detect issues early
+- **API call reduction**: Calendar requests should make 1 call instead of 3+
+- **Response time improvement**: Faster due to single AI call
+- **Error rate**: Should remain same or improve
+- **User satisfaction**: Better confirmation experience
 
-## Conclusion
+---
 
-This overhaul transforms the confirmation system from a complex, error-prone double-execution system into a clean, draft-based architecture. The key insight is **separating planning from execution** - the system plans operations, creates drafts, gets confirmation, and only then executes. This eliminates redundancy at the source and provides a much better user experience.
-
-The new system is:
-- **Simpler**: Clear phases and responsibilities
-- **Faster**: No redundant execution
-- **More Reliable**: Single execution path
-- **More User-Friendly**: Proper draft management
-- **More Maintainable**: Focused, single-purpose services
-
-This addresses the core issue of multiple calendar calls while building a foundation for a robust confirmation system that can scale with future requirements.
+**Status**: Ready for implementation
+**Estimated effort**: 4 weeks
+**Risk level**: Medium (significant architectural change)
+**Primary benefit**: Eliminates double execution problem at the source
