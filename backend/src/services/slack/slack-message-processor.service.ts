@@ -671,8 +671,7 @@ export class SlackMessageProcessor extends BaseService {
       const toolResult = await this.toolExecutorService.executeTool(
         toolCall,
         executionContext,
-        accessToken, // Pass the retrieved access token
-        { preview: false } // Execute for real
+        accessToken // Pass the retrieved access token
       );
 
       if (toolResult.success) {
@@ -760,194 +759,66 @@ export class SlackMessageProcessor extends BaseService {
         openaiApiKey: process.env.OPENAI_API_KEY || 'dummy-key' 
       });
       
-      // Route to MasterAgent for intent parsing with Slack context
-      const masterResponse = await masterAgent.processUserInput(
+      // Use unified processing with DraftManager integration
+      const result = await masterAgent.processUserInputUnified(
         request.message,
         sessionId,
         request.context.userId,
-        request.context
+        {
+          accessToken,
+          context: request.context
+        }
       );
 
-      // Execute tools in preview mode to check for confirmation needs
-      if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
-        const executionContext: ToolExecutionContext = {
+      // Check if result indicates draft creation needed
+      if (result.needsConfirmation && result.draftId) {
+        this.logInfo('Tools require confirmation, showing preview to user', {
           sessionId,
-          userId: request.context.userId,
-          timestamp: new Date(),
-          metadata: {
-            teamId: request.context.teamId,
-            channelId: request.context.channelId
+          draftId: result.draftId
+        });
+
+        // Store confirmation in database using existing system (keep this part)
+        await this.storeConfirmationInDatabase(sessionId, request.context, [result.toolCall!], []);
+
+        const processingTime = Date.now() - startTime;
+        return {
+          success: true,
+          response: {
+            text: result.message // This includes draft contents
+          },
+          shouldRespond: true,
+          executionMetadata: {
+            processingTime,
+            toolResults: [],
+            masterAgentResponse: result.message,
+            errorContext: {
+              draftId: result.draftId,
+              needsConfirmation: true
+            }
           }
         };
-        
-        this.logInfo('Starting preview mode execution for Slack', {
-          toolCalls: masterResponse.toolCalls.map(tc => ({ name: tc.name, hasParams: !!tc.parameters })),
-          sessionId,
-          userId: request.context.userId
-        });
-        
-        // Execute tools in preview mode to check for confirmation needs
-        const previewResults = await this.toolExecutorService.executeTools(
-          masterResponse.toolCalls,
-          executionContext,
-          accessToken,
-          { preview: true } // Run in preview mode
-        );
-        
-        this.logInfo('Preview mode execution completed for Slack', {
-          previewResultsCount: previewResults.length,
-          results: previewResults.map(r => ({
-            toolName: r.toolName,
-            success: r.success,
-            hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
-            awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : undefined
-          }))
-        });
-        
-        // Check if any tools require confirmation
-        const needsConfirmation = previewResults.some(result =>
-          result.result && typeof result.result === 'object' &&
-          'awaitingConfirmation' in result.result &&
-          result.result.awaitingConfirmation === true
-        );
-
-        this.logInfo('Preview results analysis', {
-          previewResultsCount: previewResults.length,
-          needsConfirmation,
-          resultsWithAwaitingConfirmation: previewResults.filter(r =>
-            r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result
-          ).length,
-          resultsDetails: previewResults.map(r => ({
-            toolName: r.toolName,
-            success: r.success,
-            hasResult: !!r.result,
-            hasAwaitingConfirmation: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result,
-            awaitingConfirmationValue: r.result && typeof r.result === 'object' && 'awaitingConfirmation' in r.result ? r.result.awaitingConfirmation : undefined
-          }))
-        });
-
-        if (needsConfirmation) {
-          this.logInfo('Tools require confirmation, showing preview to user', {
-            sessionId,
-            previewResultsCount: previewResults.length
-          });
-
-          // Generate confirmation message from preview results
-          const confirmationText = this.generateConfirmationMessage(previewResults, masterResponse);
-
-          // Store confirmation in database using existing system
-          await this.storeConfirmationInDatabase(sessionId, request.context, masterResponse.toolCalls, previewResults);
-
-          const processingTime = Date.now() - startTime;
-          return {
-            success: true,
-            response: {
-              text: confirmationText
-            },
-            shouldRespond: true,
-            executionMetadata: {
-              processingTime,
-              toolResults: previewResults.map(tr => ({
-                toolName: tr.toolName,
-                success: tr.success,
-                executionTime: tr.executionTime,
-                error: tr.error || undefined,
-                result: tr.result
-              })),
-              masterAgentResponse: confirmationText
-            }
-          };
-        }
       }
 
-      // Execute tool calls if present (only when no confirmation needed)
-      const toolResults: any[] = [];
-      
-      if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
-        this.logInfo('No confirmation required, executing tools directly', {
-          toolCount: masterResponse.toolCalls.length,
-          sessionId
-        });
-        
-        const executionContext = {
-          sessionId,
-          userId: request.context.userId,
-          timestamp: new Date(),
-          slackContext: request.context
-        };
-
-        for (const toolCall of masterResponse.toolCalls) {
-          try {
-            const result = await this.toolExecutorService.executeTool(
-              toolCall,
-              executionContext,
-              accessToken,
-              { preview: false }
-            );
-            
-            if (result && 'toolName' in result) {
-              toolResults.push(result);
-              this.logDebug(`Tool ${toolCall.name} executed successfully`, {
-                success: result.success,
-                executionTime: result.executionTime,
-                sessionId
-              });
-            }
-          } catch (error) {
-            this.logError(`Error executing tool ${toolCall.name}`, error, {
-              toolName: toolCall.name,
-              sessionId,
-              userId: request.context.userId
-            });
-
-            toolResults.push({
-              toolName: toolCall.name,
-              success: false,
-              error: error instanceof Error ? error.message : 'Unknown execution error',
-              result: null,
-              executionTime: 0
-            });
-          }
-        }
-      }
-
-      // Process tool results through Master Agent LLM for natural language response
-      if (toolResults.length > 0) {
-        const logContext = {
-          correlationId: `slack-process-${Date.now()}`,
-          userId: request.context.userId,
-          sessionId: sessionId,
-          operation: 'process_tool_results'
-        };
-        
-        const naturalLanguageResponse = await masterAgent.processToolResultsWithLLM(
-          request.message,
-          toolResults,
-          sessionId,
-          logContext
-        );
-        
-        masterResponse.message = naturalLanguageResponse;
-      }
+      // For direct execution (no confirmation needed), the result already contains processed tool results
 
       const processingTime = Date.now() - startTime;
       
       return {
         success: true,
         response: {
-          text: masterResponse.message || '🌟💖 Yay! I processed your request successfully and I\'m so happy I could help! ✨'
+          text: result.message || '🌟💖 Yay! I processed your request successfully and I\'m so happy I could help! ✨'
         },
         shouldRespond: true,
         executionMetadata: {
           processingTime,
-          toolResults: toolResults.map(tr => ({
+          toolResults: result.toolResults?.map(tr => ({
             toolName: tr.toolName,
             success: tr.success,
             executionTime: tr.executionTime,
             error: tr.error || undefined,
             result: tr.result
-          })),
-          masterAgentResponse: masterResponse.message
+          })) || [],
+          masterAgentResponse: result.message
         }
       };
       

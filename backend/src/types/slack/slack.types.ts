@@ -234,6 +234,12 @@ export interface SlackResponse {
   attachments?: any[];
   response_type?: 'in_channel' | 'ephemeral';
   replace_original?: boolean;
+  success?: boolean;
+  message?: string;
+  error?: string;
+  requiresOAuth?: boolean;
+  oauthUrl?: string;
+  data?: any;
 }
 
 /**

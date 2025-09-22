@@ -12,14 +12,13 @@ import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
-import { SlackEventHandler } from './slack/slack-event-handler.service';
-import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
-import { SlackMessageProcessor } from './slack/slack-message-processor.service';
+import { SlackService } from './slack/slack.service';
+import { SlackOAuthService } from './slack/slack-oauth.service';
 // Removed SlackEventValidator - consolidated into SlackAgent
 // EmailValidator removed - LLM handles validation directly
 // Removed CalendarFormatter and CalendarValidator - consolidated into CalendarAgent
 // Removed SlackMessageAnalyzer, SlackDraftManager, SlackFormatter - consolidated into SlackAgent
-import { SlackInterfaceService } from './slack/slack-interface.service';
+// Removed SlackInterfaceService - consolidated into SlackService
 // Removed WorkflowCacheService - replaced with simple in-memory state in MasterAgent
 import { DraftManager } from './draft-manager.service';
 // Removed IntentAnalysisService - using only NextStepPlanningService for all planning
@@ -59,7 +58,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: {
-          serviceCount: 19, // Our target service count
+          serviceCount: 17, // Our target service count (reduced from 19 by consolidating Slack services)
           environment: process.env.NODE_ENV
         }
       });
@@ -192,49 +191,38 @@ const registerCoreServices = async (): Promise<void> => {
 
 
 
-    // 11. SlackEventHandler - Focused service for Slack event processing
+    // 11. SlackService - Consolidated service for all main Slack operations
     if (ENV_VALIDATION.isSlackConfigured()) {
-      const { WebClient } = await import('@slack/web-api');
-      const client = new WebClient(ENVIRONMENT.slack.botToken);
-      const slackEventHandler = new SlackEventHandler({
+      const slackService = new SlackService({
+        signingSecret: ENVIRONMENT.slack.signingSecret,
+        botToken: ENVIRONMENT.slack.botToken,
+        clientId: ENVIRONMENT.slack.clientId,
+        clientSecret: ENVIRONMENT.slack.clientSecret,
+        redirectUri: ENVIRONMENT.slack.redirectUri,
+        development: ENVIRONMENT.nodeEnv === 'development',
         enableDeduplication: true,
-        deduplicationTTL: 5 * 60 * 1000, // 5 minutes
         enableBotMessageFiltering: true,
-        enableDMOnlyMode: true
-      }, client);
-      serviceManager.registerService('slackEventHandler', slackEventHandler as any, {
+        enableDMOnlyMode: true,
+        enableAsyncProcessing: true
+      });
+      serviceManager.registerService('slackService', slackService, {
+        dependencies: ['tokenManager', 'toolExecutorService'],
         priority: 70,
         autoStart: true
       });
     }
 
-    // 13. SlackOAuthManager - Focused service for Slack OAuth handling
+    // 12. SlackOAuthService - Dedicated service for Slack OAuth operations
     if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackOAuthManager = new SlackOAuthManager({
+      const slackOAuthService = new SlackOAuthService({
         clientId: ENVIRONMENT.slack.clientId,
         clientSecret: ENVIRONMENT.slack.clientSecret,
         redirectUri: ENVIRONMENT.slack.redirectUri,
-        scopes: ['chat:write', 'im:write', 'im:read']
+        scopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/calendar']
       });
-      serviceManager.registerService('slackOAuthManager', slackOAuthManager, {
+      serviceManager.registerService('slackOAuthService', slackOAuthService, {
         dependencies: ['tokenManager'],
         priority: 75,
-        autoStart: true
-      });
-    }
-
-
-    // 15. SlackMessageProcessor - Focused service for message processing pipeline
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackMessageProcessor = new SlackMessageProcessor({
-        enableOAuthDetection: true,
-        enableConfirmationDetection: true,
-        enableDMOnlyMode: true,
-        enableAsyncProcessing: true
-      });
-      serviceManager.registerService('slackMessageProcessor', slackMessageProcessor, {
-        dependencies: ['tokenManager', 'toolExecutorService'],
-        priority: 81,
         autoStart: true
       });
     }
@@ -249,24 +237,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 19-20. Calendar auxiliary services - REMOVED: Consolidated into CalendarAgent
 
-    // 21. SlackInterfaceService - Central coordinator for all Slack operations
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackInterfaceService = new SlackInterfaceService({
-        signingSecret: ENVIRONMENT.slack.signingSecret,
-        botToken: ENVIRONMENT.slack.botToken,
-        clientId: ENVIRONMENT.slack.clientId,
-        clientSecret: ENVIRONMENT.slack.clientSecret,
-        redirectUri: ENVIRONMENT.slack.redirectUri,
-        development: ENVIRONMENT.nodeEnv === 'development'
-      });
-      serviceManager.registerService('slackInterfaceService', slackInterfaceService, {
-        dependencies: ['slackMessageProcessor'],
-        priority: 94,
-        autoStart: true
-      });
-
-      // 24-26. Slack auxiliary services - REMOVED: Consolidated into SlackAgent
-    }
+    // SlackInterfaceService - REMOVED: Functionality consolidated into SlackService
 
 
 

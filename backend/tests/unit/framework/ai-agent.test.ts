@@ -1,4 +1,4 @@
-import { AIAgent, AIAgentWithPreview, AIPlanningConfig, AIPlan, AIPlanStep, AITool } from '../../../src/framework/ai-agent';
+import { AIAgent, AIPlanningConfig, AIPlan, AIPlanStep, AITool } from '../../../src/framework/ai-agent';
 import { ToolExecutionContext, AgentConfig } from '../../../src/types/tools';
 import { OpenAIService } from '../../../src/services/openai.service';
 import { getService } from '../../../src/services/service-manager';

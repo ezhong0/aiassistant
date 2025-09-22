@@ -16,7 +16,8 @@ import { userRateLimit, sensitiveOperationRateLimit } from '../middleware/rate-l
 import { getService } from '../services/service-manager';
 import { REQUEST_LIMITS, RATE_LIMITS } from '../config/app-config';
 import { assistantApiLogging } from '../middleware/api-logging.middleware';
-import { MasterAgent } from '../agents/master.agent';
+import { MasterAgent, UnifiedProcessingResult } from '../agents/master.agent';
+import { DraftManager } from '../services/draft-manager.service';
 import { ToolExecutorService } from '../services/tool-executor.service';
 import { OpenAIService } from '../services/openai.service';
 import { TokenStorageService } from '../services/token-storage.service';
@@ -191,109 +192,49 @@ router.post('/text-command',
       return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json(errorResponse);
     }
 
-    // Get Master Agent response (determines which tools to call)
-    const masterResponse = await masterAgent.processUserInput(commandString, finalSessionId, user.userId);
-    
-    // Step 2: First run tools in preview mode to check for confirmation needs
-    if (masterResponse.toolCalls && masterResponse.toolCalls.length > 0) {
-      const executionContext: ToolExecutionContext = {
-        sessionId: finalSessionId,
-        userId: user.userId,
-        timestamp: new Date()
-      };
-      
-      
-      // First, run in preview mode to see if confirmation is needed
-      const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
-      if (!toolExecutorService) {
-        throw new Error('Tool executor service not available');
+    // Use unified processing with DraftManager integration
+    const result = await masterAgent.processUserInputUnified(
+      commandString,
+      finalSessionId,
+      user.userId,
+      {
+        accessToken: accessToken as string | undefined,
+        context: mergedContext
       }
-        const previewResults = await toolExecutorService.executeTools(
-          masterResponse.toolCalls,
-          executionContext,
-          accessToken as string | undefined,
-          { preview: true } // Run in preview mode
-        );
-      
-      
-      // Check if any tools require confirmation
-      const needsConfirmation = previewResults.some(result => 
-        result.result && typeof result.result === 'object' && 
-        'awaitingConfirmation' in result.result && 
-        result.result.awaitingConfirmation === true
-      );
-      
-      
-      if (needsConfirmation) {
-        // Store pending actions in session context
-        const pendingActions = extractPendingActions(previewResults);
-        
-        
-        // Note: Using stateless architecture with TokenStorageService now
-        
-        // Generate dynamic confirmation message
-        const confirmationMessage = await generateDynamicConfirmationMessage(masterResponse.toolCalls, previewResults, commandString);
-        const confirmationPrompt = await generateDynamicConfirmationPrompt(masterResponse.toolCalls, previewResults, commandString);
-        
-        // Return confirmation required response
-        const confirmationResponse = ResponseBuilder.confirmationRequired(
-          confirmationMessage,
-          {
-            sessionId: finalSessionId,
-            toolResults: previewResults,
-            pendingActions: pendingActions,
-            confirmationPrompt: confirmationPrompt,
-            conversationContext: buildConversationContext(commandString, masterResponse.message, mergedContext)
-          },
-          {
-            sessionId: finalSessionId,
-            userId: user.userId
-          }
-        );
-        return res.json(confirmationResponse);
-      } else {
-        // No confirmation needed, execute tools normally
-        const toolExecutorService = getService<ToolExecutorService>('toolExecutorService');
-        if (!toolExecutorService) {
-          throw new Error('Tool executor service not available');
-        }
-        const toolResults = await toolExecutorService.executeTools(
-          masterResponse.toolCalls,
-          executionContext,
-          accessToken as string | undefined,
-          { preview: false } // Execute normally
-        );
-        
-        const executionStats = toolExecutorService.getExecutionStats(toolResults);
-        const completionMessage = await generateDynamicCompletionMessage(toolResults, commandString);
-        
-        const actionResponse = ResponseBuilder.actionCompleted(
-          completionMessage,
-          {
-            sessionId: finalSessionId,
-            toolResults,
-            executionStats,
-            conversationContext: buildConversationContext(commandString, masterResponse.message, mergedContext)
-          },
-          {
-            sessionId: finalSessionId,
-            userId: user.userId
-          }
-        );
-        return res.json(actionResponse);
-      }
-    } else {
-      // No tools needed, just return the response
-      return res.json({
-        success: true,
-        type: 'response',
-        message: masterResponse.message,
-        data: {
-          response: masterResponse.message,
+    );
+
+    // Check if result indicates draft creation needed
+    if (result.needsConfirmation && result.draftId) {
+      // Return confirmation response with draft details
+      const confirmationResponse = ResponseBuilder.confirmationRequired(
+        result.message, // This includes draft contents
+        {
           sessionId: finalSessionId,
-          conversationContext: buildConversationContext(command, masterResponse.message, mergedContext)
+          draftId: result.draftId,
+          draftContents: result.draftContents,
+          conversationContext: buildConversationContext(commandString, result.message, mergedContext)
+        },
+        {
+          sessionId: finalSessionId,
+          userId: user.userId
         }
-      });
+      );
+      return res.json(confirmationResponse);
+    } else {
+      // Direct execution completed or no action needed
+      const actionResponse = ResponseBuilder.actionCompleted(
+        result.message,
+        {
+          sessionId: finalSessionId,
+          toolResults: result.toolResults,
+          conversationContext: buildConversationContext(commandString, result.message, mergedContext)
+        },
+        {
+          sessionId: finalSessionId,
+          userId: user.userId
+        }
+      );
+      return res.json(actionResponse);
     }
 
   } catch (error) {
@@ -688,38 +629,43 @@ const handleActionConfirmation = async (
     const confirmed = await isPositiveConfirmation(command);
 
     if (!confirmed) {
+      // Cancel draft using DraftManager
+      const draftManager = getService<DraftManager>('draftManager');
+      if (draftManager && pendingAction.actionId) {
+        await draftManager.removeDraft(pendingAction.actionId);
+      }
+      
+      return res.json({
+        success: true,
+        type: 'response',
+        message: 'Action cancelled.',
+        data: {
+          actionId: pendingAction.actionId,
+          status: 'cancelled',
+          sessionId
+        }
+      });
+    }
+
+    // Execute draft using DraftManager
+    const draftManager = getService<DraftManager>('draftManager');
+    if (!draftManager) {
+      throw new Error('DraftManager not available');
+    }
+
+    const result = await draftManager.executeDraft(pendingAction.actionId);
+
     return res.json({
-      success: true,
-      type: 'response',
-      message: 'Action cancelled.',
+      success: result.success,
+      type: result.success ? 'action_completed' : 'error',
+      message: result.success ? 'Action completed successfully!' : result.error,
       data: {
         actionId: pendingAction.actionId,
-        status: 'cancelled',
+        status: result.success ? 'completed' : 'failed',
+        result: result.result,
         sessionId
       }
     });
-  }
-
-  // Execute the confirmed action
-  const result = await executeConfirmedAction(
-    pendingAction.actionId,
-    pendingAction.parameters,
-    req.user!.userId,
-    sessionId,
-    req.body.accessToken
-  );
-
-  return res.json({
-    success: result.success,
-    type: result.success ? 'action_completed' : 'error',
-    message: result.message,
-    data: {
-      actionId: pendingAction.actionId,
-      status: result.success ? 'completed' : 'failed',
-      result: result.data,
-      sessionId
-    }
-  });
   } catch (error) {
     
     return res.status(500).json({
@@ -850,8 +796,7 @@ const executeConfirmedAction = async (
     const toolResult = await toolExecutorService.executeTool(
       toolCall,
       executionContext,
-      accessToken,
-      { preview: false }
+      accessToken
     );
 
     if (toolResult.success) {

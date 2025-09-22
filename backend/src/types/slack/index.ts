@@ -1,10 +1,10 @@
 import { ServiceManager } from '../../services/service-manager';
-import { SlackInterfaceService } from '../../services/slack/slack-interface.service';
+import { SlackService } from '../../services/slack/slack.service';
 import { SlackConfig } from './slack-config.types';
 import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
 
 export interface InterfaceManager {
-  slackInterface?: SlackInterfaceService;
+  slackInterface?: SlackService;
   start(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -18,14 +18,12 @@ export const initializeInterfaces = async (
 ): Promise<InterfaceManager> => {
   const interfaces: InterfaceManager = {
     async start() {
-      if (this.slackInterface) {
-        await this.slackInterface.initialize();
-      }
+      // SlackService is already initialized by ServiceManager
+      // No additional initialization needed
     },
     async stop() {
-      if (this.slackInterface) {
-        await this.slackInterface.destroy();
-      }
+      // SlackService cleanup is handled by ServiceManager
+      // No additional cleanup needed
     }
   };
 
@@ -41,7 +39,8 @@ export const initializeInterfaces = async (
         development: !ENV_VALIDATION.isProduction()
       };
 
-      interfaces.slackInterface = new SlackInterfaceService(slackConfig);
+      // Get the already-initialized SlackService from ServiceManager
+      interfaces.slackInterface = serviceManager.getService('slackService') as SlackService;
       // Don't initialize here - let startInterfaces handle it
       
     } else {

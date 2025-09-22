@@ -38,6 +38,25 @@ import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as N
 import { ToolExecutorService } from '../services/tool-executor.service';
 
 /**
+ * Result interface for unified processing
+ */
+export interface UnifiedProcessingResult {
+  message: string;           // Natural language response WITH draft contents
+  needsConfirmation: boolean;
+  draftId?: string;         // ID for tracking draft
+  draftContents?: {         // Structured draft data for UI display
+    action: string;
+    recipient?: string;
+    subject?: string;
+    body?: string;
+    previewData: any;
+  };
+  toolCall?: ToolCall;      // The tool call that was drafted
+  toolResults?: ToolResult[]; // For direct execution
+  success: boolean;
+}
+
+/**
  * Agent capabilities interface for internal use
  */
 interface AgentCapability {
@@ -538,8 +557,12 @@ export class MasterAgent {
   async processUserInputUnified(
     userInput: string,
     sessionId: string,
-    userId?: string
-  ): Promise<string> {
+    userId?: string,
+    options?: {
+      accessToken?: string;
+      context?: any;
+    }
+  ): Promise<UnifiedProcessingResult> {
     const startTime = Date.now();
     const correlationId = `master-unified-${sessionId}-${Date.now()}`;
     const logContext: LogContext = {
@@ -586,7 +609,7 @@ export class MasterAgent {
       const intentAnalysis = await this.comprehensiveIntentAnalysis(analysisContext);
 
       // 5. Route based on AI analysis
-      return await this.routeBasedOnIntent(intentAnalysis, sessionId, userId || 'unknown');
+      return await this.routeBasedOnIntent(intentAnalysis, sessionId, userId || 'unknown', options);
 
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -599,7 +622,12 @@ export class MasterAgent {
       });
 
       // Return user-friendly error message
-      return await this.createUserFriendlyErrorText(error as Error, userInput);
+      const errorMessage = await this.createUserFriendlyErrorText(error as Error, userInput);
+      return {
+        message: errorMessage,
+        needsConfirmation: false,
+        success: false
+      };
     }
   }
 
@@ -738,39 +766,72 @@ Return JSON with this structure:
   private async routeBasedOnIntent(
     analysis: IntentAnalysis,
     sessionId: string,
-    userId: string
-  ): Promise<string> {
+    userId: string,
+    options?: {
+      accessToken?: string;
+      context?: any;
+    }
+  ): Promise<UnifiedProcessingResult> {
     const draftManager = this.getDraftManager();
     if (!draftManager) {
-      return "❌ System temporarily unavailable. Please try again in a moment.";
+      return {
+        message: "❌ System temporarily unavailable. Please try again in a moment.",
+        needsConfirmation: false,
+        success: false
+      };
     }
 
     if (!analysis || !analysis.intentType) {
-      return "❌ I couldn't understand your request. Could you please rephrase it?";
+      return {
+        message: "❌ I couldn't understand your request. Could you please rephrase it?",
+        needsConfirmation: false,
+        success: false
+      };
     }
 
     switch (analysis.intentType) {
       case 'confirmation_positive':
         if (!analysis.targetDraftId) {
-          return "❌ I couldn't find the draft to confirm. Please try your request again.";
+          return {
+            message: "❌ I couldn't find the draft to confirm. Please try your request again.",
+            needsConfirmation: false,
+            success: false
+          };
         }
 
         try {
           const result = await draftManager.executeDraft(analysis.targetDraftId);
-          return result.success
-            ? "✅ Action completed successfully!"
-            : `❌ Failed to complete action: ${result.error || 'Unknown error'}`;
+          return {
+            message: result.success
+              ? "✅ Action completed successfully!"
+              : `❌ Failed to complete action: ${result.error || 'Unknown error'}`,
+            needsConfirmation: false,
+            toolResults: result.success ? [result] : undefined,
+            success: result.success
+          };
         } catch (error) {
-          return `❌ Failed to execute action: ${(error as Error).message}`;
+          return {
+            message: `❌ Failed to execute action: ${(error as Error).message}`,
+            needsConfirmation: false,
+            success: false
+          };
         }
 
       case 'confirmation_negative':
         await draftManager.clearSessionDrafts(sessionId);
-        return `❌ Action cancelled. ${analysis.reasoning}`;
+        return {
+          message: `❌ Action cancelled. ${analysis.reasoning}`,
+          needsConfirmation: false,
+          success: true
+        };
 
       case 'draft_modification':
         if (!analysis.targetDraftId || !analysis.modifications) {
-          return "❌ I couldn't understand what changes you want to make. Could you be more specific?";
+          return {
+            message: "❌ I couldn't understand what changes you want to make. Could you be more specific?",
+            needsConfirmation: false,
+            success: false
+          };
         }
 
         try {
@@ -784,9 +845,27 @@ Return JSON with this structure:
               }
             }
           );
-          return `🔍 Updated: ${updatedDraft.previewData.description}. Reply "yes" to confirm.`;
+          
+          // Generate response with updated draft contents
+          const messageWithContents = await this.generateResponseWithDraftContents(updatedDraft);
+          
+          return {
+            message: messageWithContents,
+            needsConfirmation: true,
+            draftId: updatedDraft.id,
+            draftContents: {
+              action: updatedDraft.operation,
+              previewData: updatedDraft.previewData
+            },
+            toolCall: updatedDraft.toolCall,
+            success: true
+          };
         } catch (error) {
-          return `❌ Failed to update draft: ${(error as Error).message}`;
+          return {
+            message: `❌ Failed to update draft: ${(error as Error).message}`,
+            needsConfirmation: false,
+            success: false
+          };
         }
 
       case 'new_request':
@@ -794,43 +873,176 @@ Return JSON with this structure:
         await draftManager.clearSessionDrafts(sessionId);
 
         if (!analysis.newOperation) {
-          return "❌ I couldn't understand what you want me to do. Could you be more specific?";
+          return {
+            message: "❌ I couldn't understand what you want me to do. Could you be more specific?",
+            needsConfirmation: false,
+            success: false
+          };
         }
 
         try {
           const draft = await draftManager.createDraft(sessionId, analysis.newOperation);
-          return `🔍 Ready to ${draft.previewData.description}. Reply "yes" to confirm or describe any changes.`;
+          
+          // Generate response with draft contents
+          const messageWithContents = await this.generateResponseWithDraftContents(draft);
+          
+          return {
+            message: messageWithContents,
+            needsConfirmation: true,
+            draftId: draft.id,
+            draftContents: {
+              action: draft.operation,
+              previewData: draft.previewData
+            },
+            toolCall: draft.toolCall,
+            success: true
+          };
         } catch (error) {
-          return `❌ Failed to create draft: ${(error as Error).message}`;
+          return {
+            message: `❌ Failed to create draft: ${(error as Error).message}`,
+            needsConfirmation: false,
+            success: false
+          };
         }
 
       case 'new_write_operation':
         if (!analysis.newOperation) {
-          return "❌ I couldn't understand what you want me to do. Could you be more specific?";
+          return {
+            message: "❌ I couldn't understand what you want me to do. Could you be more specific?",
+            needsConfirmation: false,
+            success: false
+          };
         }
 
         try {
           const draft = await draftManager.createDraft(sessionId, analysis.newOperation);
-          return `🔍 Ready to ${draft.previewData.description}. Reply "yes" to confirm or describe any changes.`;
+          
+          // Generate response with draft contents
+          const messageWithContents = await this.generateResponseWithDraftContents(draft);
+          
+          return {
+            message: messageWithContents,
+            needsConfirmation: true,
+            draftId: draft.id,
+            draftContents: {
+              action: draft.operation,
+              previewData: draft.previewData
+            },
+            toolCall: draft.toolCall,
+            success: true
+          };
         } catch (error) {
-          return `❌ Failed to create draft: ${(error as Error).message}`;
+          return {
+            message: `❌ Failed to create draft: ${(error as Error).message}`,
+            needsConfirmation: false,
+            success: false
+          };
         }
 
       case 'read_operation':
         if (!analysis.readOperations || analysis.readOperations.length === 0) {
-          return "❌ I couldn't determine what information you're looking for.";
+          return {
+            message: "❌ I couldn't determine what information you're looking for.",
+            needsConfirmation: false,
+            success: false
+          };
         }
 
         try {
           // Execute read operations immediately (no confirmation needed)
-          const results = await this.executeReadOperations(analysis.readOperations, sessionId, userId);
-          return this.formatReadResults(results);
+          const results = await this.executeReadOperations(analysis.readOperations, sessionId, userId, options);
+          const formattedResults = this.formatReadResults(results);
+          
+          return {
+            message: formattedResults,
+            needsConfirmation: false,
+            toolResults: results,
+            success: true
+          };
         } catch (error) {
-          return `❌ Failed to retrieve information: ${(error as Error).message}`;
+          return {
+            message: `❌ Failed to retrieve information: ${(error as Error).message}`,
+            needsConfirmation: false,
+            success: false
+          };
         }
 
       default:
-        return "❌ I couldn't understand your request. Could you try rephrasing it?";
+        return {
+          message: "❌ I couldn't understand your request. Could you try rephrasing it?",
+          needsConfirmation: false,
+          success: false
+        };
+    }
+  }
+
+  /**
+   * Generate natural language response that includes draft contents
+   */
+  private async generateResponseWithDraftContents(draft: Draft): Promise<string> {
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        // Fallback to simple template
+        return `🔍 Ready to ${draft.previewData.description}. Reply "yes" to confirm or describe any changes.`;
+      }
+
+      const prompt = `Generate a natural language response that shows the user exactly what will be executed.
+
+Draft operation: ${draft.operation}
+Draft type: ${draft.type}
+Draft details: ${JSON.stringify(draft.previewData, null, 2)}
+Parameters: ${JSON.stringify(draft.parameters, null, 2)}
+
+Requirements:
+- Show the user exactly what will happen
+- Include specific details (recipients, subject, content, times, etc.)
+- Ask for confirmation naturally
+- Be friendly and clear
+- Format the content nicely for readability
+
+Example for email:
+"I'll send this email to John:
+
+To: john@example.com
+Subject: Meeting Update
+
+Hi John,
+
+I wanted to update you on our meeting scheduled for tomorrow...
+
+Would you like me to send this email?"
+
+Example for calendar:
+"I'll create this calendar event:
+
+Event: Team Meeting
+Date: Tomorrow, March 15th at 2:00 PM
+Duration: 1 hour
+Attendees: john@example.com, sarah@example.com
+Location: Conference Room A
+
+Would you like me to create this event?"
+
+Generate the response for this ${draft.type} operation:`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You are an AI assistant that clearly shows users what actions will be taken.',
+        { temperature: 0.3, maxTokens: 500 }
+      );
+
+      return response.trim();
+
+    } catch (error) {
+      logger.error('Failed to generate response with draft contents', {
+        error: (error as Error).message,
+        draftId: draft.id,
+        draftType: draft.type
+      });
+      
+      // Fallback to simple template
+      return `🔍 Ready to ${draft.previewData.description}. Reply "yes" to confirm or describe any changes.`;
     }
   }
 
@@ -840,7 +1052,11 @@ Return JSON with this structure:
   private async executeReadOperations(
     readOperations: ToolCall[],
     sessionId: string,
-    userId: string
+    userId: string,
+    options?: {
+      accessToken?: string;
+      context?: any;
+    }
   ): Promise<ToolResult[]> {
     const logContext: LogContext = {
       correlationId: `read-ops-${Date.now()}`,
@@ -866,7 +1082,7 @@ Return JSON with this structure:
 
     for (const toolCall of readOperations) {
       try {
-        const result = await toolExecutorService.executeTool(toolCall, context);
+        const result = await toolExecutorService.executeTool(toolCall, context, options?.accessToken);
         results.push(result);
       } catch (error) {
         results.push({
