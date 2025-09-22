@@ -28,6 +28,7 @@ import {
   validateMobileTokenExchange,
 } from '../middleware/enhanced-validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
+import { SlackOAuthService } from '../services/slack/slack-oauth.service';
 
 const router = express.Router();
 
@@ -184,7 +185,6 @@ router.get('/debug/test-oauth-url',
     // Also test the Slack interface OAuth URL generation
     let slackOAuthUrl = 'Not available';
     try {
-      const { SlackInterfaceService } = await import('../services/slack/slack-interface.service');
       const mockSlackContext = {
         teamId: 'test_team',
         userId: 'test_user',
@@ -192,18 +192,20 @@ router.get('/debug/test-oauth-url',
         isDirectMessage: false
       };
       
-      // Create a mock SlackInterfaceService instance to test OAuth URL generation
-      const mockSlackInterface = new SlackInterfaceService({} as any);
-      await mockSlackInterface.initialize();
-      const oauthService = (mockSlackInterface as any)['slackOAuthService'];
-      if (oauthService && typeof oauthService.generateAuthorizationUrl === 'function') {
-        const authResult = await oauthService.generateAuthorizationUrl({
-          teamId: mockSlackContext.teamId,
-          userId: mockSlackContext.userId
-        });
-        slackOAuthUrl = authResult.authorizationUrl || 'No authorization URL generated';
+      // Build a basic Slack OAuth URL for test output
+      const clientId = process.env.SLACK_CLIENT_ID;
+      const redirectUri = process.env.SLACK_OAUTH_REDIRECT_URI;
+      if (clientId && redirectUri) {
+        const scopes = [
+          'im:history',
+          'im:write',
+          'users:read',
+          'chat:write',
+          'commands'
+        ].join(',');
+        slackOAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
       } else {
-        slackOAuthUrl = 'OAuth service not available';
+        slackOAuthUrl = 'OAuth config missing';
       }
     } catch (slackError: unknown) {
       const errorMessage = slackError instanceof Error ? slackError.message : 'Unknown error';

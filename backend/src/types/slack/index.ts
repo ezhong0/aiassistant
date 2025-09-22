@@ -89,5 +89,5 @@ export const stopInterfaces = async (interfaces: InterfaceManager): Promise<void
 };
 
 // Export individual interfaces for direct use
-export { SlackInterfaceService } from '../../services/slack/slack-interface.service';
+export * from './slack.types';
 export type { SlackConfig } from './slack-config.types';

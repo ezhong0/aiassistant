@@ -123,13 +123,16 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
    * Required method to process incoming requests - routes to appropriate handlers
    */
   protected async processQuery(params: CalendarAgentRequest, context: ToolExecutionContext): Promise<any> {
-    console.log('🎯 CALENDAR AGENT: processQuery called with params:', JSON.stringify(params, null, 2));
-    console.log('🎯 CALENDAR AGENT: processQuery called with context:', JSON.stringify({
-      sessionId: context.sessionId,
-      userId: context.userId,
-      hasSlackContext: !!context.slackContext,
-      slackContext: context.slackContext
-    }, null, 2));
+    logger.debug('CalendarAgent.processQuery called', {
+      correlationId: `calendar-${context.sessionId}-${Date.now()}`,
+      operation: 'calendar_process_query',
+      metadata: {
+        sessionId: context.sessionId,
+        userId: context.userId,
+        action: params.action,
+        hasSlackContext: !!context.slackContext
+      }
+    });
 
     const logContext: LogContext = {
       correlationId: `calendar-${context.sessionId}-${Date.now()}`,
@@ -159,12 +162,15 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     // Get access token from TokenManager using Slack context
     let accessToken: string | null = null;
 
-    console.log('🔑 CALENDAR AGENT: Attempting to retrieve access token');
-    console.log('🔑 CALENDAR AGENT: Slack context:', {
-      hasSlackContext: !!context.slackContext,
-      teamId: context.slackContext?.teamId,
-      userId: context.slackContext?.userId,
-      hasParamsAccessToken: !!params.accessToken
+    logger.debug('Attempting to retrieve access token (masked)', {
+      correlationId: logContext.correlationId,
+      operation: 'calendar_token_lookup',
+      metadata: {
+        hasSlackContext: !!context.slackContext,
+        teamId: context.slackContext?.teamId,
+        userId: context.slackContext?.userId,
+        hasParamsAccessToken: !!params.accessToken
+      }
     });
 
     logger.debug('Attempting to retrieve access token', {
@@ -178,26 +184,23 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     });
 
     if (context.slackContext?.teamId && context.slackContext?.userId) {
-      console.log('🔑 CALENDAR AGENT: Found Slack context, looking up TokenManager');
+      logger.debug('Found Slack context, looking up TokenManager', { correlationId: logContext.correlationId });
       const tokenManager = serviceManager.getService<TokenManager>('tokenManager');
-      console.log('🔑 CALENDAR AGENT: TokenManager lookup result:', {
-        hasTokenManager: !!tokenManager,
-        isTokenManagerReady: tokenManager?.isReady()
+      logger.debug('TokenManager lookup result', {
+        correlationId: logContext.correlationId,
+        operation: 'calendar_token_lookup',
+        metadata: { hasTokenManager: !!tokenManager, isTokenManagerReady: tokenManager?.isReady() }
       });
 
       if (tokenManager) {
         try {
-          console.log('🔑 CALENDAR AGENT: Calling getValidTokensForCalendar with:', {
-            teamId: context.slackContext.teamId,
-            userId: context.slackContext.userId
-          });
           accessToken = await tokenManager.getValidTokensForCalendar(context.slackContext.teamId, context.slackContext.userId);
-          console.log('🔑 CALENDAR AGENT: Token retrieval result:', {
-            hasAccessToken: !!accessToken,
-            accessTokenLength: accessToken?.length || 0
+          logger.debug('Token retrieval result (masked)', {
+            correlationId: logContext.correlationId,
+            operation: 'calendar_token_lookup',
+            metadata: { hasAccessToken: !!accessToken, accessTokenLength: accessToken?.length || 0 }
           });
         } catch (error) {
-          console.log('🔑 CALENDAR AGENT: Error retrieving access token:', error);
           logger.error('Error retrieving access token', error as Error, {
             ...logContext,
             metadata: {
@@ -207,16 +210,10 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
           });
         }
       } else {
-        console.log('🔑 CALENDAR AGENT: TokenManager service not available');
-        console.log('🔑 CALENDAR AGENT: Available services:', Object.keys((serviceManager as any).services || {}));
+        logger.warn('TokenManager service not available for CalendarAgent', { correlationId: logContext.correlationId });
       }
     } else {
-      console.log('🔑 CALENDAR AGENT: Missing Slack context for token retrieval');
-      console.log('🔑 CALENDAR AGENT: Context details:', {
-        hasContext: !!context,
-        hasSlackContext: !!context.slackContext,
-        contextKeys: context ? Object.keys(context) : []
-      });
+      logger.debug('Missing Slack context for token retrieval', { correlationId: logContext.correlationId });
     }
 
     // Also check if access token is provided in parameters (for backwards compatibility)
@@ -543,7 +540,8 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       });
 
       return {
-        success: true
+        success: true,
+        preview: actionPreview
       };
     } catch (error) {
       logger.error('Failed to generate calendar preview', error as Error, {
@@ -1336,11 +1334,36 @@ Always return structured execution status with event details, scheduling insight
     if (!data.summary || data.summary.trim().length === 0) {
       errors.push('Event summary is required');
     }
+    if (data.start && !this.isIsoDateTime(data.start)) {
+      errors.push('Start time must be ISO 8601 datetime');
+    }
+    if (data.end && !this.isIsoDateTime(data.end)) {
+      errors.push('End time must be ISO 8601 datetime');
+    }
+    if (data.start && data.end && new Date(data.start).getTime() >= new Date(data.end).getTime()) {
+      errors.push('End time must be after start time');
+    }
+    if (Array.isArray(data.attendees) && data.attendees.length > 100) {
+      errors.push('Too many attendees (max 100)');
+    }
     return { isValid: errors.length === 0, errors };
   }
 
   private validateQueryOptions(options: any): { isValid: boolean; errors?: string[] } {
-    return { isValid: true }; // Simple validation
+    const errors: string[] = [];
+    if (options.timeMin && !this.isIsoDateTime(options.timeMin)) {
+      errors.push('timeMin must be ISO 8601 datetime');
+    }
+    if (options.timeMax && !this.isIsoDateTime(options.timeMax)) {
+      errors.push('timeMax must be ISO 8601 datetime');
+    }
+    if (options.timeMin && options.timeMax && new Date(options.timeMin).getTime() > new Date(options.timeMax).getTime()) {
+      errors.push('timeMin must be before or equal to timeMax');
+    }
+    if (options.maxResults && (typeof options.maxResults !== 'number' || options.maxResults <= 0)) {
+      errors.push('maxResults must be a positive number');
+    }
+    return { isValid: errors.length === 0, errors };
   }
 
   private validateEventId(eventId: string): { isValid: boolean; errors?: string[] } {
@@ -1349,6 +1372,13 @@ Always return structured execution status with event details, scheduling insight
       errors.push('Event ID is required');
     }
     return { isValid: errors.length === 0, errors };
+  }
+
+  private isIsoDateTime(value: string): boolean {
+    if (typeof value !== 'string') return false;
+    // Basic ISO 8601 validation using Date
+    const d = new Date(value);
+    return !isNaN(d.getTime()) && /\d{4}-\d{2}-\d{2}T/.test(value);
   }
 
   /**

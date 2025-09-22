@@ -265,6 +265,15 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
+    // 39. MasterAgentService - Provides MasterAgent instance via DI
+    const { MasterAgentService } = await import('./master-agent.service');
+    const masterAgentService = new MasterAgentService();
+    serviceManager.registerService('masterAgentService', masterAgentService, {
+      dependencies: ['openaiService'],
+      priority: 59, // After OpenAI
+      autoStart: true
+    });
+
     // 38. IntentAnalysisService - REMOVED to consolidate planning in NextStepPlanningService
     // const intentAnalysisService = new IntentAnalysisService();
     // serviceManager.registerService('intentAnalysisService', intentAnalysisService, {

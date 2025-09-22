@@ -6,7 +6,6 @@ import { PreviewGenerationResult } from '../types/api/api.types';
 import { resolveSlackService } from '../services/service-resolver';
 import { getService, serviceManager } from '../services/service-manager';
 import { OpenAIService } from '../services/openai.service';
-import { SlackInterfaceService } from '../services/slack/slack-interface.service';
 import { SlackService } from '../services/slack/slack.service';
 import { DraftManager, WriteOperation } from '../services/draft-manager.service';
 import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack/slack.types';
@@ -141,18 +140,14 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
   private slackMessageAnalyzer = {
     readMessageHistory: async (channelId: string, options: { limit?: number; includeAllMetadata?: boolean }) => {
       if (!this.slackService) return { success: false, messages: [], message: 'SlackService unavailable' };
-      const client = this.slackService.getClient();
       const limit = typeof options?.limit === 'number' ? options.limit : 10;
-      const resp: any = await client.conversations.history({ channel: channelId, limit });
-      const messages = Array.isArray(resp.messages) ? resp.messages : [];
+      const { messages } = await this.slackService.getChannelHistory(channelId, limit);
       return { success: true, messages, message: 'ok' };
     },
     readThreadMessages: async (channelId: string, threadTs: string, options: { limit?: number; includeAllMetadata?: boolean }) => {
       if (!this.slackService) return { success: false, messages: [], message: 'SlackService unavailable' };
-      const client = this.slackService.getClient();
       const limit = typeof options?.limit === 'number' ? options.limit : 20;
-      const resp: any = await client.conversations.replies({ channel: channelId, ts: threadTs, limit });
-      const messages = Array.isArray(resp.messages) ? resp.messages : [];
+      const { messages } = await this.slackService.getThreadMessages(channelId, threadTs, limit);
       return { success: true, messages, message: 'ok' };
     },
     analyzeConversationContext: async (messages: any[], _options: { includeSentiment?: boolean; includeKeyTopics?: boolean; includeActionItems?: boolean }) => {

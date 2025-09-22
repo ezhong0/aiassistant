@@ -2,12 +2,13 @@ import { WebClient } from '@slack/web-api';
 import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { TokenManager } from '../token-manager';
-import { ToolExecutorService } from '../tool-executor.service';
 import { SlackContext, SlackEventType, SlackEvent, SlackResponse } from '../../types/slack/slack.types';
 import { SlackConfig } from '../../types/slack/slack-config.types';
 import { serviceManager } from '../service-manager';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger';
+import { MasterAgent } from '../../agents/master.agent';
+import { MasterAgentService } from '../master-agent.service';
 
 export interface SlackServiceConfig {
   signingSecret: string;
@@ -43,7 +44,7 @@ export class SlackService extends BaseService {
   private webClient: WebClient;
   private config: SlackServiceConfig;
   private tokenManager: TokenManager | null = null;
-  private toolExecutorService: ToolExecutorService | null = null;
+  private masterAgent: MasterAgent | null = null;
 
   // Event handling state
   private processedEvents = new Map<string, any>();
@@ -71,9 +72,13 @@ export class SlackService extends BaseService {
       // Test connection
       await this.testSlackConnection();
 
+      // Resolve MasterAgent from DI
+      const maService = serviceManager.getService('masterAgentService') as MasterAgentService;
+      this.masterAgent = maService ? maService.getMasterAgent() : null;
+
       this.logInfo('SlackService initialized successfully', {
         hasTokenManager: !!this.tokenManager,
-        hasToolExecutor: !!this.toolExecutorService,
+        hasToolExecutor: false, // ToolExecutorService is removed
         botUserId: this.botUserId,
         enableDeduplication: this.config.enableDeduplication,
         enableDMOnlyMode: this.config.enableDMOnlyMode
@@ -100,13 +105,9 @@ export class SlackService extends BaseService {
    */
   private async initializeDependencies(): Promise<void> {
     this.tokenManager = serviceManager.getService('tokenManager') as TokenManager;
-    this.toolExecutorService = serviceManager.getService('toolExecutorService') as ToolExecutorService;
 
     if (!this.tokenManager) {
       throw new Error('TokenManager dependency not available');
-    }
-    if (!this.toolExecutorService) {
-      throw new Error('ToolExecutorService dependency not available');
     }
   }
 
@@ -148,7 +149,7 @@ export class SlackService extends BaseService {
    */
   async processEvent(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
     try {
-      // Event deduplication
+      // Event deduplication (optional)
       if (this.config.enableDeduplication && this.isDuplicateEvent(event)) {
         this.logInfo('Duplicate event ignored', { eventId: (event as any).event_id });
         return { success: true, message: 'Duplicate event ignored' };
@@ -218,7 +219,7 @@ export class SlackService extends BaseService {
       }
 
       // Process as regular message through tool executor
-      return await this.processMessageWithTools(messageText, context);
+      return await this.processMessageWithMasterAgent(messageText, context);
 
     } catch (error) {
       this.logError('Failed to handle message event', error);
@@ -241,35 +242,30 @@ export class SlackService extends BaseService {
   /**
    * Process message through tool executor
    */
-  private async processMessageWithTools(messageText: string, context: SlackContext): Promise<SlackResponse> {
+  private async processMessageWithMasterAgent(messageText: string, context: SlackContext): Promise<SlackResponse> {
     try {
-      if (!this.toolExecutorService) {
-        throw new Error('ToolExecutorService not available');
+      const sessionId = `slack:${context.teamId}:${context.userId}`;
+      if (!this.masterAgent) {
+        throw new Error('MasterAgent not available');
       }
-
-      // Create tool execution context
-      const toolContext = {
-        sessionId: `slack-${context.userId}-${Date.now()}`,
-        userId: context.userId,
-        timestamp: new Date()
-      };
-
-      // Create tool call object
-      const toolCall = {
-        name: 'slackAgent',
-        parameters: {
-          message: messageText,
-          context: context
+      const unified = await this.masterAgent.processUserInputUnified(
+        messageText,
+        sessionId,
+        context.userId,
+        {
+          context: { slackContext: context }
         }
-      };
-
-      // Execute tools
-      const result = await this.toolExecutorService.executeTool(toolCall, toolContext);
+      );
 
       return {
-        success: result.success,
-        message: result.result || 'Message processed',
-        data: (result as any).data
+        success: unified.success,
+        message: unified.message,
+        data: {
+          needsConfirmation: unified.needsConfirmation,
+          draftId: unified.draftId,
+          draftContents: unified.draftContents,
+          toolResults: unified.toolResults
+        }
       };
 
     } catch (error) {
@@ -352,8 +348,8 @@ export class SlackService extends BaseService {
    * Check for duplicate events
    */
   private isDuplicateEvent(event: SlackEvent): boolean {
-    // Generate a unique ID based on event properties
-    const eventId = this.generateEventId(event);
+    // Use stable ID if available
+    const eventId = (event as any).event_id || this.generateEventId(event);
     if (!eventId) return false;
 
     const now = Date.now();
@@ -376,25 +372,41 @@ export class SlackService extends BaseService {
    * Generate event ID from event properties
    */
   private generateEventId(event: SlackEvent): string | null {
-    // Simple ID generation based on common properties
-    const timestamp = Date.now();
-    return `${(event as any).type}-${timestamp}`;
+    try {
+      const team = (event as any).team_id || (event as any).authorizations?.[0]?.team_id || 'unknown';
+      const channel = (event as any).event?.channel || (event as any).channel || 'unknown';
+      const ts = (event as any).event?.ts || (event as any).ts || 'unknown';
+      const clientMsgId = (event as any).event?.client_msg_id || (event as any).client_msg_id || 'na';
+      return `${team}:${channel}:${ts}:${clientMsgId}`;
+    } catch {
+      return null;
+    }
   }
 
   /**
    * Check if message is from bot
    */
   private isBotMessage(event: SlackEvent): boolean {
-    // Simple bot detection - this can be enhanced based on actual event structure
-    return false; // For now, assume no bot messages to avoid type issues
+    const subtype = (event as any).event?.subtype || (event as any).subtype;
+    if (subtype === 'bot_message') return true;
+    const botProfile = (event as any).event?.bot_profile || (event as any).bot_profile;
+    if (botProfile) return true;
+    if (this.botUserId) {
+      const user = (event as any).event?.user || (event as any).user;
+      if (user && user === this.botUserId) return true;
+    }
+    return false;
   }
 
   /**
    * Check if message is direct message
    */
   private isDirectMessage(event: SlackEvent): boolean {
-    // Simple DM detection - this can be enhanced based on actual event structure
-    return true; // For now, assume all messages are DMs
+    const channel = (event as any).event?.channel || (event as any).channel;
+    if (typeof channel === 'string' && channel.startsWith('D')) return true; // IM channels
+    const channelType = (event as any).event?.channel_type;
+    if (channelType === 'im') return true;
+    return false;
   }
 
   /**
@@ -442,8 +454,26 @@ export class SlackService extends BaseService {
       healthy: this.isReady(),
       botUserId: this.botUserId,
       hasTokenManager: !!this.tokenManager,
-      hasToolExecutor: !!this.toolExecutorService,
+      hasToolExecutor: false, // ToolExecutorService is removed
       processedEventsCount: this.processedEvents.size
     };
+  }
+
+  /**
+   * Typed helper: get channel history
+   */
+  async getChannelHistory(channelId: string, limit = 20): Promise<{ messages: any[]; hasMore: boolean; nextCursor?: string; }> {
+    const resp: any = await this.webClient.conversations.history({ channel: channelId, limit });
+    const messages = Array.isArray(resp.messages) ? resp.messages : [];
+    return { messages, hasMore: !!resp.response_metadata?.next_cursor, nextCursor: resp.response_metadata?.next_cursor };
+  }
+
+  /**
+   * Typed helper: get thread messages
+   */
+  async getThreadMessages(channelId: string, threadTs: string, limit = 20): Promise<{ messages: any[]; hasMore: boolean; nextCursor?: string; }> {
+    const resp: any = await this.webClient.conversations.replies({ channel: channelId, ts: threadTs, limit });
+    const messages = Array.isArray(resp.messages) ? resp.messages : [];
+    return { messages, hasMore: !!resp.response_metadata?.next_cursor, nextCursor: resp.response_metadata?.next_cursor };
   }
 }

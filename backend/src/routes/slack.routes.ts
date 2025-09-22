@@ -220,7 +220,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         return;
       }
 
-      // For actual events, handle them directly instead of forwarding
+      // For actual events, handle them directly via SlackService
       if (type === 'event_callback' && event) {
         logger.debug('Event callback processing', {
           ...logContext,
@@ -242,10 +242,16 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         res.status(200).json({ ok: true });
         
         // Process the event asynchronously (don't await)
-        const interfaces = getInterfaces ? getInterfaces() : null;
-        if (interfaces?.slackInterface) {
-          // Process in background - don't block the response
-          interfaces.slackInterface.handleEvent(event, team_id).catch((processError: unknown) => {
+        const slackService = serviceManager.getService('slackService') as SlackService | undefined;
+        if (slackService) {
+          const slackContext = {
+            userId: event.user,
+            channelId: event.channel,
+            teamId: team_id,
+            threadTs: event.thread_ts,
+            isDirectMessage: event.channel_type === 'im'
+          };
+          slackService.processEvent(event as any, slackContext as any).catch((processError: unknown) => {
             logger.error('Event processing failed', {
               error: (processError as Error).message,
               stack: (processError as Error).stack,
@@ -254,7 +260,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             });
           });
         } else {
-          logger.warn('No Slack interface available - event not processed', {
+          logger.warn('SlackService not available - event not processed', {
             ...logContext,
             operation: 'event_processing',
             metadata: { eventType: event.type }

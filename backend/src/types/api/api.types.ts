@@ -407,6 +407,7 @@ export interface PreviewGenerationResult {
   fallbackMessage?: string;
   authRequired?: boolean;
   authReason?: string;
+  preview?: ActionPreview;
 }
 
 // ============================================================================
