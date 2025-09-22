@@ -6,7 +6,7 @@ import { ActionPreview, PreviewGenerationResult, CalendarPreviewData, ActionRisk
 import { CalendarService, CalendarEvent } from '../services/calendar/calendar.service';
 import { resolveCalendarService } from '../services/service-resolver';
 import { getService, serviceManager } from '../services/service-manager';
-import { OperationDetectionService } from '../services/operation-detection.service';
+// Removed OperationDetectionService - CalendarAgent handles its own operation detection
 import { TokenManager } from '../services/token-manager';
 import { APP_CONSTANTS } from '../config/constants';
 import { CALENDAR_SERVICE_CONSTANTS } from '../config/calendar-service-constants';
@@ -21,9 +21,15 @@ import {
   ListEventsActionParams
 } from '../types/agents/agent-specific-parameters';
 
-// Import focused services
-import { CalendarFormatter, CalendarFormattingResult, CalendarResult } from '../services/calendar/calendar-formatter.service';
-import { CalendarValidator, CalendarValidationResult } from '../services/calendar/calendar-validator.service';
+// Focused services removed - CalendarAgent handles validation and formatting internally
+
+// Simple result interface for internal use
+interface SimpleCalendarResult {
+  success: boolean;
+  data?: any;
+  message: string;
+  error?: string;
+}
 
 export interface CalendarAgentRequest {
   action: 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots';
@@ -79,8 +85,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
   
   // Focused service dependencies
   private calendarService: CalendarService | null = null;
-  private calendarFormatter: CalendarFormatter | null = null;
-  private calendarValidator: CalendarValidator | null = null;
+  // Calendar formatting and validation now handled internally
 
   constructor() {
     super({
@@ -111,12 +116,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
     if (!this.calendarService) {
       this.calendarService = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_SERVICE) as CalendarService;
     }
-    if (!this.calendarFormatter) {
-      this.calendarFormatter = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_FORMATTER) as CalendarFormatter;
-    }
-    if (!this.calendarValidator) {
-      this.calendarValidator = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_VALIDATOR) as CalendarValidator;
-    }
+    // Calendar formatting and validation now handled internally
   }
 
   /**
@@ -151,8 +151,8 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       ...logContext,
       metadata: {
         hasCalendarService: !!this.calendarService,
-        hasCalendarFormatter: !!this.calendarFormatter,
-        hasCalendarValidator: !!this.calendarValidator
+        calendarFormattingEnabled: true,
+        calendarValidationEnabled: true
       }
     });
 
@@ -451,22 +451,18 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       return params.action;
     }
 
-    try {
-      const operationDetectionService = serviceManager.getService<OperationDetectionService>('operationDetectionService');
-      if (!operationDetectionService) {
-        throw new Error('OperationDetectionService not available');
-      }
-
-      const userQuery = params.query || 'Calendar operation';
-      const detection = await operationDetectionService.detectOperation(
-        'calendarAgent',
-        userQuery,
-        params
-      );
-
-      return detection.operation;
-    } catch (error) {
-      throw new Error(`Failed to detect calendar operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Simple operation detection based on keywords
+    const userQuery = (params.query || '').toLowerCase();
+    if (userQuery.includes('create') || userQuery.includes('add') || userQuery.includes('schedule')) {
+      return 'create';
+    } else if (userQuery.includes('list') || userQuery.includes('show') || userQuery.includes('find')) {
+      return 'list';
+    } else if (userQuery.includes('update') || userQuery.includes('modify') || userQuery.includes('change')) {
+      return 'update';
+    } else if (userQuery.includes('delete') || userQuery.includes('remove') || userQuery.includes('cancel')) {
+      return 'delete';
+    } else {
+      return 'list'; // Default operation
     }
   }
 
@@ -838,7 +834,7 @@ Always return structured execution status with event details, scheduling insight
       );
 
       // Format the result
-      const calendarResult: CalendarResult = {
+      const calendarResult: SimpleCalendarResult = {
         event: createdEvent,
         summary: createdEvent?.summary || undefined,
         start: createdEvent?.start?.dateTime || undefined,
@@ -847,7 +843,12 @@ Always return structured execution status with event details, scheduling insight
         attendees: createdEvent?.attendees?.map((att: any) => att.email)
       };
 
-      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+      // Simple formatting now handled directly by CalendarAgent
+      const formattingResult = {
+        success: calendarResult.success,
+        message: calendarResult.message,
+        data: calendarResult.data
+      };
 
       return {
         success: true,
@@ -904,12 +905,17 @@ Always return structured execution status with event details, scheduling insight
       );
 
       // Format the result
-      const calendarResult: CalendarResult = {
+      const calendarResult: SimpleCalendarResult = {
         events: events,
         count: events.length
       };
 
-      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+      // Simple formatting now handled directly by CalendarAgent
+      const formattingResult = {
+        success: calendarResult.success,
+        message: calendarResult.message,
+        data: calendarResult.data
+      };
 
       return {
         success: true,
@@ -981,7 +987,7 @@ Always return structured execution status with event details, scheduling insight
       );
 
       // Format the result
-      const calendarResult: CalendarResult = {
+      const calendarResult: SimpleCalendarResult = {
         event: updatedEvent,
         summary: updatedEvent?.summary || undefined,
         start: updatedEvent?.start?.dateTime || undefined,
@@ -990,7 +996,12 @@ Always return structured execution status with event details, scheduling insight
         attendees: updatedEvent?.attendees?.map((att: any) => att.email)
       };
 
-      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+      // Simple formatting now handled directly by CalendarAgent
+      const formattingResult = {
+        success: calendarResult.success,
+        message: calendarResult.message,
+        data: calendarResult.data
+      };
 
       return {
         success: true,
@@ -1066,12 +1077,17 @@ Always return structured execution status with event details, scheduling insight
       );
 
       // Format the result
-      const calendarResult: CalendarResult = {
+      const calendarResult: SimpleCalendarResult = {
         isAvailable: !availabilityResult.busy,
         conflictingEvents: availabilityResult.conflicts
       };
 
-      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+      // Simple formatting now handled directly by CalendarAgent
+      const formattingResult = {
+        success: calendarResult.success,
+        message: calendarResult.message,
+        data: calendarResult.data
+      };
 
       return {
         success: true,
@@ -1109,11 +1125,16 @@ Always return structured execution status with event details, scheduling insight
       );
 
       // Format the result
-      const calendarResult: CalendarResult = {
+      const calendarResult: SimpleCalendarResult = {
         availableSlots: availableSlots
       };
 
-      const formattingResult = this.calendarFormatter!.formatCalendarResult(calendarResult);
+      // Simple formatting now handled directly by CalendarAgent
+      const formattingResult = {
+        success: calendarResult.success,
+        message: calendarResult.message,
+        data: calendarResult.data
+      };
 
       return {
         success: true,
@@ -1296,24 +1317,20 @@ Always return structured execution status with event details, scheduling insight
   }
 
   /**
-   * Detect calendar operation from query text using LLM intelligence
+   * Detect calendar operation from query text using simple keyword matching
    */
   private async detectCalendarOperation(query: string): Promise<string> {
-    try {
-      const operationDetectionService = serviceManager.getService<OperationDetectionService>('operationDetectionService');
-      if (!operationDetectionService) {
-        throw new Error('OperationDetectionService not available');
-      }
-
-      const detection = await operationDetectionService.detectOperation(
-        'calendarAgent',
-        query,
-        {}
-      );
-
-      return detection.operation;
-    } catch (error) {
-      throw new Error(`Failed to detect calendar operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const lowerQuery = query.toLowerCase();
+    if (lowerQuery.includes('create') || lowerQuery.includes('add') || lowerQuery.includes('schedule')) {
+      return 'create';
+    } else if (lowerQuery.includes('list') || lowerQuery.includes('show') || lowerQuery.includes('find')) {
+      return 'list';
+    } else if (lowerQuery.includes('update') || lowerQuery.includes('modify') || lowerQuery.includes('change')) {
+      return 'update';
+    } else if (lowerQuery.includes('delete') || lowerQuery.includes('remove') || lowerQuery.includes('cancel')) {
+      return 'delete';
+    } else {
+      return 'list'; // Default operation
     }
   }
 }

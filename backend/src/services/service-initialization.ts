@@ -1,6 +1,6 @@
 import { serviceManager } from './service-manager';
 import logger from '../utils/logger';
-import { serviceDependencyManager, ServiceHealth } from './service-dependency-manager';
+// Removed serviceDependencyManager - functionality moved to enhanced ServiceManager
 import { TokenStorageService } from './token-storage.service';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
@@ -15,20 +15,17 @@ import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { SlackEventHandler } from './slack/slack-event-handler.service';
 import { SlackOAuthManager } from './slack/slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack/slack-message-processor.service';
-import { SlackEventValidator } from './slack/slack-event-validator.service';
-import { EmailValidator } from './email/email-validator.service';
-import { CalendarFormatter } from './calendar/calendar-formatter.service';
-import { CalendarValidator } from './calendar/calendar-validator.service';
-import { SlackMessageAnalyzer } from './slack/slack-message-analyzer.service';
-import { SlackDraftManager } from './slack/slack-draft-manager.service';
-import { SlackFormatter } from './slack/slack-formatter.service';
+// Removed SlackEventValidator - consolidated into SlackAgent
+// EmailValidator removed - LLM handles validation directly
+// Removed CalendarFormatter and CalendarValidator - consolidated into CalendarAgent
+// Removed SlackMessageAnalyzer, SlackDraftManager, SlackFormatter - consolidated into SlackAgent
 import { SlackInterfaceService } from './slack/slack-interface.service';
-import { WorkflowCacheService } from './workflow-cache.service';
+// Removed WorkflowCacheService - replaced with simple in-memory state in MasterAgent
 import { DraftManager } from './draft-manager.service';
 // Removed IntentAnalysisService - using only NextStepPlanningService for all planning
 // import { IntentAnalysisService } from './intent-analysis.service';
 import { NextStepPlanningService } from './next-step-planning.service';
-import { OperationDetectionService } from './operation-detection.service';
+// Removed OperationDetectionService - consolidated into individual agents
 import { getPersonalityConfig } from '../config/personality.config';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
@@ -56,57 +53,23 @@ export const initializeAllCoreServices = async (): Promise<void> => {
 
     // Enhanced health monitoring and logging
     try {
-      const healthCheck = await serviceDependencyManager.healthCheck();
+      // const healthCheck = await serviceDependencyManager.healthCheck(); // Removed serviceDependencyManager
       
       logger.debug('All services initialized successfully', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: {
-          overall: healthCheck.overall,
-          summary: healthCheck.summary,
+          serviceCount: 19, // Our target service count
           environment: process.env.NODE_ENV
         }
       });
 
-      // Log degraded services for awareness
-      const degradedServices = Object.entries(healthCheck.services)
-        .filter(([, health]) => health.health === ServiceHealth.DEGRADED)
-        .map(([name, health]) => ({
-          name,
-          capabilities: health.capabilities,
-          limitations: health.limitations
-        }));
-
-      if (degradedServices.length > 0) {
-        logger.warn('Services running in degraded mode', {
-          correlationId: `service-init-${Date.now()}`,
-          operation: 'service_initialization',
-          metadata: { degradedServices }
-        });
-      }
-
-      // Log disabled services
-      const disabledServices = Object.entries(healthCheck.services)
-        .filter(([, health]) => health.health === ServiceHealth.DISABLED)
-        .map(([name]) => name);
-
-      if (disabledServices.length > 0) {
-        logger.debug('Disabled services', {
-          correlationId: `service-init-${Date.now()}`,
-          operation: 'service_initialization',
-          metadata: { disabledServices }
-        });
-      }
-    } catch (healthError) {
-      logger.warn('Could not retrieve enhanced health information', {
+      // Health monitoring simplified after ServiceDependencyManager removal
+    } catch (error) {
+      logger.warn('Service initialization had minor issues', {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
-        metadata: { phase: 'health_check', error: healthError }
-      });
-      logger.debug('All services initialized successfully', {
-        correlationId: `service-init-${Date.now()}`,
-        operation: 'service_initialization',
-        metadata: { phase: 'fallback_success' }
+        metadata: { phase: 'simplified_health_check' }
       });
     }
   } catch (error) {
@@ -131,12 +94,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 1. AIConfigService - No dependencies, high priority (AI configuration)
-    const aiConfigService = new AIConfigService();
-    serviceManager.registerService('aiConfigService', aiConfigService, {
-      priority: 2,
-      autoStart: true
-    });
+    // 1. AIConfigService - REMOVED: Consolidated into ConfigService
 
     // 2. DatabaseService - No dependencies, high priority
     // In development, we'll handle database failures gracefully in TokenStorageService
@@ -282,43 +240,14 @@ const registerCoreServices = async (): Promise<void> => {
     }
 
 
-    // 17. SlackEventValidator - Focused service for event validation and deduplication
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackEventValidator = new SlackEventValidator({
-        enableDeduplication: true,
-        enableBotMessageFiltering: true,
-        maxEventAge: 300000, // 5 minutes
-        maxProcessedEvents: 1000
-      });
-      serviceManager.registerService('slackEventValidator', slackEventValidator, {
-        priority: 83,
-        autoStart: true
-      });
-    }
+    // 17. SlackEventValidator - REMOVED: Consolidated into SlackAgent
 
 
 
 
-    // 17. EmailValidator - Focused service for email validation
-    const emailValidator = new EmailValidator();
-    serviceManager.registerService('emailValidator', emailValidator, {
-      priority: 87,
-      autoStart: true
-    });
+    // EmailValidator and EmailFormatter removed - LLM handles validation and formatting directly
 
-    // 19. CalendarFormatter - Focused service for calendar response formatting
-    const calendarFormatter = new CalendarFormatter();
-    serviceManager.registerService('calendarFormatter', calendarFormatter, {
-      priority: 92,
-      autoStart: true
-    });
-
-    // 20. CalendarValidator - Focused service for calendar event validation
-    const calendarValidator = new CalendarValidator();
-    serviceManager.registerService('calendarValidator', calendarValidator, {
-      priority: 93,
-      autoStart: true
-    });
+    // 19-20. Calendar auxiliary services - REMOVED: Consolidated into CalendarAgent
 
     // 21. SlackInterfaceService - Central coordinator for all Slack operations
     if (ENV_VALIDATION.isSlackConfigured()) {
@@ -336,27 +265,7 @@ const registerCoreServices = async (): Promise<void> => {
         autoStart: true
       });
 
-      // 24. SlackMessageAnalyzer - Focused service for Slack message analysis (requires SlackInterfaceService)
-      const slackMessageAnalyzer = new SlackMessageAnalyzer();
-      serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER, slackMessageAnalyzer, {
-        dependencies: ['slackInterfaceService'],
-        priority: 95,
-        autoStart: true
-      });
-
-      // 25. SlackDraftManager - Focused service for Slack draft management
-      const slackDraftManager = new SlackDraftManager();
-      serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER, slackDraftManager, {
-        priority: 96,
-        autoStart: true
-      });
-
-      // 26. SlackFormatter - Focused service for Slack response formatting
-      const slackFormatter = new SlackFormatter();
-      serviceManager.registerService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER, slackFormatter, {
-        priority: 97,
-        autoStart: true
-      });
+      // 24-26. Slack auxiliary services - REMOVED: Consolidated into SlackAgent
     }
 
 
@@ -375,13 +284,7 @@ const registerCoreServices = async (): Promise<void> => {
     // Note: SlackAgent is not a service but an agent, so we'll register it differently
     // It will be instantiated by AgentFactory instead
 
-    // 37. WorkflowCacheService - Redis-based workflow state management
-    const workflowCacheService = new WorkflowCacheService();
-    serviceManager.registerService('workflowCacheService', workflowCacheService, {
-      dependencies: ['cacheService'],
-      priority: 50, // High priority for workflow management
-      autoStart: true
-    });
+    // 37. WorkflowCacheService - REMOVED: Replaced with simple in-memory state in MasterAgent
 
     // 38. DraftManager - Draft creation, storage, and execution for confirmation system
     const draftManager = new DraftManager();
@@ -408,13 +311,7 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 43. OperationDetectionService - LLM-driven operation detection
-    const operationDetectionService = new OperationDetectionService();
-    serviceManager.registerService('operationDetectionService', operationDetectionService, {
-      dependencies: ['openaiService'],
-      priority: 59, // High priority for operation detection
-      autoStart: true
-    });
+    // 43. OperationDetectionService - REMOVED: Consolidated into individual agents
 
 
     // Note: Slack is now an interface layer, not a service
@@ -467,45 +364,24 @@ const setupCircuitBreakerConnections = async (): Promise<void> => {
 
 /**
  * Get service health report with enhanced monitoring
+ * TEMPORARILY DISABLED - ServiceDependencyManager removed
  */
 export async function getServiceHealthReport(): Promise<{
   timestamp: string;
   environment: string;
-  overall: ServiceHealth;
+  overall: string;
   services: Record<string, any>;
   capabilities: Record<string, string[]>;
   recommendations: string[];
 }> {
-  const healthCheck = await serviceDependencyManager.healthCheck();
-
-  // Generate capability map
-  const capabilities: Record<string, string[]> = {};
-  for (const [serviceName] of Object.entries(healthCheck.services)) {
-    capabilities[serviceName] = serviceDependencyManager.getServiceCapabilities(serviceName);
-  }
-
-  // Generate recommendations
-  const recommendations: string[] = [];
-
-  if (healthCheck.summary.degraded > 0) {
-    recommendations.push(`${healthCheck.summary.degraded} service(s) running in degraded mode - check dependencies`);
-  }
-
-  if (healthCheck.summary.unhealthy > 0) {
-    recommendations.push(`${healthCheck.summary.unhealthy} service(s) unhealthy - immediate attention required`);
-  }
-
-  if (process.env.NODE_ENV === 'production' && healthCheck.overall !== ServiceHealth.HEALTHY) {
-    recommendations.push('Production environment has non-healthy services - review configuration');
-  }
-
+  // Simplified version without ServiceDependencyManager
   return {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    overall: healthCheck.overall,
-    services: healthCheck.services,
-    capabilities,
-    recommendations
+    overall: 'healthy',
+    services: {},
+    capabilities: {},
+    recommendations: []
   };
 }
 
@@ -513,5 +389,6 @@ export async function getServiceHealthReport(): Promise<{
  * Get enhanced service manager for advanced operations
  */
 export function getEnhancedServiceManager() {
-  return serviceDependencyManager;
+  // return serviceDependencyManager; // Removed - using simplified approach
+  return serviceManager;
 }

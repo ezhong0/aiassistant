@@ -13,10 +13,28 @@ import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
-import { WorkflowCacheService, WorkflowState, WorkflowStep } from '../services/workflow-cache.service';
+// Removed WorkflowCacheService - using simple in-memory state management
+interface SimpleWorkflowState {
+  workflowId: string;
+  sessionId: string;
+  status: 'active' | 'completed' | 'cancelled';
+  currentStep: number;
+  totalSteps: number;
+  context: any;
+  createdAt: Date;
+  lastActivity: Date;
+}
+
+interface SimpleWorkflowStep {
+  stepId: string;
+  stepNumber: number;
+  description: string;
+  status: 'pending' | 'completed' | 'failed';
+  result?: any;
+}
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
-import { OperationDetectionService } from '../services/operation-detection.service';
+// Removed OperationDetectionService - agents handle their own operation detection
 import { ToolExecutorService } from '../services/tool-executor.service';
 
 /**
@@ -96,7 +114,7 @@ export interface WorkflowResponse {
   currentStep: number;
   totalSteps: number;
   needsConfirmation: boolean;
-  nextStep?: WorkflowStep;
+  nextStep?: SimpleWorkflowStep;
 }
 
 export interface StepResult {
@@ -200,6 +218,10 @@ export class MasterAgent {
   private systemPrompt: string;
   private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
+
+  // Simple in-memory workflow state management (replaces WorkflowCacheService)
+  private workflows: Map<string, SimpleWorkflowState> = new Map();
+  private sessionWorkflows: Map<string, string[]> = new Map(); // sessionId -> workflowIds[]
 
 
   /**
@@ -453,17 +475,14 @@ export class MasterAgent {
       // Check memory usage periodically
       this.checkMemoryUsage();
       
-      // Check for active workflow first
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        const activeWorkflows = await workflowCacheService.getActiveWorkflows(sessionId);
+      // Check for active workflow first using simple state management
+      const activeWorkflows = this.getActiveWorkflows(sessionId);
 
-        if (activeWorkflows.length > 0) {
-          // Handle workflow interruption/continuation with step-by-step
-          const activeWorkflow = activeWorkflows[0];
-          if (activeWorkflow) {
-            return await this.continueStepByStepWorkflow(userInput, activeWorkflow, sessionId, userId, slackContext);
-          }
+      if (activeWorkflows.length > 0) {
+        // Handle workflow interruption/continuation with step-by-step
+        const activeWorkflow = activeWorkflows[0];
+        if (activeWorkflow) {
+          return await this.continueStepByStepWorkflow(userInput, activeWorkflow, sessionId, userId, slackContext);
         }
       }
 
@@ -1741,18 +1760,35 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
   /**
    * Get WorkflowCacheService instance
    */
-  private getWorkflowCacheService(): WorkflowCacheService | null {
-    try {
-      const service = getService<WorkflowCacheService>('workflowCacheService');
-      return service || null;
-    } catch (error) {
-      logger.debug('WorkflowCacheService not available', {
-        correlationId: 'workflow-service-check',
-        operation: 'workflow_service_check',
-        metadata: { error: (error as Error).message }
-      });
-      return null;
+  /**
+   * Simple workflow management methods (replacing WorkflowCacheService)
+   */
+  private createWorkflow(workflow: SimpleWorkflowState): void {
+    this.workflows.set(workflow.workflowId, workflow);
+
+    // Add to session's active workflows
+    const sessionWorkflows = this.sessionWorkflows.get(workflow.sessionId) || [];
+    sessionWorkflows.push(workflow.workflowId);
+    this.sessionWorkflows.set(workflow.sessionId, sessionWorkflows);
+  }
+
+  private getActiveWorkflows(sessionId: string): SimpleWorkflowState[] {
+    const workflowIds = this.sessionWorkflows.get(sessionId) || [];
+    return workflowIds
+      .map(id => this.workflows.get(id))
+      .filter((w): w is SimpleWorkflowState => w !== undefined && w.status === 'active');
+  }
+
+  private updateWorkflow(workflowId: string, updates: Partial<SimpleWorkflowState>): void {
+    const workflow = this.workflows.get(workflowId);
+    if (workflow) {
+      Object.assign(workflow, updates, { lastActivity: new Date() });
+      this.workflows.set(workflowId, workflow);
     }
+  }
+
+  private cancelWorkflow(workflowId: string): void {
+    this.updateWorkflow(workflowId, { status: 'cancelled' });
   }
 
   // Removed getIntentAnalysisService - using only NextStepPlanningService for all planning
@@ -1887,10 +1923,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
    */
   private async abortWorkflow(workflowId: string): Promise<void> {
     try {
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.cancelWorkflow(workflowId);
-      }
+      this.cancelWorkflow(workflowId);
 
       logger.debug('Workflow aborted', {
         correlationId: `abort-workflow-${workflowId}`,
@@ -1912,7 +1945,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
   private async handleWorkflowInterruptionFallback(
     userInput: string,
     sessionId: string,
-    activeWorkflow: WorkflowState,
+    activeWorkflow: SimpleWorkflowState,
     userId?: string
   ): Promise<MasterAgentResponse> {
     // Original interruption logic as fallback
@@ -1973,7 +2006,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
    */
   async continueStepByStepWorkflow(
     userInput: string,
-    activeWorkflow: WorkflowState,
+    activeWorkflow: SimpleWorkflowState,
     sessionId: string,
     userId?: string,
     slackContext?: SlackContext
@@ -1995,13 +2028,10 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       logger.info('Continuing step-by-step workflow with new input', logContext);
 
       // Simplified workflow interruption handling - treat any new input as starting a new workflow
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.updateWorkflow(activeWorkflow.workflowId, {
-          status: 'cancelled',
-          lastActivity: new Date()
-        });
-      }
+      this.updateWorkflow(activeWorkflow.workflowId, {
+        status: 'cancelled',
+        lastActivity: new Date()
+      });
       return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
     } catch (error) {
       logger.error('Failed to continue step-by-step workflow', error as Error, logContext);
@@ -2051,31 +2081,23 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
       // Create workflow state for tracking
       const workflowId = `stepbystep-${sessionId}-${Date.now()}`;
-      const workflowState: WorkflowState = {
+      const workflowState: SimpleWorkflowState = {
         workflowId,
         sessionId,
-        userId: userId || 'unknown',
         status: 'active',
         currentStep: 0,
         totalSteps: 0, // Will be updated dynamically
-        plan: [], // Empty initially - steps are planned dynamically
-        completedSteps: [],
-        pendingStep: null,
         context: {
           originalRequest: userInput,
           userIntent: userInput, // Same as original request for now
           gatheredData: {}
         },
         createdAt: new Date(),
-        lastActivity: new Date(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        lastActivity: new Date()
       };
 
       // Save initial workflow state
-      const workflowCacheService = this.getWorkflowCacheService();
-      if (workflowCacheService) {
-        await workflowCacheService.createWorkflow(workflowState);
-      }
+      this.createWorkflow(workflowState);
 
       // Execute step-by-step loop
       const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, slackContext);
@@ -2260,34 +2282,19 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
       } catch (stepError) {
         // Handle step execution error
-        const operationDetectionService = getService<OperationDetectionService>('operationDetectionService');
-        if (operationDetectionService) {
-          const errorAnalysis = await operationDetectionService.analyzeError(
-            stepError as Error,
-            {
-              agent: nextStep.agent,
-              operation: nextStep.operation,
-              parameters: nextStep.parameters,
-              userRequest: workflowContext.originalRequest
-            }
-          );
+        // Simple error handling without operation detection service
+        const error = stepError as Error;
+        finalMessage = `Step execution failed: ${error.message}. Please try rephrasing your request.`;
 
-          if (errorAnalysis.recoverable) {
-            finalMessage = `${errorAnalysis.userFriendlyMessage} ${errorAnalysis.suggestedAction}`;
-          } else {
-            throw ErrorFactory.businessRuleViolation('step_execution_failed', {
-              correlationId: `step-exec-failed-${Date.now()}`,
-              operation: 'step_execution',
-              metadata: { 
-                errorMessage: errorAnalysis.userFriendlyMessage,
-                agent: nextStep.agent,
-                operation: nextStep.operation
-              }
-            });
+        throw ErrorFactory.businessRuleViolation('step_execution_failed', {
+          correlationId: `step-exec-failed-${Date.now()}`,
+          operation: 'step_execution',
+          metadata: {
+            errorMessage: error.message,
+            agent: nextStep.agent,
+            operation: nextStep.operation
           }
-        } else {
-          throw stepError;
-        }
+        });
         break;
       }
     }

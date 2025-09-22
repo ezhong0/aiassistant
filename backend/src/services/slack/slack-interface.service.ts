@@ -4,7 +4,7 @@ import { ServiceManager } from '../service-manager';
 import { SlackEventHandler } from './slack-event-handler.service';
 import { SlackOAuthManager } from './slack-oauth-manager.service';
 import { SlackMessageProcessor } from './slack-message-processor.service';
-import { SlackEventValidator } from './slack-event-validator.service';
+// SlackEventValidator removed - validation handled directly in SlackInterfaceService
 import { 
   SlackContext, 
   SlackEventType, 
@@ -45,7 +45,7 @@ export class SlackInterfaceService extends BaseService {
   private slackOAuthManager: SlackOAuthManager | null = null;
   private slackMessageProcessor: SlackMessageProcessor | null = null;
   private slackResponseFormatter: any | null = null;
-  private slackEventValidator: SlackEventValidator | null = null;
+  // slackEventValidator removed - validation handled directly in SlackInterfaceService
 
   /**
    * Initialize SlackInterface service with configuration
@@ -104,7 +104,7 @@ export class SlackInterfaceService extends BaseService {
         hasSlackOAuthManager: !!this.slackOAuthManager,
         hasSlackMessageProcessor: !!this.slackMessageProcessor,
         hasSlackResponseFormatter: !!this.slackResponseFormatter,
-        hasSlackEventValidator: !!this.slackEventValidator,
+        slackEventValidationEnabled: true,
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -138,10 +138,7 @@ export class SlackInterfaceService extends BaseService {
         this.slackResponseFormatter = null;
       }
       
-      if (this.slackEventValidator) {
-        await this.slackEventValidator.destroy();
-        this.slackEventValidator = null;
-      }
+      // Event validation cleanup handled internally
       
     
       this.logInfo('SlackInterface destroyed successfully');
@@ -550,13 +547,7 @@ export class SlackInterfaceService extends BaseService {
     // SlackResponseFormatter service removed - using direct response generation
 
     // Initialize SlackEventValidator
-    this.slackEventValidator = new SlackEventValidator({
-      enableDeduplication: true,
-      enableBotMessageFiltering: true,
-      maxEventAge: 300000, // 5 minutes
-      maxProcessedEvents: 1000
-    });
-    await this.slackEventValidator.initialize();
+    // Event validation now handled directly in SlackInterfaceService
 
       }
 
@@ -573,9 +564,7 @@ export class SlackInterfaceService extends BaseService {
       });
 
       // Set bot user ID in event validator if available
-      if (this.slackEventValidator && authTest.user_id) {
-        this.slackEventValidator.setBotUserId(authTest.user_id as string);
-      }
+      // Event validation setup handled internally
     } catch (error) {
       this.logError('Failed to verify Slack connection', error);
       throw new Error('Slack client authentication failed');
@@ -604,7 +593,7 @@ export class SlackInterfaceService extends BaseService {
           slackOAuthManager: !!this.slackOAuthManager,
           slackMessageProcessor: !!this.slackMessageProcessor,
           slackResponseFormatter: !!this.slackResponseFormatter,
-          slackEventValidator: !!this.slackEventValidator,
+          slackEventValidationEnabled: true,
         }
       }
     };

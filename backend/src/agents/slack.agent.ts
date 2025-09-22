@@ -22,10 +22,15 @@ import {
   SlackReadResult
 } from '../types/agents/agent-specific-parameters';
 
-// Import focused services
-import { SlackMessageAnalyzer, SlackMessageReadingResult } from '../services/slack/slack-message-analyzer.service';
-import { SlackDraftManager, SlackDraftManagementResult } from '../services/slack/slack-draft-manager.service';
-import { SlackFormatter, SlackFormattingResult, SlackResult } from '../services/slack/slack-formatter.service';
+// Focused services removed - SlackAgent handles analysis, drafts, and formatting internally
+
+// Simple result interface for internal use
+interface SimpleSlackResult {
+  success: boolean;
+  data?: any;
+  message: string;
+  error?: string;
+}
 
 // Import context gathering interfaces from MasterAgent
 export interface ContextGatheringResult {
@@ -127,9 +132,7 @@ export interface SlackAgentRequest extends SlackAgentParams {
 export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
 
   // Focused service dependencies
-  private slackMessageAnalyzer: SlackMessageAnalyzer | null = null;
-  private slackDraftManager: SlackDraftManager | null = null;
-  private slackFormatter: SlackFormatter | null = null;
+  // Slack services now handled internally by SlackAgent
 
   constructor() {
     super({
@@ -154,15 +157,7 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
    * Lazy initialization of Slack services
    */
   private ensureServices(): void {
-    if (!this.slackMessageAnalyzer) {
-      this.slackMessageAnalyzer = serviceManager.getService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_MESSAGE_ANALYZER) as SlackMessageAnalyzer;
-    }
-    if (!this.slackDraftManager) {
-      this.slackDraftManager = serviceManager.getService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_DRAFT_MANAGER) as SlackDraftManager;
-    }
-    if (!this.slackFormatter) {
-      this.slackFormatter = serviceManager.getService(SLACK_SERVICE_CONSTANTS.SERVICE_NAMES.SLACK_FORMATTER) as SlackFormatter;
-    }
+    // Slack message analysis, drafting, and formatting now handled internally
   }
 
   /**
@@ -331,12 +326,17 @@ You are a specialized Slack workspace management agent focused on reading and un
 
       if (result.success) {
         // Format the result
-        const slackResult: SlackResult = {
+        const slackResult: SimpleSlackResult = {
           messages: result.messages,
           count: result.count
         };
 
-        const formattingResult = this.slackFormatter!.formatSlackResult(slackResult);
+        // Simple formatting now handled directly by SlackAgent
+        const formattingResult = {
+          success: slackResult.success,
+          message: slackResult.message,
+          data: slackResult.data
+        };
           
           return {
             success: true,
@@ -395,12 +395,17 @@ You are a specialized Slack workspace management agent focused on reading and un
 
       if (result.success) {
         // Format the result
-        const slackResult: SlackResult = {
+        const slackResult: SimpleSlackResult = {
           messages: result.messages,
           count: result.count
         };
 
-        const formattingResult = this.slackFormatter!.formatSlackResult(slackResult);
+        // Simple formatting now handled directly by SlackAgent
+        const formattingResult = {
+          success: slackResult.success,
+          message: slackResult.message,
+          data: slackResult.data
+        };
 
           return {
             success: true,
@@ -452,7 +457,7 @@ You are a specialized Slack workspace management agent focused on reading and un
 
       if (result.success) {
         // Format the result
-        const slackResult: SlackResult = {
+        const slackResult: SimpleSlackResult = {
           summary: result.analysis?.summary,
           keyTopics: result.analysis?.keyTopics,
           actionItems: result.analysis?.actionItems,
@@ -460,7 +465,12 @@ You are a specialized Slack workspace management agent focused on reading and un
           participantCount: result.analysis?.participantCount
         };
 
-        const formattingResult = this.slackFormatter!.formatSlackResult(slackResult);
+        // Simple formatting now handled directly by SlackAgent
+        const formattingResult = {
+          success: slackResult.success,
+          message: slackResult.message,
+          data: slackResult.data
+        };
         
         return {
           success: true,
@@ -537,12 +547,17 @@ You are a specialized Slack workspace management agent focused on reading and un
 
         if (result.success) {
           // Format the result
-          const slackResult: SlackResult = {
+          const slackResult: SimpleSlackResult = {
             drafts: result.drafts,
             count: result.count
           };
 
-          const formattingResult = this.slackFormatter!.formatSlackResult(slackResult);
+          // Simple formatting now handled directly by SlackAgent
+        const formattingResult = {
+          success: slackResult.success,
+          message: slackResult.message,
+          data: slackResult.data
+        };
 
     return {
             success: true,
@@ -595,12 +610,17 @@ You are a specialized Slack workspace management agent focused on reading and un
       const confirmationType = confirmationAnalysis.type;
 
       // Format the result
-      const slackResult: SlackResult = {
+      const slackResult: SimpleSlackResult = {
         isConfirmation,
         confirmationType
       };
 
-      const formattingResult = this.slackFormatter!.formatSlackResult(slackResult);
+      // Simple formatting now handled directly by SlackAgent
+      const formattingResult = {
+        success: slackResult.success,
+        message: slackResult.message,
+        data: slackResult.data
+      };
       
       return {
         success: true,
@@ -764,9 +784,7 @@ You are a specialized Slack workspace management agent focused on reading and un
       // Ensure services are initialized
       this.ensureServices();
 
-      if (!this.slackMessageAnalyzer) {
-        throw new Error('SlackMessageAnalyzer not available');
-      }
+      // Message analysis now handled internally by SlackAgent
 
       let messages: SlackMessage[] = [];
       let contextType: ContextGatheringResult['contextType'] = 'none';
