@@ -150,19 +150,19 @@ export class SlackService extends BaseService {
     try {
       // Event deduplication
       if (this.config.enableDeduplication && this.isDuplicateEvent(event)) {
-        this.logInfo('Duplicate event ignored', { eventId: event.event_id });
+        this.logInfo('Duplicate event ignored', { eventId: (event as any).event_id });
         return { success: true, message: 'Duplicate event ignored' };
       }
 
       // Bot message filtering
       if (this.config.enableBotMessageFiltering && this.isBotMessage(event)) {
-        this.logInfo('Bot message ignored', { eventType: event.type });
+        this.logInfo('Bot message ignored', { eventType: (event as any).type });
         return { success: true, message: 'Bot message ignored' };
       }
 
       // DM only mode
       if (this.config.enableDMOnlyMode && !this.isDirectMessage(event)) {
-        this.logInfo('Non-DM message ignored', { eventType: event.type });
+        this.logInfo('Non-DM message ignored', { eventType: (event as any).type });
         return { success: true, message: 'Non-DM message ignored' };
       }
 
@@ -183,13 +183,13 @@ export class SlackService extends BaseService {
    * Handle events by type
    */
   private async handleEventByType(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
-    switch (event.type) {
+    switch ((event as any).type) {
       case 'message':
         return await this.handleMessageEvent(event, context);
       case 'app_mention':
         return await this.handleAppMentionEvent(event, context);
       default:
-        this.logInfo('Unhandled event type', { eventType: event.type });
+        this.logInfo('Unhandled event type', { eventType: (event as any).type });
         return { success: true, message: 'Event type not handled' };
     }
   }
@@ -200,7 +200,7 @@ export class SlackService extends BaseService {
   private async handleMessageEvent(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
     try {
       // Extract message text
-      const messageText = event.text || '';
+      const messageText = (event as any).text || '';
 
       // Check for OAuth requirements
       if (await this.requiresOAuth(messageText, context)) {
@@ -269,7 +269,7 @@ export class SlackService extends BaseService {
       return {
         success: result.success,
         message: result.result || 'Message processed',
-        data: result.data
+        data: (result as any).data
       };
 
     } catch (error) {
@@ -378,7 +378,7 @@ export class SlackService extends BaseService {
   private generateEventId(event: SlackEvent): string | null {
     // Simple ID generation based on common properties
     const timestamp = Date.now();
-    return `${event.type}-${timestamp}`;
+    return `${(event as any).type}-${timestamp}`;
   }
 
   /**

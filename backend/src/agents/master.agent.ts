@@ -13,9 +13,8 @@ import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
-// Import WorkflowOrchestrator and AgentCoordinator for extracted functionality
+// Import WorkflowOrchestrator for extracted workflow functionality
 import { WorkflowOrchestrator, SimpleWorkflowState, SimpleWorkflowStep } from '../framework/workflow-orchestrator';
-import { AgentCoordinator, AgentExecutionContext, AgentExecutionResult } from '../framework/agent-coordinator';
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 // Removed OperationDetectionService - agents handle their own operation detection
@@ -221,9 +220,8 @@ export class MasterAgent {
   private systemPrompt: string;
   private lastMemoryCheck: number = Date.now();
 
-  // Extracted components for workflow and agent management
+  // Extracted component for workflow management
   private workflowOrchestrator: WorkflowOrchestrator;
-  private agentCoordinator: AgentCoordinator;
 
 
   /**
@@ -243,9 +241,8 @@ export class MasterAgent {
    * ```
    */
   constructor(config?: MasterAgentConfig) {
-    // Initialize extracted components
+    // Initialize extracted workflow component
     this.workflowOrchestrator = new WorkflowOrchestrator();
-    this.agentCoordinator = new AgentCoordinator();
 
     // Generate dynamic system prompt from AgentFactory
     this.systemPrompt = this.generateSystemPrompt();
@@ -270,49 +267,59 @@ export class MasterAgent {
 
 
   /**
-   * Get all agent schemas for OpenAI function calling
+   * Get all agent schemas for OpenAI function calling using AgentFactory
    */
   public getAgentSchemas(): OpenAIFunctionSchema[] {
-    const capabilities = this.agentCoordinator.getAvailableAgents();
-    return capabilities.map(agent => ({
-      name: agent.name,
-      description: agent.description,
-      parameters: {
-        type: 'object',
-        properties: agent.capabilities.reduce((props, cap) => {
-          props[cap.name] = cap.parameters;
-          return props;
-        }, {} as any),
-        required: agent.capabilities
-          .filter(cap => cap.required && cap.required.length > 0)
-          .flatMap(cap => cap.required || [])
-      }
-    }));
+    return AgentFactory.getEnabledAgentNames()
+      .map(agentName => {
+        const agent = AgentFactory.getAgent(agentName);
+        if (agent) {
+          // Try to get schema from agent if it has the method
+          const agentClass = agent.constructor as any;
+          if (typeof agentClass.getOpenAIFunctionSchema === 'function') {
+            return agentClass.getOpenAIFunctionSchema();
+          }
+        }
+        // Fallback schema for agents without getOpenAIFunctionSchema
+        return {
+          name: agentName,
+          description: `${agentName} agent`,
+          parameters: {
+            type: 'object' as const,
+            properties: {},
+            required: []
+          }
+        };
+      });
   }
 
   /**
-   * Get agent capabilities summary for AI planning
+   * Get agent capabilities summary for AI planning using AgentFactory
    */
   public async getAgentCapabilities(): Promise<Record<string, AgentCapability>> {
-    const agents = this.agentCoordinator.getAvailableAgents();
+    const enabledAgentNames = AgentFactory.getEnabledAgentNames();
     const capabilities: Record<string, AgentCapability> = {};
 
-    for (const agent of agents) {
-      capabilities[agent.name] = {
-        capabilities: agent.capabilities.map(cap => cap.description),
-        limitations: ['Agent-specific limitations not yet extracted'], // TODO: Extract from agents
-        schema: {
-          name: agent.name,
-          description: agent.description,
-          parameters: {
-            type: 'object',
-            properties: agent.capabilities.reduce((props, cap) => {
-              props[cap.name] = cap.parameters;
-              return props;
-            }, {} as any)
-          }
-        }
-      };
+    for (const agentName of enabledAgentNames) {
+      const agent = AgentFactory.getAgent(agentName);
+      if (agent) {
+        const agentClass = agent.constructor as any;
+        capabilities[agentName] = {
+          capabilities: typeof agentClass.getCapabilities === 'function'
+            ? agentClass.getCapabilities()
+            : [`${agentName} operations`],
+          limitations: typeof agentClass.getLimitations === 'function'
+            ? agentClass.getLimitations()
+            : ['Standard agent limitations'],
+          schema: typeof agentClass.getOpenAIFunctionSchema === 'function'
+            ? agentClass.getOpenAIFunctionSchema()
+            : {
+                name: agentName,
+                description: `${agentName} agent`,
+                parameters: { type: 'object' as const, properties: {}, required: [] }
+              }
+        };
+      }
     }
 
     return capabilities;
@@ -1754,11 +1761,8 @@ Be helpful, professional, and take intelligent action rather than asking for cla
         }
       });
       
-      // Trigger cleanup on orchestrators
+      // Trigger cleanup on workflow orchestrator
       this.workflowOrchestrator.cleanupOldWorkflows();
-
-      // Perform agent health checks
-      await this.agentCoordinator.performHealthChecks();
 
       // Force garbage collection if available
       if (global.gc) {

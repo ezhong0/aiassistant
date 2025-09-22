@@ -813,7 +813,7 @@ Always return structured execution status with event details, scheduling insight
       if (!validationResult.isValid) {
         return {
           success: false,
-          error: validationResult.errors.join(', ')
+          error: validationResult.errors?.join(', ') || 'Unknown validation error'
         };
       }
 
@@ -835,12 +835,16 @@ Always return structured execution status with event details, scheduling insight
 
       // Format the result
       const calendarResult: SimpleCalendarResult = {
-        event: createdEvent,
-        summary: createdEvent?.summary || undefined,
-        start: createdEvent?.start?.dateTime || undefined,
-        end: createdEvent?.end?.dateTime || undefined,
-        location: createdEvent?.location || undefined,
-        attendees: createdEvent?.attendees?.map((att: any) => att.email)
+        success: true,
+        message: `Event created successfully: ${createdEvent?.summary || 'Untitled'}`,
+        data: {
+          event: createdEvent,
+          summary: createdEvent?.summary || undefined,
+          start: createdEvent?.start?.dateTime || undefined,
+          end: createdEvent?.end?.dateTime || undefined,
+          location: createdEvent?.location || undefined,
+          attendees: createdEvent?.attendees?.map((att: any) => att.email)
+        }
       };
 
       // Simple formatting now handled directly by CalendarAgent
@@ -852,10 +856,8 @@ Always return structured execution status with event details, scheduling insight
 
       return {
         success: true,
-        data: {
-          event: createdEvent,
-          message: formattingResult.formattedText
-        }
+        message: calendarResult.message,
+        data: calendarResult.data
       };
     } catch (error) {
       logger.error('Error handling create event', error as Error, {
@@ -890,7 +892,7 @@ Always return structured execution status with event details, scheduling insight
       if (!validationResult.isValid) {
         return {
           success: false,
-          error: validationResult.errors.join(', ')
+          error: validationResult.errors?.join(', ') || 'Unknown validation error'
         };
       }
 
@@ -907,8 +909,12 @@ Always return structured execution status with event details, scheduling insight
 
       // Format the result
       const calendarResult: SimpleCalendarResult = {
-        events: events,
-        count: events.length
+        success: true,
+        message: `Found ${events.length} events`,
+        data: {
+          events: events,
+          count: events.length
+        }
       };
 
       // Simple formatting now handled directly by CalendarAgent
@@ -920,11 +926,8 @@ Always return structured execution status with event details, scheduling insight
 
       return {
         success: true,
-        data: {
-          events: events,
-          count: events.length,
-          message: formattingResult.formattedText
-        }
+        message: calendarResult.message,
+        data: calendarResult.data
       };
     } catch (error) {
       logger.error('Error handling list events', error as Error, {
@@ -950,7 +953,7 @@ Always return structured execution status with event details, scheduling insight
       if (!eventIdValidation.isValid) {
         return {
           success: false,
-          error: eventIdValidation.errors.join(', ')
+          error: eventIdValidation.errors?.join(', ') || 'Unknown validation error'
         };
       }
 
@@ -968,7 +971,7 @@ Always return structured execution status with event details, scheduling insight
       if (!validationResult.isValid) {
         return {
           success: false,
-          error: validationResult.errors.join(', ')
+          error: validationResult.errors?.join(', ') || 'Unknown validation error'
         };
       }
 
@@ -991,12 +994,16 @@ Always return structured execution status with event details, scheduling insight
 
       // Format the result
       const calendarResult: SimpleCalendarResult = {
-        event: updatedEvent,
-        summary: updatedEvent?.summary || undefined,
-        start: updatedEvent?.start?.dateTime || undefined,
-        end: updatedEvent?.end?.dateTime || undefined,
-        location: updatedEvent?.location || undefined,
-        attendees: updatedEvent?.attendees?.map((att: any) => att.email)
+        success: true,
+        message: `Event updated successfully: ${updatedEvent?.summary || 'Untitled'}`,
+        data: {
+          event: updatedEvent,
+          summary: updatedEvent?.summary || undefined,
+          start: updatedEvent?.start?.dateTime || undefined,
+          end: updatedEvent?.end?.dateTime || undefined,
+          location: updatedEvent?.location || undefined,
+          attendees: updatedEvent?.attendees?.map((att: any) => att.email)
+        }
       };
 
       // Simple formatting now handled directly by CalendarAgent
@@ -1008,10 +1015,8 @@ Always return structured execution status with event details, scheduling insight
 
       return {
         success: true,
-        data: {
-          event: updatedEvent,
-          message: formattingResult.formattedText
-        }
+        message: calendarResult.message,
+        data: calendarResult.data
       };
     } catch (error) {
       logger.error('Error handling update event', error as Error, {
@@ -1037,7 +1042,7 @@ Always return structured execution status with event details, scheduling insight
       if (!eventIdValidation.isValid) {
         return {
           success: false,
-          error: eventIdValidation.errors.join(', ')
+          error: eventIdValidation.errors?.join(', ') || 'Unknown validation error'
         };
       }
 
@@ -1050,8 +1055,9 @@ Always return structured execution status with event details, scheduling insight
 
       return {
         success: true,
+        message: CALENDAR_SERVICE_CONSTANTS.SUCCESS.EVENT_DELETED,
         data: {
-          message: CALENDAR_SERVICE_CONSTANTS.SUCCESS.EVENT_DELETED
+          eventId: parameters.eventId as string
         }
       };
     } catch (error) {
@@ -1082,8 +1088,12 @@ Always return structured execution status with event details, scheduling insight
 
       // Format the result
       const calendarResult: SimpleCalendarResult = {
-        isAvailable: !availabilityResult.busy,
-        conflictingEvents: availabilityResult.conflicts
+        success: true,
+        message: !availabilityResult.busy ? 'Time slot is available' : 'Time slot has conflicts',
+        data: {
+          isAvailable: !availabilityResult.busy,
+          conflictingEvents: availabilityResult.conflicts
+        }
       };
 
       // Simple formatting now handled directly by CalendarAgent
@@ -1095,11 +1105,8 @@ Always return structured execution status with event details, scheduling insight
 
       return {
         success: true,
-        data: {
-          isAvailable: !availabilityResult.busy,
-          conflictingEvents: availabilityResult.conflicts,
-          message: formattingResult.formattedText
-        }
+        message: calendarResult.message,
+        data: calendarResult.data
       };
     } catch (error) {
       logger.error('Error handling check availability', error as Error, {
@@ -1130,7 +1137,11 @@ Always return structured execution status with event details, scheduling insight
 
       // Format the result
       const calendarResult: SimpleCalendarResult = {
-        availableSlots: availableSlots
+        success: true,
+        message: `Found ${availableSlots.length} available time slots`,
+        data: {
+          availableSlots: availableSlots
+        }
       };
 
       // Simple formatting now handled directly by CalendarAgent
@@ -1142,10 +1153,8 @@ Always return structured execution status with event details, scheduling insight
 
       return {
         success: true,
-        data: {
-          availableSlots: availableSlots,
-          message: formattingResult.formattedText
-        }
+        message: calendarResult.message,
+        data: calendarResult.data
       };
     } catch (error) {
       logger.error('Error handling find slots', error as Error, {
