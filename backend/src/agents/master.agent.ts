@@ -13,25 +13,9 @@ import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
 import { ContactAgent } from './contact.agent';
-// Removed WorkflowCacheService - using simple in-memory state management
-interface SimpleWorkflowState {
-  workflowId: string;
-  sessionId: string;
-  status: 'active' | 'completed' | 'cancelled';
-  currentStep: number;
-  totalSteps: number;
-  context: any;
-  createdAt: Date;
-  lastActivity: Date;
-}
-
-interface SimpleWorkflowStep {
-  stepId: string;
-  stepNumber: number;
-  description: string;
-  status: 'pending' | 'completed' | 'failed';
-  result?: any;
-}
+// Import WorkflowOrchestrator and AgentCoordinator for extracted functionality
+import { WorkflowOrchestrator, SimpleWorkflowState, SimpleWorkflowStep } from '../framework/workflow-orchestrator';
+import { AgentCoordinator, AgentExecutionContext, AgentExecutionResult } from '../framework/agent-coordinator';
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
 import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
 // Removed OperationDetectionService - agents handle their own operation detection
@@ -235,12 +219,11 @@ export function safeParseMasterAgentResponse(data: unknown): { success: true; da
 export class MasterAgent {
   private useOpenAI: boolean = false;
   private systemPrompt: string;
-  private agentSchemas: Map<string, OpenAIFunctionSchema> = new Map();
   private lastMemoryCheck: number = Date.now();
 
-  // Simple in-memory workflow state management (replaces WorkflowCacheService)
-  private workflows: Map<string, SimpleWorkflowState> = new Map();
-  private sessionWorkflows: Map<string, string[]> = new Map(); // sessionId -> workflowIds[]
+  // Extracted components for workflow and agent management
+  private workflowOrchestrator: WorkflowOrchestrator;
+  private agentCoordinator: AgentCoordinator;
 
 
   /**
@@ -260,26 +243,13 @@ export class MasterAgent {
    * ```
    */
   constructor(config?: MasterAgentConfig) {
-    // Agents are now stateless - no session management needed
-    
-    // AgentFactory should already be initialized by the main application
-    // No need to initialize it again here
+    // Initialize extracted components
+    this.workflowOrchestrator = new WorkflowOrchestrator();
+    this.agentCoordinator = new AgentCoordinator();
 
     // Generate dynamic system prompt from AgentFactory
     this.systemPrompt = this.generateSystemPrompt();
-    
-    // Initialize agent schemas for OpenAI function calling
-    this.initializeAgentSchemas().catch(error => {
-      logger.error('Agent schema initialization failed', {
-        error: error.message,
-        stack: error.stack,
-        correlationId: 'init',
-        operation: 'agent_schema_init',
-        metadata: { service: 'MasterAgent' }
-      });
-    });
 
-    
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
       this.useOpenAI = true;
@@ -298,85 +268,54 @@ export class MasterAgent {
   }
 
 
-  /**
-   * Initialize OpenAI function schemas for all agents
-   */
-  private async initializeAgentSchemas(): Promise<void> {
-    try {
-      // Import agent classes dynamically to avoid circular imports
-      const { EmailAgent } = await import('./email.agent');
-      const { ContactAgent } = await import('./contact.agent');
-      const { CalendarAgent } = await import('./calendar.agent');
-      
-      // Register agent schemas
-      this.agentSchemas.set('emailAgent', EmailAgent.getOpenAIFunctionSchema());
-      this.agentSchemas.set('contactAgent', ContactAgent.getOpenAIFunctionSchema() as any);
-      this.agentSchemas.set('calendarAgent', CalendarAgent.getOpenAIFunctionSchema());
-      
-      logger.debug('Agent schemas initialized for OpenAI function calling', {
-        correlationId: 'init',
-        operation: 'agent_schema_init',
-        metadata: { 
-          schemaCount: this.agentSchemas.size,
-          schemaNames: Array.from(this.agentSchemas.keys())
-        }
-      });
-    } catch (error) {
-      logger.error('Agent schema initialization failed', {
-        error: (error as Error).message,
-        stack: (error as Error).stack,
-        correlationId: 'init',
-        operation: 'agent_schema_init',
-        metadata: { service: 'MasterAgent' }
-      });
-      // Clear schemas on error to prevent memory leaks from partial initialization
-      this.agentSchemas.clear();
-    }
-  }
 
   /**
    * Get all agent schemas for OpenAI function calling
    */
   public getAgentSchemas(): OpenAIFunctionSchema[] {
-    return Array.from(this.agentSchemas.values());
+    const capabilities = this.agentCoordinator.getAvailableAgents();
+    return capabilities.map(agent => ({
+      name: agent.name,
+      description: agent.description,
+      parameters: {
+        type: 'object',
+        properties: agent.capabilities.reduce((props, cap) => {
+          props[cap.name] = cap.parameters;
+          return props;
+        }, {} as any),
+        required: agent.capabilities
+          .filter(cap => cap.required && cap.required.length > 0)
+          .flatMap(cap => cap.required || [])
+      }
+    }));
   }
 
   /**
    * Get agent capabilities summary for AI planning
    */
   public async getAgentCapabilities(): Promise<Record<string, AgentCapability>> {
-    try {
-      const { EmailAgent } = await import('./email.agent');
-      const { ContactAgent } = await import('./contact.agent');
-      const { CalendarAgent } = await import('./calendar.agent');
-      
-      return {
-        emailAgent: {
-          capabilities: EmailAgent.getCapabilities(),
-          limitations: EmailAgent.getLimitations(),
-          schema: EmailAgent.getOpenAIFunctionSchema()
-        },
-        contactAgent: {
-          capabilities: ContactAgent.getCapabilities(),
-          limitations: ContactAgent.getLimitations(),
-          schema: ContactAgent.getOpenAIFunctionSchema() as any
-        },
-        calendarAgent: {
-          capabilities: CalendarAgent.getCapabilities(),
-          limitations: CalendarAgent.getLimitations(),
-          schema: CalendarAgent.getOpenAIFunctionSchema()
+    const agents = this.agentCoordinator.getAvailableAgents();
+    const capabilities: Record<string, AgentCapability> = {};
+
+    for (const agent of agents) {
+      capabilities[agent.name] = {
+        capabilities: agent.capabilities.map(cap => cap.description),
+        limitations: ['Agent-specific limitations not yet extracted'], // TODO: Extract from agents
+        schema: {
+          name: agent.name,
+          description: agent.description,
+          parameters: {
+            type: 'object',
+            properties: agent.capabilities.reduce((props, cap) => {
+              props[cap.name] = cap.parameters;
+              return props;
+            }, {} as any)
+          }
         }
       };
-    } catch (error) {
-      logger.error('Failed to get agent capabilities', {
-        error: (error as Error).message,
-        stack: (error as Error).stack,
-        correlationId: 'init',
-        operation: 'agent_capabilities',
-        metadata: { service: 'MasterAgent' }
-      });
-      return {};
     }
+
+    return capabilities;
   }
 
   /**
@@ -492,10 +431,11 @@ export class MasterAgent {
       logger.info('Request started', logContext);
       
       // Check memory usage periodically
-      this.checkMemoryUsage();
+      await this.checkMemoryUsage();
       
-      // Check for active workflow first using simple state management
-      const activeWorkflows = this.getActiveWorkflows(sessionId);
+      // Check for active workflow first using WorkflowOrchestrator
+      const activeWorkflows = this.workflowOrchestrator.getSessionWorkflows(sessionId)
+        .filter((w: SimpleWorkflowState) => w.status === 'active');
 
       if (activeWorkflows.length > 0) {
         // Handle workflow interruption/continuation with step-by-step
@@ -1780,7 +1720,7 @@ Be helpful, professional, and take intelligent action rather than asking for cla
   /**
    * Monitor memory usage and trigger cleanup if needed
    */
-  private checkMemoryUsage(): void {
+  private async checkMemoryUsage(): Promise<void> {
     const now = Date.now();
     // Check memory every 30 seconds
     if (now - this.lastMemoryCheck < 30000) {
@@ -1814,25 +1754,12 @@ Be helpful, professional, and take intelligent action rather than asking for cla
         }
       });
       
-      // Clear agent schemas to free memory
-      if (this.agentSchemas.size > 0) {
-        const schemasSize = this.agentSchemas.size;
-        this.agentSchemas.clear();
-        // Reinitialize immediately to maintain functionality
-        this.initializeAgentSchemas().catch(error => {
-          logger.error('Failed to reinitialize agent schemas', error, {
-            correlationId: 'memory-cleanup',
-            operation: 'schema_reinit',
-            metadata: { previousSize: schemasSize }
-          });
-        });
-        logger.debug('Agent schemas cleared and reinitialized', {
-          correlationId: 'memory-cleanup',
-          operation: 'schema_reinit',
-          metadata: { previousSize: schemasSize }
-        });
-      }
-      
+      // Trigger cleanup on orchestrators
+      this.workflowOrchestrator.cleanupOldWorkflows();
+
+      // Perform agent health checks
+      await this.agentCoordinator.performHealthChecks();
+
       // Force garbage collection if available
       if (global.gc) {
         global.gc();
@@ -1974,37 +1901,18 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
 
   /**
-   * Get WorkflowCacheService instance
-   */
-  /**
-   * Simple workflow management methods (replacing WorkflowCacheService)
+   * Workflow management methods using WorkflowOrchestrator
    */
   private createWorkflow(workflow: SimpleWorkflowState): void {
-    this.workflows.set(workflow.workflowId, workflow);
-
-    // Add to session's active workflows
-    const sessionWorkflows = this.sessionWorkflows.get(workflow.sessionId) || [];
-    sessionWorkflows.push(workflow.workflowId);
-    this.sessionWorkflows.set(workflow.sessionId, sessionWorkflows);
-  }
-
-  private getActiveWorkflows(sessionId: string): SimpleWorkflowState[] {
-    const workflowIds = this.sessionWorkflows.get(sessionId) || [];
-    return workflowIds
-      .map(id => this.workflows.get(id))
-      .filter((w): w is SimpleWorkflowState => w !== undefined && w.status === 'active');
+    this.workflowOrchestrator.createWorkflow(workflow);
   }
 
   private updateWorkflow(workflowId: string, updates: Partial<SimpleWorkflowState>): void {
-    const workflow = this.workflows.get(workflowId);
-    if (workflow) {
-      Object.assign(workflow, updates, { lastActivity: new Date() });
-      this.workflows.set(workflowId, workflow);
-    }
+    this.workflowOrchestrator.updateWorkflow(workflowId, updates);
   }
 
   private cancelWorkflow(workflowId: string): void {
-    this.updateWorkflow(workflowId, { status: 'cancelled' });
+    this.workflowOrchestrator.cancelWorkflow(workflowId);
   }
 
   // Removed getIntentAnalysisService - using only NextStepPlanningService for all planning
@@ -2244,10 +2152,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       logger.info('Continuing step-by-step workflow with new input', logContext);
 
       // Simplified workflow interruption handling - treat any new input as starting a new workflow
-      this.updateWorkflow(activeWorkflow.workflowId, {
-        status: 'cancelled',
-        lastActivity: new Date()
-      });
+      this.workflowOrchestrator.cancelWorkflow(activeWorkflow.workflowId);
       return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
     } catch (error) {
       logger.error('Failed to continue step-by-step workflow', error as Error, logContext);
@@ -2296,7 +2201,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       };
 
       // Create workflow state for tracking
-      const workflowId = `stepbystep-${sessionId}-${Date.now()}`;
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
       const workflowState: SimpleWorkflowState = {
         workflowId,
         sessionId,
@@ -2541,7 +2446,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
 
   public cleanup(): void {
-    this.agentSchemas.clear();
+    // Cleanup is now handled by the extracted components
     logger.debug('MasterAgent cleanup completed', {
       correlationId: 'cleanup',
       operation: 'agent_cleanup',
