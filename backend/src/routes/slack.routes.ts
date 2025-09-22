@@ -192,6 +192,17 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
     const logContext = createLogContext(req);
     
     try {
+      // Ignore Slack retries to prevent duplicate processing
+      const retryNum = req.get('X-Slack-Retry-Num');
+      if (retryNum && parseInt(retryNum, 10) > 0) {
+        logger.debug('Ignoring Slack retry delivery', {
+          ...logContext,
+          metadata: { retryNum, reason: req.get('X-Slack-Retry-Reason') }
+        });
+        res.status(200).json({ ok: true, ignored: 'slack_retry' });
+        return;
+      }
+
       const { challenge, type, event, team_id, api_app_id } = req.body;
       
       logger.info('Slack event received', {

@@ -50,35 +50,13 @@ export interface NextStepPlan {
  */
 export class NextStepPlanningService extends BaseService {
   private openaiService: OpenAIService | null = null;
-
-  // Available agents and their capabilities for dynamic selection
-  private readonly AVAILABLE_AGENTS = {
-    emailAgent: {
-      capabilities: ['search', 'send', 'read', 'compose', 'reply', 'forward', 'delete'],
-      description: 'Gmail operations including search, composition, and management',
-      parameters: ['query', 'recipient', 'subject', 'body', 'timeRange', 'maxResults', 'operation']
-    },
-        calendarAgent: {
-          capabilities: ['search', 'create', 'update', 'delete', 'check_availability', 'suggest_times', 'retrieve_events', 'list_events', 'retrieve_suggested_times'],
-          description: 'Google Calendar operations for event management and scheduling',
-          parameters: ['title', 'startTime', 'endTime', 'attendees', 'duration', 'query', 'operation']
-        },
-    contactAgent: {
-      capabilities: ['search', 'create', 'update', 'delete', 'resolve'],
-      description: 'Contact management and resolution operations',
-      parameters: ['name', 'email', 'phone', 'query', 'operation']
-    },
-    slackAgent: {
-      capabilities: ['send_message', 'gather_context', 'search', 'analyze'],
-      description: 'Slack operations for messaging and context gathering',
-      parameters: ['channel', 'message', 'user', 'query', 'operation']
-    },
-    thinkAgent: {
-      capabilities: ['analyze', 'reason', 'summarize', 'compare', 'recommend'],
-      description: 'AI reasoning and analysis for complex decision making',
-      parameters: ['query', 'context', 'data', 'operation']
-    }
-  };
+  // Dynamic agent inventory, refreshed from AgentFactory at runtime
+  private agentInventory: Record<string, {
+    capabilities: string[];
+    limitations?: string[];
+    schema?: any;
+    enabled?: boolean;
+  }> = {};
 
   constructor() {
     super('nextStepPlanningService');
@@ -91,13 +69,16 @@ export class NextStepPlanningService extends BaseService {
       throw new Error('OpenAIService is required for NextStepPlanningService');
     }
 
+    // Preload dynamic agent inventory (best effort)
+    await this.refreshAgentInventory().catch(() => undefined);
+
     logger.debug('NextStepPlanningService initialized', {
       correlationId: `next-step-planning-init-${Date.now()}`,
       operation: 'next_step_planning_init',
       metadata: {
         service: 'nextStepPlanningService',
         hasOpenAIService: !!this.openaiService,
-        availableAgents: Object.keys(this.AVAILABLE_AGENTS)
+        availableAgents: Object.keys(this.agentInventory)
       }
     });
   }
@@ -106,39 +87,69 @@ export class NextStepPlanningService extends BaseService {
    * Plan the next step in the workflow based on current context
    */
   async planNextStep(context: WorkflowContext): Promise<NextStepPlan | null> {
-    console.log('📋 PLANNING: Starting next step planning...');
-    console.log('📊 Planning Context:', JSON.stringify(context, null, 2));
-    
+    const correlationId = `planning-${Date.now()}`;
+
+    logger.debug('Starting next step planning', {
+      correlationId,
+      operation: 'next_step_planning',
+      metadata: {
+        currentStep: context.currentStep,
+        maxSteps: context.maxSteps,
+        completedStepsCount: context.completedSteps.length
+      }
+    });
+
     if (!this.openaiService) {
       throw new Error('OpenAIService not available');
     }
 
     try {
-      console.log('🔍 PLANNING: Creating planning prompt...');
+      // Ensure agent inventory is fresh (non-blocking failure)
+      await this.refreshAgentInventory().catch(() => undefined);
+
+      logger.debug('Creating planning prompt', {
+        correlationId,
+        operation: 'planning_prompt_creation'
+      });
       const planningPrompt = this.createNextStepPrompt(context);
 
-      console.log('🤖 PLANNING: Calling OpenAI for step planning...');
+      logger.debug('Calling OpenAI for step planning', {
+        correlationId,
+        operation: 'openai_planning_call'
+      });
       const response = await this.openaiService.generateText(
         planningPrompt,
         'You are an intelligent workflow planner. Plan the next logical step based on context. Return only valid JSON.',
         { temperature: 0.2, maxTokens: 2000 }
       );
 
-      console.log('📋 PLANNING: Raw OpenAI response:', response);
+      logger.debug('Received OpenAI planning response', {
+        correlationId,
+        operation: 'openai_planning_response',
+        metadata: { responseLength: response.length }
+      });
+
       let nextStep;
       try {
         nextStep = JSON.parse(response);
-        console.log('✅ PLANNING: Parsed next step:', JSON.stringify(nextStep, null, 2));
+        logger.debug('Successfully parsed next step', {
+          correlationId,
+          operation: 'step_parsing',
+          metadata: {
+            stepNumber: nextStep.stepNumber,
+            agent: nextStep.agent,
+            operation: nextStep.operation
+          }
+        });
       } catch (parseError) {
         throw new Error(`LLM returned invalid JSON for step planning: ${response.substring(0, 200)}... Parse error: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
       }
 
       // If the task is marked as complete, return null
       if (nextStep.isComplete) {
-        console.log('✅ PLANNING: Task marked as complete, returning null');
         logger.debug('Workflow marked as complete', {
-          correlationId: `next-step-complete-${Date.now()}`,
-          operation: 'next_step_complete',
+          correlationId,
+          operation: 'workflow_complete',
           metadata: {
             originalRequest: context.originalRequest.substring(0, 100),
             completedSteps: context.completedSteps.length,
@@ -149,12 +160,14 @@ export class NextStepPlanningService extends BaseService {
       }
 
       // Validate and enhance the next step
-      console.log('🔧 PLANNING: Validating and enhancing next step...');
+      logger.debug('Validating and enhancing next step', {
+        correlationId,
+        operation: 'step_validation'
+      });
       const validatedStep = this.validateNextStep(nextStep, context);
-      console.log('🎉 PLANNING: Final validated step:', JSON.stringify(validatedStep, null, 2));
 
-      logger.debug('Next step planned', {
-        correlationId: `next-step-planned-${Date.now()}`,
+      logger.debug('Next step planned successfully', {
+        correlationId,
         operation: 'next_step_planned',
         metadata: {
           stepNumber: validatedStep.stepNumber,
@@ -201,7 +214,37 @@ export class NextStepPlanningService extends BaseService {
         { temperature: 0.1, maxTokens: 1500 }
       );
 
-      const analysis = JSON.parse(response);
+      // Robust JSON parsing with error handling
+      let analysis;
+      try {
+        // Try to extract JSON from the response
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysis = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('No JSON found in response');
+        }
+      } catch (parseError) {
+        logger.warn('Failed to parse step analysis JSON, using fallback', {
+          correlationId: `step-analysis-parse-error-${Date.now()}`,
+          operation: 'step_analysis_parse_error',
+          metadata: {
+            responseLength: response.length,
+            responsePreview: response.substring(0, 200),
+            parseError: parseError instanceof Error ? parseError.message : 'Unknown error'
+          }
+        });
+
+        // Fallback analysis based on step success
+        analysis = {
+          shouldContinue: stepResult.success && stepResult.agent === 'calendarAgent' && stepResult.operation === 'check_availability',
+          isComplete: stepResult.success && stepResult.agent === 'calendarAgent' && stepResult.operation === 'list',
+          needsUserInput: false,
+          analysis: stepResult.success
+            ? 'Step completed successfully. Proceeding based on operation type.'
+            : 'Step failed. Stopping workflow for user review.'
+        };
+      }
 
       logger.debug('Step result analyzed', {
         correlationId: `step-analysis-${Date.now()}`,
@@ -233,9 +276,16 @@ export class NextStepPlanningService extends BaseService {
    * Create prompt for next step planning
    */
   private createNextStepPrompt(context: WorkflowContext): string {
-    const agentCapabilities = Object.entries(this.AVAILABLE_AGENTS)
-      .map(([name, agent]) => `${name}: ${agent.description} (${agent.capabilities.join(', ')})`)
-      .join('\n');
+    const availableAgentsJson = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(this.agentInventory).map(([name, meta]) => [name, {
+          capabilities: meta.capabilities,
+          limitations: meta.limitations
+        }])
+      ),
+      null,
+      2
+    );
 
     const completedStepsContext = context.completedSteps.length > 0
       ? `\nCOMPLETED STEPS:\n${context.completedSteps.map(step =>
@@ -251,6 +301,10 @@ export class NextStepPlanningService extends BaseService {
     const currentDateStr = currentDate.toISOString().split('T')[0];
     const currentYear = currentDate.getFullYear();
 
+    const intentAnalysisContext = context.gatheredData.intentAnalysis
+      ? `\nINTENT ANALYSIS:\n- Intent Type: ${context.gatheredData.intentType}\n- Confidence: ${context.gatheredData.confidence}\n- Analysis: ${JSON.stringify(context.gatheredData.intentAnalysis, null, 2)}`
+      : '';
+
     return `
 You are an advanced AI workflow planner. Plan the next logical step based on the current context.
 
@@ -263,36 +317,44 @@ ORIGINAL REQUEST: "${context.originalRequest}"
 CURRENT STEP: ${context.currentStep}
 MAX STEPS: ${context.maxSteps}
 
-${completedStepsContext}${gatheredDataContext}
+${intentAnalysisContext}${completedStepsContext}${gatheredDataContext}
 
-AVAILABLE AGENTS:
-${agentCapabilities}
+AVAILABLE AGENTS (dynamic JSON):
+${availableAgentsJson}
+
+AVAILABLE AGENTS WITH EXACT OPERATION NAMES:
+- calendarAgent: create, list, update, delete, check_availability, find_slots
+- emailAgent: send, compose, search, read, reply, forward, delete  
+- contactAgent: search, create, update, delete, resolve
 
 PLANNING RULES:
-1. Analyze what has been accomplished so far
-2. Determine the next logical step to complete the original request
-3. Choose the most appropriate agent for the task
-4. Generate specific parameters based on context and previous results
-5. If the task is complete, set isComplete to true
-6. If maximum steps reached without completion, set isComplete to true
-7. Consider error recovery if previous steps failed
-8. Be intelligent about step dependencies and order
-9. Always use current year (${currentYear}) when generating dates
-10. Use proper ISO 8601 format for dates: YYYY-MM-DDTHH:mm:ssZ
+1. Use intent analysis to understand the user's goal and context
+2. For confirmation_positive: plan to execute the referenced draft
+3. For confirmation_negative: plan to cancel/cleanup drafts
+4. For draft_modification: plan to update the draft with new values
+5. For new_request/new_write_operation: plan steps to fulfill the request (resolve contacts, compose drafts, etc.)
+6. For read_operation: plan steps to gather the requested information
+7. Always defer destructive actions until explicit user confirmation
+8. If essential data is missing, plan a clarification/user-input step
+9. Be intelligent about step dependencies and order
+10. Always use current year (${currentYear}) when generating dates
+11. Use proper ISO 8601 format for dates: YYYY-MM-DDTHH:mm:ssZ
+12. Use EXACT operation names (with underscores, not spaces)
+13. For calendar operations: use check_availability, create, list, update, delete, find_slots
+14. For email operations: use send, compose, search, read, reply, forward, delete
+15. For contact operations: use search, create, update, delete, resolve
 
-OPERATION EFFICIENCY RULES:
-- Consolidate similar operations into single comprehensive calls
-- Avoid redundant requests for the same data or time periods
-- Check completed steps to prevent duplicate operations
-- Use appropriate parameters to filter and scope requests
-- Plan steps that build upon previous results rather than repeating work
+WRITE OPERATION GUIDELINE:
+- For email writes: plan contactAgent.resolve → emailAgent.compose (draft) → await confirmation
+- For calendar writes: plan contact resolution for attendees → calendarAgent.create (draft) → await confirmation
+- For reads: plan single read operation → synthesize results
 
 RESPONSE FORMAT (JSON only):
 {
   "stepNumber": ${context.currentStep},
   "description": "Clear description of what this step will accomplish",
   "agent": "agentName",
-  "operation": "specific_operation",
+  "operation": "exact_operation_name",
   "parameters": {
     "param1": "value1",
     "param2": "value2"
@@ -307,7 +369,7 @@ If the task is complete, respond with:
   "reasoning": "Explanation of why the task is complete"
 }
 
-Plan intelligently based on context, not rigid templates!
+Plan intelligently based on intent and context, not rigid templates!
 `;
   }
 
@@ -315,6 +377,9 @@ Plan intelligently based on context, not rigid templates!
    * Create prompt for step result analysis
    */
   private createStepAnalysisPrompt(stepResult: StepResult, context: WorkflowContext): string {
+    // Summarize large result objects to prevent token overflow
+    const resultSummary = this.summarizeStepResult(stepResult);
+
     return `
 You are an intelligent step result analyzer. Analyze the step execution result and determine next actions.
 
@@ -326,12 +391,12 @@ STEP EXECUTION RESULT:
 - Operation: ${stepResult.operation}
 - Parameters: ${JSON.stringify(stepResult.parameters)}
 - Success: ${stepResult.success}
-- Result: ${JSON.stringify(stepResult.result)}
+- Result Summary: ${resultSummary}
 - Error: ${stepResult.error || 'None'}
 
 CONTEXT:
 - Completed Steps: ${context.completedSteps.length}
-- Gathered Data: ${JSON.stringify(context.gatheredData)}
+- Gathered Data Keys: ${Object.keys(context.gatheredData).join(', ')}
 
 ANALYSIS REQUIREMENTS:
 1. Determine if the step was successful and achieved its goal
@@ -340,6 +405,14 @@ ANALYSIS REQUIREMENTS:
 4. Assess if the workflow should continue
 5. Extract any useful data from the step result
 6. Recommend next actions
+
+WORKFLOW CONTINUATION GUIDELINES:
+- For calendar check_availability: If successful and slot is available, continue to create the event
+- For calendar list operations: If successful, consider task complete (user asked for info)
+- For failed steps: Generally continue if the failure is recoverable, stop if critical
+- For read operations: Complete after successful retrieval
+- For write operations: Continue until confirmation and execution is complete
+- Always prioritize user intent from the original request
 
 RESPONSE FORMAT (JSON only):
 {
@@ -363,15 +436,12 @@ Analyze intelligently and provide actionable insights!
    */
   private validateNextStep(nextStep: any, context: WorkflowContext): NextStepPlan {
     // Validate agent exists
-    if (!nextStep.agent || !this.AVAILABLE_AGENTS[nextStep.agent as keyof typeof this.AVAILABLE_AGENTS]) {
+    if (!nextStep.agent || !this.agentInventory[nextStep.agent]) {
       throw new Error(`Invalid agent specified: ${nextStep.agent}`);
     }
 
-    // Validate operation is supported by agent
-    const agent = this.AVAILABLE_AGENTS[nextStep.agent as keyof typeof this.AVAILABLE_AGENTS];
-    if (!nextStep.operation || !agent.capabilities.includes(nextStep.operation)) {
-      throw new Error(`Operation '${nextStep.operation}' not supported by agent '${nextStep.agent}'`);
-    }
+    // Remove strict operation validation - let the agent handle it
+    // The agent will validate the operation when it receives the tool call
 
     return {
       stepNumber: nextStep.stepNumber || context.currentStep,
@@ -388,7 +458,7 @@ Analyze intelligently and provide actionable insights!
    * Get available agents for planning
    */
   getAvailableAgents(): Record<string, any> {
-    return this.AVAILABLE_AGENTS;
+    return this.agentInventory;
   }
 
   protected async onDestroy(): Promise<void> {
@@ -405,9 +475,85 @@ Analyze intelligently and provide actionable insights!
       details: {
         service: 'nextStepPlanningService',
         hasOpenAIService: !!this.openaiService,
-        availableAgents: Object.keys(this.AVAILABLE_AGENTS),
+        availableAgents: Object.keys(this.agentInventory),
         stepByStepPlanning: true
       }
     };
+  }
+
+  /**
+   * Summarize step results to prevent token overflow in analysis prompts
+   */
+  private summarizeStepResult(stepResult: StepResult): string {
+    if (!stepResult.result || typeof stepResult.result !== 'object') {
+      return JSON.stringify(stepResult.result);
+    }
+
+    try {
+      // Handle calendar results
+      if (stepResult.agent === 'calendarAgent') {
+        const result = stepResult.result as any;
+        if (result.result?.data?.events) {
+          const events = result.result.data.events;
+          return `Found ${events.length} calendar events: ${events.slice(0, 3).map((e: any) =>
+            `"${e.summary}" (${e.start?.dateTime || e.start?.date})`
+          ).join(', ')}${events.length > 3 ? ` and ${events.length - 3} more...` : ''}`;
+        }
+        if (result.result?.data?.isAvailable !== undefined) {
+          return `Time slot availability: ${result.result.data.isAvailable ? 'Available' : 'Busy/Conflict'}`;
+        }
+      }
+
+      // Handle email results
+      if (stepResult.agent === 'emailAgent') {
+        const result = stepResult.result as any;
+        if (result.result?.data?.emails) {
+          return `Found ${result.result.data.emails.length} emails`;
+        }
+        if (result.result?.data?.sent) {
+          return `Email sent successfully`;
+        }
+      }
+
+      // Handle contact results
+      if (stepResult.agent === 'contactAgent') {
+        const result = stepResult.result as any;
+        if (result.result?.data?.contacts) {
+          return `Found ${result.result.data.contacts.length} contacts`;
+        }
+      }
+
+      // Default: stringify with size limit
+      const resultStr = JSON.stringify(stepResult.result);
+      if (resultStr.length > 500) {
+        return resultStr.substring(0, 500) + '... [truncated]';
+      }
+      return resultStr;
+
+    } catch (error) {
+      return `Result data (${typeof stepResult.result}) - could not summarize`;
+    }
+  }
+
+  /**
+   * Refresh agent inventory dynamically from AgentFactory
+   */
+  private async refreshAgentInventory(): Promise<void> {
+    try {
+      const { AgentFactory } = await import('../framework/agent-factory');
+      const meta = await AgentFactory.getAgentDiscoveryMetadata();
+      const inventory: Record<string, any> = {};
+      for (const [name, info] of Object.entries(meta || {})) {
+        inventory[name] = {
+          capabilities: Array.isArray((info as any).capabilities) ? (info as any).capabilities : [],
+          limitations: (info as any).limitations,
+          schema: (info as any).schema,
+          enabled: (info as any).enabled
+        };
+      }
+      this.agentInventory = inventory;
+    } catch {
+      // Keep previous inventory on failure
+    }
   }
 }

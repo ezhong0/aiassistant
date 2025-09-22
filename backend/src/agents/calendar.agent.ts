@@ -627,18 +627,23 @@ Always return structured execution status with event details, scheduling insight
 
     logger.debug('Executing calendar tool', logContext);
 
-    console.log('🎯 CALENDAR AGENT: executeCustomTool called with parameters:', JSON.stringify(parameters, null, 2));
-    console.log('🎯 CALENDAR AGENT: executeCustomTool called with context:', JSON.stringify({
-      sessionId: context.sessionId,
-      userId: context.userId,
-      hasSlackContext: !!context.slackContext,
-      slackContext: context.slackContext
-    }, null, 2));
+    logger.debug('Calendar tool execution started with parameters', {
+      ...logContext,
+      metadata: { parameterKeys: Object.keys(parameters) }
+    });
+    logger.debug('Calendar tool context information', {
+      ...logContext,
+      metadata: {
+        sessionId: context.sessionId,
+        userId: context.userId,
+        hasSlackContext: !!context.slackContext
+      }
+    });
 
     // Get access token from TokenManager using Slack context
     let accessToken: string | null = null;
 
-    console.log('🔑 CALENDAR AGENT: executeCustomTool - Attempting to retrieve access token');
+    logger.debug('Attempting to retrieve calendar access token', logContext);
     console.log('🔑 CALENDAR AGENT: executeCustomTool - Slack context:', {
       hasSlackContext: !!context.slackContext,
       teamId: context.slackContext?.teamId,
@@ -666,17 +671,28 @@ Always return structured execution status with event details, scheduling insight
 
       if (tokenManager) {
         try {
-          console.log('🔑 CALENDAR AGENT: executeCustomTool - Calling getValidTokensForCalendar with:', {
-            teamId: context.slackContext.teamId,
-            userId: context.slackContext.userId
+          logger.debug('Getting valid tokens for calendar operation', {
+            correlationId: `calendar-agent-tokens-${Date.now()}`,
+            operation: 'get_calendar_tokens',
+            metadata: {
+              teamId: context.slackContext.teamId,
+              userId: context.slackContext.userId
+            }
           });
           accessToken = await tokenManager.getValidTokensForCalendar(context.slackContext.teamId, context.slackContext.userId);
-          console.log('🔑 CALENDAR AGENT: executeCustomTool - Token retrieval result:', {
-            hasAccessToken: !!accessToken,
-            accessTokenLength: accessToken?.length || 0
+          logger.debug('Calendar token retrieval completed', {
+            correlationId: `calendar-agent-tokens-${Date.now()}`,
+            operation: 'calendar_token_result',
+            metadata: {
+              hasAccessToken: !!accessToken,
+              accessTokenLength: accessToken?.length || 0
+            }
           });
         } catch (error) {
-          console.log('🔑 CALENDAR AGENT: executeCustomTool - Error retrieving access token:', error);
+          logger.error('Error retrieving calendar access token', error as Error, {
+            correlationId: `calendar-agent-error-${Date.now()}`,
+            operation: 'calendar_token_error'
+          });
           logger.error('executeCustomTool: Error retrieving access token', error as Error, {
             ...logContext,
             metadata: {

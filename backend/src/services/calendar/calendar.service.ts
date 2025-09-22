@@ -235,9 +235,10 @@ export class CalendarService extends BaseService {
         orderBy = 'startTime'
       } = options;
 
-      console.log('🌐 CALENDAR SERVICE: Starting Google Calendar API call');
-      console.log('🌐 CALENDAR SERVICE: Time range:', { timeMin, timeMax });
-      console.log('🌐 CALENDAR SERVICE: Query params:', { maxResults, calendarId, singleEvents, orderBy });
+      this.logDebug('Starting Google Calendar API call', {
+        timeRange: { timeMin, timeMax },
+        queryParams: { maxResults, calendarId, singleEvents, orderBy }
+      });
 
       this.logDebug('Fetching calendar events', {
         timeMin,
@@ -262,20 +263,23 @@ export class CalendarService extends BaseService {
         listOptions.timeMax = timeMax;
       }
 
-      console.log('🌐 CALENDAR SERVICE: Making API call with options:', JSON.stringify({
-        calendarId: listOptions.calendarId,
-        timeMin: listOptions.timeMin,
-        timeMax: listOptions.timeMax,
-        maxResults: listOptions.maxResults,
-        singleEvents: listOptions.singleEvents,
-        orderBy: listOptions.orderBy
-      }, null, 2));
+      this.logDebug('Making Calendar API call', {
+        options: {
+          calendarId: listOptions.calendarId,
+          timeMin: listOptions.timeMin,
+          timeMax: listOptions.timeMax,
+          maxResults: listOptions.maxResults,
+          singleEvents: listOptions.singleEvents,
+          orderBy: listOptions.orderBy
+        }
+      });
 
       const response = await this.calendarService.events.list(listOptions);
 
-      console.log('🌐 CALENDAR SERVICE: API call completed');
-      console.log('🌐 CALENDAR SERVICE: Response status:', response.status);
-      console.log('🌐 CALENDAR SERVICE: Events in response:', response.data.items?.length || 0);
+      this.logDebug('Calendar API call completed successfully', {
+        status: response.status,
+        eventCount: response.data.items?.length || 0
+      });
 
       const events = response.data.items || [];
       

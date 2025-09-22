@@ -248,6 +248,14 @@ export class SlackService extends BaseService {
       if (!this.masterAgent) {
         throw new Error('MasterAgent not available');
       }
+
+      // Post "working on it" message immediately
+      await this.postMessageToSlack(
+        context.channelId,
+        "🤔 Working on your request...",
+        context.threadTs
+      );
+
       const unified = await this.masterAgent.processUserInputUnified(
         messageText,
         sessionId,
@@ -255,6 +263,13 @@ export class SlackService extends BaseService {
         {
           context: { slackContext: context }
         }
+      );
+
+      // Post the final response back to Slack
+      await this.postMessageToSlack(
+        context.channelId,
+        unified.message,
+        context.threadTs
       );
 
       return {
@@ -270,6 +285,17 @@ export class SlackService extends BaseService {
 
     } catch (error) {
       this.logError('Failed to process message with tools', error);
+      
+      // Generate user-friendly error message
+      const userFriendlyError = await this.generateUserFriendlyErrorMessage(error, messageText);
+
+      // Post error message to Slack
+      await this.postMessageToSlack(
+        context.channelId,
+        userFriendlyError,
+        context.threadTs
+      ).catch(() => {}); // Don't fail if we can't post the error message
+
       return {
         success: false,
         message: 'Failed to process message',
@@ -351,20 +377,13 @@ export class SlackService extends BaseService {
     // Use stable ID if available
     const eventId = (event as any).event_id || this.generateEventId(event);
     if (!eventId) return false;
-
     const now = Date.now();
     const eventData = this.processedEvents.get(eventId);
-
     if (eventData && (now - eventData.timestamp) < 300000) { // 5 minutes
       return true;
     }
-
-    // Store event
     this.processedEvents.set(eventId, { timestamp: now });
-
-    // Cleanup old events
     this.cleanupOldEvents();
-
     return false;
   }
 
@@ -424,6 +443,17 @@ export class SlackService extends BaseService {
   }
 
   /**
+   * Post message to Slack with thread support
+   */
+  private async postMessageToSlack(channel: string, text: string, threadTs?: string): Promise<any> {
+    const options: any = {};
+    if (threadTs) {
+      options.thread_ts = threadTs;
+    }
+    return await this.sendMessage(channel, text, options);
+  }
+
+  /**
    * Send message to Slack
    */
   async sendMessage(channel: string, text: string, options?: any): Promise<any> {
@@ -475,5 +505,58 @@ export class SlackService extends BaseService {
     const resp: any = await this.webClient.conversations.replies({ channel: channelId, ts: threadTs, limit });
     const messages = Array.isArray(resp.messages) ? resp.messages : [];
     return { messages, hasMore: !!resp.response_metadata?.next_cursor, nextCursor: resp.response_metadata?.next_cursor };
+  }
+
+  /**
+   * Generate user-friendly error messages
+   */
+  private async generateUserFriendlyErrorMessage(error: unknown, userInput: string): Promise<string> {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Common error patterns and user-friendly responses
+    const errorMappings = [
+      {
+        pattern: /oauth|token|auth/i,
+        message: '🔑 Looks like I need permission to access your Google account. Please check your authentication settings.'
+      },
+      {
+        pattern: /timeout|deadline|timeout/i,
+        message: '⏱️ That request took too long to process. Please try again with a simpler request.'
+      },
+      {
+        pattern: /rate.?limit/i,
+        message: '🚦 I\'m processing a lot of requests right now. Please wait a moment and try again.'
+      },
+      {
+        pattern: /network|connection|fetch/i,
+        message: '🌐 I\'m having trouble connecting to external services. Please check your internet connection and try again.'
+      },
+      {
+        pattern: /not.?found|404/i,
+        message: '🔍 I couldn\'t find what you\'re looking for. Please double-check your request and try again.'
+      },
+      {
+        pattern: /permission|forbidden|403/i,
+        message: '🚫 I don\'t have permission to perform that action. Please check your account permissions.'
+      },
+      {
+        pattern: /calendar/i,
+        message: '📅 I encountered an issue with calendar operations. Please make sure your Google Calendar is accessible and try again.'
+      },
+      {
+        pattern: /email|gmail/i,
+        message: '📧 I encountered an issue with email operations. Please make sure your Gmail access is configured properly.'
+      }
+    ];
+
+    // Find matching error pattern
+    for (const mapping of errorMappings) {
+      if (mapping.pattern.test(errorMessage)) {
+        return mapping.message;
+      }
+    }
+
+    // Default fallback message
+    return `❌ I encountered an issue processing "${userInput.substring(0, 50)}${userInput.length > 50 ? '...' : ''}". Please try rephrasing your request or contact support if the issue persists.`;
   }
 }

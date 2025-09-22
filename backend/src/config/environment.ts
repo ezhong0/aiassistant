@@ -18,6 +18,7 @@ export const ENV_VARS = {
   
   // Security
   JWT_SECRET: 'JWT_SECRET',
+  OAUTH_STATE_SECRET: 'OAUTH_STATE_SECRET',
   
   // API keys
   OPENAI_API_KEY: 'OPENAI_API_KEY',
@@ -150,7 +151,8 @@ export const ENV_VALIDATION = {
     const productionRequired = [
       ENV_VARS.GOOGLE_CLIENT_ID,
       ENV_VARS.GOOGLE_CLIENT_SECRET,
-      ENV_VARS.GOOGLE_REDIRECT_URI
+      ENV_VARS.GOOGLE_REDIRECT_URI,
+      ENV_VARS.OAUTH_STATE_SECRET
     ];
     
     // Check core required

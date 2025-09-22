@@ -37,6 +37,12 @@ export interface UnifiedProcessingResult {
   toolCall?: ToolCall;      // The tool call that was drafted
   toolResults?: ToolResult[]; // For direct execution
   success: boolean;
+  executionMetadata?: {
+    processingTime?: number;
+    workflowId?: string;
+    totalSteps?: number;
+    workflowAction?: string;
+  };
 }
 
 /**
@@ -166,6 +172,17 @@ export interface AnalysisContext {
     riskLevel: string;
   }[];
   conversationHistory?: string[];
+  slackContext?: {
+    channel: string;
+    userId: string;
+    teamId: string;
+    threadTs?: string;
+    recentMessages?: Array<{
+      text: string;
+      user: string;
+      timestamp: string;
+    }>;
+  };
 }
 
 // ✅ Validation helpers for MasterAgent responses
@@ -549,14 +566,21 @@ export class MasterAgent {
           createdAt: draft.createdAt,
           riskLevel: draft.riskLevel
         })),
-        conversationHistory: await this.getRecentConversation(sessionId)
+        conversationHistory: await this.getRecentConversation(sessionId),
+        slackContext: options?.context?.slackContext ? {
+          channel: options.context.slackContext.channel,
+          userId: options.context.slackContext.userId,
+          teamId: options.context.slackContext.teamId,
+          threadTs: options.context.slackContext.threadTs,
+          recentMessages: await this.getRecentSlackMessages(options.context.slackContext)
+        } : undefined
       };
 
       // 4. Single AI call that determines everything
       const intentAnalysis = await this.comprehensiveIntentAnalysis(analysisContext);
 
-      // 5. Route based on AI analysis
-      return await this.routeBasedOnIntent(intentAnalysis, sessionId, userId || 'unknown', options);
+      // 5. Route all requests through step-by-step execution
+      return await this.executeStepByStepFromIntent(intentAnalysis, userInput, sessionId, userId, options);
 
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -600,6 +624,15 @@ export class MasterAgent {
     const prompt = `Analyze user intent comprehensively and return structured JSON:
 
 User message: "${context.userInput}"
+
+${context.slackContext ? `
+SLACK CONTEXT:
+- Channel: ${context.slackContext.channel}
+- User: ${context.slackContext.userId}
+- Team: ${context.slackContext.teamId}
+- Thread: ${context.slackContext.threadTs || 'Not in thread'}
+- Recent messages: ${context.slackContext.recentMessages?.length || 0} messages available
+` : 'No Slack context available.'}
 
 ${context.hasPendingDrafts ? `
 EXISTING PENDING DRAFTS:
@@ -708,220 +741,95 @@ Return JSON with this structure:
   }
 
   /**
-   * Route to appropriate action based on unified analysis
+   * Execute step-by-step workflow based on intent analysis
+   * This replaces routeBasedOnIntent with planner-first execution
    */
-  private async routeBasedOnIntent(
-    analysis: IntentAnalysis,
+  private async executeStepByStepFromIntent(
+    intentAnalysis: IntentAnalysis,
+    userInput: string,
     sessionId: string,
-    userId: string,
+    userId?: string,
     options?: {
       accessToken?: string;
       context?: any;
     }
   ): Promise<UnifiedProcessingResult> {
-    const draftManager = this.getDraftManager();
-    if (!draftManager) {
+    const correlationId = `step-from-intent-${sessionId}-${Date.now()}`;
+    const logContext: LogContext = {
+      correlationId,
+      userId,
+      sessionId,
+      operation: 'executeStepByStepFromIntent',
+      metadata: { intentType: intentAnalysis.intentType }
+    };
+
+    try {
+      logger.info('Starting step-by-step execution from intent', logContext);
+
+      // Initialize workflow context with intent information
+      const workflowContext: WorkflowContext = {
+        originalRequest: userInput,
+        currentStep: 1,
+        maxSteps: 10,
+        completedSteps: [],
+        gatheredData: {
+          intentAnalysis: intentAnalysis,
+          intentType: intentAnalysis.intentType,
+          confidence: intentAnalysis.confidence
+        },
+        userContext: { 
+          slackContext: options?.context?.slackContext, 
+          userId, 
+          sessionId 
+        }
+      };
+
+      // Create workflow state for tracking
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+      const workflowState: SimpleWorkflowState = {
+        workflowId,
+        sessionId,
+        status: 'active',
+        currentStep: 0,
+        totalSteps: 0,
+        context: {
+          originalRequest: userInput,
+          userIntent: userInput,
+          gatheredData: workflowContext.gatheredData
+        },
+        createdAt: new Date(),
+        lastActivity: new Date()
+      };
+
+      // Save initial workflow state
+      this.createWorkflow(workflowState);
+
+      // Execute step-by-step loop
+      const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, options?.context?.slackContext);
+
+      // Convert MasterAgentResponse to UnifiedProcessingResult
       return {
-        message: "❌ System temporarily unavailable. Please try again in a moment.",
+        message: result.message,
+        needsConfirmation: false, // Step-by-step handles confirmations internally
+        success: true,
+        toolResults: result.toolResults,
+        executionMetadata: result.executionMetadata
+      };
+
+    } catch (error) {
+      logger.error('Step-by-step execution from intent failed', error as Error, logContext);
+      
+      // Return user-friendly error message
+      const errorMessage = await this.createUserFriendlyErrorText(error as Error, userInput);
+      return {
+        message: errorMessage,
         needsConfirmation: false,
         success: false
       };
-    }
-
-    if (!analysis || !analysis.intentType) {
-      return {
-        message: "❌ I couldn't understand your request. Could you please rephrase it?",
-        needsConfirmation: false,
-        success: false
-      };
-    }
-
-    switch (analysis.intentType) {
-      case 'confirmation_positive':
-        if (!analysis.targetDraftId) {
-          return {
-            message: "❌ I couldn't find the draft to confirm. Please try your request again.",
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-        try {
-          const result = await draftManager.executeDraft(analysis.targetDraftId);
-          return {
-            message: result.success
-              ? "✅ Action completed successfully!"
-              : `❌ Failed to complete action: ${result.error || 'Unknown error'}`,
-            needsConfirmation: false,
-            toolResults: result.success ? [result] : undefined,
-            success: result.success
-          };
-        } catch (error) {
-          return {
-            message: `❌ Failed to execute action: ${(error as Error).message}`,
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-      case 'confirmation_negative':
-        await draftManager.clearSessionDrafts(sessionId);
-        return {
-          message: `❌ Action cancelled. ${analysis.reasoning}`,
-          needsConfirmation: false,
-          success: true
-        };
-
-      case 'draft_modification':
-        if (!analysis.targetDraftId || !analysis.modifications) {
-          return {
-            message: "❌ I couldn't understand what changes you want to make. Could you be more specific?",
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-        try {
-          const updatedDraft = await draftManager.updateDraft(
-            analysis.targetDraftId,
-            {
-              parameters: analysis.modifications.newValues,
-              previewData: {
-                description: `Modified: ${analysis.modifications.fieldsToUpdate.join(', ')}`,
-                details: analysis.modifications.newValues
-              }
-            }
-          );
-          
-          // Generate response with updated draft contents
-          const messageWithContents = await this.generateResponseWithDraftContents(updatedDraft);
-          
-          return {
-            message: messageWithContents,
-            needsConfirmation: true,
-            draftId: updatedDraft.id,
-            draftContents: {
-              action: updatedDraft.operation,
-              previewData: updatedDraft.previewData
-            },
-            toolCall: updatedDraft.toolCall,
-            success: true
-          };
-        } catch (error) {
-          return {
-            message: `❌ Failed to update draft: ${(error as Error).message}`,
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-      case 'new_request':
-        // Clear existing drafts and process new request
-        await draftManager.clearSessionDrafts(sessionId);
-
-        if (!analysis.newOperation) {
-          return {
-            message: "❌ I couldn't understand what you want me to do. Could you be more specific?",
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-        try {
-          const draft = await draftManager.createDraft(sessionId, analysis.newOperation);
-          
-          // Generate response with draft contents
-          const messageWithContents = await this.generateResponseWithDraftContents(draft);
-          
-          return {
-            message: messageWithContents,
-            needsConfirmation: true,
-            draftId: draft.id,
-            draftContents: {
-              action: draft.operation,
-              previewData: draft.previewData
-            },
-            toolCall: draft.toolCall,
-            success: true
-          };
-        } catch (error) {
-          return {
-            message: `❌ Failed to create draft: ${(error as Error).message}`,
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-      case 'new_write_operation':
-        if (!analysis.newOperation) {
-          return {
-            message: "❌ I couldn't understand what you want me to do. Could you be more specific?",
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-        try {
-          const draft = await draftManager.createDraft(sessionId, analysis.newOperation);
-          
-          // Generate response with draft contents
-          const messageWithContents = await this.generateResponseWithDraftContents(draft);
-          
-          return {
-            message: messageWithContents,
-            needsConfirmation: true,
-            draftId: draft.id,
-            draftContents: {
-              action: draft.operation,
-              previewData: draft.previewData
-            },
-            toolCall: draft.toolCall,
-            success: true
-          };
-        } catch (error) {
-          return {
-            message: `❌ Failed to create draft: ${(error as Error).message}`,
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-      case 'read_operation':
-        if (!analysis.readOperations || analysis.readOperations.length === 0) {
-          return {
-            message: "❌ I couldn't determine what information you're looking for.",
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-        try {
-          // Execute read operations immediately (no confirmation needed)
-          const results = await this.executeReadOperations(analysis.readOperations, sessionId, userId, options);
-          const formattedResults = this.formatReadResults(results);
-          
-          return {
-            message: formattedResults,
-            needsConfirmation: false,
-            toolResults: results,
-            success: true
-          };
-        } catch (error) {
-          return {
-            message: `❌ Failed to retrieve information: ${(error as Error).message}`,
-            needsConfirmation: false,
-            success: false
-          };
-        }
-
-      default:
-        return {
-          message: "❌ I couldn't understand your request. Could you try rephrasing it?",
-          needsConfirmation: false,
-          success: false
-        };
     }
   }
+
+  // Deprecated method routeBasedOnIntent removed - now using step-by-step execution via executeStepByStepFromIntent
 
   /**
    * Generate natural language response that includes draft contents
@@ -1079,6 +987,28 @@ Generate the response for this ${draft.type} operation:`;
   }
 
   /**
+   * Get recent Slack messages for context gathering
+   */
+  private async getRecentSlackMessages(slackContext: any): Promise<Array<{
+    text: string;
+    user: string;
+    timestamp: string;
+  }>> {
+    try {
+      // For now, return empty array - this could be enhanced to fetch actual Slack message history
+      // This would require Slack API integration to get conversation history
+      return [];
+    } catch (error) {
+      logger.warn('Failed to get recent Slack messages', {
+        correlationId: `slack-messages-${Date.now()}`,
+        operation: 'get_recent_slack_messages',
+        metadata: { error: (error as Error).message }
+      });
+      return [];
+    }
+  }
+
+  /**
    * Get recent conversation history for context
    */
   private async getRecentConversation(sessionId: string): Promise<string[]> {
@@ -1125,6 +1055,66 @@ Return a single line response starting with ❌ that explains what went wrong in
    */
   private getToolExecutorService(): ToolExecutorService | null {
     return getService('toolExecutorService') as ToolExecutorService;
+  }
+
+  /**
+   * Create user-friendly error messages for step execution failures
+   */
+  private async createUserFriendlyStepErrorMessage(error: Error, step: NextStepPlan, originalRequest: string): Promise<string> {
+    const errorMappings = [
+      {
+        pattern: /oauth|token|auth|permission/i,
+        message: '🔑 I need permission to access your accounts. Please make sure you\'ve authorized the necessary Google services.'
+      },
+      {
+        pattern: /timeout|deadline/i,
+        message: '⏱️ That operation took too long. Please try a simpler request.'
+      },
+      {
+        pattern: /not.?found|404/i,
+        agent: 'calendarAgent',
+        message: '📅 I couldn\'t find the calendar event or information you\'re looking for.'
+      },
+      {
+        pattern: /not.?found|404/i,
+        agent: 'contactAgent',
+        message: '👤 I couldn\'t find that contact. Please check the name and try again.'
+      },
+      {
+        pattern: /not.?found|404/i,
+        agent: 'emailAgent',
+        message: '📧 I couldn\'t find the email you\'re referring to.'
+      },
+      {
+        pattern: /calendar.*conflict|busy/i,
+        message: '📅 There\'s a scheduling conflict. Please choose a different time.'
+      },
+      {
+        pattern: /scope|insufficient.*permission/i,
+        message: '🔐 I need additional permissions to complete this action. Please re-authorize with the required permissions.'
+      }
+    ];
+
+    const errorMessage = error.message;
+
+    // Find agent-specific or general error mapping
+    for (const mapping of errorMappings) {
+      if (mapping.pattern.test(errorMessage)) {
+        if (!mapping.agent || mapping.agent === step.agent) {
+          return `${mapping.message} I was trying to ${step.description.toLowerCase()}.`;
+        }
+      }
+    }
+
+    // Default message based on agent type
+    const agentMessages = {
+      calendarAgent: '📅 I encountered an issue with your calendar operation',
+      emailAgent: '📧 I encountered an issue with your email operation',
+      contactAgent: '👤 I encountered an issue looking up contact information'
+    };
+
+    const agentMessage = agentMessages[step.agent as keyof typeof agentMessages] || 'I encountered an issue';
+    return `${agentMessage}. Please try rephrasing your request: "${originalRequest.substring(0, 100)}${originalRequest.length > 100 ? '...' : ''}"`;
   }
 
   /**
@@ -1868,12 +1858,33 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     // Create a copy to avoid modifying the original
     const truncated = { ...result };
 
+    // Preserve calendar events for display - only limit to first 10 events
+    if (truncated.events && Array.isArray(truncated.events)) {
+      truncated.events = truncated.events.slice(0, 10).map((event: any) => {
+        if (event && typeof event === 'object') {
+          // Keep essential calendar event fields for display
+          return {
+            id: event.id,
+            summary: event.summary,
+            description: event.description?.length > 200
+              ? event.description.substring(0, 200) + '...'
+              : event.description,
+            start: event.start,
+            end: event.end,
+            location: event.location,
+            attendees: event.attendees?.slice(0, 5) // Limit attendees
+          };
+        }
+        return event;
+      });
+    }
+
     // Truncate email content specifically
     if (truncated.emails && Array.isArray(truncated.emails)) {
       truncated.emails = truncated.emails.map((email: any) => {
         if (email && typeof email === 'object') {
           const truncatedEmail = { ...email };
-          
+
           // Truncate email body content
           if (truncatedEmail.body) {
             if (truncatedEmail.body.text && truncatedEmail.body.text.length > 500) {
@@ -1883,12 +1894,12 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
               truncatedEmail.body.html = truncatedEmail.body.html.substring(0, 500) + '...';
             }
           }
-          
+
           // Truncate snippet
           if (truncatedEmail.snippet && truncatedEmail.snippet.length > 200) {
             truncatedEmail.snippet = truncatedEmail.snippet.substring(0, 200) + '...';
           }
-          
+
           return truncatedEmail;
         }
         return email;
@@ -2018,7 +2029,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 Here's the data from your tools:
 ${JSON.stringify(toolResultsSummary, null, 2)}
 
-Respond naturally and conversationally. Skip technical details like URLs, IDs, and metadata. Don't use markdown formatting - just plain text that's easy to read.`;
+Respond naturally and conversationally. If the data contains calendar events, list them in a clear, readable format with dates, times, and titles. If it contains emails, summarize the important ones. Skip technical details like URLs, IDs, and metadata. Don't use markdown formatting - just plain text that's easy to read and informative.`;
 
       const response = await openaiService.generateText(
         prompt,
@@ -2276,7 +2287,24 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     const toolResults: ToolResult[] = [];
     let finalMessage = '';
 
+    // Add safety timeout mechanism
+    const workflowStartTime = Date.now();
+    const WORKFLOW_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes maximum
+
     while (workflowContext.currentStep <= workflowContext.maxSteps) {
+      // Check workflow timeout
+      if (Date.now() - workflowStartTime > WORKFLOW_TIMEOUT_MS) {
+        logger.warn('Workflow timeout reached', {
+          workflowId,
+          sessionId,
+          userId,
+          timeoutMs: WORKFLOW_TIMEOUT_MS,
+          currentStep: workflowContext.currentStep,
+          operation: 'workflow_timeout'
+        });
+        finalMessage = `Workflow timed out after ${WORKFLOW_TIMEOUT_MS / 1000} seconds. Please try a simpler request.`;
+        break;
+      }
       logger.debug('Planning step', {
         stepNumber: workflowContext.currentStep,
         workflowId,
@@ -2370,7 +2398,28 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
         };
 
         // Analyze step result
+        logger.debug('Analyzing step result', {
+          stepNumber: nextStep.stepNumber,
+          toolResult: { success: toolResult.success, error: toolResult.error },
+          workflowId,
+          sessionId,
+          userId,
+          operation: 'step_result_analysis'
+        });
+
         const stepAnalysis = await nextStepPlanningService.analyzeStepResult(stepResult, workflowContext);
+
+        logger.debug('Step analysis completed', {
+          stepNumber: nextStep.stepNumber,
+          shouldContinue: stepAnalysis.shouldContinue,
+          isComplete: stepAnalysis.isComplete,
+          needsUserInput: stepAnalysis.needsUserInput,
+          analysis: stepAnalysis.analysis.substring(0, 200),
+          workflowId,
+          sessionId,
+          userId,
+          operation: 'step_analysis_result'
+        });
 
         // Update workflow context
         workflowContext.completedSteps.push(stepResult);
@@ -2389,45 +2438,98 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
         // Check if task is complete
         if (stepAnalysis.isComplete) {
-          finalMessage = `Task completed! ${stepAnalysis.analysis}`;
+          logger.info('Workflow marked as complete by step analysis', {
+            stepNumber: nextStep.stepNumber,
+            analysis: stepAnalysis.analysis,
+            workflowId,
+            sessionId,
+            userId,
+            operation: 'workflow_complete'
+          });
+
+          // For completion, use the original request so the LLM can format the actual data
+          // instead of just the generic analysis message
+          finalMessage = workflowContext.originalRequest;
           break;
         }
 
         // Check if user input is needed
         if (stepAnalysis.needsUserInput) {
+          logger.info('Workflow paused - user input needed', {
+            stepNumber: nextStep.stepNumber,
+            analysis: stepAnalysis.analysis,
+            workflowId,
+            sessionId,
+            userId,
+            operation: 'workflow_user_input_needed'
+          });
           finalMessage = `I need more information from you. ${stepAnalysis.analysis}`;
           break;
         }
 
         // Check if we should continue
         if (!stepAnalysis.shouldContinue) {
+          logger.info('Workflow paused by step analysis', {
+            stepNumber: nextStep.stepNumber,
+            analysis: stepAnalysis.analysis,
+            workflowId,
+            sessionId,
+            userId,
+            operation: 'workflow_paused'
+          });
           finalMessage = `Workflow paused. ${stepAnalysis.analysis}`;
           break;
         }
 
-      } catch (stepError) {
-        // Handle step execution error
-        // Simple error handling without operation detection service
-        const error = stepError as Error;
-        finalMessage = `Step execution failed: ${error.message}. Please try rephrasing your request.`;
-
-        throw ErrorFactory.businessRuleViolation('step_execution_failed', {
-          correlationId: `step-exec-failed-${Date.now()}`,
-          operation: 'step_execution',
-          metadata: {
-            errorMessage: error.message,
-            agent: nextStep.agent,
-            operation: nextStep.operation
-          }
+        // If we reach here, continue to the next step
+        logger.debug('Continuing to next step', {
+          completedStep: nextStep.stepNumber,
+          nextStepNumber: workflowContext.currentStep,
+          workflowId,
+          sessionId,
+          userId,
+          operation: 'continue_workflow'
         });
+
+      } catch (stepError) {
+        // Handle step execution error with user-friendly messaging
+        const error = stepError as Error;
+        logger.error('Step execution failed', error, {
+          workflowId,
+          sessionId,
+          userId,
+          stepNumber: nextStep.stepNumber,
+          agent: nextStep.agent,
+          stepOperation: nextStep.operation,
+          operation: 'step_execution_error'
+        });
+
+        // Generate user-friendly error message
+        finalMessage = await this.createUserFriendlyStepErrorMessage(error, nextStep, workflowContext.originalRequest);
+
+        // Break from loop instead of throwing to provide user feedback
         break;
       }
     }
 
     // Generate final natural language response
     if (!finalMessage) {
-      finalMessage = `I've completed ${workflowContext.completedSteps.length} steps for your request, but reached the maximum step limit.`;
+      if (workflowContext.completedSteps.length > 0) {
+        finalMessage = `I've completed ${workflowContext.completedSteps.length} steps for your request, but reached the maximum step limit. Please let me know if you need anything else.`;
+      } else {
+        finalMessage = `I wasn't able to complete any steps for your request. Please try rephrasing or provide more details.`;
+      }
     }
+
+    logger.info('Workflow execution completed', {
+      workflowId,
+      sessionId,
+      userId,
+      completedSteps: workflowContext.completedSteps.length,
+      totalToolCalls: toolCalls.length,
+      finalMessage: finalMessage.substring(0, 100),
+      operation: 'workflow_execution_complete'
+    });
 
     const naturalResponse = await this.generateNaturalLanguageResponseInternal(
       finalMessage,

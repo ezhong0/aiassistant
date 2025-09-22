@@ -3,6 +3,7 @@ import { TokenManager } from '../token-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 import { serviceManager } from '../service-manager';
 import { OAuthStateService } from '../oauth-state.service';
+import crypto from 'crypto';
 
 export interface SlackOAuthConfig {
   clientId: string;
@@ -44,8 +45,9 @@ export class SlackOAuthService extends BaseService {
   private config: SlackOAuthConfig;
   private tokenManager: TokenManager | null = null;
   private successMessageCache = new Map<string, number>(); // Track shown success messages
-  private usedNonces = new Map<string, number>(); // legacy field removed (handled by OAuthStateService)
+  private usedNonces = new Map<string, number>(); // Local fallback only
   private oauthStateService: OAuthStateService | null = null;
+  private readonly nonceTtlMs = 10 * 60 * 1000;
 
   constructor(config: SlackOAuthConfig) {
     super('SlackOAuthService');
@@ -91,11 +93,6 @@ export class SlackOAuthService extends BaseService {
   private async initializeDependencies(): Promise<void> {
     this.tokenManager = serviceManager.getService('tokenManager') as TokenManager;
     this.oauthStateService = serviceManager.getService('oauthStateService') as OAuthStateService;
-    if (!this.oauthStateService) {
-      const svc = new OAuthStateService();
-      serviceManager.registerService('oauthStateService', svc, { dependencies: ['cacheService'], priority: 57, autoStart: true });
-      this.oauthStateService = serviceManager.getService('oauthStateService') as OAuthStateService;
-    }
     if (!this.tokenManager) {
       throw new Error('TokenManager not available');
     }
@@ -140,7 +137,9 @@ export class SlackOAuthService extends BaseService {
   async exchangeCodeForTokens(code: string, state: string): Promise<SlackOAuthResult> {
     try {
       // Validate state parameter (signature, expiry, nonce) via OAuthStateService when available
-      const context = this.validateSignedState(state);
+      const context = this.oauthStateService
+        ? (await this.oauthStateService.validateAndConsume(state))
+        : this.validateSignedState(state);
       if (!context) {
         return {
           success: false,
@@ -305,21 +304,85 @@ export class SlackOAuthService extends BaseService {
    * Generate state parameter for OAuth flow
    */
   private buildSignedState(context: SlackContext): string {
-    if (!this.oauthStateService) return '';
-    return this.oauthStateService.issueState(context);
+    if (this.oauthStateService) {
+      return this.oauthStateService.issueState(context);
+    }
+    // Local fallback signing for development/non-Redis environments
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const payloadObj = {
+      userId: context.userId,
+      channelId: context.channelId,
+      ts: Date.now(),
+      n: nonce
+    };
+    const payload = JSON.stringify(payloadObj);
+    const sig = this.sign(payload);
+    const b64 = Buffer.from(payload).toString('base64');
+    this.usedNonces.set(nonce, Date.now());
+    this.cleanupOldNonces();
+    return `${b64}.${sig}`;
   }
 
   /**
    * Validate and parse state parameter
    */
   private validateSignedState(state: string): SlackContext | null {
-    if (!this.oauthStateService) return null;
-    // Using async validator; in this context, treat as sync by ignoring nonce consumption for test endpoints
-    // Prefer using the async method where possible
-    return null;
+    try {
+      const parts = state.split('.');
+      if (parts.length !== 2) {
+        this.logWarn('Invalid OAuth state format');
+        return null;
+      }
+      const [b64, providedSig] = parts;
+      const payloadBuf = Buffer.from(b64 || '', 'base64');
+      const payload = payloadBuf.toString('utf8');
+      const expectedSig = this.sign(payload);
+      if (!this.timingSafeEqual(Buffer.from(providedSig || '', 'hex'), Buffer.from(expectedSig || '', 'hex'))) {
+        this.logWarn('OAuth state signature mismatch');
+        return null;
+      }
+      const obj = JSON.parse(payload) as { userId: string; channelId: string; ts: number; n: string };
+      if (Date.now() - obj.ts > this.nonceTtlMs) {
+        this.logWarn('OAuth state expired');
+        return null;
+      }
+      const seenAt = this.usedNonces.get(obj.n);
+      if (seenAt && Date.now() - seenAt < this.nonceTtlMs) {
+        this.logWarn('OAuth state nonce replay detected');
+        return null;
+      }
+      this.usedNonces.set(obj.n, Date.now());
+      this.cleanupOldNonces();
+      return {
+        userId: obj.userId,
+        channelId: obj.channelId,
+        teamId: '',
+        isDirectMessage: true
+      };
+    } catch (error) {
+      this.logError('Failed to validate signed state', error);
+      return null;
+    }
   }
 
-  // Crypto helpers removed; handled by OAuthStateService
+  private sign(payload: string): string {
+    const secret = process.env.OAUTH_STATE_SECRET || process.env.JWT_SECRET || 'default-unsafe-secret-change-me';
+    return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  }
+
+  private timingSafeEqual(a: Buffer, b: Buffer): boolean {
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  }
+
+  private cleanupOldNonces(): void {
+    const now = Date.now();
+    for (const [nonce, ts] of this.usedNonces.entries()) {
+      if (now - ts > this.nonceTtlMs) {
+        this.usedNonces.delete(nonce);
+      }
+    }
+  }
 
   /**
    * Handle OAuth success message display

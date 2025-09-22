@@ -31,6 +31,7 @@ import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
 import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
+import { ENV_VALIDATION, ENVIRONMENT } from './config/environment';
 
 // Global interfaces store
 let globalInterfaces: InterfaceManager | null = null;
@@ -38,6 +39,15 @@ let globalInterfaces: InterfaceManager | null = null;
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
   try {
+    // Enforce production env guardrails for secrets
+    if (ENV_VALIDATION.isProduction()) {
+      const missing = ENV_VALIDATION.validateRequired();
+      if (missing.length > 0) {
+        console.error('❌ Missing required environment variables in production:', missing.join(', '));
+        throw new Error('Missing required environment variables');
+      }
+    }
+
     // Initialize all core services with enhanced dependency management
     await initializeAllCoreServices();
 
