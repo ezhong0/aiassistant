@@ -78,7 +78,8 @@ export const securityHeaders = helmet({
   },
   noSniff: true,
   frameguard: { action: 'deny' },
-  xssFilter: true,
+  // xssFilter removed: deprecated in Helmet v5+
+  crossOriginResourcePolicy: { policy: 'same-origin' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 });
 
@@ -141,7 +142,7 @@ export const apiSecurityHeaders = (req: Request, res: Response, next: NextFuncti
   res.set({
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
-    'X-XSS-Protection': '1; mode=block',
+    // X-XSS-Protection deprecated; modern browsers ignore it
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'

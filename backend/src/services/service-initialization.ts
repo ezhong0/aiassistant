@@ -11,6 +11,7 @@ import { CalendarService } from './calendar/calendar.service';
 import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
+import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { SlackService } from './slack/slack.service';
 import { SlackOAuthService } from './slack/slack-oauth.service';
@@ -107,6 +108,14 @@ const registerCoreServices = async (): Promise<void> => {
     const cacheService = new CacheService();
     serviceManager.registerService('cacheService', cacheService, {
       priority: 6,
+      autoStart: true
+    });
+
+    // 3b. OAuthStateService - depends on cacheService
+    const oauthStateService = new OAuthStateService();
+    serviceManager.registerService('oauthStateService', oauthStateService, {
+      dependencies: ['cacheService'],
+      priority: 7,
       autoStart: true
     });
 
