@@ -7,6 +7,8 @@ import { resolveSlackService } from '../services/service-resolver';
 import { getService, serviceManager } from '../services/service-manager';
 import { OpenAIService } from '../services/openai.service';
 import { SlackInterfaceService } from '../services/slack/slack-interface.service';
+import { SlackService } from '../services/slack/slack.service';
+import { DraftManager, WriteOperation } from '../services/draft-manager.service';
 import { SlackContext, SlackMessageEvent, SlackResponse, SlackBlock } from '../types/slack/slack.types';
 import { SlackMessage as ReaderSlackMessage, SlackMessageReaderError, SlackAttachment } from '../types/slack/slack-message-reader.types';
 import { SLACK_CONSTANTS } from '../config/constants';
@@ -133,21 +135,65 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
 
   // Focused service dependencies
   // Slack services now handled internally by SlackAgent
+  private slackService: SlackService | null = null;
+  private draftManager: DraftManager | null = null;
 
-  // TODO: These should be properly implemented or removed
   private slackMessageAnalyzer = {
-    readMessageHistory: async (channelId: string, options: any) => ({ success: true, messages: [], message: 'Not implemented' }),
-    readThreadMessages: async (channelId: string, threadTs: string, options: any) => ({ success: true, messages: [], message: 'Not implemented' }),
-    analyzeConversationContext: async (messages: any[], options: any) => ({ success: true, summary: 'Not implemented', message: 'Not implemented' })
+    readMessageHistory: async (channelId: string, options: { limit?: number; includeAllMetadata?: boolean }) => {
+      if (!this.slackService) return { success: false, messages: [], message: 'SlackService unavailable' };
+      const client = this.slackService.getClient();
+      const limit = typeof options?.limit === 'number' ? options.limit : 10;
+      const resp: any = await client.conversations.history({ channel: channelId, limit });
+      const messages = Array.isArray(resp.messages) ? resp.messages : [];
+      return { success: true, messages, message: 'ok' };
+    },
+    readThreadMessages: async (channelId: string, threadTs: string, options: { limit?: number; includeAllMetadata?: boolean }) => {
+      if (!this.slackService) return { success: false, messages: [], message: 'SlackService unavailable' };
+      const client = this.slackService.getClient();
+      const limit = typeof options?.limit === 'number' ? options.limit : 20;
+      const resp: any = await client.conversations.replies({ channel: channelId, ts: threadTs, limit });
+      const messages = Array.isArray(resp.messages) ? resp.messages : [];
+      return { success: true, messages, message: 'ok' };
+    },
+    analyzeConversationContext: async (messages: any[], _options: { includeSentiment?: boolean; includeKeyTopics?: boolean; includeActionItems?: boolean }) => {
+      const openai = getService<OpenAIService>('openaiService');
+      const joined = messages.map(m => (m.text || '')).filter(Boolean).slice(0, 50).join('\n');
+      if (!openai) {
+        return { success: true, summary: joined.slice(0, 500), message: 'fallback' } as any;
+      }
+      const prompt = `Summarize the following Slack conversation. Provide summary, key topics, action items, sentiment and participant count.\n\n${joined}`;
+      const summary = await openai.generateText(prompt, 'You summarize Slack conversations.', { temperature: 0.2, maxTokens: 300 });
+      return { success: true, analysis: { summary }, message: 'ok' } as any;
+    }
   };
 
   private slackDraftManager = {
-    createDraft: async (channelId: string, text: string, options: any) => ({ success: true, draftId: 'temp', message: 'Not implemented' }),
-    listDrafts: async (channelId: string, options: any) => ({ success: true, drafts: [], message: 'Not implemented' })
+    createDraft: async (channelId: string, text: string, options: { threadTs?: string; scheduledTime?: string }) => {
+      if (!this.draftManager) return { success: false, message: 'DraftManager unavailable' } as any;
+      const writeOp: WriteOperation = {
+        type: 'slack',
+        operation: 'send_message',
+        parameters: { channelId, text, threadTs: options?.threadTs, scheduledTime: options?.scheduledTime },
+        toolCall: { name: 'slack_send_message', parameters: { channelId, text, threadTs: options?.threadTs } },
+        confirmationReason: 'User requested to send a Slack message',
+        riskLevel: 'low',
+        previewDescription: `Send Slack message to ${channelId}${options?.threadTs ? ' in thread' : ''}`
+      };
+      const draft = await this.draftManager.createDraft(`slack:${channelId}`, writeOp);
+      return { success: true, draftId: draft.id, draft } as any;
+    },
+    listDrafts: async (_channelId: string, _options: { limit?: number; includeScheduled?: boolean }) => {
+      if (!this.draftManager) return { success: false, drafts: [], message: 'DraftManager unavailable' } as any;
+      const drafts = await this.draftManager.getSessionDrafts(`slack:*`);
+      return { success: true, drafts } as any;
+    }
   };
 
   private slackFormatter = {
-    formatMessages: (messages: any[]) => ({ success: true, formattedText: 'Not implemented', message: 'Not implemented' })
+    formatMessages: (messages: SlackMessage[]) => {
+      const formattedText = messages.map(m => `[@${m.userId}] ${m.text}`).join('\n');
+      return { success: true, formattedText, message: 'ok' } as any;
+    }
   };
 
   constructor() {
@@ -173,7 +219,12 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
    * Lazy initialization of Slack services
    */
   private ensureServices(): void {
-    // Slack message analysis, drafting, and formatting now handled internally
+    if (!this.slackService) {
+      this.slackService = (getService<SlackService>('slackService') || null);
+    }
+    if (!this.draftManager) {
+      this.draftManager = (getService<DraftManager>('draftManager') || null);
+    }
   }
 
   /**
@@ -332,8 +383,6 @@ You are a specialized Slack workspace management agent focused on reading and un
         parameters.channelId as string,
         {
           limit: parameters.limit as number,
-          oldest: parameters.oldest as string,
-          latest: parameters.latest as string,
           includeAllMetadata: parameters.includeAttachments as boolean
         }
       );
