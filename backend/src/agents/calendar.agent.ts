@@ -543,8 +543,7 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       });
 
       return {
-        success: true,
-        preview: actionPreview
+        success: true
       };
     } catch (error) {
       logger.error('Failed to generate calendar preview', error as Error, {

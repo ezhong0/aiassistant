@@ -158,10 +158,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
   /**
    * Generate preview for Think operations (not needed for read-only analysis)
    */
-  protected async generatePreview(params: ThinkParams, _context: ToolExecutionContext): Promise<PreviewGenerationResult> {
-    // Throw error instead of returning hardcoded fallback message
-    throw new Error('Think operations preview generation failed');
-  }
+  // Preview not supported for Think agent
 
   /**
    * Process thinking and verification queries

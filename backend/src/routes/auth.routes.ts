@@ -195,15 +195,15 @@ router.get('/debug/test-oauth-url',
       // Create a mock SlackInterfaceService instance to test OAuth URL generation
       const mockSlackInterface = new SlackInterfaceService({} as any);
       await mockSlackInterface.initialize();
-      const oauthManager = mockSlackInterface['slackOAuthManager'];
-      if (oauthManager) {
-        const authResult = await oauthManager.generateAuthorizationUrl({
+      const oauthService = (mockSlackInterface as any)['slackOAuthService'];
+      if (oauthService && typeof oauthService.generateAuthorizationUrl === 'function') {
+        const authResult = await oauthService.generateAuthorizationUrl({
           teamId: mockSlackContext.teamId,
           userId: mockSlackContext.userId
         });
         slackOAuthUrl = authResult.authorizationUrl || 'No authorization URL generated';
       } else {
-        slackOAuthUrl = 'OAuth manager not available';
+        slackOAuthUrl = 'OAuth service not available';
       }
     } catch (slackError: unknown) {
       const errorMessage = slackError instanceof Error ? slackError.message : 'Unknown error';

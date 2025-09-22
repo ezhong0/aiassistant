@@ -646,12 +646,7 @@ export abstract class AIAgent<TParams = any, TResult = any> {
 
   // ABSTRACT METHODS - Must be implemented by subclasses
   
-  /**
-   * Generate a detailed action preview for confirmation purposes
-   * Must be implemented by agents that require confirmation (requiresConfirmation: true)
-   * Can be left unimplemented for agents that don't need confirmation
-   */
-  protected generatePreview?(params: TParams, context: ToolExecutionContext): Promise<PreviewGenerationResult>;
+  // Preview generation removed; drafts handle confirmation UX
 
   /**
    * Create user-friendly error messages for AI planning failures

@@ -243,13 +243,7 @@ You are a specialized contact discovery and management agent.
       ];
     }
   
-  /**
-   * Generate preview for Contact operations (read-only, no confirmation needed)
-   */
-  protected async generatePreview(params: ContactAgentRequest, _context: ToolExecutionContext): Promise<PreviewGenerationResult> {
-    // Throw error instead of returning hardcoded fallback message
-    throw new Error('Contact operations preview generation failed');
-  }
+  // Preview not supported for Contact agent
 
   /**
    * Execute contact-specific tool operations with AI planning

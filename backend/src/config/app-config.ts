@@ -145,8 +145,6 @@ export const EXECUTION_CONFIG = {
   
   /** Tool execution modes */
   executionModes: {
-    /** Preview mode - prepare but don't execute */
-    preview: 'preview',
     /** Normal execution mode */
     normal: 'normal'
   } as const

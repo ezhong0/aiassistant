@@ -2,7 +2,8 @@ import { WebClient } from '@slack/web-api';
 import { BaseService } from '../base-service';
 import { ServiceManager } from '../service-manager';
 import { SlackEventHandler } from './slack-event-handler.service';
-import { SlackOAuthManager } from './slack-oauth-manager.service';
+// SlackOAuthManager removed - using SlackOAuthService directly
+import { SlackOAuthService } from './slack-oauth.service';
 import { SlackMessageProcessor } from './slack-message-processor.service';
 // SlackEventValidator removed - validation handled directly in SlackInterfaceService
 import { 
@@ -42,7 +43,7 @@ export class SlackInterfaceService extends BaseService {
   
   // Focused services for proper separation of concerns
   private slackEventHandler: SlackEventHandler | null = null;
-  private slackOAuthManager: SlackOAuthManager | null = null;
+  private slackOAuthService: SlackOAuthService | null = null;
   private slackMessageProcessor: SlackMessageProcessor | null = null;
   private slackResponseFormatter: any | null = null;
   // slackEventValidator removed - validation handled directly in SlackInterfaceService
@@ -101,7 +102,7 @@ export class SlackInterfaceService extends BaseService {
 
       this.logInfo('SlackInterface initialized successfully', {
         hasSlackEventHandler: !!this.slackEventHandler,
-        hasSlackOAuthManager: !!this.slackOAuthManager,
+        hasSlackOAuthService: !!this.slackOAuthService,
         hasSlackMessageProcessor: !!this.slackMessageProcessor,
         hasSlackResponseFormatter: !!this.slackResponseFormatter,
         slackEventValidationEnabled: true,
@@ -122,9 +123,9 @@ export class SlackInterfaceService extends BaseService {
         this.slackEventHandler = null;
       }
       
-      if (this.slackOAuthManager) {
-        await this.slackOAuthManager.destroy();
-        this.slackOAuthManager = null;
+      if (this.slackOAuthService) {
+        await this.slackOAuthService.destroy();
+        this.slackOAuthService = null;
       }
       
       
@@ -515,10 +516,10 @@ export class SlackInterfaceService extends BaseService {
       this.logWarn('SlackEventHandler not available - event processing will use fallback');
     }
 
-    // Initialize SlackOAuthManager
-    this.slackOAuthManager = serviceManager.getService('slackOAuthManager') as SlackOAuthManager;
-    if (!this.slackOAuthManager) {
-      this.logWarn('SlackOAuthManager not available - OAuth handling will use fallback');
+    // Initialize SlackOAuthService
+    this.slackOAuthService = serviceManager.getService('slackOAuthService') as SlackOAuthService;
+    if (!this.slackOAuthService) {
+      this.logWarn('SlackOAuthService not available - OAuth handling will use fallback');
     }
 
 
@@ -590,7 +591,7 @@ export class SlackInterfaceService extends BaseService {
         hasClient: !!this.client,
         focusedServices: {
           slackEventHandler: !!this.slackEventHandler,
-          slackOAuthManager: !!this.slackOAuthManager,
+          slackOAuthService: !!this.slackOAuthService,
           slackMessageProcessor: !!this.slackMessageProcessor,
           slackResponseFormatter: !!this.slackResponseFormatter,
           slackEventValidationEnabled: true,

@@ -600,8 +600,7 @@ You are a specialized email management agent powered by Gmail API.
       });
 
       return {
-        success: true,
-        preview: actionPreview
+        success: true
       };
     } catch (error) {
       logger.error('Failed to generate email preview', error as Error, {

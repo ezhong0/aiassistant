@@ -205,12 +205,7 @@ export const AGENT_CONSTANTS = {
   /** Maximum number of agent retries */
   MAX_AGENT_RETRIES: 2,
   
-  /** Preview mode timeout in milliseconds */
-  PREVIEW_TIMEOUT_MS: 10000,
-  
-  /** Maximum preview response length */
-  MAX_PREVIEW_LENGTH: 1000
-} as const;
+ } as const;
 
 /**
  * Calendar and scheduling constants

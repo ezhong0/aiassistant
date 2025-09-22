@@ -403,7 +403,6 @@ export interface ActionPreview {
 
 export interface PreviewGenerationResult {
   success: boolean;
-  preview?: ActionPreview;
   error?: string;
   fallbackMessage?: string;
   authRequired?: boolean;
@@ -415,7 +414,6 @@ export interface PreviewGenerationResult {
 // ============================================================================
 
 export interface EnhancedConfirmationData extends ConfirmationRequiredData {
-  preview: ActionPreview;
   toolResults: ToolResultInfo[];
 }
 

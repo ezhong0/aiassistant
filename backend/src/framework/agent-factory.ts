@@ -415,74 +415,8 @@ export class AgentFactory {
     return prompts.join('\n');
   }
 
-  /**
-   * Check if a tool requires confirmation at the agent level
-   * This should be used in combination with operation-specific logic
-   */
-  static toolNeedsConfirmation(toolName: string): boolean {
-    const metadata = this.toolMetadata.get(toolName);
-    return metadata?.requiresConfirmation || false;
-  }
-
-  /**
-   * Check if a tool requires confirmation based on operation using AI
-   * This is the preferred method for determining confirmation needs
-   */
-  static async toolNeedsConfirmationForOperation(toolName: string, operation: string): Promise<boolean> {
-    // Import AGENT_HELPERS dynamically to avoid circular imports
-    const { AGENT_HELPERS } = await import('../config/agent-config');
-    
-    // Map AgentFactory tool names to AGENT_CONFIG names
-    const toolNameMapping: Record<string, string> = {
-      'emailAgent': 'email',
-      'manage_emails': 'email',
-      'contactAgent': 'contact',
-      'search_contacts': 'contact',
-      'calendarAgent': 'calendar',
-      'manage_calendar': 'calendar',
-      'Think': 'think',
-      'slackAgent': 'slack',
-      'read_slack_messages': 'slack'
-    };
-    
-    const configAgentName = toolNameMapping[toolName] || toolName;
-    return await AGENT_HELPERS.operationRequiresConfirmation(configAgentName as any, operation);
-  }
-
-  /**
-   * Detect operation from tool parameters using AI classification
-   * Maps AgentFactory tool names to AGENT_CONFIG names
-   */
-  static async detectOperationFromParameters(toolName: string, parameters: Record<string, any>): Promise<string> {
-    const { AGENT_HELPERS } = await import('../config/agent-config');
-    
-    // Map AgentFactory tool names to AGENT_CONFIG names
-    const toolNameMapping: Record<string, string> = {
-      'emailAgent': 'email',
-      'manage_emails': 'email',
-      'contactAgent': 'contact',
-      'search_contacts': 'contact',
-      'calendarAgent': 'calendar',
-      'manage_calendar': 'calendar',
-      'Think': 'think',
-      'slackAgent': 'slack',
-      'read_slack_messages': 'slack'
-    };
-    
-    const configAgentName = toolNameMapping[toolName] || toolName;
-    const query = parameters.query || parameters.query || '';
-    
-    if (typeof query === 'string') {
-      return await AGENT_HELPERS.detectOperation(configAgentName as any, query);
-    }
-    
-    // Check for explicit action parameter (used by calendar agent)
-    if (parameters.action) {
-      return parameters.action;
-    }
-    
-    return 'unknown';
-  }
+  // Preview-era confirmation checks removed
+  // Preview-era operation detection removed; agents handle their own operations
 
   /**
    * Check if a tool is critical

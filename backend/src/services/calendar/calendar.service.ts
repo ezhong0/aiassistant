@@ -236,7 +236,6 @@ export class CalendarService extends BaseService {
       } = options;
 
       console.log('🌐 CALENDAR SERVICE: Starting Google Calendar API call');
-      console.log('🌐 CALENDAR SERVICE: Access token preview:', accessToken.substring(0, 50) + '...');
       console.log('🌐 CALENDAR SERVICE: Time range:', { timeMin, timeMax });
       console.log('🌐 CALENDAR SERVICE: Query params:', { maxResults, calendarId, singleEvents, orderBy });
 
