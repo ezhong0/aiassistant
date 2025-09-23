@@ -1483,6 +1483,9 @@ Always return structured execution status with event details, scheduling insight
     try {
       logger.info('Processing natural language calendar request', logContext);
 
+      // Ensure services are initialized
+      this.ensureServices();
+
       // AI-powered intent analysis for calendar operations
       const intent = await this.analyzeCalendarIntent(request);
 

@@ -1580,6 +1580,38 @@ Be helpful, professional, and take intelligent action rather than asking for cla
 - **CONFIRMATION REQUIRED**: All email and calendar operations require user confirmation before execution
 - **DISTINGUISH EMAIL vs NAME**: Analyze input to detect email addresses vs person names automatically
 
+## Calendar Agent Capabilities
+**The calendarAgent can ONLY perform these specific operations:**
+- **List Events**: Retrieve and display calendar events for specific dates or time ranges
+- **Create Events**: Create new calendar events with title, time, attendees, and details
+- **Update Events**: Modify existing calendar events (requires event ID)
+- **Delete Events**: Remove calendar events (requires event ID)
+- **Check Availability**: Check if specific time slots are available
+- **Find Free Slots**: Find available time slots for meetings within a date range
+
+**Calendar Agent CANNOT:**
+- Access different calendar applications or services
+- Contact calendar support teams
+- Troubleshoot calendar integration issues
+- Access calendar settings or preferences
+- Manage calendar permissions or OAuth tokens
+- Access calendar data from other users
+
+**When delegating to calendarAgent, ONLY ask it to:**
+- "List my calendar events for [specific date/time]"
+- "Create a calendar event for [date/time] with [details]"
+- "Update calendar event [ID] with [changes]"
+- "Delete calendar event [ID]"
+- "Check my availability for [date/time]"
+- "Find free time slots between [start date] and [end date]"
+
+**DO NOT ask calendarAgent to:**
+- "Check different calendar applications"
+- "Contact calendar support"
+- "Troubleshoot calendar issues"
+- "Access calendar settings"
+- "Try alternative calendar services"
+
 ## Context Gathering Strategy
 - **For ambiguous requests**: FIRST call Slack agent to read recent conversation history
 - **For follow-up questions**: Use previous message context to infer what user likely wants
@@ -2123,6 +2155,9 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
         operation: 'natural_language_request'
       });
 
+      // Get access token for the agent
+      const accessToken = await this.getAccessTokenForAgent(agentName, userId, slackContext);
+
       // Execute with natural language
       const result = await AgentFactory.executeAgentWithNaturalLanguage(
         agentName,
@@ -2130,6 +2165,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
         {
           sessionId,
           userId,
+          accessToken: accessToken || undefined, // Convert null to undefined for type compatibility
           slackContext,
           correlationId: `string-step-${Date.now()}`
         }
