@@ -37,7 +37,11 @@ export const ENV_VARS = {
   // Feature flags
   ENABLE_OPENAI: 'ENABLE_OPENAI',
   ENABLE_RATE_LIMITING: 'ENABLE_RATE_LIMITING',
-  ENABLE_REQUEST_LOGGING: 'ENABLE_REQUEST_LOGGING'
+  ENABLE_REQUEST_LOGGING: 'ENABLE_REQUEST_LOGGING',
+  
+  // Natural language logging
+  NATURAL_LANGUAGE_LOGGING: 'NATURAL_LANGUAGE_LOGGING',
+  NATURAL_LANGUAGE_LOG_LEVEL: 'NATURAL_LANGUAGE_LOG_LEVEL'
 } as const;
 
 /** Environment configuration with type-safe access and defaults */
@@ -110,7 +114,13 @@ export const ENVIRONMENT = {
     openai: process.env[ENV_VARS.ENABLE_OPENAI] !== 'false' && !!process.env[ENV_VARS.OPENAI_API_KEY],
     
     /** Enable request logging */
-    requestLogging: process.env[ENV_VARS.ENABLE_REQUEST_LOGGING] !== 'false'
+    requestLogging: process.env[ENV_VARS.ENABLE_REQUEST_LOGGING] !== 'false',
+    
+    /** Enable natural language logging */
+    naturalLanguageLogging: process.env[ENV_VARS.NATURAL_LANGUAGE_LOGGING] === 'true',
+    
+    /** Natural language log level */
+    naturalLanguageLogLevel: process.env[ENV_VARS.NATURAL_LANGUAGE_LOG_LEVEL] || 'agent'
   }
 } as const;
 

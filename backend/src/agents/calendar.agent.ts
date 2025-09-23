@@ -453,19 +453,8 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
       return params.action;
     }
 
-    // Simple operation detection based on keywords
-    const userQuery = (params.query || '').toLowerCase();
-    if (userQuery.includes('create') || userQuery.includes('add') || userQuery.includes('schedule')) {
-      return 'create';
-    } else if (userQuery.includes('list') || userQuery.includes('show') || userQuery.includes('find')) {
-      return 'list';
-    } else if (userQuery.includes('update') || userQuery.includes('modify') || userQuery.includes('change')) {
-      return 'update';
-    } else if (userQuery.includes('delete') || userQuery.includes('remove') || userQuery.includes('cancel')) {
-      return 'delete';
-    } else {
-      return 'list'; // Default operation
-    }
+    // Pure natural language system - no text-based operation detection allowed
+    throw new Error('Legacy operation detection method called - use AI-powered intent analysis instead');
   }
 
   /**
@@ -1467,17 +1456,8 @@ Always return structured execution status with event details, scheduling insight
       // Generate contextual natural language response
       const naturalResponse = await this.generateContextualResponse(request, result, intent);
 
-      logger.info('Natural language calendar request completed', {
-        ...logContext,
-        metadata: {
-          ...logContext.metadata,
-          operation: intent.operation,
-          success: result.success,
-          responseLength: naturalResponse.length
-        }
-      });
-
-      return {
+      // Create the natural language response
+      const nlResponse: NaturalLanguageResponse = {
         response: naturalResponse,
         reasoning: `Analyzed request and detected ${intent.operation} operation. ${intent.reasoning || 'Executed successfully.'}`,
         metadata: {
@@ -1487,6 +1467,22 @@ Always return structured execution status with event details, scheduling insight
           parameters: intent.parameters
         }
       };
+
+      // Log agent communication using natural language logger
+      const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
+      naturalLanguageLogger.logAgentCommunication(
+        'calendarAgent',
+        request,
+        nlResponse,
+        {
+          correlationId: context.correlationId,
+          sessionId: context.sessionId,
+          userId: context.userId,
+          operation: 'agent_communication'
+        }
+      );
+
+      return nlResponse;
 
     } catch (error) {
       logger.error('Natural language calendar processing failed', error as Error, logContext);
@@ -1516,51 +1512,61 @@ Always return structured execution status with event details, scheduling insight
       throw new Error('AI service unavailable. Calendar intent analysis requires OpenAI service.');
     }
 
-    const prompt = `Analyze this calendar request and extract structured information:
+    const prompt = `You are a calendar assistant. Analyze this request: "${request}"
 
-REQUEST: "${request}"
+Choose the operation and extract parameters:
 
-Determine:
-1. Operation: create, list, update, delete, check_availability, or find_slots
-2. Parameters: Extract relevant details for the operation
-3. Confidence: How confident are you in this analysis (0-1)
-4. Reasoning: Brief explanation of your analysis
+OPERATIONS (choose ONE):
+- list: Show calendar events
+- create: Make new events
+- update: Modify events
+- delete: Remove events
+- check_availability: Check if free
+- find_slots: Find open times
 
-For CREATE operations, extract:
-- summary (event title)
-- start (ISO datetime or relative time like "tomorrow at 2pm")
-- end (ISO datetime or duration)
-- attendees (email addresses)
-- location
-- description
+For LIST requests like "show my calendar", "what's on my calendar", "events for next week":
+- Operation: "list"
+- Parameters: timeframe details
 
-For LIST operations, extract:
-- timeMin, timeMax (date range)
-- query (search terms)
-- maxResults
+For CREATE requests like "schedule meeting", "book appointment":
+- Operation: "create"
+- Parameters: event details
 
-For UPDATE/DELETE operations, extract:
-- eventId (if mentioned)
-- summary (for finding the event)
-- Any fields to update
+IMPORTANT: Always provide a complete JSON response with all 4 fields.
 
-For AVAILABILITY/SLOTS operations, extract:
-- startTime, endTime (time range to check)
-- duration (for find_slots)
-
-Return JSON format:
+Example for "show my calendar":
 {
-  "operation": "create|list|update|delete|check_availability|find_slots",
-  "parameters": { ... },
-  "confidence": 0.0-1.0,
-  "reasoning": "explanation"
-}`;
+  "operation": "list",
+  "parameters": {"timeMin": "2025-01-01T00:00:00Z", "maxResults": 50},
+  "confidence": 0.9,
+  "reasoning": "User wants to view calendar events"
+}
+
+Return this exact JSON format:
+{
+  "operation": "list",
+  "parameters": {},
+  "confidence": 0.9,
+  "reasoning": "Brief explanation"
+}
+
+Remember: operation must be exactly one of: list, create, update, delete, check_availability, find_slots`;
 
     try {
+      console.log('Calendar Intent Analysis - Sending prompt to AI:', {
+        request: request.substring(0, 100),
+        promptLength: prompt.length
+      });
+
       const analysis = await openaiService.generateStructuredData(
         prompt,
         'Analyze calendar requests and extract operation details',
-        { temperature: 0.1, maxTokens: 800 }
+        {
+          temperature: 0.1,
+          maxTokens: 800,
+          // Add JSON schema for stricter validation
+          response_format: { type: "json_object" }
+        }
       ) as {
         operation: string;
         parameters: any;
@@ -1568,9 +1574,43 @@ Return JSON format:
         reasoning: string;
       };
 
+      console.log('Calendar Intent Analysis - AI Response received:', {
+        request: request.substring(0, 100),
+        hasAnalysis: !!analysis,
+        analysisKeys: analysis ? Object.keys(analysis) : []
+      });
+
       // Validate the analysis
-      if (!analysis.operation || !['create', 'list', 'update', 'delete', 'check_availability', 'find_slots'].includes(analysis.operation)) {
-        throw new Error('Invalid operation detected');
+      const validOperations = ['create', 'list', 'update', 'delete', 'check_availability', 'find_slots'];
+
+      // Log the raw AI response for debugging
+      console.log('Calendar AI Analysis Result:', {
+        request: request.substring(0, 100),
+        analysis,
+        analysisType: typeof analysis,
+        operationType: typeof analysis?.operation,
+        operationValue: analysis?.operation,
+        analysisKeys: analysis ? Object.keys(analysis) : 'null/undefined'
+      });
+
+      if (!analysis || typeof analysis !== 'object') {
+        throw new Error(`AI returned invalid response format: ${typeof analysis}`);
+      }
+
+      // Check if AI returned empty object
+      if (Object.keys(analysis).length === 0) {
+        throw new Error('AI returned empty object - likely a prompt parsing issue');
+      }
+
+      if (!analysis.operation || !validOperations.includes(analysis.operation)) {
+        console.error('Calendar intent analysis validation failed:', {
+          request,
+          receivedOperation: analysis.operation,
+          validOperations,
+          fullAnalysis: analysis,
+          analysisKeys: Object.keys(analysis)
+        });
+        throw new Error(`Invalid operation detected: "${analysis.operation}". Valid operations: ${validOperations.join(', ')}`);
       }
 
       return {
@@ -1581,18 +1621,15 @@ Return JSON format:
       };
 
     } catch (error) {
-      logger.error('AI intent analysis failed, using fallback', error as Error, {
-        correlationId: `calendar-intent-fallback-${Date.now()}`,
-        operation: 'intent_analysis_fallback',
+      logger.error('AI intent analysis failed - no fallback available in pure NL system', error as Error, {
+        correlationId: `calendar-intent-error-${Date.now()}`,
+        operation: 'intent_analysis_error',
         metadata: { request: request.substring(0, 100) }
       });
 
-      return {
-        operation: 'create', // Default fallback operation
-        parameters: {},
-        confidence: 0.5,
-        reasoning: 'Fallback analysis due to AI service error'
-      };
+      // In a pure natural language system, we must rely on AI
+      // If AI fails, we cannot process the request properly
+      throw new Error(`AI intent analysis failed and no text-based fallback allowed in pure natural language system: ${(error as Error).message}`);
     }
   }
 

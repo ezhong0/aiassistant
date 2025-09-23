@@ -184,6 +184,15 @@ export class NextStepPlanningService extends BaseService {
         }
       });
 
+      // Log plan creation using natural language logger
+      const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
+      naturalLanguageLogger.logPlanCreation(validatedStep, {
+        correlationId,
+        sessionId: context.userContext?.sessionId || 'unknown',
+        userId: context.userContext?.userId,
+        operation: 'plan_creation'
+      });
+
       return validatedStep;
     } catch (error) {
       logger.error('Failed to plan next step', error as Error, {

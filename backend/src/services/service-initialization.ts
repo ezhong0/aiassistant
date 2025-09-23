@@ -292,11 +292,14 @@ const registerCoreServices = async (): Promise<void> => {
     // });
 
 
-    // 42. NextStepPlanningService - Dynamic step-by-step workflow planning
-    const nextStepPlanningService = new NextStepPlanningService();
-    serviceManager.registerService('nextStepPlanningService', nextStepPlanningService, {
+    // 42. LEGACY: NextStepPlanningService - REMOVED: Replaced by StringPlanningService
+
+    // 42b. StringPlanningService - Simple string-based workflow planning
+    const { StringPlanningService } = await import('./string-planning.service');
+    const stringPlanningService = new StringPlanningService();
+    serviceManager.registerService('stringPlanningService', stringPlanningService, {
       dependencies: ['openaiService'],
-      priority: 58, // High priority for step planning
+      priority: 59, // Higher priority than NextStepPlanningService
       autoStart: true
     });
 

@@ -1213,68 +1213,114 @@ Please provide a detailed execution plan that accomplishes this request efficien
     const startTime = Date.now();
 
     try {
-      // Log using existing AIAgent logging infrastructure
-      console.log(`[${this.config.name}] Processing natural language request: ${request.substring(0, 100)}...`);
-
+      // Log using natural language logger instead of console.log
+      const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
+      
       // Check if this is a draft execution request
       const isDraftExecution = await this.isDraftExecutionRequest(request, context);
       if (isDraftExecution.isDraftExecution) {
-        console.log(`[${this.config.name}] Processing draft execution request for draft: ${isDraftExecution.draftId}`);
+        naturalLanguageLogger.logDraftWorkflow('executed', isDraftExecution.draftId!, 'unknown', {
+          correlationId: context.correlationId,
+          sessionId: context.sessionId,
+          userId: context.userId,
+          operation: 'draft_execution'
+        });
         return await this.executeDraftFromRequest(isDraftExecution.draftId!, request, context);
       }
 
       // 1. AI-powered intent analysis (domain-specific)
       const intent = await this.analyzeIntent(request, context);
 
-      console.log(`[${this.config.name}] Intent analyzed: ${intent.operation} (confidence: ${intent.confidence})`);
+      // Log intent analysis for natural language flow tracking
+      naturalLanguageLogger.logIntentAnalysis({
+        intentType: 'new_request', // Will be mapped from agent intent
+        confidence: intent.confidence,
+        reasoning: intent.reasoning,
+        newOperation: {
+          operation: intent.operation,
+          parameters: intent.parameters
+        }
+      } as any, request, {
+        correlationId: context.correlationId,
+        sessionId: context.sessionId,
+        userId: context.userId,
+        operation: 'agent_intent_analysis'
+      });
 
       // 2. Determine if this operation requires a draft
       const requiresDraft = await this.shouldCreateDraft(intent, context);
 
       if (requiresDraft.shouldCreateDraft) {
-        console.log(`[${this.config.name}] Creating draft for operation: ${intent.operation}`);
-        return await this.createDraftFromIntent(intent, request, context, requiresDraft);
+        const draftResponse = await this.createDraftFromIntent(intent, request, context, requiresDraft);
+        
+        // Log draft creation
+        if (draftResponse.draft) {
+          naturalLanguageLogger.logDraftWorkflow('created', draftResponse.draft.draftId, draftResponse.draft.type, {
+            correlationId: context.correlationId,
+            sessionId: context.sessionId,
+            userId: context.userId,
+            operation: 'draft_creation'
+          }, draftResponse.draft.previewData);
+        }
+        
+        return draftResponse;
       }
 
       // 3. Execute the selected tool(s) directly
       const toolResult = await this.executeSelectedTool(intent, context);
 
       // 4. Generate natural language response
-      const response = await this.generateResponse(request, toolResult, intent, context);
+      const responseText = await this.generateResponse(request, toolResult, intent, context);
 
-      const executionTime = Date.now() - startTime;
-
-      console.log(`[${this.config.name}] Natural language request completed: ${intent.operation} (${executionTime}ms)`);
-
-      return {
-        response: response,
+      // Create proper NaturalLanguageResponse object
+      const response: NaturalLanguageResponse = {
+        response: responseText,
         reasoning: intent.reasoning,
         metadata: {
           operation: intent.operation,
           confidence: intent.confidence,
           toolsUsed: intent.toolsUsed,
-          executionTime,
+          executionTime: Date.now() - startTime,
           success: toolResult.success,
           ...intent.parameters
         }
       };
 
+      // Log agent communication
+      naturalLanguageLogger.logAgentCommunication(
+        this.config.name,
+        request,
+        response,
+        {
+          correlationId: context.correlationId,
+          sessionId: context.sessionId,
+          userId: context.userId,
+          operation: 'agent_communication'
+        }
+      );
+
+      return response;
+
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Log error using natural language logger
+      const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
+      naturalLanguageLogger.logError(error as Error, {
+        correlationId: context.correlationId,
+        sessionId: context.sessionId,
+        userId: context.userId,
+        operation: 'agent_error'
+      }, {
+        agent: this.config.name,
+        request: request.substring(0, 100),
+        executionTime
+      });
 
-      console.error(`[${this.config.name}] Natural language processing failed: ${errorMessage} (${executionTime}ms)`);
-
-      return {
-        response: `I encountered an issue processing your request: ${errorMessage}. Please try rephrasing your request or check if you have the necessary permissions.`,
-        reasoning: `Failed to process request due to: ${errorMessage}`,
-        metadata: {
-          operation: 'error',
-          error: errorMessage,
-          executionTime,
-          success: false
-        }
-      };
+      throw this.createError(
+        `Natural language processing failed: ${error instanceof Error ? error.message : error}`,
+        'NATURAL_LANGUAGE_PROCESSING_FAILED'
+      );
     }
   }
 

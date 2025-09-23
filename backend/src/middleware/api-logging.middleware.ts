@@ -90,14 +90,14 @@ export const apiLoggingMiddleware = (options: {
       requestLogData.contentLength = parseInt(req.get('Content-Length') || '0', 10);
     }
 
-    // Log the incoming request
-    logger.info('API Request', {
-      correlationId: requestId,
-      userId: (req as AuthenticatedRequest).user?.userId,
-      sessionId: req.headers['x-session-id'] as string,
-      operation: 'api_request_start',
-      metadata: requestLogData
-    });
+    // Log the incoming request - TEMPORARILY DISABLED
+    // logger.info('API Request', {
+    //   correlationId: requestId,
+    //   userId: (req as AuthenticatedRequest).user?.userId,
+    //   sessionId: req.headers['x-session-id'] as string,
+    //   operation: 'api_request_start',
+    //   metadata: requestLogData
+    // });
 
     // Override res.json to capture response data
     const originalJson = res.json;
@@ -148,6 +148,7 @@ export const apiLoggingMiddleware = (options: {
       
       const logMessage = `API Response - ${req.method} ${req.path} - ${res.statusCode} - ${responseTime}ms`;
 
+      // TEMPORARILY DISABLED - Only log errors
       if (logLevel === 'error') {
         logger.error(logMessage, {
           error: 'API Response Error',
@@ -160,39 +161,41 @@ export const apiLoggingMiddleware = (options: {
             responseBody: logBody ? sanitizeObject(responseData, sensitiveFields, maxBodyLength) : undefined
           }
         });
-      } else if (logLevel === 'warn') {
-        logger.warn(logMessage, {
-          correlationId: requestId,
-          userId: (req as AuthenticatedRequest).user?.userId,
-          sessionId: req.headers['x-session-id'] as string,
-          operation: 'api_response_warn',
-          metadata: responseLogData
-        });
-      } else {
-        logger.info(logMessage, {
-          correlationId: requestId,
-          userId: (req as AuthenticatedRequest).user?.userId,
-          sessionId: req.headers['x-session-id'] as string,
-          operation: 'api_response_success',
-          metadata: responseLogData
-        });
       }
+      // Disabled: warn and info logging
+      // } else if (logLevel === 'warn') {
+      //   logger.warn(logMessage, {
+      //     correlationId: requestId,
+      //     userId: (req as AuthenticatedRequest).user?.userId,
+      //     sessionId: req.headers['x-session-id'] as string,
+      //     operation: 'api_response_warn',
+      //     metadata: responseLogData
+      //   });
+      // } else {
+      //   logger.info(logMessage, {
+      //     correlationId: requestId,
+      //     userId: (req as AuthenticatedRequest).user?.userId,
+      //     sessionId: req.headers['x-session-id'] as string,
+      //     operation: 'api_response_success',
+      //     metadata: responseLogData
+      //   });
+      // }
 
-      // Log additional metrics for monitoring
-      if (responseTime > 5000) { // Slow requests > 5 seconds
-        logger.warn('Slow API Response', {
-          correlationId: requestId,
-          userId: (req as AuthenticatedRequest).user?.userId,
-          sessionId: req.headers['x-session-id'] as string,
-          operation: 'slow_api_response',
-          metadata: {
-            method: req.method,
-            path: req.path,
-            responseTime,
-            statusCode: res.statusCode
-          }
-        });
-      }
+      // TEMPORARILY DISABLED - Slow request logging
+      // if (responseTime > 5000) { // Slow requests > 5 seconds
+      //   logger.warn('Slow API Response', {
+      //     correlationId: requestId,
+      //     userId: (req as AuthenticatedRequest).user?.userId,
+      //     sessionId: req.headers['x-session-id'] as string,
+      //     operation: 'slow_api_response',
+      //     metadata: {
+      //       method: req.method,
+      //       path: req.path,
+      //       responseTime,
+      //       statusCode: res.statusCode
+      //     }
+      //   });
+      // }
     };
 
     // Attach listeners for response completion

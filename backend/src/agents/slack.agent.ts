@@ -1082,14 +1082,8 @@ Return only JSON: {"isConfirmation": boolean, "type": "positive"|"negative", "co
 
       return JSON.parse(response);
     } catch (error) {
-      // Fallback to simple detection on error
-      const lowerMessage = message.toLowerCase();
-      const isPositive = lowerMessage.includes('yes') || lowerMessage.includes('confirm');
-      return {
-        isConfirmation: isPositive || lowerMessage.includes('no') || lowerMessage.includes('cancel'),
-        type: isPositive ? 'positive' : 'negative',
-        confidence: 0.3
-      };
+      // Pure natural language system - no text-based fallback allowed
+      throw new Error(`AI confirmation analysis failed and no text-based fallback allowed in pure natural language system: ${(error as Error).message}`);
     }
   }
 

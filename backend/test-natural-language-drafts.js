@@ -22,8 +22,8 @@ async function testNaturalLanguageDraftFlow() {
     console.log('🧪 Starting End-to-End Natural Language Draft Flow Test\n');
 
     // Dynamic imports to handle ES modules
-    const { MasterAgent } = await import('./src/agents/master.agent.js');
-    const { AgentFactory } = await import('./src/framework/agent-factory.js');
+    const { MasterAgent } = await import('./src/agents/master.agent.ts');
+    const { AgentFactory } = await import('./src/framework/agent-factory.ts');
 
     console.log('✅ Successfully imported MasterAgent and AgentFactory\n');
 
@@ -139,13 +139,21 @@ async function testNaturalLanguageDraftFlow() {
   }
 }
 
+// Add timeout to prevent hanging
+const testTimeout = setTimeout(() => {
+  console.log('⏰ Test timed out after 30 seconds');
+  process.exit(1);
+}, 30000);
+
 // Run the test
 testNaturalLanguageDraftFlow()
   .then(() => {
+    clearTimeout(testTimeout);
     console.log('\n🎉 All tests passed! Natural language draft flow is working correctly.');
     process.exit(0);
   })
   .catch((error) => {
+    clearTimeout(testTimeout);
     console.error('💥 Test suite failed:', error);
     process.exit(1);
   });

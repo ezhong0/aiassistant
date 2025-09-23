@@ -16,7 +16,8 @@ import { ContactAgent } from './contact.agent';
 // Import WorkflowOrchestrator for extracted workflow functionality
 import { WorkflowOrchestrator, SimpleWorkflowState, SimpleWorkflowStep } from '../framework/workflow-orchestrator';
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
-import { NextStepPlanningService, WorkflowContext, NextStepPlan, StepResult as NextStepResult } from '../services/next-step-planning.service';
+// Legacy import removed - using StringPlanningService instead
+import { StringPlanningService, StringWorkflowContext, StringStepPlan, StringStepResult } from '../services/string-planning.service';
 // Removed OperationDetectionService - agents handle their own operation detection
 import { ToolExecutorService } from '../services/tool-executor.service';
 
@@ -486,8 +487,9 @@ export class MasterAgent {
         });
       }
 
-      // Start new step-by-step execution
-      return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
+      // Start new string-based step-by-step execution
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+      return await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId, slackContext);
     } catch (error) {
       const duration = Date.now() - startTime;
       logger.error('Operation failed', {
@@ -585,8 +587,25 @@ export class MasterAgent {
       // 4. Single AI call that determines everything
       const intentAnalysis = await this.comprehensiveIntentAnalysis(analysisContext);
 
-      // 5. Route all requests through step-by-step execution
-      return await this.executeStepByStepFromIntent(intentAnalysis, userInput, sessionId, userId, options);
+      // 5. Route all requests through string-based step execution
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+      const result = await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId, options?.context?.slackContext);
+
+      // Convert MasterAgentResponse to UnifiedProcessingResult
+      const draftInfo = this.extractDraftInfoFromToolResults(result.toolResults || []);
+
+      return {
+        message: result.message,
+        needsConfirmation: draftInfo?.requiresConfirmation || false,
+        draftId: draftInfo?.draftId,
+        draftContents: draftInfo ? {
+          action: draftInfo.description,
+          previewData: draftInfo.previewData
+        } : undefined,
+        success: true,
+        toolResults: result.toolResults,
+        executionMetadata: result.executionMetadata
+      };
 
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -730,7 +749,17 @@ Return JSON with this structure:
         }
       });
 
-      return response as IntentAnalysis;
+      const intentAnalysis = response as IntentAnalysis;
+      
+      // Log intent analysis using natural language logger
+      const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
+      naturalLanguageLogger.logIntentAnalysis(intentAnalysis, context.userInput, {
+        correlationId: logContext.correlationId || `intent-${Date.now()}`,
+        sessionId: context.sessionId,
+        operation: 'comprehensiveIntentAnalysis'
+      });
+
+      return intentAnalysis;
 
     } catch (error) {
       logger.error('Failed to parse intent analysis', {
@@ -750,98 +779,6 @@ Return JSON with this structure:
    * Execute step-by-step workflow based on intent analysis
    * This replaces routeBasedOnIntent with planner-first execution
    */
-  private async executeStepByStepFromIntent(
-    intentAnalysis: IntentAnalysis,
-    userInput: string,
-    sessionId: string,
-    userId?: string,
-    options?: {
-      accessToken?: string;
-      context?: any;
-    }
-  ): Promise<UnifiedProcessingResult> {
-    const correlationId = `step-from-intent-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'executeStepByStepFromIntent',
-      metadata: { intentType: intentAnalysis.intentType }
-    };
-
-    try {
-      logger.info('Starting step-by-step execution from intent', logContext);
-
-      // Initialize workflow context with intent information
-      const workflowContext: WorkflowContext = {
-        originalRequest: userInput,
-        currentStep: 1,
-        maxSteps: 10,
-        completedSteps: [],
-        gatheredData: {
-          intentAnalysis: intentAnalysis,
-          intentType: intentAnalysis.intentType,
-          confidence: intentAnalysis.confidence
-        },
-        userContext: { 
-          slackContext: options?.context?.slackContext, 
-          userId, 
-          sessionId 
-        }
-      };
-
-      // Create workflow state for tracking
-      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
-      const workflowState: SimpleWorkflowState = {
-        workflowId,
-        sessionId,
-        status: 'active',
-        currentStep: 0,
-        totalSteps: 0,
-        context: {
-          originalRequest: userInput,
-          userIntent: userInput,
-          gatheredData: workflowContext.gatheredData
-        },
-        createdAt: new Date(),
-        lastActivity: new Date()
-      };
-
-      // Save initial workflow state
-      this.createWorkflow(workflowState);
-
-      // Execute step-by-step loop
-      const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, options?.context?.slackContext);
-
-      // Convert MasterAgentResponse to UnifiedProcessingResult
-      const draftInfo = this.extractDraftInfoFromToolResults(result.toolResults || []);
-      const executedDraftInfo = this.extractExecutedDraftInfoFromToolResults(result.toolResults || []);
-
-      return {
-        message: result.message,
-        needsConfirmation: draftInfo?.requiresConfirmation || false,
-        draftId: draftInfo?.draftId,
-        draftContents: draftInfo ? {
-          action: draftInfo.description,
-          previewData: draftInfo.previewData
-        } : undefined,
-        success: true,
-        toolResults: result.toolResults,
-        executionMetadata: result.executionMetadata
-      };
-
-    } catch (error) {
-      logger.error('Step-by-step execution from intent failed', error as Error, logContext);
-      
-      // Return user-friendly error message
-      const errorMessage = await this.createUserFriendlyErrorText(error as Error, userInput);
-      return {
-        message: errorMessage,
-        needsConfirmation: false,
-        success: false
-      };
-    }
-  }
 
   // Deprecated method routeBasedOnIntent removed - now using step-by-step execution via executeStepByStepFromIntent
 
@@ -1071,50 +1008,6 @@ Return a single line response starting with ❌ that explains what went wrong in
     return getService('toolExecutorService') as ToolExecutorService;
   }
 
-  /**
-   * Create user-friendly error messages for step execution failures
-   */
-  private async createUserFriendlyStepErrorMessage(error: Error, step: NextStepPlan, originalRequest: string): Promise<string> {
-    try {
-      const openaiService = this.getOpenAIService();
-      if (!openaiService) {
-        return `I encountered an issue while ${step.description.toLowerCase()}: ${error.message}`;
-      }
-
-      const prompt = `Create a user-friendly error message for this situation:
-
-Error: ${error.message}
-Step attempted: ${step.description}
-Original request: ${originalRequest}
-Agent involved: ${step.agent}
-
-Create a helpful, empathetic message that:
-1. Explains what went wrong in simple terms
-2. Suggests how the user might resolve the issue
-3. Uses appropriate emojis for context
-4. Is concise and actionable
-
-Focus on common issues like:
-- Authentication/permission problems
-- Not found errors
-- Network timeouts
-- Insufficient permissions
-- Scheduling conflicts
-
-Return only the user-friendly message.`;
-
-      const response = await openaiService.generateText(
-        prompt,
-        'You create helpful, user-friendly error messages.',
-        { temperature: 0.3, maxTokens: 150 }
-      );
-
-      return response.trim();
-    } catch (aiError) {
-      // Simple fallback if AI fails
-      return `I encountered an issue while ${step.description.toLowerCase()}: ${error.message}`;
-    }
-  }
 
   /**
    * Create user-friendly error messages for MasterAgent failures using LLM intelligence
@@ -2003,6 +1896,338 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
   }
 
   /**
+   * Execute string-based step-by-step workflow loop
+   * Simplified version using natural language planning and pure string communication
+   */
+  private async executeStringBasedStepLoop(
+    originalRequest: string,
+    workflowId: string,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext
+  ): Promise<MasterAgentResponse> {
+    logger.info('Starting string-based step loop', {
+      workflowId,
+      sessionId,
+      userId,
+      originalRequest: originalRequest.substring(0, 100),
+      operation: 'string_step_loop_start'
+    });
+
+    const stringPlanningService = getService<StringPlanningService>('stringPlanningService');
+    if (!stringPlanningService) {
+      throw ErrorFactory.serviceUnavailable('StringPlanningService', {
+        correlationId: `string-loop-${Date.now()}`,
+        operation: 'string_planning'
+      });
+    }
+
+    const MAX_STEPS = 10;
+    const STEP_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes total
+    const startTime = Date.now();
+
+    const context: StringWorkflowContext = {
+      originalRequest,
+      currentStep: 1,
+      maxSteps: MAX_STEPS,
+      completedSteps: [],
+      stepResults: [],
+      userContext: { sessionId, userId, slackContext }
+    };
+
+    let allStepResults: string[] = [];
+
+    // Execute step loop
+    while (context.currentStep <= MAX_STEPS) {
+      // Check timeout
+      if (Date.now() - startTime > STEP_TIMEOUT_MS) {
+        logger.warn('String-based workflow timeout', {
+          workflowId,
+          sessionId,
+          currentStep: context.currentStep,
+          operation: 'string_workflow_timeout'
+        });
+        break;
+      }
+
+      try {
+        // Plan next step
+        logger.info('Planning string-based step', {
+          workflowId,
+          sessionId,
+          stepNumber: context.currentStep,
+          operation: 'string_step_planning'
+        });
+
+        const plan = await stringPlanningService.planNextStep(context);
+
+        // 🎯 LOG THE PLAN
+        logger.info('📋 STRING-BASED PLAN CREATED', {
+          workflowId,
+          sessionId,
+          stepNumber: context.currentStep,
+          stepDescription: plan.nextStep,
+          reasoning: plan.reasoning,
+          isComplete: plan.isComplete,
+          operation: 'string_plan_created'
+        });
+
+        if (plan.isComplete) {
+          logger.info('String workflow marked complete', {
+            workflowId,
+            sessionId,
+            completedSteps: context.completedSteps.length,
+            operation: 'string_workflow_complete'
+          });
+          break;
+        }
+
+        // Execute the step
+        logger.info('🔧 EXECUTING STRING-BASED STEP', {
+          workflowId,
+          sessionId,
+          stepNumber: context.currentStep,
+          stepDescription: plan.nextStep,
+          operation: 'string_step_execution'
+        });
+
+        const stepResult = await this.executeStringStep(plan.nextStep, sessionId, userId, slackContext);
+
+        // Analyze the result
+        const analysis = await stringPlanningService.analyzeStepResult(plan.nextStep, stepResult, context);
+
+        // Update context
+        context.completedSteps.push(plan.nextStep);
+        context.stepResults.push(analysis.summary);
+        allStepResults.push(stepResult);
+
+        logger.info('String step completed', {
+          workflowId,
+          sessionId,
+          stepNumber: context.currentStep,
+          stepSummary: analysis.summary.substring(0, 100),
+          shouldContinue: analysis.shouldContinue,
+          operation: 'string_step_complete'
+        });
+
+        // Check if we should continue
+        if (!analysis.shouldContinue) {
+          logger.info('String workflow stopping - no more steps needed', {
+            workflowId,
+            sessionId,
+            completedSteps: context.completedSteps.length,
+            operation: 'string_workflow_stop'
+          });
+          break;
+        }
+
+        context.currentStep++;
+
+      } catch (error) {
+        logger.error('String step execution failed', error as Error, {
+          workflowId,
+          sessionId,
+          stepNumber: context.currentStep,
+          operation: 'string_step_error'
+        });
+
+        // Add error as step result and continue
+        allStepResults.push(`Step failed: ${(error as Error).message}`);
+        context.currentStep++;
+      }
+    }
+
+    // Generate final response
+    const finalResponse = await this.generateStringBasedResponse(originalRequest, context.completedSteps, allStepResults, sessionId);
+
+    logger.info('String-based workflow completed', {
+      workflowId,
+      sessionId,
+      totalSteps: context.completedSteps.length,
+      finalResponseLength: finalResponse.length,
+      operation: 'string_workflow_complete'
+    });
+
+    return {
+      message: finalResponse,
+      executionMetadata: {
+        processingTime: Date.now() - startTime,
+        completedSteps: context.completedSteps.length
+      }
+    };
+  }
+
+  /**
+   * Execute a single string-based step by delegating to appropriate subagent
+   */
+  private async executeStringStep(
+    stepDescription: string,
+    sessionId: string,
+    userId?: string,
+    slackContext?: SlackContext
+  ): Promise<string> {
+    try {
+      // Determine which agent should handle this step
+      const agentName = await this.determineAgentForStringStep(stepDescription);
+
+      // 🎯 LOG AGENT SELECTION
+      logger.info('🤖 DELEGATING TO AGENT', {
+        stepDescription: stepDescription,
+        selectedAgent: agentName,
+        sessionId,
+        operation: 'string_step_delegation'
+      });
+
+      // Get the agent
+      const agent = await AgentFactory.getAgent(agentName);
+      if (!agent) {
+        throw new Error(`Agent '${agentName}' not available`);
+      }
+
+      // Check if agent supports natural language processing
+      const supportsNL = await AgentFactory.supportsNaturalLanguage(agentName);
+      if (!supportsNL) {
+        throw new Error(`Agent '${agentName}' does not support natural language processing`);
+      }
+
+      // 💬 LOG NATURAL LANGUAGE COMMUNICATION
+      logger.info('💬 SENDING NATURAL LANGUAGE TO SUBAGENT', {
+        agentName,
+        naturalLanguageRequest: stepDescription,
+        sessionId,
+        operation: 'natural_language_request'
+      });
+
+      // Execute with natural language
+      const result = await AgentFactory.executeAgentWithNaturalLanguage(
+        agentName,
+        stepDescription, // This is the rich, detailed natural language instruction
+        {
+          sessionId,
+          userId,
+          slackContext,
+          correlationId: `string-step-${Date.now()}`
+        }
+      );
+
+      // 📨 LOG AGENT RESPONSE
+      logger.info('📨 RECEIVED RESPONSE FROM SUBAGENT', {
+        agentName,
+        success: result.success,
+        response: result.response?.substring(0, 200),
+        sessionId,
+        operation: 'natural_language_response'
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Agent execution failed');
+      }
+
+      return result.response || 'Step completed successfully';
+
+    } catch (error) {
+      logger.error('String step execution failed', error as Error, {
+        stepDescription: stepDescription.substring(0, 100),
+        sessionId,
+        operation: 'string_step_execution_error'
+      });
+
+      return `Failed to execute step: ${(error as Error).message}`;
+    }
+  }
+
+  /**
+   * Determine which agent should handle a string-based step
+   */
+  private async determineAgentForStringStep(stepDescription: string): Promise<string> {
+    const openaiService = this.getOpenAIService();
+    if (!openaiService) {
+      // Simple fallback logic
+      const step = stepDescription.toLowerCase();
+      if (step.includes('calendar') || step.includes('meeting') || step.includes('schedule')) return 'calendarAgent';
+      if (step.includes('email') || step.includes('message') || step.includes('send')) return 'emailAgent';
+      if (step.includes('contact') || step.includes('find') || step.includes('person')) return 'contactAgent';
+      if (step.includes('slack') || step.includes('channel')) return 'slackAgent';
+      return 'calendarAgent'; // Default fallback
+    }
+
+    try {
+      const prompt = `Which agent should handle this step: "${stepDescription}"
+
+Available agents:
+- calendarAgent: Handle calendar events, meetings, scheduling
+- emailAgent: Handle email sending, searching, composing
+- contactAgent: Handle contact management, finding people
+- slackAgent: Handle Slack messaging, channel management
+
+Respond with just the agent name: calendarAgent, emailAgent, contactAgent, or slackAgent`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'Determine appropriate agent for step',
+        { temperature: 0.1, maxTokens: 20 }
+      );
+
+      const agentName = response.trim();
+      const validAgents = ['calendarAgent', 'emailAgent', 'contactAgent', 'slackAgent'];
+
+      return validAgents.includes(agentName) ? agentName : 'calendarAgent';
+
+    } catch (error) {
+      logger.error('Agent determination failed', error as Error);
+      return 'calendarAgent'; // Safe fallback
+    }
+  }
+
+  /**
+   * Generate final natural language response from string-based execution
+   */
+  private async generateStringBasedResponse(
+    originalRequest: string,
+    completedSteps: string[],
+    stepResults: string[],
+    sessionId: string
+  ): Promise<string> {
+    const openaiService = this.getOpenAIService();
+    if (!openaiService) {
+      // Simple fallback
+      if (stepResults.length === 0) {
+        return "I wasn't able to complete your request.";
+      }
+      return stepResults[stepResults.length - 1] || "Request completed"; // Return last result
+    }
+
+    try {
+      const prompt = `User requested: "${originalRequest}"
+
+I completed these steps:
+${completedSteps.map((step, i) => `${i + 1}. ${step}`).join('\n')}
+
+With these results:
+${stepResults.map((result, i) => `${i + 1}. ${result.substring(0, 300)}`).join('\n')}
+
+Provide a natural, conversational response to the user that summarizes what was accomplished and includes any relevant information they requested. Be concise but helpful.`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'Generate final response for string-based workflow',
+        { temperature: 0.7, maxTokens: 500 }
+      );
+
+      return response.trim();
+
+    } catch (error) {
+      logger.error('String response generation failed', error as Error, {
+        sessionId,
+        operation: 'string_response_generation_error'
+      });
+
+      // Return the most relevant result
+      return stepResults.length > 0 ? (stepResults[stepResults.length - 1] || "I completed your request.") : "I completed your request.";
+    }
+  }
+
+  /**
    * Internal natural language response generation for workflow steps
    */
   private async generateNaturalLanguageResponseInternal(
@@ -2144,7 +2369,8 @@ Respond naturally and conversationally. If the data contains calendar events, li
     // Original interruption logic as fallback
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
-      return await this.executeStepByStep(userInput, sessionId, userId);
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+      return await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId);
     }
 
     const analysisPrompt = `
@@ -2170,13 +2396,16 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       const analysis = JSON.parse(analysisResponse);
 
       if (analysis.relatesToWorkflow) {
-        return await this.executeStepByStep(userInput, sessionId, userId);
+        const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+        return await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId);
       } else {
         await this.abortWorkflow(activeWorkflow.workflowId);
-        return await this.executeStepByStep(userInput, sessionId, userId);
+        const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+        return await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId);
       }
     } catch (error) {
-      return await this.executeStepByStep(userInput, sessionId, userId);
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+      return await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId);
     }
   }
 
@@ -2222,552 +2451,16 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
       // Simplified workflow interruption handling - treat any new input as starting a new workflow
       this.workflowOrchestrator.cancelWorkflow(activeWorkflow.workflowId);
-      return await this.executeStepByStep(userInput, sessionId, userId, slackContext);
+      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
+      return await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId, slackContext);
     } catch (error) {
       logger.error('Failed to continue step-by-step workflow', error as Error, logContext);
       return this.createErrorResponse(error as Error);
     }
   }
 
-  /**
-   * Execute workflow using step-by-step planning instead of upfront planning
-   */
-  async executeStepByStep(
-    userInput: string,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext
-  ): Promise<MasterAgentResponse> {
-    logger.info('Starting step-by-step execution', {
-      userInput,
-      sessionId,
-      userId,
-      hasSlackContext: !!slackContext,
-      operation: 'step_by_step_execution_start'
-    });
-    
-    const startTime = Date.now();
-    const correlationId = `step-by-step-${sessionId}-${Date.now()}`;
-    const logContext: LogContext = {
-      correlationId,
-      userId,
-      sessionId,
-      operation: 'executeStepByStep',
-      metadata: { inputLength: userInput.length }
-    };
 
-    try {
-      logger.info('Starting step-by-step execution', logContext);
-
-      // Initialize workflow context
-      const workflowContext: WorkflowContext = {
-        originalRequest: userInput,
-        currentStep: 1,
-        maxSteps: 10,
-        completedSteps: [],
-        gatheredData: {},
-        userContext: { slackContext, userId, sessionId }
-      };
-
-      // Create workflow state for tracking
-      const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
-      const workflowState: SimpleWorkflowState = {
-        workflowId,
-        sessionId,
-        status: 'active',
-        currentStep: 0,
-        totalSteps: 0, // Will be updated dynamically
-        context: {
-          originalRequest: userInput,
-          userIntent: userInput, // Same as original request for now
-          gatheredData: {}
-        },
-        createdAt: new Date(),
-        lastActivity: new Date()
-      };
-
-      // Save initial workflow state
-      this.createWorkflow(workflowState);
-
-      // Execute step-by-step loop
-      const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, slackContext);
-
-      const endTime = Date.now();
-      logger.info('Step-by-step execution completed', {
-        ...logContext,
-        metadata: {
-          ...logContext.metadata,
-          processingTime: endTime - startTime,
-          totalSteps: workflowContext.completedSteps.length,
-          success: true
-        }
-      });
-
-      return result;
-    } catch (error) {
-      logger.error('Step-by-step execution failed', error as Error, logContext);
-      return this.createErrorResponse(error as Error);
-    }
-  }
-
-  /**
-   * Execute the step-by-step workflow loop
-   */
-  private async executeStepByStepLoop(
-    workflowContext: WorkflowContext,
-    workflowId: string,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext
-  ): Promise<MasterAgentResponse> {
-    logger.info('Starting step-by-step loop', {
-      workflowId,
-      currentStep: workflowContext.currentStep,
-      maxSteps: workflowContext.maxSteps,
-      sessionId,
-      userId,
-      operation: 'step_by_step_loop_start'
-    });
-    
-    const nextStepPlanningService = getService<NextStepPlanningService>('nextStepPlanningService');
-    if (!nextStepPlanningService) {
-      throw ErrorFactory.serviceUnavailable('NextStepPlanningService', {
-        correlationId: `step-loop-${Date.now()}`,
-        operation: 'step_planning'
-      });
-    }
-
-    const toolCalls: ToolCall[] = [];
-    const toolResults: ToolResult[] = [];
-    let finalMessage = '';
-
-    // Add safety timeout mechanism
-    const workflowStartTime = Date.now();
-    const WORKFLOW_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes maximum
-
-    while (workflowContext.currentStep <= workflowContext.maxSteps) {
-      // Check workflow timeout
-      if (Date.now() - workflowStartTime > WORKFLOW_TIMEOUT_MS) {
-        logger.warn('Workflow timeout reached', {
-          workflowId,
-          sessionId,
-          userId,
-          timeoutMs: WORKFLOW_TIMEOUT_MS,
-          currentStep: workflowContext.currentStep,
-          operation: 'workflow_timeout'
-        });
-        finalMessage = `Workflow timed out after ${WORKFLOW_TIMEOUT_MS / 1000} seconds. Please try a simpler request.`;
-        break;
-      }
-      logger.debug('Planning step', {
-        stepNumber: workflowContext.currentStep,
-        workflowId,
-        sessionId,
-        userId,
-        operation: 'step_planning'
-      });
-      // Plan next step (now includes natural language capabilities by default)
-      const nextStep = await nextStepPlanningService.planNextStep(workflowContext);
-
-      // If no more steps, we're done
-      if (!nextStep) {
-        logger.info('Workflow complete - no more steps', {
-          workflowId,
-          sessionId,
-          userId,
-          operation: 'workflow_complete'
-        });
-        finalMessage = `Task completed successfully! I have processed your request: "${workflowContext.originalRequest}"`;
-        break;
-      }
-
-      logger.info('Executing step', {
-        stepNumber: nextStep.stepNumber,
-        description: nextStep.description,
-        agent: nextStep.agent,
-        workflowId,
-        sessionId,
-        userId,
-        operation: 'step_execution'
-      });
-      logger.debug('Step details', {
-        stepOperation: nextStep.operation,
-        parameters: nextStep.parameters,
-        stepNumber: nextStep.stepNumber,
-        workflowId,
-        sessionId,
-        userId,
-        operation: 'step_details'
-      });
-
-      logger.debug('Executing step', {
-        correlationId: `step-${workflowContext.currentStep}`,
-        operation: 'step_execution',
-        metadata: {
-          stepNumber: nextStep.stepNumber,
-          agent: nextStep.agent,
-          operation: nextStep.operation,
-          description: nextStep.description
-        }
-      });
-
-      try {
-        let toolResult: ToolResult;
-        let toolCall: ToolCall | null = null;
-
-        // Try natural language processing first if available
-        const usingNaturalLanguage = await this.tryNaturalLanguageExecution(
-          nextStep,
-          sessionId,
-          userId,
-          slackContext
-        );
-
-        if (usingNaturalLanguage.success) {
-          logger.info('Step executed using natural language processing', {
-            stepNumber: nextStep.stepNumber,
-            agent: nextStep.agent,
-            naturalLanguageRequest: nextStep.naturalLanguageRequest?.substring(0, 100),
-            workflowId,
-            sessionId,
-            userId,
-            operation: 'natural_language_execution'
-          });
-          toolResult = usingNaturalLanguage.result!;
-
-          // Create a virtual tool call for tracking purposes
-          toolCall = {
-            name: nextStep.agent,
-            parameters: {
-              naturalLanguageRequest: nextStep.naturalLanguageRequest,
-              operation: nextStep.operation,
-              executionMode: 'natural_language'
-            }
-          };
-        } else {
-          // Fallback to structured tool call
-          logger.debug('Using fallback structured tool call execution', {
-            stepNumber: nextStep.stepNumber,
-            agent: nextStep.agent,
-            reason: usingNaturalLanguage.fallbackReason,
-            workflowId,
-            sessionId,
-            userId,
-            operation: 'structured_tool_execution'
-          });
-
-          toolCall = {
-            name: nextStep.agent,
-            parameters: {
-              operation: nextStep.operation,
-              ...nextStep.parameters
-            }
-          };
-
-          logger.debug('Executing structured tool call', {
-            toolCall: toolCall,
-            stepNumber: nextStep.stepNumber,
-            workflowId,
-            sessionId,
-            userId,
-            operation: 'tool_call_execution'
-          });
-          toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId, slackContext);
-        }
-        logger.debug('Tool execution completed', {
-          toolResult: toolResult,
-          stepNumber: nextStep.stepNumber,
-          workflowId,
-          sessionId,
-          userId,
-          operation: 'tool_execution_completed'
-        });
-
-        // Create step result
-        const stepResult: NextStepResult = {
-          stepNumber: nextStep.stepNumber,
-          agent: nextStep.agent,
-          operation: nextStep.operation,
-          parameters: nextStep.parameters,
-          result: toolResult.result,
-          success: toolResult.success,
-          error: toolResult.error,
-          executedAt: new Date()
-        };
-
-        // Analyze step result
-        logger.debug('Analyzing step result', {
-          stepNumber: nextStep.stepNumber,
-          toolResult: { success: toolResult.success, error: toolResult.error },
-          workflowId,
-          sessionId,
-          userId,
-          operation: 'step_result_analysis'
-        });
-
-        const stepAnalysis = await nextStepPlanningService.analyzeStepResult(stepResult, workflowContext);
-
-        logger.debug('Step analysis completed', {
-          stepNumber: nextStep.stepNumber,
-          shouldContinue: stepAnalysis.shouldContinue,
-          isComplete: stepAnalysis.isComplete,
-          needsUserInput: stepAnalysis.needsUserInput,
-          analysis: stepAnalysis.analysis.substring(0, 200),
-          workflowId,
-          sessionId,
-          userId,
-          operation: 'step_analysis_result'
-        });
-
-        // Update workflow context
-        workflowContext.completedSteps.push(stepResult);
-        workflowContext.currentStep++;
-
-        // Merge any updated context
-        if (stepAnalysis.updatedContext) {
-          workflowContext.gatheredData = {
-            ...workflowContext.gatheredData,
-            ...stepAnalysis.updatedContext.gatheredData
-          };
-        }
-
-        toolCalls.push(toolCall);
-        toolResults.push(toolResult);
-
-        // Check if task is complete
-        if (stepAnalysis.isComplete) {
-          logger.info('Workflow marked as complete by step analysis', {
-            stepNumber: nextStep.stepNumber,
-            analysis: stepAnalysis.analysis,
-            workflowId,
-            sessionId,
-            userId,
-            operation: 'workflow_complete'
-          });
-
-          // For completion, use the original request so the LLM can format the actual data
-          // instead of just the generic analysis message
-          finalMessage = workflowContext.originalRequest;
-          break;
-        }
-
-        // Check if user input is needed
-        if (stepAnalysis.needsUserInput) {
-          logger.info('Workflow paused - user input needed', {
-            stepNumber: nextStep.stepNumber,
-            analysis: stepAnalysis.analysis,
-            workflowId,
-            sessionId,
-            userId,
-            operation: 'workflow_user_input_needed'
-          });
-          finalMessage = `I need more information from you. ${stepAnalysis.analysis}`;
-          break;
-        }
-
-        // Check if we should continue
-        if (!stepAnalysis.shouldContinue) {
-          logger.info('Workflow paused by step analysis', {
-            stepNumber: nextStep.stepNumber,
-            analysis: stepAnalysis.analysis,
-            workflowId,
-            sessionId,
-            userId,
-            operation: 'workflow_paused'
-          });
-          finalMessage = `Workflow paused. ${stepAnalysis.analysis}`;
-          break;
-        }
-
-        // If we reach here, continue to the next step
-        logger.debug('Continuing to next step', {
-          completedStep: nextStep.stepNumber,
-          nextStepNumber: workflowContext.currentStep,
-          workflowId,
-          sessionId,
-          userId,
-          operation: 'continue_workflow'
-        });
-
-      } catch (stepError) {
-        // Handle step execution error with user-friendly messaging
-        const error = stepError as Error;
-        logger.error('Step execution failed', error, {
-          workflowId,
-          sessionId,
-          userId,
-          stepNumber: nextStep.stepNumber,
-          agent: nextStep.agent,
-          stepOperation: nextStep.operation,
-          operation: 'step_execution_error'
-        });
-
-        // Generate user-friendly error message
-        finalMessage = await this.createUserFriendlyStepErrorMessage(error, nextStep, workflowContext.originalRequest);
-
-        // Break from loop instead of throwing to provide user feedback
-        break;
-      }
-    }
-
-    // Generate final natural language response
-    if (!finalMessage) {
-      if (workflowContext.completedSteps.length > 0) {
-        finalMessage = `I've completed ${workflowContext.completedSteps.length} steps for your request, but reached the maximum step limit. Please let me know if you need anything else.`;
-      } else {
-        finalMessage = `I wasn't able to complete any steps for your request. Please try rephrasing or provide more details.`;
-      }
-    }
-
-    logger.info('Workflow execution completed', {
-      workflowId,
-      sessionId,
-      userId,
-      completedSteps: workflowContext.completedSteps.length,
-      totalToolCalls: toolCalls.length,
-      finalMessage: finalMessage.substring(0, 100),
-      operation: 'workflow_execution_complete'
-    });
-
-    const naturalResponse = await this.generateNaturalLanguageResponseInternal(
-      finalMessage,
-      toolResults,
-      sessionId
-    );
-
-    return {
-      message: naturalResponse,
-      toolCalls,
-      toolResults,
-      executionMetadata: {
-        processingTime: 0, // Will be calculated by caller
-        workflowId,
-        totalSteps: workflowContext.completedSteps.length,
-        workflowAction: 'step_by_step_completed'
-      }
-    };
-  }
-
-  /**
-   * Try to execute a step using natural language processing
-   * Falls back to structured tool calls if natural language is not supported
-   */
-  private async tryNaturalLanguageExecution(
-    nextStep: NextStepPlan,
-    sessionId: string,
-    userId?: string,
-    slackContext?: any
-  ): Promise<{ success: boolean; result?: ToolResult; fallbackReason?: string }> {
-
-    // Check if the step has a natural language request and the agent supports it
-    if (!nextStep.naturalLanguageRequest) {
-      return {
-        success: false,
-        fallbackReason: 'No natural language request provided'
-      };
-    }
-
-    try {
-      // Get access token for the agent
-      const accessToken = await this.getAccessTokenForAgent(nextStep.agent, userId);
-      if (!accessToken) {
-        return {
-          success: false,
-          fallbackReason: 'No access token available for agent'
-        };
-      }
-
-      // Check if agent supports natural language processing (with caching)
-      const supportsNaturalLanguage = await this.checkAgentNaturalLanguageSupport(nextStep.agent);
-      if (!supportsNaturalLanguage) {
-        return {
-          success: false,
-          fallbackReason: 'Agent does not support natural language processing'
-        };
-      }
-
-      // Load agent instance
-      let agent: any;
-      try {
-        const { AgentFactory } = await import('../framework/agent-factory');
-        agent = await AgentFactory.getAgent(nextStep.agent);
-      } catch (error) {
-        return {
-          success: false,
-          fallbackReason: 'Could not load agent from AgentFactory'
-        };
-      }
-
-      logger.debug('Executing natural language request', {
-        agent: nextStep.agent,
-        naturalLanguageRequest: nextStep.naturalLanguageRequest.substring(0, 100),
-        sessionId,
-        userId,
-        operation: 'natural_language_request_execution'
-      });
-
-      // Execute using natural language processing
-      const nlResult = await agent.processNaturalLanguageRequest(
-        nextStep.naturalLanguageRequest,
-        {
-          sessionId,
-          userId,
-          accessToken,
-          slackContext
-        }
-      );
-
-      // Convert natural language result to ToolResult format
-      const toolResult: ToolResult = {
-        toolName: nextStep.agent,
-        success: true,
-        result: {
-          naturalLanguageResponse: nlResult.response,
-          reasoning: nlResult.reasoning,
-          metadata: nlResult.metadata,
-          // Include draft information if present
-          draft: nlResult.draft,
-          executedDraft: nlResult.executedDraft,
-          suggestions: nlResult.suggestions,
-          warnings: nlResult.warnings,
-          // Include any structured data from the result
-          ...nlResult.metadata
-        },
-        executionTime: 0 // Will be calculated by caller if needed
-      };
-
-      logger.info('Natural language execution completed successfully', {
-        agent: nextStep.agent,
-        responseLength: nlResult.response.length,
-        confidence: nlResult.metadata?.confidence,
-        agentOperation: nlResult.metadata?.operation,
-        sessionId,
-        userId,
-        operation: 'natural_language_execution_success'
-      });
-
-      return {
-        success: true,
-        result: toolResult
-      };
-
-    } catch (error) {
-      logger.warn('Natural language execution failed, falling back to structured call', {
-        agent: nextStep.agent,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        naturalLanguageRequest: nextStep.naturalLanguageRequest?.substring(0, 100),
-        sessionId,
-        userId,
-        operation: 'natural_language_execution_fallback'
-      });
-
-      return {
-        success: false,
-        fallbackReason: `Natural language execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      };
-    }
-  }
-
+  // LEGACY METHOD REMOVED - Replaced by executeStringBasedStepLoop
   /**
    * Check if agent supports natural language processing (with caching)
    */
@@ -2808,7 +2501,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
   /**
    * Get access token for a specific agent
    */
-  private async getAccessTokenForAgent(agentName: string, userId?: string): Promise<string | null> {
+  private async getAccessTokenForAgent(agentName: string, userId?: string, slackContext?: any): Promise<string | null> {
     try {
       if (!userId) {
         return null;
@@ -2826,8 +2519,26 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
         return null;
       }
 
-      // Parse userId with robust handling for different formats
-      const { teamId, actualUserId } = this.parseUserId(userId);
+      // Use Slack context if available, otherwise parse userId
+      let teamId: string | null = null;
+      let actualUserId: string | null = null;
+
+      if (slackContext?.teamId && slackContext?.userId) {
+        // Use Slack context directly
+        teamId = slackContext.teamId;
+        actualUserId = slackContext.userId;
+        logger.debug('Using Slack context for token retrieval', {
+          agentName,
+          teamId,
+          actualUserId,
+          operation: 'get_access_token_for_agent'
+        });
+      } else {
+        // Parse userId with robust handling for different formats
+        const parsed = this.parseUserId(userId);
+        teamId = parsed.teamId;
+        actualUserId = parsed.actualUserId;
+      }
 
       if (!teamId || !actualUserId) {
         logger.warn('Invalid userId format for token retrieval', {
@@ -2835,6 +2546,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
           agentName,
           parsedTeamId: teamId,
           parsedUserId: actualUserId,
+          hasSlackContext: !!slackContext,
           operation: 'get_access_token_for_agent'
         });
         return null;

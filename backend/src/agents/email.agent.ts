@@ -503,17 +503,8 @@ You are a specialized email management agent powered by Gmail API.
       return params.operation;
     }
 
-    // Simple operation detection based on keywords
-    const userQuery = (params.query || '').toLowerCase();
-    if (userQuery.includes('send') || userQuery.includes('email')) {
-      return 'send';
-    } else if (userQuery.includes('search') || userQuery.includes('find') || userQuery.includes('show')) {
-      return 'search';
-    } else if (userQuery.includes('reply')) {
-      return 'reply';
-    } else {
-      return 'search'; // Default operation
-    }
+    // Pure natural language system - no text-based operation detection allowed
+    throw new Error('Legacy operation detection method called - use AI-powered intent analysis instead');
   }
 
   /**
