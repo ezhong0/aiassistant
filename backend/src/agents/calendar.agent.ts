@@ -20,6 +20,12 @@ import {
   CalendarEventResult,
   ListEventsActionParams
 } from '../types/agents/agent-specific-parameters';
+import {
+  AgentExecutionContext,
+  AgentIntent,
+  AgentCapabilities,
+  NaturalLanguageResponse
+} from '../types/agents/natural-language.types';
 
 // Focused services removed - CalendarAgent handles validation and formatting internally
 
@@ -758,7 +764,8 @@ Always return structured execution status with event details, scheduling insight
       // If no operation is specified, try to detect from query or parameters
       let detectedOperation = operation;
       if (!detectedOperation && parameters.query) {
-        detectedOperation = await this.detectCalendarOperation(parameters.query as string);
+        // Use AI-based intent analysis instead of fallback text matching
+        throw new Error('Calendar operation detection requires AI intent analysis. Please check your OpenAI configuration.');
       }
 
       // Default to create if still no operation detected
@@ -1397,23 +1404,6 @@ Always return structured execution status with event details, scheduling insight
     return !isNaN(d.getTime()) && /\d{4}-\d{2}-\d{2}T/.test(value);
   }
 
-  /**
-   * Detect calendar operation from query text using simple keyword matching
-   */
-  private async detectCalendarOperation(query: string): Promise<string> {
-    const lowerQuery = query.toLowerCase();
-    if (lowerQuery.includes('create') || lowerQuery.includes('add') || lowerQuery.includes('schedule')) {
-      return 'create';
-    } else if (lowerQuery.includes('list') || lowerQuery.includes('show') || lowerQuery.includes('find')) {
-      return 'list';
-    } else if (lowerQuery.includes('update') || lowerQuery.includes('modify') || lowerQuery.includes('change')) {
-      return 'update';
-    } else if (lowerQuery.includes('delete') || lowerQuery.includes('remove') || lowerQuery.includes('cancel')) {
-      return 'delete';
-    } else {
-      return 'list'; // Default operation
-    }
-  }
 
   // ========================================
   // NATURAL LANGUAGE PROCESSING CAPABILITIES
@@ -1425,10 +1415,10 @@ Always return structured execution status with event details, scheduling insight
    */
   async processNaturalLanguageRequest(
     request: string,
-    context: { sessionId: string, accessToken: string, slackContext?: any, userId?: string }
-  ): Promise<{ response: string, reasoning: string, metadata: any }> {
+    context: AgentExecutionContext
+  ): Promise<NaturalLanguageResponse> {
     const logContext: LogContext = {
-      correlationId: `calendar-nl-${context.sessionId}-${Date.now()}`,
+      correlationId: context.correlationId,
       userId: context.userId,
       sessionId: context.sessionId,
       operation: 'natural_language_processing',
@@ -1453,9 +1443,9 @@ Always return structured execution status with event details, scheduling insight
       }, {
         sessionId: context.sessionId,
         userId: context.userId,
-        timestamp: new Date(),
+        timestamp: context.timestamp,
         metadata: {
-          correlationId: `calendar-nl-${context.sessionId}-${Date.now()}`,
+          correlationId: context.correlationId,
           toolName: 'calendarAgent',
           naturalLanguageRequest: true
         }
@@ -1523,13 +1513,7 @@ Always return structured execution status with event details, scheduling insight
   }> {
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
-      // Fallback to simple keyword detection
-      return {
-        operation: await this.detectCalendarOperation(request) as any,
-        parameters: {},
-        confidence: 0.6,
-        reasoning: 'Used fallback keyword detection'
-      };
+      throw new Error('AI service unavailable. Calendar intent analysis requires OpenAI service.');
     }
 
     const prompt = `Analyze this calendar request and extract structured information:
@@ -1604,7 +1588,7 @@ Return JSON format:
       });
 
       return {
-        operation: await this.detectCalendarOperation(request) as any,
+        operation: 'create', // Default fallback operation
         parameters: {},
         confidence: 0.5,
         reasoning: 'Fallback analysis due to AI service error'
@@ -1784,5 +1768,111 @@ Keep the response focused and informative. Don't use markdown formatting.`;
         executionTime: 0
       };
     }
+  }
+
+  // ============================================================================
+  // NATURAL LANGUAGE TEMPLATE IMPLEMENTATION
+  // ============================================================================
+
+  /**
+   * Get agent capability description for MasterAgent
+   */
+  getCapabilityDescription(): AgentCapabilities {
+    return {
+      name: 'Calendar Expert',
+      description: 'Manages calendar events, scheduling, and availability checking using Google Calendar',
+      capabilities: [
+        'Create calendar events',
+        'List upcoming events',
+        'Check availability',
+        'Find meeting slots',
+        'Update existing events',
+        'Delete events',
+        'Schedule meetings',
+        'Manage appointments'
+      ],
+      limitations: [
+        'Requires Google Calendar access and authentication',
+        'Cannot access external calendars without proper permissions',
+        'Limited to Google Calendar platform only'
+      ],
+      examples: [
+        'Schedule a meeting tomorrow at 2pm',
+        'What meetings do I have today?',
+        'Check if I\'m free Friday afternoon',
+        'Cancel my 3pm meeting',
+        'Create a dentist appointment next week',
+        'Show me my calendar for tomorrow',
+        'Find a free slot for a 1-hour meeting this week',
+        'Update my team meeting to 4pm'
+      ],
+      domains: ['calendar', 'scheduling', 'meetings', 'appointments', 'events'],
+      requirements: ['Google OAuth authentication', 'Calendar read/write permissions']
+    };
+  }
+
+  /**
+   * Analyze natural language intent for calendar domain
+   */
+  protected async analyzeIntent(request: string, context: AgentExecutionContext): Promise<AgentIntent> {
+    // Use existing analyzeCalendarIntent method
+    const analysis = await this.analyzeCalendarIntent(request);
+
+    return {
+      operation: analysis.operation,
+      parameters: analysis.parameters,
+      confidence: analysis.confidence,
+      reasoning: analysis.reasoning,
+      toolsUsed: [analysis.operation]
+    };
+  }
+
+  /**
+   * Execute the tool selected by intent analysis
+   */
+  protected async executeSelectedTool(intent: AgentIntent, context: AgentExecutionContext): Promise<ToolResult> {
+    // Convert AgentExecutionContext to ToolExecutionContext and use existing method
+    const toolContext: ToolExecutionContext = {
+      sessionId: context.sessionId,
+      userId: context.userId,
+      timestamp: context.timestamp,
+      metadata: context.metadata
+    };
+
+    // Use existing executeInternalOperation method
+    return await this.executeInternalOperation(intent.operation, {
+      ...intent.parameters,
+      accessToken: context.accessToken
+    }, toolContext);
+  }
+
+  /**
+   * Generate natural language response from tool execution result
+   */
+  protected async generateResponse(
+    request: string,
+    result: ToolResult,
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    // Use existing generateContextualResponse method
+    const calendarResult: CalendarAgentResponse = {
+      success: result.success,
+      message: result.result?.message || (result.success ? 'Operation completed' : 'Operation failed'),
+      event: result.result?.data?.event,
+      events: result.result?.data?.events,
+      count: result.result?.data?.count || result.result?.data?.events?.length,
+      isAvailable: result.result?.data?.isAvailable,
+      conflictingEvents: result.result?.data?.conflictingEvents,
+      availableSlots: result.result?.data?.availableSlots,
+      error: result.error
+    };
+
+    return await this.generateContextualResponse(request, calendarResult, {
+      operation: intent.operation,
+      parameters: intent.parameters,
+      confidence: intent.confidence,
+      reasoning: intent.reasoning
+    });
   }
 }

@@ -34,6 +34,12 @@ import {
   SearchEmailActionParams,
   EmailSummaryParams
 } from '../types/agents/agent-specific-parameters';
+import {
+  AgentExecutionContext,
+  AgentIntent,
+  NaturalLanguageResponse,
+  AgentCapabilities
+} from '../types/agents/natural-language.types';
 
 /**
  * Email operation result interface - Intent-agnostic
@@ -964,8 +970,7 @@ You are a specialized email management agent powered by Gmail API.
     try {
       const openaiService = getService<OpenAIService>('openaiService');
       if (!openaiService) {
-        // Fallback to basic processing if AI service unavailable
-        return this.fallbackPreprocessEmailQuery(query);
+        throw new Error('AI service unavailable. Natural language email query processing requires OpenAI service.');
       }
 
       const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -1021,61 +1026,16 @@ Return only the Gmail search query syntax.`;
       return processedQuery;
 
     } catch (error) {
-      logger.error('AI query preprocessing failed, using fallback', error as Error, {
+      logger.error('AI query preprocessing failed', error as Error, {
         correlationId: 'email-query-preprocess',
         operation: 'ai_query_preprocessing_error'
       });
 
-      // Fallback to simple processing on error
-      return this.fallbackPreprocessEmailQuery(query);
+      // Throw error instead of using fallback - pure AI approach
+      throw new Error(`Email query preprocessing failed: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your OpenAI configuration.`);
     }
   }
 
-  /**
-   * Fallback email query preprocessing using basic pattern matching
-   * Used when AI service is unavailable
-   */
-  private fallbackPreprocessEmailQuery(query: string): string {
-    let processedQuery = query.toLowerCase();
-
-    // Basic time expressions
-    processedQuery = processedQuery.replace(/\btoday\b/g, 'newer_than:1d');
-    processedQuery = processedQuery.replace(/\byesterday\b/g, `after:${this.getDateString(-1)} before:${this.getDateString(0)}`);
-    processedQuery = processedQuery.replace(/\bthis week\b/g, 'newer_than:7d');
-    processedQuery = processedQuery.replace(/\blast week\b/g, `after:${this.getDateString(-14)} before:${this.getDateString(-7)}`);
-    processedQuery = processedQuery.replace(/\bthis month\b/g, 'newer_than:30d');
-    processedQuery = processedQuery.replace(/\brecently\b/g, 'newer_than:7d');
-
-    // Basic from/to patterns
-    processedQuery = processedQuery.replace(/\bfrom ([\w@.-]+)\b/g, 'from:$1');
-    processedQuery = processedQuery.replace(/\bto ([\w@.-]+)\b/g, 'to:$1');
-
-    // Basic subject patterns
-    processedQuery = processedQuery.replace(/\babout (.+?)(?:\s|$)/g, 'subject:"$1"');
-
-    // Basic attachment patterns
-    processedQuery = processedQuery.replace(/\bwith attachments?\b/g, 'has:attachment');
-    processedQuery = processedQuery.replace(/\battachments?\b/g, 'has:attachment');
-
-    // Basic unread patterns
-    processedQuery = processedQuery.replace(/\bunread\b/g, 'is:unread');
-
-    // Add default inbox filter if no folder specified
-    if (!processedQuery.includes('in:') && !processedQuery.includes('label:')) {
-      processedQuery += ' in:inbox';
-    }
-
-    logger.debug('Fallback email query preprocessed', {
-      correlationId: 'email-query-preprocess-fallback',
-      operation: 'fallback_query_preprocessing',
-      metadata: {
-        originalQuery: query,
-        processedQuery: processedQuery
-      }
-    });
-
-    return processedQuery.trim();
-  }
 
   /**
    * Get date string for Gmail API (YYYY/MM/DD format) relative to today
@@ -1250,5 +1210,184 @@ Return only the Gmail search query syntax.`;
       hasEmailValidator: false, // Removed - LLM handles validation
       hasEmailFormatter: false  // Removed - LLM handles formatting
     };
+  }
+
+  // NATURAL LANGUAGE INTERFACE IMPLEMENTATION
+
+  /**
+   * Get agent capability description for MasterAgent
+   */
+  getCapabilityDescription(): AgentCapabilities {
+    return {
+      name: 'Email Expert',
+      description: 'Comprehensive email management using Gmail API for sending, searching, and organizing emails',
+      capabilities: [
+        'Send emails with attachments and formatting',
+        'Search through email inbox and folders using natural language',
+        'List emails with filtering and sorting',
+        'Reply to existing email conversations',
+        'Create and manage email drafts',
+        'Handle email threading and conversations',
+        'Process email attachments and content',
+        'Convert natural language queries to Gmail search syntax'
+      ],
+      limitations: [
+        'Requires Gmail API access and proper OAuth permissions',
+        'Limited by Gmail API rate limits and quotas',
+        'Cannot access emails from other email providers',
+        'Cannot send emails to invalid or non-existent addresses',
+        'Limited by Gmail storage and attachment size limits'
+      ],
+      examples: [
+        'Send an email to john@example.com about the meeting',
+        'Show me emails from Sarah today',
+        'Search for emails about project updates',
+        'Find unread emails with attachments',
+        'Reply to the last email from Mike',
+        'Create a draft email to the team'
+      ],
+      domains: ['email', 'gmail', 'messaging', 'communication'],
+      requirements: ['Gmail API access', 'OAuth authentication']
+    };
+  }
+
+  /**
+   * Domain-specific intent analysis for email operations
+   */
+  protected async analyzeIntent(request: string, context: AgentExecutionContext): Promise<AgentIntent> {
+    try {
+      const prompt = `Analyze this email request: "${request}"
+
+Available email operations:
+- send: Send new emails to recipients
+- search: Search through emails using Gmail queries
+- reply: Reply to existing email messages
+- draft: Create email drafts for later sending
+- get: Retrieve specific email by ID
+
+Return JSON with operation, parameters, confidence (0-1), and reasoning.
+
+Parameters should include:
+- query: The full request for context
+- recipients: Array of email addresses (for send operations)
+- recipientName: Name to resolve from contacts (for send operations)
+- subject: Email subject line (for send operations)
+- body: Email content (for send operations)
+- messageId: Message ID (for reply operations)
+- threadId: Thread ID (for reply operations)
+- maxResults: Maximum results (for search operations)
+- searchQuery: Search terms (for search operations)`;
+
+      const response = await this.openaiService?.generateStructuredData(prompt, 'Email intent analyzer', {
+        type: 'object',
+        properties: {
+          operation: { type: 'string' },
+          parameters: { type: 'object' },
+          confidence: { type: 'number' },
+          reasoning: { type: 'string' }
+        }
+      }) as { operation?: string; parameters?: any; confidence?: number; reasoning?: string };
+
+      return {
+        operation: response?.operation || 'search',
+        parameters: response?.parameters || { query: request },
+        confidence: response?.confidence || 0.8,
+        reasoning: response?.reasoning || 'Email operation detected',
+        toolsUsed: ['emailAgent', response?.operation || 'search']
+      };
+    } catch (error) {
+      console.error('Email intent analysis failed:', error);
+      // Fallback to search operation if analysis fails
+      return {
+        operation: 'search',
+        parameters: { query: request },
+        confidence: 0.7,
+        reasoning: 'Fallback to email search due to analysis error',
+        toolsUsed: ['emailAgent']
+      };
+    }
+  }
+
+  /**
+   * Execute the selected tool based on intent analysis
+   */
+  protected async executeSelectedTool(intent: AgentIntent, context: AgentExecutionContext): Promise<any> {
+    const params: EmailAgentRequest = {
+      query: intent.parameters.query || '',
+      accessToken: context.accessToken || '',
+      operation: intent.operation,
+      recipientName: intent.parameters.recipientName,
+      subject: intent.parameters.subject,
+      body: intent.parameters.body,
+      messageId: intent.parameters.messageId,
+      threadId: intent.parameters.threadId
+    };
+
+    const toolContext = {
+      sessionId: context.sessionId,
+      userId: context.userId,
+      timestamp: context.timestamp,
+      metadata: { correlationId: context.correlationId }
+    };
+
+    return await this.processQuery(params, toolContext);
+  }
+
+  /**
+   * Generate natural language response from tool execution results
+   */
+  protected async generateResponse(
+    request: string,
+    result: any,
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    try {
+      const emailResult = result as EmailResult;
+
+      switch (intent.operation) {
+        case 'send':
+          if (emailResult.messageId) {
+            return `✅ Email sent successfully to ${emailResult.recipient}!
+📧 Subject: ${emailResult.subject || 'No Subject'}
+💌 Your message has been delivered.`;
+          } else {
+            return 'Failed to send email. Please check the recipient address and try again.';
+          }
+
+        case 'search':
+          if (emailResult.count === 0) {
+            return '📭 No emails found matching your search criteria. Try adjusting your search terms or date range.';
+          }
+          return `📧 Found ${emailResult.count || 0} email${(emailResult.count || 0) === 1 ? '' : 's'} matching your search.${emailResult.emails && emailResult.emails.length > 0 ? `
+
+Recent results:
+${emailResult.emails.slice(0, 3).map(email => `• ${email.subject || 'No Subject'} - from ${email.from || 'Unknown'}`).join('\n')}${(emailResult.count || 0) > 3 ? `\n... and ${(emailResult.count || 0) - 3} more` : ''}` : ''}`;
+
+        case 'reply':
+          if (emailResult.messageId) {
+            return '✅ Reply sent successfully! Your response has been added to the conversation thread.';
+          } else {
+            return 'Failed to send reply. Please ensure the original message exists and try again.';
+          }
+
+        case 'draft':
+          return 'Email draft created successfully. You can review and send it from your Gmail drafts folder.';
+
+        case 'get':
+          if (emailResult.emails && emailResult.emails.length > 0) {
+            const email = emailResult.emails[0];
+            return `📧 Email retrieved: "${email?.subject || 'No Subject'}" from ${email?.from || 'Unknown'}`;
+          } else {
+            return '📭 Email not found or no longer available.';
+          }
+
+        default:
+          return `Email operation completed. ${emailResult.count ? `Found ${emailResult.count} results.` : ''}`;
+      }
+    } catch (error) {
+      console.error('Email response generation failed:', error);
+      return `I encountered an issue while processing your email request: "${request}". Please check your Gmail connection and try again.`;
+    }
   }
 }

@@ -19,6 +19,12 @@ import {
   ContactSearchParams,
   ContactSearchResult
 } from '../types/agents/agent-specific-parameters';
+import {
+  AgentExecutionContext,
+  AgentIntent,
+  NaturalLanguageResponse,
+  AgentCapabilities
+} from '../types/agents/natural-language.types';
 
 /**
  * Contact operation result interface
@@ -529,20 +535,12 @@ You are a specialized contact discovery and management agent.
       // Use AI to extract contact names and determine if limit is specified
       const contactLookup = await aiClassificationService.extractContactNames(query);
       
-      // For now, use the original query as search term, but this could be enhanced
-      // to extract more specific search parameters using AI
-      let searchTerm = query;
-      let maxResults: number | undefined;
-      
-      // Simple fallback for limit detection (could be enhanced with AI)
-      const limitMatch = query.match(/(?:first|top|limit)\s+(\d+)/i);
-      if (limitMatch && limitMatch[1]) {
-        maxResults = Math.min(parseInt(limitMatch[1]), CONTACT_CONSTANTS.MAX_SEARCH_RESULTS);
-      }
-      
+      // Use AI to extract structured search parameters from natural language
+      const searchParams = await aiClassificationService.extractContactSearchParameters(query);
+
       return {
-        searchTerm,
-        maxResults: maxResults || undefined
+        searchTerm: searchParams.searchTerm || query,
+        maxResults: searchParams.maxResults ? Math.min(searchParams.maxResults, CONTACT_CONSTANTS.MAX_SEARCH_RESULTS) : undefined
       };
     } catch (error) {
       logger.error('Failed to extract search parameters', error as Error, {
@@ -591,11 +589,156 @@ You are a specialized contact discovery and management agent.
     const highConfidenceContacts = contacts.filter(c => (c.confidence || 0) >= confidenceThreshold);
     return highConfidenceContacts.length > 1;
   }
-  
+
   /**
    * Filter contacts by minimum confidence score
    */
   static filterByConfidence(contacts: ContactType[], minConfidence: number = CONTACT_CONSTANTS.MIN_CONFIDENCE_SCORE): ContactType[] {
     return contacts.filter(contact => (contact.confidence || 0) >= minConfidence);
+  }
+
+  // NATURAL LANGUAGE INTERFACE IMPLEMENTATION
+
+  /**
+   * Get agent capability description for MasterAgent
+   */
+  getCapabilityDescription(): AgentCapabilities {
+    return {
+      name: 'Contact Expert',
+      description: 'Manages contact search and retrieval from Google Contacts and email history',
+      capabilities: [
+        'Search contacts by name, email, or phone',
+        'Retrieve contact information from Google Contacts',
+        'Find frequently contacted people from email history',
+        'Provide contact details for email and calendar operations',
+        'Support fuzzy name matching with confidence scores',
+        'Handle ambiguous contact queries with disambiguation'
+      ],
+      limitations: [
+        'Requires Google Contacts API access token',
+        'Limited to contacts in Google Contacts and email history',
+        'Cannot create or update contacts (read-only)',
+        'Search results depend on contact data quality'
+      ],
+      examples: [
+        'Find John Smith\'s contact information',
+        'Search for contacts with email containing @company.com',
+        'Get phone number for Sarah Johnson',
+        'Look up contact details for Mike',
+        'Find all contacts named Alex'
+      ],
+      domains: ['contacts', 'people', 'address book'],
+      requirements: ['Google Contacts API access']
+    };
+  }
+
+  /**
+   * Domain-specific intent analysis for contact operations
+   */
+  protected async analyzeIntent(request: string, context: AgentExecutionContext): Promise<AgentIntent> {
+    try {
+      const prompt = `Analyze this contact request: "${request}"
+
+Available contact operations:
+- search: Find contacts by name, email, phone, or other criteria
+- lookup: Get specific contact information
+- find: Discover contacts matching criteria
+
+Return JSON with operation, parameters, confidence (0-1), and reasoning.
+
+Parameters should include:
+- query: The search query or contact identifier
+- name: Specific name to search for (if mentioned)
+- email: Specific email to search for (if mentioned)
+- phone: Specific phone number to search for (if mentioned)
+- maxResults: Maximum number of results (if specified)`;
+
+      const response = await this.openaiService?.generateStructuredData(prompt, 'Contact intent analyzer', {
+        type: 'object',
+        properties: {
+          operation: { type: 'string' },
+          parameters: { type: 'object' },
+          confidence: { type: 'number' },
+          reasoning: { type: 'string' }
+        }
+      }) as { operation?: string; parameters?: any; confidence?: number; reasoning?: string };
+
+      return {
+        operation: response?.operation || 'search',
+        parameters: response?.parameters || { query: request },
+        confidence: response?.confidence || 0.8,
+        reasoning: response?.reasoning || 'Contact search operation detected',
+        toolsUsed: ['contactAgent', 'search_contacts']
+      };
+    } catch (error) {
+      console.error('Contact intent analysis failed:', error);
+      // Fallback to basic search operation
+      return {
+        operation: 'search',
+        parameters: { query: request },
+        confidence: 0.7,
+        reasoning: 'Fallback to contact search due to analysis error',
+        toolsUsed: ['contactAgent']
+      };
+    }
+  }
+
+  /**
+   * Execute the selected tool based on intent analysis
+   */
+  protected async executeSelectedTool(intent: AgentIntent, context: AgentExecutionContext): Promise<any> {
+    const params: ContactAgentRequest = {
+      query: intent.parameters.query || '',
+      accessToken: context.accessToken || '',
+      operation: intent.operation as 'search' | 'create' | 'update',
+      name: intent.parameters.name,
+      email: intent.parameters.email,
+      phone: intent.parameters.phone
+    };
+
+    const toolContext = {
+      sessionId: context.sessionId,
+      userId: context.userId,
+      timestamp: context.timestamp,
+      metadata: { correlationId: context.correlationId }
+    };
+
+    return await this.processQuery(params, toolContext);
+  }
+
+  /**
+   * Generate natural language response from tool execution results
+   */
+  protected async generateResponse(
+    request: string,
+    result: any,
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    try {
+      const contactResult = result as ContactResult;
+
+      if (contactResult.totalCount === 0) {
+        return `I couldn't find any contacts matching "${request}". You might want to try:
+- Using a different name variation or nickname
+- Searching by email address instead
+- Checking if the contact exists in your Google Contacts`;
+      }
+
+      if (contactResult.totalCount === 1) {
+        const contact = contactResult.contacts[0];
+        return `Found contact: ${contact?.name}${contact?.email ? ` (${contact.email})` : ''}${contact?.phone ? `, Phone: ${contact.phone}` : ''}`;
+      }
+
+      // Multiple contacts found
+      const contactList = contactResult.contacts.slice(0, 5).map(contact =>
+        `• ${contact.name}${contact.email ? ` (${contact.email})` : ''}${contact.confidence ? ` - ${Math.round(contact.confidence * 100)}% match` : ''}`
+      ).join('\n');
+
+      return `Found ${contactResult.totalCount} contacts matching "${request}":\n${contactList}${contactResult.totalCount > 5 ? `\n... and ${contactResult.totalCount - 5} more` : ''}`;
+    } catch (error) {
+      console.error('Contact response generation failed:', error);
+      return `I encountered an issue while processing your contact request: "${request}". Please try rephrasing your request or check that you have access to Google Contacts.`;
+    }
   }
 }

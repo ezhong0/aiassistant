@@ -349,7 +349,11 @@ export class MasterAgent {
    */
   private getSlackAgent(): SlackAgent | null {
     try {
-      return AgentFactory.getAgent('slackAgent') as SlackAgent;
+      const agent = AgentFactory.getAgent('slackAgent');
+      if (agent && 'slackService' in agent) {
+        return agent as unknown as SlackAgent;
+      }
+      return null;
     } catch (error) {
       logger.warn('SlackAgent not available from AgentFactory', {
         correlationId: 'init',
@@ -810,9 +814,17 @@ Return JSON with this structure:
       const result = await this.executeStepByStepLoop(workflowContext, workflowId, sessionId, userId, options?.context?.slackContext);
 
       // Convert MasterAgentResponse to UnifiedProcessingResult
+      const draftInfo = this.extractDraftInfoFromToolResults(result.toolResults || []);
+      const executedDraftInfo = this.extractExecutedDraftInfoFromToolResults(result.toolResults || []);
+
       return {
         message: result.message,
-        needsConfirmation: false, // Step-by-step handles confirmations internally
+        needsConfirmation: draftInfo?.requiresConfirmation || false,
+        draftId: draftInfo?.draftId,
+        draftContents: draftInfo ? {
+          action: draftInfo.description,
+          previewData: draftInfo.previewData
+        } : undefined,
         success: true,
         toolResults: result.toolResults,
         executionMetadata: result.executionMetadata
@@ -1063,60 +1075,45 @@ Return a single line response starting with ❌ that explains what went wrong in
    * Create user-friendly error messages for step execution failures
    */
   private async createUserFriendlyStepErrorMessage(error: Error, step: NextStepPlan, originalRequest: string): Promise<string> {
-    const errorMappings = [
-      {
-        pattern: /oauth|token|auth|permission/i,
-        message: '🔑 I need permission to access your accounts. Please make sure you\'ve authorized the necessary Google services.'
-      },
-      {
-        pattern: /timeout|deadline/i,
-        message: '⏱️ That operation took too long. Please try a simpler request.'
-      },
-      {
-        pattern: /not.?found|404/i,
-        agent: 'calendarAgent',
-        message: '📅 I couldn\'t find the calendar event or information you\'re looking for.'
-      },
-      {
-        pattern: /not.?found|404/i,
-        agent: 'contactAgent',
-        message: '👤 I couldn\'t find that contact. Please check the name and try again.'
-      },
-      {
-        pattern: /not.?found|404/i,
-        agent: 'emailAgent',
-        message: '📧 I couldn\'t find the email you\'re referring to.'
-      },
-      {
-        pattern: /calendar.*conflict|busy/i,
-        message: '📅 There\'s a scheduling conflict. Please choose a different time.'
-      },
-      {
-        pattern: /scope|insufficient.*permission/i,
-        message: '🔐 I need additional permissions to complete this action. Please re-authorize with the required permissions.'
+    try {
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        return `I encountered an issue while ${step.description.toLowerCase()}: ${error.message}`;
       }
-    ];
 
-    const errorMessage = error.message;
+      const prompt = `Create a user-friendly error message for this situation:
 
-    // Find agent-specific or general error mapping
-    for (const mapping of errorMappings) {
-      if (mapping.pattern.test(errorMessage)) {
-        if (!mapping.agent || mapping.agent === step.agent) {
-          return `${mapping.message} I was trying to ${step.description.toLowerCase()}.`;
-        }
-      }
+Error: ${error.message}
+Step attempted: ${step.description}
+Original request: ${originalRequest}
+Agent involved: ${step.agent}
+
+Create a helpful, empathetic message that:
+1. Explains what went wrong in simple terms
+2. Suggests how the user might resolve the issue
+3. Uses appropriate emojis for context
+4. Is concise and actionable
+
+Focus on common issues like:
+- Authentication/permission problems
+- Not found errors
+- Network timeouts
+- Insufficient permissions
+- Scheduling conflicts
+
+Return only the user-friendly message.`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You create helpful, user-friendly error messages.',
+        { temperature: 0.3, maxTokens: 150 }
+      );
+
+      return response.trim();
+    } catch (aiError) {
+      // Simple fallback if AI fails
+      return `I encountered an issue while ${step.description.toLowerCase()}: ${error.message}`;
     }
-
-    // Default message based on agent type
-    const agentMessages = {
-      calendarAgent: '📅 I encountered an issue with your calendar operation',
-      emailAgent: '📧 I encountered an issue with your email operation',
-      contactAgent: '👤 I encountered an issue looking up contact information'
-    };
-
-    const agentMessage = agentMessages[step.agent as keyof typeof agentMessages] || 'I encountered an issue';
-    return `${agentMessage}. Please try rephrasing your request: "${originalRequest.substring(0, 100)}${originalRequest.length > 100 ? '...' : ''}"`;
   }
 
   /**
@@ -2019,19 +2016,49 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
         return 'Step executed successfully.';
       }
 
+      // Check for draft information in tool results
+      const draftInfo = this.extractDraftInfoFromToolResults(toolResults);
+      const executedDraftInfo = this.extractExecutedDraftInfoFromToolResults(toolResults);
+
       const toolResultsSummary = toolResults.map(tr => ({
         toolName: tr.toolName,
         success: tr.success,
         result: this.truncateToolResultForLLM(tr.result),
-        error: tr.error
+        error: tr.error,
+        draft: tr.result?.draft,
+        executedDraft: tr.result?.executedDraft
       }));
 
-      const prompt = `User asked: "${userInput}"
+      let prompt = `User asked: "${userInput}"
 
 Here's the data from your tools:
-${JSON.stringify(toolResultsSummary, null, 2)}
+${JSON.stringify(toolResultsSummary, null, 2)}`;
 
-Respond naturally and conversationally. If the data contains calendar events, list them in a clear, readable format with dates, times, and titles. If it contains emails, summarize the important ones. Skip technical details like URLs, IDs, and metadata. Don't use markdown formatting - just plain text that's easy to read and informative.`;
+      if (draftInfo) {
+        prompt += `
+
+DRAFT CREATED:
+A ${draftInfo.type} draft was created: ${draftInfo.description}
+Draft ID: ${draftInfo.draftId}
+Risk Level: ${draftInfo.riskLevel}
+Requires Confirmation: ${draftInfo.requiresConfirmation}
+
+Include this draft information in your response and let the user know they can confirm or modify it.`;
+      }
+
+      if (executedDraftInfo) {
+        prompt += `
+
+DRAFT EXECUTED:
+Draft ${executedDraftInfo.draftId} was ${executedDraftInfo.success ? 'successfully executed' : 'failed to execute'}
+${executedDraftInfo.error ? `Error: ${executedDraftInfo.error}` : ''}
+
+Include this execution result in your response.`;
+      }
+
+      prompt += `
+
+Respond naturally and conversationally. If the data contains calendar events, list them in a clear, readable format with dates, times, and titles. If it contains emails, summarize the important ones. If drafts were created or executed, mention that clearly. Skip technical details like URLs, IDs, and metadata. Don't use markdown formatting - just plain text that's easy to read and informative.`;
 
       const response = await openaiService.generateText(
         prompt,
@@ -2050,6 +2077,31 @@ Respond naturally and conversationally. If the data contains calendar events, li
       return 'Step executed successfully.';
     }
   }
+
+  /**
+   * Extract draft information from tool results
+   */
+  private extractDraftInfoFromToolResults(toolResults: ToolResult[]): any | null {
+    for (const result of toolResults) {
+      if (result.result?.draft) {
+        return result.result.draft;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract executed draft information from tool results
+   */
+  private extractExecutedDraftInfoFromToolResults(toolResults: ToolResult[]): any | null {
+    for (const result of toolResults) {
+      if (result.result?.executedDraft) {
+        return result.result.executedDraft;
+      }
+    }
+    return null;
+  }
+
   // Removed executeWorkflowWithSequentialExecution - using only Master Agent step-by-step execution
   // This eliminates dual execution paths and ensures consistent behavior
 
@@ -2673,6 +2725,11 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
           naturalLanguageResponse: nlResult.response,
           reasoning: nlResult.reasoning,
           metadata: nlResult.metadata,
+          // Include draft information if present
+          draft: nlResult.draft,
+          executedDraft: nlResult.executedDraft,
+          suggestions: nlResult.suggestions,
+          warnings: nlResult.warnings,
           // Include any structured data from the result
           ...nlResult.metadata
         },

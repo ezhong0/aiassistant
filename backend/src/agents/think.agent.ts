@@ -13,6 +13,12 @@ import {
   ThinkAnalysisParams,
   ThinkAnalysisResult
 } from '../types/agents/agent-specific-parameters';
+import {
+  AgentExecutionContext,
+  AgentIntent,
+  NaturalLanguageResponse,
+  AgentCapabilities
+} from '../types/agents/natural-language.types';
 import { OpenAIService } from '../services/openai.service';
 
 export interface ThinkAgentResponse extends AgentResponse {
@@ -271,20 +277,19 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
     reason: string;
   }> {
     const { name: toolName, parameters } = toolCall;
-    const query = originalQuery.toLowerCase();
 
     switch (toolName) {
       case 'contactAgent':
-        return await this.analyzeContactAgentUsage(query, parameters);
+        return await this.analyzeContactAgentUsage(originalQuery, parameters);
       
       case 'emailAgent':
-        return await this.analyzeEmailAgentUsage(query, parameters);
-      
+        return await this.analyzeEmailAgentUsage(originalQuery, parameters);
+
       case 'calendarAgent':
-        return await this.analyzeCalendarAgentUsage(query, parameters);
-      
+        return await this.analyzeCalendarAgentUsage(originalQuery, parameters);
+
       case 'slackAgent':
-        return await this.analyzeSlackAgentUsage(query, parameters);
+        return await this.analyzeSlackAgentUsage(originalQuery, parameters);
       
       default:
         return {
@@ -549,7 +554,7 @@ Analysis: ✅ Optimal - Think tool used appropriately for analysis
       const openaiService = getService<OpenAIService>('openaiService');
       if (!openaiService) {
         // Fallback to simplified analysis if AI service unavailable
-        return this.fallbackToolSuggestions(query);
+        throw new Error('AI service unavailable. Tool suggestions require OpenAI service.');
       }
 
       const prompt = `Analyze this user query and suggest appropriate tools/agents based on the intent:
@@ -592,66 +597,200 @@ Return JSON array of suggestions:
       }
 
       // Fallback if AI response parsing fails
-      return this.fallbackToolSuggestions(query);
+      throw new Error('Tool suggestion analysis failed. Please check your OpenAI configuration.');
 
     } catch (error) {
       console.error('AI tool suggestion analysis failed', error);
 
       // Fallback to basic analysis on error
-      return this.fallbackToolSuggestions(query);
+      throw new Error('Tool suggestion analysis failed. Please check your OpenAI configuration.');
     }
   }
 
-  /**
-   * Fallback tool suggestions using basic patterns
-   * Used when AI service is unavailable
-   */
-  private fallbackToolSuggestions(query: string): string[] {
-    const suggestions: string[] = [];
-    const lowerQuery = query.toLowerCase();
-
-    // Basic email detection
-    if (/\b(email|send|message|mail|reply)\b/i.test(query)) {
-      suggestions.push('Consider using emailAgent for email operations');
-
-      // Basic person name detection (fallback pattern)
-      if (/\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query) && !/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query)) {
-        suggestions.push('Add contactAgent to resolve contact names to email addresses');
-      }
-    }
-
-    // Basic calendar detection
-    if (/\b(meeting|schedule|calendar|event|appointment)\b/i.test(query)) {
-      suggestions.push('Consider using calendarAgent for calendar operations');
-
-      // Basic attendee name detection (fallback pattern)
-      if (/\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(query) && !/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query)) {
-        suggestions.push('Add contactAgent to resolve attendee names');
-      }
-    }
-
-    // Basic contact detection
-    if (/\b(contact|find|lookup|people|address)\b/i.test(query)) {
-      suggestions.push('Consider using contactAgent for contact lookup');
-    }
-
-    // Basic Slack detection
-    if (/\b(slack|message|thread|channel)\b/i.test(query)) {
-      suggestions.push('Consider using slackAgent for Slack message operations');
-    }
-
-    console.log('Fallback tool suggestions generated', {
-      query: query,
-      suggestionCount: suggestions.length
-    });
-
-    return suggestions;
-  }
 
   /**
    * Get system prompt for external use
    */
   getSystemPrompt(): string {
     return this.systemPrompt;
+  }
+
+  // NATURAL LANGUAGE INTERFACE IMPLEMENTATION
+
+  /**
+   * Get agent capability description for MasterAgent
+   */
+  getCapabilityDescription(): AgentCapabilities {
+    return {
+      name: 'Think Expert',
+      description: 'Analyzes and reflects on reasoning processes, verifies correct actions were taken',
+      capabilities: [
+        'Analyze tool selection appropriateness',
+        'Verify if actions align with user intent',
+        'Provide reasoning explanations for decisions',
+        'Suggest improvements for suboptimal approaches',
+        'Evaluate completeness of multi-step operations',
+        'Check dependencies and sequencing of operations',
+        'Assess efficiency of chosen solutions',
+        'Validate information gathering strategies'
+      ],
+      limitations: [
+        'Cannot take direct actions on behalf of users',
+        'Analysis quality depends on available context',
+        'May not have full visibility into all tool executions',
+        'Cannot modify or correct past actions'
+      ],
+      examples: [
+        'Analyze if the right tools were chosen for this task',
+        'Verify that the calendar event was created correctly',
+        'Check if contact lookup was needed before sending email',
+        'Evaluate the completeness of this approach',
+        'Suggest improvements for this workflow'
+      ],
+      domains: ['analysis', 'verification', 'reasoning', 'reflection'],
+      requirements: ['Access to execution context and tool results']
+    };
+  }
+
+  /**
+   * Domain-specific intent analysis for Think operations
+   */
+  protected async analyzeIntent(request: string, context: AgentExecutionContext): Promise<AgentIntent> {
+    try {
+      const prompt = `Analyze this thinking/analysis request: "${request}"
+
+Available Think operations:
+- analyze: Analyze tool selection and approach appropriateness
+- verify: Verify if actions align with user intent
+- reflect: Reflect on reasoning and decision-making process
+- suggest: Suggest improvements for workflows or approaches
+- evaluate: Evaluate completeness and efficiency of operations
+
+Return JSON with operation, parameters, confidence (0-1), and reasoning.
+
+Parameters should include:
+- query: The full request for context
+- analysisType: Type of analysis to perform
+- toolsToAnalyze: Specific tools or actions to analyze
+- userIntent: The original user intent to verify against
+- executionContext: Context of what was executed`;
+
+      const response = await this.openaiService?.generateStructuredData(prompt, 'Think intent analyzer', {
+        type: 'object',
+        properties: {
+          operation: { type: 'string' },
+          parameters: { type: 'object' },
+          confidence: { type: 'number' },
+          reasoning: { type: 'string' }
+        }
+      }) as { operation?: string; parameters?: any; confidence?: number; reasoning?: string };
+
+      return {
+        operation: response?.operation || 'analyze',
+        parameters: response?.parameters || { query: request, analysisType: 'general' },
+        confidence: response?.confidence || 0.8,
+        reasoning: response?.reasoning || 'Think operation detected',
+        toolsUsed: ['thinkAgent', response?.operation || 'analyze']
+      };
+    } catch (error) {
+      console.error('Think intent analysis failed:', error);
+      // Fallback to analyze operation
+      return {
+        operation: 'analyze',
+        parameters: { query: request, analysisType: 'general' },
+        confidence: 0.7,
+        reasoning: 'Fallback to think analysis due to analysis error',
+        toolsUsed: ['thinkAgent']
+      };
+    }
+  }
+
+  /**
+   * Execute the selected tool based on intent analysis
+   */
+  protected async executeSelectedTool(intent: AgentIntent, context: AgentExecutionContext): Promise<any> {
+    const params: ThinkParams = {
+      query: intent.parameters.query || '',
+      context: intent.parameters.userIntent || intent.parameters.query
+    };
+
+    const toolContext = {
+      sessionId: context.sessionId,
+      userId: context.userId,
+      timestamp: context.timestamp,
+      metadata: { correlationId: context.correlationId }
+    };
+
+    return await this.processQuery(params, toolContext);
+  }
+
+  /**
+   * Generate natural language response from tool execution results
+   */
+  protected async generateResponse(
+    request: string,
+    result: any,
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    try {
+      const thinkResult = result as ThinkAgentResponse;
+
+      if (!thinkResult.success || !thinkResult.data) {
+        return `I encountered an issue while analyzing: ${thinkResult.message || 'Unknown error'}. Please provide more context about what you'd like me to analyze.`;
+      }
+
+      const { data } = thinkResult;
+      let response = '';
+
+      // Add verification status
+      switch (data.verificationStatus) {
+        case 'correct':
+          response += '✅ **Analysis: Correct Approach**\n';
+          break;
+        case 'incorrect':
+          response += '❌ **Analysis: Incorrect Approach**\n';
+          break;
+        case 'partial':
+          response += '⚠️ **Analysis: Partially Correct**\n';
+          break;
+        case 'unclear':
+          response += '❓ **Analysis: Unclear**\n';
+          break;
+      }
+
+      // Add reasoning
+      if (data.reasoning) {
+        response += `\n**Reasoning:** ${data.reasoning}\n`;
+      }
+
+      // Add tool analysis if available
+      if (data.toolAnalysis && data.toolAnalysis.length > 0) {
+        response += '\n**Tool Analysis:**\n';
+        data.toolAnalysis.forEach(analysis => {
+          const icon = analysis.appropriateness === 'correct' ? '✅' :
+                      analysis.appropriateness === 'incorrect' ? '❌' : '⚠️';
+          response += `${icon} **${analysis.toolName}**: ${analysis.reason}\n`;
+        });
+      }
+
+      // Add suggestions if available
+      if (data.suggestions && data.suggestions.length > 0) {
+        response += '\n**Suggestions for Improvement:**\n';
+        data.suggestions.forEach(suggestion => {
+          response += `• ${suggestion}\n`;
+        });
+      }
+
+      // Add overall assessment
+      if (data.overallAssessment) {
+        response += `\n**Overall Assessment:** ${data.overallAssessment}`;
+      }
+
+      return response.trim() || 'Analysis completed successfully.';
+    } catch (error) {
+      console.error('Think response generation failed:', error);
+      return `I encountered an issue while generating my analysis response for: "${request}". Please try rephrasing your request or provide more specific context.`;
+    }
   }
 }

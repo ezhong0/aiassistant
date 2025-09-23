@@ -8,6 +8,7 @@ import { ContactAgent } from '../agents/contact.agent';
 import { ThinkAgent } from '../agents/think.agent';
 import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
+import { AgentCapabilities } from '../types/agents/natural-language.types';
 
 // OpenAI Function Schema interface
 export interface OpenAIFunctionSchema {
@@ -254,6 +255,212 @@ export class AgentFactory {
     const agent = this.agents.get(name);
     if (!agent) return false;
     return agent.isEnabled();
+  }
+
+  // ============================================================================
+  // NATURAL LANGUAGE CAPABILITY DISCOVERY
+  // ============================================================================
+
+  /**
+   * Get all agent capabilities for MasterAgent domain selection
+   */
+  static getAgentCapabilities(): Record<string, AgentCapabilities> {
+    const capabilities: Record<string, AgentCapabilities> = {};
+
+    for (const [name, agent] of this.agents) {
+      if (agent && agent.isEnabled() && typeof agent.getCapabilityDescription === 'function') {
+        try {
+          capabilities[name] = agent.getCapabilityDescription();
+        } catch (error) {
+          logger.warn(`Failed to get capabilities for agent ${name}`, {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            operation: 'get_agent_capabilities'
+          });
+        }
+      }
+    }
+
+    return capabilities;
+  }
+
+  /**
+   * Check if an agent supports natural language processing
+   */
+  static supportsNaturalLanguage(agentName: string): boolean {
+    const agent = this.getAgent(agentName);
+    return !!(agent && typeof agent.processNaturalLanguageRequest === 'function');
+  }
+
+  /**
+   * Get a list of all agents that support natural language processing
+   */
+  static getNaturalLanguageAgents(): string[] {
+    const nlAgents: string[] = [];
+
+    for (const [name, agent] of this.agents) {
+      if (agent && agent.isEnabled() && typeof agent.processNaturalLanguageRequest === 'function') {
+        nlAgents.push(name);
+      }
+    }
+
+    return nlAgents;
+  }
+
+  /**
+   * Execute an agent using natural language
+   */
+  static async executeAgentWithNaturalLanguage(
+    agentName: string,
+    request: string,
+    context: {
+      sessionId: string;
+      userId?: string;
+      accessToken?: string;
+      slackContext?: any;
+      correlationId?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    response?: string;
+    reasoning?: string;
+    metadata?: any;
+    error?: string;
+  }> {
+    const agent = this.getAgent(agentName);
+
+    if (!agent) {
+      return {
+        success: false,
+        error: `Agent ${agentName} not found or disabled`
+      };
+    }
+
+    if (!this.supportsNaturalLanguage(agentName)) {
+      return {
+        success: false,
+        error: `Agent ${agentName} does not support natural language processing`
+      };
+    }
+
+    try {
+      const result = await agent.processNaturalLanguageRequest(request, {
+        sessionId: context.sessionId,
+        userId: context.userId,
+        accessToken: context.accessToken,
+        slackContext: context.slackContext,
+        correlationId: context.correlationId || `agent-${agentName}-${Date.now()}`,
+        timestamp: new Date()
+      });
+
+      return {
+        success: true,
+        response: result.response,
+        reasoning: result.reasoning,
+        metadata: result.metadata
+      };
+
+    } catch (error) {
+      logger.error(`Natural language execution failed for agent ${agentName}`, error as Error, {
+        correlationId: context.correlationId,
+        operation: 'natural_language_execution',
+        agentName
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown execution error'
+      };
+    }
+  }
+
+  /**
+   * Find the best agent for a natural language request
+   */
+  static async findBestAgentForRequest(request: string): Promise<{
+    agentName: string | null;
+    confidence: number;
+    reasoning: string;
+  }> {
+    const capabilities = this.getAgentCapabilities();
+    const nlAgents = this.getNaturalLanguageAgents();
+
+    if (nlAgents.length === 0) {
+      return {
+        agentName: null,
+        confidence: 0,
+        reasoning: 'No natural language agents available'
+      };
+    }
+
+    // Simple keyword-based matching for now
+    const lowerRequest = request.toLowerCase();
+    let bestAgent: string | null = null;
+    let bestScore = 0;
+    let reasoning = '';
+
+    for (const agentName of nlAgents) {
+      const caps = capabilities[agentName];
+      if (!caps) continue;
+
+      let score = 0;
+      const matchReasons: string[] = [];
+
+      // Check capabilities
+      for (const capability of caps.capabilities) {
+        if (lowerRequest.includes(capability.toLowerCase())) {
+          score += 2;
+          matchReasons.push(`matches capability: ${capability}`);
+        }
+      }
+
+      // Check examples
+      for (const example of caps.examples) {
+        const similarity = this.calculateSimilarity(lowerRequest, example.toLowerCase());
+        if (similarity > 0.3) {
+          score += similarity;
+          matchReasons.push(`similar to example: ${example}`);
+        }
+      }
+
+      // Check domains
+      if (caps.domains) {
+        for (const domain of caps.domains) {
+          if (lowerRequest.includes(domain.toLowerCase())) {
+            score += 1;
+            matchReasons.push(`matches domain: ${domain}`);
+          }
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestAgent = agentName;
+        reasoning = `Selected ${caps.name}: ${matchReasons.join(', ')}`;
+      }
+    }
+
+    // Fallback to the first available agent if no good match
+    if (!bestAgent && nlAgents.length > 0) {
+      bestAgent = nlAgents[0] || null;
+      reasoning = `Fallback to first available agent: ${bestAgent}`;
+      bestScore = 0.1;
+    }
+
+    return {
+      agentName: bestAgent || null,
+      confidence: Math.min(bestScore / 3, 1), // Normalize to 0-1
+      reasoning
+    };
+  }
+
+  /**
+   * Simple similarity calculation for text matching
+   */
+  private static calculateSimilarity(str1: string, str2: string): number {
+    const words1 = str1.split(' ').filter(w => w.length > 2);
+    const words2 = str2.split(' ').filter(w => w.length > 2);
+    const commonWords = words1.filter(word => words2.includes(word));
+    return commonWords.length / Math.max(words1.length, words2.length, 1);
   }
   
   /**

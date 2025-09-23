@@ -13,6 +13,14 @@ import {
   ThinkParameters,
   validateToolParameters
 } from '../types/agents/agent-parameters';
+import {
+  AgentExecutionContext,
+  AgentIntent,
+  NaturalLanguageResponse,
+  AgentCapabilities,
+  INaturalLanguageAgent
+} from '../types/agents/natural-language.types';
+import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
 
 /**
  * AI Planning Configuration
@@ -131,10 +139,11 @@ export interface AIPlanningResult {
  * }
  * ```
  */
-export abstract class AIAgent<TParams = any, TResult = any> {
+export abstract class AIAgent<TParams = any, TResult = any> implements INaturalLanguageAgent {
   protected config: AgentConfig;
   protected aiConfig: AIPlanningConfig;
   protected openaiService: OpenAIService | undefined;
+  protected draftManager: DraftManager | null = null;
   protected toolRegistry: Map<string, AITool> = new Map();
   protected planCache: Map<string, { plan: AIPlan; timestamp: number; accessCount: number }> = new Map();
   protected readonly maxCacheSize: number = 50; // Reduced from 100
@@ -249,11 +258,17 @@ export abstract class AIAgent<TParams = any, TResult = any> {
   private initializeAIServices(): void {
     try {
       this.openaiService = getService<OpenAIService>('openaiService');
+      this.draftManager = getService<DraftManager>('draftManager') || null;
+
       if (!this.openaiService) {
-        
+        console.warn(`OpenAI service not available for ${this.config.name}`);
+      }
+
+      if (!this.draftManager) {
+        console.warn(`Draft manager not available for ${this.config.name}`);
       }
     } catch (error) {
-      
+      console.error(`Failed to initialize AI services for ${this.config.name}:`, error);
     }
   }
 
@@ -1178,6 +1193,483 @@ Please provide a detailed execution plan that accomplishes this request efficien
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);
+  }
+
+  // ============================================================================
+  // NATURAL LANGUAGE INTERFACE IMPLEMENTATION
+  // ============================================================================
+
+  /**
+   * Primary natural language interface for agent communication
+   *
+   * This is the main entry point for natural language communication between
+   * MasterAgent and domain expert agents. Each agent analyzes the request,
+   * determines the appropriate tools, and returns a natural language response.
+   */
+  async processNaturalLanguageRequest(
+    request: string,
+    context: AgentExecutionContext
+  ): Promise<NaturalLanguageResponse> {
+    const startTime = Date.now();
+
+    try {
+      // Log using existing AIAgent logging infrastructure
+      console.log(`[${this.config.name}] Processing natural language request: ${request.substring(0, 100)}...`);
+
+      // Check if this is a draft execution request
+      const isDraftExecution = await this.isDraftExecutionRequest(request, context);
+      if (isDraftExecution.isDraftExecution) {
+        console.log(`[${this.config.name}] Processing draft execution request for draft: ${isDraftExecution.draftId}`);
+        return await this.executeDraftFromRequest(isDraftExecution.draftId!, request, context);
+      }
+
+      // 1. AI-powered intent analysis (domain-specific)
+      const intent = await this.analyzeIntent(request, context);
+
+      console.log(`[${this.config.name}] Intent analyzed: ${intent.operation} (confidence: ${intent.confidence})`);
+
+      // 2. Determine if this operation requires a draft
+      const requiresDraft = await this.shouldCreateDraft(intent, context);
+
+      if (requiresDraft.shouldCreateDraft) {
+        console.log(`[${this.config.name}] Creating draft for operation: ${intent.operation}`);
+        return await this.createDraftFromIntent(intent, request, context, requiresDraft);
+      }
+
+      // 3. Execute the selected tool(s) directly
+      const toolResult = await this.executeSelectedTool(intent, context);
+
+      // 4. Generate natural language response
+      const response = await this.generateResponse(request, toolResult, intent, context);
+
+      const executionTime = Date.now() - startTime;
+
+      console.log(`[${this.config.name}] Natural language request completed: ${intent.operation} (${executionTime}ms)`);
+
+      return {
+        response: response,
+        reasoning: intent.reasoning,
+        metadata: {
+          operation: intent.operation,
+          confidence: intent.confidence,
+          toolsUsed: intent.toolsUsed,
+          executionTime,
+          success: toolResult.success,
+          ...intent.parameters
+        }
+      };
+
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      console.error(`[${this.config.name}] Natural language processing failed: ${errorMessage} (${executionTime}ms)`);
+
+      return {
+        response: `I encountered an issue processing your request: ${errorMessage}. Please try rephrasing your request or check if you have the necessary permissions.`,
+        reasoning: `Failed to process request due to: ${errorMessage}`,
+        metadata: {
+          operation: 'error',
+          error: errorMessage,
+          executionTime,
+          success: false
+        }
+      };
+    }
+  }
+
+  /**
+   * Check if the agent can handle a specific type of request
+   */
+  async canHandle(request: string): Promise<boolean> {
+    try {
+      // Simple capability check - can be overridden by specific agents
+      const capabilities = this.getCapabilityDescription();
+      const lowerRequest = request.toLowerCase();
+
+      return capabilities.capabilities.some(capability =>
+        lowerRequest.includes(capability.toLowerCase())
+      ) || capabilities.examples.some(example =>
+        this.calculateSimilarity(lowerRequest, example.toLowerCase()) > 0.5
+      );
+    } catch (error) {
+      console.warn(`[${this.config.name}] Failed to check if agent can handle request: ${request}`);
+      return false;
+    }
+  }
+
+  /**
+   * Calculate similarity between two strings (simple implementation)
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    const words1 = str1.split(' ');
+    const words2 = str2.split(' ');
+    const commonWords = words1.filter(word => words2.includes(word));
+    return commonWords.length / Math.max(words1.length, words2.length);
+  }
+
+  // ============================================================================
+  // ABSTRACT METHODS FOR DOMAIN-SPECIFIC IMPLEMENTATION
+  // ============================================================================
+
+  /**
+   * Analyze natural language intent for this domain
+   *
+   * Each agent must implement domain-specific intent analysis using AI
+   * to determine what operation to perform and extract parameters.
+   */
+  protected abstract analyzeIntent(request: string, context: AgentExecutionContext): Promise<AgentIntent>;
+
+  /**
+   * Execute the tool selected by intent analysis
+   *
+   * This method should execute the appropriate domain-specific tool
+   * based on the analyzed intent and return the structured result.
+   */
+  protected abstract executeSelectedTool(intent: AgentIntent, context: AgentExecutionContext): Promise<ToolResult>;
+
+  /**
+   * Generate natural language response from tool execution result
+   *
+   * Convert the structured tool result into a natural language response
+   * that can be understood by users and the MasterAgent.
+   */
+  protected abstract generateResponse(
+    request: string,
+    result: ToolResult,
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<string>;
+
+  /**
+   * Get agent capability description for MasterAgent
+   *
+   * This describes what the agent can do, its limitations, and provides
+   * examples to help MasterAgent decide when to use this agent.
+   */
+  abstract getCapabilityDescription(): AgentCapabilities;
+
+  // ============================================================================
+  // DRAFT MANAGEMENT METHODS
+  // ============================================================================
+
+  /**
+   * Check if the request is asking to execute an existing draft
+   */
+  protected async isDraftExecutionRequest(
+    request: string,
+    context: AgentExecutionContext
+  ): Promise<{ isDraftExecution: boolean; draftId?: string }> {
+    if (!this.openaiService) {
+      return { isDraftExecution: false };
+    }
+
+    try {
+      // Get pending drafts for this session
+      const drafts = this.draftManager ? await this.draftManager.getSessionDrafts(context.sessionId) : [];
+
+      if (drafts.length === 0) {
+        return { isDraftExecution: false };
+      }
+
+      const prompt = `Analyze if this user request is asking to execute an existing draft:
+
+Request: "${request}"
+
+Available drafts:
+${drafts.map(d => `- ${d.id}: ${d.previewData.description}`).join('\n')}
+
+Common execution phrases: "yes", "confirm", "send it", "execute", "go ahead", "do it", "proceed"
+
+Return JSON: {"isDraftExecution": boolean, "draftId": string|null}`;
+
+      const response = await this.openaiService.generateText(
+        prompt,
+        'You analyze if requests are asking to execute drafts. Return only valid JSON.',
+        { temperature: 0.1, maxTokens: 100 }
+      );
+
+      const parsed = JSON.parse(response) as { isDraftExecution: boolean; draftId: string | null };
+      return {
+        isDraftExecution: parsed.isDraftExecution,
+        draftId: parsed.draftId || undefined
+      };
+    } catch (error) {
+      console.error(`[${this.config.name}] Failed to analyze draft execution request:`, error);
+      return { isDraftExecution: false };
+    }
+  }
+
+  /**
+   * Determine if an operation should create a draft instead of executing immediately
+   */
+  protected async shouldCreateDraft(
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<{ shouldCreateDraft: boolean; riskLevel?: 'low' | 'medium' | 'high'; reason?: string }> {
+    if (!this.openaiService) {
+      return { shouldCreateDraft: false };
+    }
+
+    try {
+      const prompt = `Analyze if this operation should create a draft for user confirmation:
+
+Agent: ${this.config.name}
+Operation: ${intent.operation}
+Parameters: ${JSON.stringify(intent.parameters, null, 2)}
+Confidence: ${intent.confidence}
+
+Operations that typically need drafts:
+- Sending emails or messages
+- Creating calendar events with attendees
+- Making permanent changes to data
+- High-risk or irreversible operations
+- Operations involving external parties
+
+Operations that don't need drafts:
+- Reading/searching data
+- Getting information
+- Checking availability
+- Simple lookups
+
+Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", "reason": string}`;
+
+      const response = await this.openaiService.generateText(
+        prompt,
+        'You analyze if operations need user confirmation drafts. Return only valid JSON.',
+        { temperature: 0.1, maxTokens: 200 }
+      );
+
+      const parsed = JSON.parse(response) as { shouldCreateDraft: boolean; riskLevel: 'low' | 'medium' | 'high'; reason: string };
+      return parsed;
+    } catch (error) {
+      console.error(`[${this.config.name}] Failed to analyze draft requirements:`, error);
+      // Default to creating drafts for safety on write operations
+      const writeOperations = ['create', 'send', 'update', 'delete', 'schedule', 'add'];
+      const shouldCreateDraft = writeOperations.some(op => intent.operation.toLowerCase().includes(op));
+      return {
+        shouldCreateDraft,
+        riskLevel: shouldCreateDraft ? 'medium' : 'low',
+        reason: shouldCreateDraft ? 'Write operation detected - creating draft for safety' : 'Read-only operation'
+      };
+    }
+  }
+
+  /**
+   * Create a draft from the analyzed intent
+   */
+  protected async createDraftFromIntent(
+    intent: AgentIntent,
+    originalRequest: string,
+    context: AgentExecutionContext,
+    draftInfo: { riskLevel?: 'low' | 'medium' | 'high'; reason?: string }
+  ): Promise<NaturalLanguageResponse> {
+    if (!this.draftManager) {
+      throw new Error('Draft manager not available for creating drafts');
+    }
+
+    try {
+      // Generate preview data for the draft
+      const previewData = await this.generateDraftPreview(intent, originalRequest, context);
+
+      const writeOperation: WriteOperation = {
+        type: this.getDraftTypeFromAgent(),
+        operation: intent.operation,
+        parameters: intent.parameters,
+        toolCall: {
+          name: this.config.name,
+          parameters: intent.parameters
+        },
+        confirmationReason: draftInfo.reason || 'Operation requires confirmation',
+        riskLevel: draftInfo.riskLevel || 'medium',
+        previewDescription: previewData.description
+      };
+
+      const draft = await this.draftManager.createDraft(context.sessionId, writeOperation);
+
+      // Generate natural language response with draft info
+      const response = await this.generateDraftResponse(draft, originalRequest, context);
+
+      console.log(`[${this.config.name}] Draft created: ${draft.id} - ${previewData.description}`);
+
+      return {
+        response,
+        reasoning: `Created draft for ${intent.operation} operation`,
+        metadata: {
+          operation: 'draft_created',
+          confidence: intent.confidence,
+          toolsUsed: ['draftManager'],
+          draftOperation: intent.operation
+        },
+        draft: {
+          draftId: draft.id,
+          type: draft.type,
+          description: draft.previewData.description,
+          previewData: draft.previewData.details,
+          requiresConfirmation: true,
+          riskLevel: draft.riskLevel
+        }
+      };
+    } catch (error) {
+      console.error(`[${this.config.name}] Failed to create draft:`, error);
+      throw new Error(`Failed to create draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Execute a draft from a draft execution request
+   */
+  protected async executeDraftFromRequest(
+    draftId: string,
+    request: string,
+    context: AgentExecutionContext
+  ): Promise<NaturalLanguageResponse> {
+    if (!this.draftManager) {
+      throw new Error('Draft manager not available for executing drafts');
+    }
+
+    try {
+      // Execute the draft
+      const result = await this.draftManager.executeDraft(draftId);
+
+      // Generate response for the execution
+      const response = await this.generateDraftExecutionResponse(result, request, context);
+
+      console.log(`[${this.config.name}] Draft executed: ${draftId} - Success: ${result.success}`);
+
+      return {
+        response,
+        reasoning: `Executed draft ${draftId}`,
+        metadata: {
+          operation: 'draft_executed',
+          success: result.success,
+          toolsUsed: ['draftManager']
+        },
+        executedDraft: {
+          draftId,
+          success: result.success,
+          result: result.result,
+          error: result.error
+        }
+      };
+    } catch (error) {
+      console.error(`[${this.config.name}] Failed to execute draft:`, error);
+      throw new Error(`Failed to execute draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Generate preview data for a draft
+   */
+  protected async generateDraftPreview(
+    intent: AgentIntent,
+    originalRequest: string,
+    context: AgentExecutionContext
+  ): Promise<{ description: string; details: Record<string, any> }> {
+    // Default implementation - agents can override for specific preview generation
+    return {
+      description: `${intent.operation} operation for ${this.config.name}`,
+      details: {
+        operation: intent.operation,
+        parameters: intent.parameters,
+        originalRequest,
+        agent: this.config.name
+      }
+    };
+  }
+
+  /**
+   * Generate natural language response for draft creation
+   */
+  protected async generateDraftResponse(
+    draft: Draft,
+    originalRequest: string,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    if (!this.openaiService) {
+      return `I've prepared a ${draft.operation} operation. Would you like me to proceed?`;
+    }
+
+    try {
+      const prompt = `Generate a natural language response showing the user what draft was created:
+
+Original request: "${originalRequest}"
+Draft operation: ${draft.operation}
+Draft details: ${JSON.stringify(draft.previewData, null, 2)}
+Risk level: ${draft.riskLevel}
+
+Create a friendly response that:
+1. Shows exactly what will be done
+2. Asks for confirmation
+3. Includes relevant details from the draft
+4. Is conversational and clear
+
+Example: "I've prepared to send an email to john@example.com with the subject 'Meeting Update'. Would you like me to send it?"`;
+
+      const response = await this.openaiService.generateText(
+        prompt,
+        'You create friendly confirmation messages for draft operations.',
+        { temperature: 0.3, maxTokens: 200 }
+      );
+
+      return response.trim();
+    } catch (error) {
+      console.error(`[${this.config.name}] Failed to generate draft response:`, error);
+      return `I've prepared a ${draft.operation} operation. Would you like me to proceed?`;
+    }
+  }
+
+  /**
+   * Generate natural language response for draft execution
+   */
+  protected async generateDraftExecutionResponse(
+    result: ToolResult,
+    request: string,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    if (!this.openaiService) {
+      return result.success ? 'Operation completed successfully!' : `Operation failed: ${result.error}`;
+    }
+
+    try {
+      const prompt = `Generate a natural language response for a completed operation:
+
+User confirmation: "${request}"
+Operation result: ${JSON.stringify(result, null, 2)}
+Success: ${result.success}
+
+Create a friendly response that:
+1. Confirms what was done
+2. Includes relevant details from the result
+3. Handles both success and failure cases
+4. Is conversational and informative
+
+Example success: "✅ Email sent successfully to john@example.com!"
+Example failure: "❌ Failed to send email: Invalid recipient address"`;
+
+      const response = await this.openaiService.generateText(
+        prompt,
+        'You create friendly completion messages for executed operations.',
+        { temperature: 0.3, maxTokens: 200 }
+      );
+
+      return response.trim();
+    } catch (error) {
+      console.error(`[${this.config.name}] Failed to generate execution response:`, error);
+      return result.success ? 'Operation completed successfully!' : `Operation failed: ${result.error}`;
+    }
+  }
+
+  /**
+   * Get the draft type based on the agent name
+   */
+  protected getDraftTypeFromAgent(): 'email' | 'calendar' | 'contact' | 'slack' | 'other' {
+    const agentName = this.config.name.toLowerCase();
+    if (agentName.includes('email')) return 'email';
+    if (agentName.includes('calendar')) return 'calendar';
+    if (agentName.includes('contact')) return 'contact';
+    if (agentName.includes('slack')) return 'slack';
+    return 'other';
   }
 
   /**

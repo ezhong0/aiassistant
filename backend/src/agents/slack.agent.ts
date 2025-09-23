@@ -22,6 +22,12 @@ import {
   SlackMessageSummary,
   SlackReadResult
 } from '../types/agents/agent-specific-parameters';
+import {
+  AgentExecutionContext,
+  AgentIntent,
+  NaturalLanguageResponse,
+  AgentCapabilities
+} from '../types/agents/natural-language.types';
 
 // Focused services removed - SlackAgent handles analysis, drafts, and formatting internally
 
@@ -135,7 +141,7 @@ export class SlackAgent extends AIAgent<SlackAgentRequest, SlackAgentResult> {
   // Focused service dependencies
   // Slack services now handled internally by SlackAgent
   private slackService: SlackService | null = null;
-  private draftManager: DraftManager | null = null;
+  // Remove private draftManager - using inherited protected one from AIAgent
 
   private slackMessageAnalyzer = {
     readMessageHistory: async (channelId: string, options: { limit?: number; includeAllMetadata?: boolean }) => {
@@ -894,7 +900,7 @@ You are a specialized Slack workspace management agent focused on reading and un
                 blocks: undefined
               }));
               contextType = 'thread_history';
-              relevantContext = this.extractRelevantContext(messages, userInput);
+              relevantContext = await this.extractRelevantContext(messages, userInput);
             }
           }
           break;
@@ -922,7 +928,7 @@ You are a specialized Slack workspace management agent focused on reading and un
               blocks: undefined
             }));
             contextType = 'recent_messages';
-            relevantContext = this.extractRelevantContext(messages, userInput);
+            relevantContext = await this.extractRelevantContext(messages, userInput);
           }
           break;
 
@@ -937,12 +943,8 @@ You are a specialized Slack workspace management agent focused on reading and un
           );
           
           if (searchResult.success && searchResult.messages) {
-            // Filter messages based on search terms
-            const searchTerms = this.extractSearchTerms(userInput);
-            const filteredMessages = (searchResult.messages as any[]).filter((msg: any) => {
-              const text = (msg.text || '').toLowerCase();
-              return searchTerms.some(term => text.includes(term.toLowerCase()));
-            });
+            // Use the search results directly - AI service already handled filtering
+            const filteredMessages = searchResult.messages as any[];
             
             messages = filteredMessages.map((msg: any) => ({
               id: msg.id || '',
@@ -957,7 +959,7 @@ You are a specialized Slack workspace management agent focused on reading and un
               blocks: undefined
             }));
             contextType = 'search_results';
-            relevantContext = this.extractRelevantContext(messages, userInput);
+            relevantContext = await this.extractRelevantContext(messages, userInput);
           }
           break;
 
@@ -999,49 +1001,47 @@ You are a specialized Slack workspace management agent focused on reading and un
   }
 
   /**
-   * Extract relevant context from messages for the user input
+   * Extract relevant context from messages for the user input using AI
    */
-  private extractRelevantContext(messages: SlackMessage[], userInput: string): string {
+  private async extractRelevantContext(messages: SlackMessage[], userInput: string): Promise<string> {
     if (messages.length === 0) return '';
 
-    // Simple relevance scoring based on keyword overlap
-    const userKeywords = userInput.toLowerCase().split(/\s+/).filter(word => word.length > 3);
-    
-    const relevantMessages = messages
-      .map(msg => ({
-        message: msg,
-        score: this.calculateRelevanceScore(msg.text, userKeywords)
-      }))
-      .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3); // Top 3 most relevant messages
+    try {
+      const openaiService = getService<OpenAIService>('openaiService');
+      if (!openaiService) {
+        throw new Error('AI service unavailable. Context extraction requires OpenAI service.');
+      }
 
-    return relevantMessages
-      .map(item => `[${item.message.timestamp}] ${item.message.text}`)
-      .join('\n');
-  }
+      const messageTexts = messages.map(msg => `[${msg.timestamp}] ${msg.text}`).join('\n');
 
-  /**
-   * Calculate relevance score between message text and user keywords
-   */
-  private calculateRelevanceScore(messageText: string, keywords: string[]): number {
-    const text = messageText.toLowerCase();
-    return keywords.reduce((score, keyword) => {
-      return score + (text.includes(keyword) ? 1 : 0);
-    }, 0);
+      const prompt = `Extract the most relevant context from these Slack messages for the user request: "${userInput}"
+
+Messages:
+${messageTexts}
+
+Return the 3 most relevant messages that provide context for the user's request. Focus on messages that:
+- Relate to the same topic or project
+- Mention similar keywords or concepts
+- Provide background context that would help understand the user's request
+
+Return only the relevant message text with timestamps, one per line.`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You extract relevant context from Slack messages based on user requests.',
+        { temperature: 0.1, maxTokens: 500 }
+      );
+
+      return response.trim();
+    } catch (error) {
+      logger.error('AI context extraction failed', error as Error);
+      throw new Error('Context extraction failed. Please check your OpenAI configuration.');
+    }
   }
 
   /**
    * Extract search terms from user input
    */
-  private extractSearchTerms(userInput: string): string[] {
-    // Simple extraction of potential search terms
-    const words = userInput.toLowerCase().split(/\s+/);
-    return words.filter(word => 
-      word.length > 2 && 
-      !['the', 'and', 'or', 'but', 'for', 'with', 'about', 'from', 'that', 'this'].includes(word)
-    );
-  }
 
   /**
    * AI-powered confirmation analysis
@@ -1054,14 +1054,7 @@ You are a specialized Slack workspace management agent focused on reading and un
     try {
       const openaiService = getService<OpenAIService>('openaiService');
       if (!openaiService) {
-        // Fallback to simple detection if AI service unavailable
-        const lowerMessage = message.toLowerCase();
-        const isPositive = lowerMessage.includes('yes') || lowerMessage.includes('confirm');
-        return {
-          isConfirmation: isPositive || lowerMessage.includes('no') || lowerMessage.includes('cancel'),
-          type: isPositive ? 'positive' : 'negative',
-          confidence: 0.5
-        };
+        throw new Error('AI service unavailable. Confirmation analysis requires OpenAI service.');
       }
 
       const prompt = `Analyze this message to determine if it's a confirmation/response and what type:
@@ -1110,5 +1103,173 @@ Return only JSON: {"isConfirmation": boolean, "type": "positive"|"negative", "co
       'Cannot read messages from channels the bot is not a member of',
       'Draft management is local to this service instance'
     ];
+  }
+
+  // NATURAL LANGUAGE INTERFACE IMPLEMENTATION
+
+  /**
+   * Get agent capability description for MasterAgent
+   */
+  getCapabilityDescription(): AgentCapabilities {
+    return {
+      name: 'Slack Expert',
+      description: 'Reads Slack messages, analyzes conversations, and manages Slack communication workflows',
+      capabilities: [
+        'Read messages from Slack channels and threads',
+        'Analyze conversation context and extract key topics',
+        'Provide message summaries and sentiment analysis',
+        'Track action items and follow-ups from discussions',
+        'Search through message history with filters',
+        'Identify conversation participants and engagement patterns',
+        'Extract relevant context for ongoing conversations',
+        'Handle thread-based discussions and replies'
+      ],
+      limitations: [
+        'Cannot access private channels without proper permissions',
+        'Limited by Slack API rate limits and access tokens',
+        'Cannot read messages from channels the bot is not a member of',
+        'Cannot send messages or modify Slack content (read-only)',
+        'Draft management is local to this service instance'
+      ],
+      examples: [
+        'Read the latest 10 messages from #general channel',
+        'Summarize the discussion in the project thread',
+        'What are the key topics from today\'s standup messages?',
+        'Show me recent messages mentioning the release',
+        'Analyze sentiment of the team discussion',
+        'Extract action items from the planning conversation'
+      ],
+      domains: ['slack', 'messaging', 'team communication', 'conversation analysis'],
+      requirements: ['Slack API access', 'Bot token with appropriate scopes']
+    };
+  }
+
+  /**
+   * Domain-specific intent analysis for Slack operations
+   */
+  protected async analyzeIntent(request: string, context: AgentExecutionContext): Promise<AgentIntent> {
+    try {
+      const prompt = `Analyze this Slack request: "${request}"
+
+Available Slack operations:
+- read_messages: Read recent messages from a channel
+- read_thread: Read messages from a specific thread
+- analyze_context: Analyze conversation context and extract insights
+- search_messages: Search through message history
+- summarize: Summarize conversations or discussions
+
+Return JSON with operation, parameters, confidence (0-1), and reasoning.
+
+Parameters should include:
+- query: The full request for context
+- channelId: Slack channel ID (if specified or can be inferred)
+- threadTs: Thread timestamp (for thread operations)
+- limit: Number of messages to read (default 10)
+- includeAttachments: Whether to include message attachments
+- searchQuery: Search terms (for search operations)
+- operation: The specific Slack operation to perform`;
+
+      const response = await this.openaiService?.generateStructuredData(prompt, 'Slack intent analyzer', {
+        type: 'object',
+        properties: {
+          operation: { type: 'string' },
+          parameters: { type: 'object' },
+          confidence: { type: 'number' },
+          reasoning: { type: 'string' }
+        }
+      }) as { operation?: string; parameters?: any; confidence?: number; reasoning?: string };
+
+      return {
+        operation: response?.operation || 'read_messages',
+        parameters: response?.parameters || { query: request, limit: 10 },
+        confidence: response?.confidence || 0.8,
+        reasoning: response?.reasoning || 'Slack operation detected',
+        toolsUsed: ['slackAgent', response?.operation || 'read_messages']
+      };
+    } catch (error) {
+      console.error('Slack intent analysis failed:', error);
+      // Fallback to read_messages operation
+      return {
+        operation: 'read_messages',
+        parameters: { query: request, limit: 10 },
+        confidence: 0.7,
+        reasoning: 'Fallback to Slack message reading due to analysis error',
+        toolsUsed: ['slackAgent']
+      };
+    }
+  }
+
+  /**
+   * Execute the selected tool based on intent analysis
+   */
+  protected async executeSelectedTool(intent: AgentIntent, context: AgentExecutionContext): Promise<any> {
+    const params: SlackAgentRequest = {
+      query: intent.parameters.query || '',
+      accessToken: context.accessToken || '',
+      operation: intent.operation as 'read_messages' | 'read_thread' | 'detect_drafts' | 'manage_drafts' | 'confirmation_handling',
+      channelId: intent.parameters.channelId || context.slackContext?.channelId,
+      threadTs: intent.parameters.threadTs || context.slackContext?.threadTs,
+      limit: intent.parameters.limit || 10,
+      includeAttachments: intent.parameters.includeAttachments || false
+    };
+
+    const toolContext = {
+      sessionId: context.sessionId,
+      userId: context.userId,
+      timestamp: context.timestamp,
+      metadata: { correlationId: context.correlationId }
+    };
+
+    return await this.processQuery(params, toolContext);
+  }
+
+  /**
+   * Generate natural language response from tool execution results
+   */
+  protected async generateResponse(
+    request: string,
+    result: any,
+    intent: AgentIntent,
+    context: AgentExecutionContext
+  ): Promise<string> {
+    try {
+      const slackResult = result as SlackAgentResult;
+
+      if (!slackResult.success) {
+        return `I encountered an issue while accessing Slack: ${slackResult.error || 'Unknown error'}. Please check your Slack connection and permissions.`;
+      }
+
+      switch (intent.operation) {
+        case 'read_messages':
+          if (!slackResult.messages || slackResult.messages.length === 0) {
+            return 'No messages found in the specified channel. The channel might be empty or you may not have access to it.';
+          }
+          return `📱 Found ${slackResult.count || slackResult.messages.length} message${(slackResult.count || slackResult.messages.length) === 1 ? '' : 's'} from Slack.${slackResult.summary ? `\n\n**Summary:** ${slackResult.summary}` : ''}${slackResult.keyTopics && slackResult.keyTopics.length > 0 ? `\n\n**Key Topics:** ${slackResult.keyTopics.join(', ')}` : ''}`;
+
+        case 'read_thread':
+          if (!slackResult.messages || slackResult.messages.length === 0) {
+            return 'No messages found in the specified thread. The thread might be empty or no longer accessible.';
+          }
+          return `🧵 Found ${slackResult.count || slackResult.messages.length} message${(slackResult.count || slackResult.messages.length) === 1 ? '' : 's'} in the thread.${slackResult.participantCount ? ` Participants: ${slackResult.participantCount}` : ''}${slackResult.summary ? `\n\n**Thread Summary:** ${slackResult.summary}` : ''}`;
+
+        case 'analyze_context':
+          return `🔍 Slack context analysis completed.${slackResult.summary ? `\n\n**Analysis:** ${slackResult.summary}` : ''}${slackResult.sentiment ? `\n**Sentiment:** ${slackResult.sentiment}` : ''}${slackResult.actionItems && slackResult.actionItems.length > 0 ? `\n\n**Action Items:**\n${slackResult.actionItems.map(item => `• ${item}`).join('\n')}` : ''}`;
+
+        case 'search_messages':
+          if (!slackResult.messages || slackResult.messages.length === 0) {
+            return 'No messages found matching your search criteria. Try adjusting your search terms or expanding the time range.';
+          }
+          return `🔍 Found ${slackResult.count || slackResult.messages.length} message${(slackResult.count || slackResult.messages.length) === 1 ? '' : 's'} matching your search.${slackResult.keyTopics && slackResult.keyTopics.length > 0 ? `\n\n**Topics Found:** ${slackResult.keyTopics.join(', ')}` : ''}`;
+
+        case 'summarize':
+          return `📋 Slack conversation summary:${slackResult.summary ? `\n\n${slackResult.summary}` : '\n\nNo significant content to summarize.'}${slackResult.actionItems && slackResult.actionItems.length > 0 ? `\n\n**Action Items:**\n${slackResult.actionItems.map(item => `• ${item}`).join('\n')}` : ''}`;
+
+        default:
+          return `Slack operation completed successfully. ${slackResult.count ? `Found ${slackResult.count} items.` : ''}${slackResult.summary ? ` ${slackResult.summary}` : ''}`;
+      }
+    } catch (error) {
+      console.error('Slack response generation failed:', error);
+      return `I encountered an issue while processing your Slack request: "${request}". Please check your Slack connection and try again.`;
+    }
   }
 }
