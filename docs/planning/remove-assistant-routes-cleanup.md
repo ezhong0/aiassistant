@@ -268,19 +268,21 @@ git reset --hard rollback-assistant-routes
 
 ### Major Legacy Systems to Remove
 
-#### 1. NextStepPlanningService (Unused)
+#### 1. NextStepPlanningService (Unused) ✅ COMPLETED
 - **File**: `backend/src/services/next-step-planning.service.ts`
 - **Status**: Replaced by StringPlanningService but still registered
 - **Impact**: Remove service registration and file
 - **Lines**: ~644 lines of unused code
+- **Result**: ✅ Removed file and updated service initialization comments
 
-#### 2. Legacy Master Agent Methods
+#### 2. Legacy Master Agent Methods ✅ COMPLETED
 - **Method**: `checkAgentNaturalLanguageSupport()` (lines 2528-2560)
 - **Status**: Marked as "LEGACY METHOD REMOVED" but still exists
 - **Impact**: Delete the method entirely
 - **Lines**: ~33 lines of unused code
+- **Result**: ✅ Removed method and associated cache from MasterAgent
 
-#### 3. Test Files in Root Directory
+#### 3. Test Files in Root Directory ✅ COMPLETED
 **Files to remove**:
 - `backend/test-ai-fixes.js`
 - `backend/test-autonomous-agents.js`
@@ -290,8 +292,16 @@ git reset --hard rollback-assistant-routes
 - `backend/test-natural-language-logging.js`
 - `backend/test-string-planning.js`
 - `backend/view-natural-language-logs.js`
+- **Result**: ✅ All test files removed from root directory
 
-#### 4. Dist Directory
+#### 4. MasterAgentService Consolidation ✅ COMPLETED
+- **File**: `backend/src/services/master-agent.service.ts`
+- **Status**: Simple wrapper around MasterAgent creation
+- **Impact**: Remove wrapper, create MasterAgent directly in SlackService
+- **Lines**: ~30 lines of wrapper code
+- **Result**: ✅ Removed MasterAgentService, SlackService now creates MasterAgent directly
+
+#### 5. Dist Directory
 - **Directory**: `backend/dist/`
 - **Status**: Built files in source control
 - **Impact**: Add to `.gitignore`, remove from repo

@@ -234,8 +234,6 @@ export function safeParseMasterAgentResponse(data: unknown): { success: true; da
  * ```
  */
 export class MasterAgent {
-  // Cache for agent capabilities to avoid repeated dynamic loading
-  private static agentCapabilityCache = new Map<string, boolean>();
   private useOpenAI: boolean = false;
   private systemPrompt: string;
   private lastMemoryCheck: number = Date.now();
@@ -2522,42 +2520,6 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
 
 
   // LEGACY METHOD REMOVED - Replaced by executeStringBasedStepLoop
-  /**
-   * Check if agent supports natural language processing (with caching)
-   */
-  private async checkAgentNaturalLanguageSupport(agentName: string): Promise<boolean> {
-    // Check cache first
-    if (MasterAgent.agentCapabilityCache.has(agentName)) {
-      return MasterAgent.agentCapabilityCache.get(agentName)!;
-    }
-
-    try {
-      const { AgentFactory } = await import('../framework/agent-factory');
-      const agent = await AgentFactory.getAgent(agentName);
-      const supportsNL = !!(agent && typeof (agent as any).processNaturalLanguageRequest === 'function');
-
-      // Cache the result
-      MasterAgent.agentCapabilityCache.set(agentName, supportsNL);
-
-      logger.debug('Agent natural language capability cached', {
-        agentName,
-        supportsNaturalLanguage: supportsNL,
-        operation: 'agent_capability_cache'
-      });
-
-      return supportsNL;
-    } catch (error) {
-      logger.warn('Failed to check agent natural language support', {
-        agentName,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        operation: 'agent_capability_check_error'
-      });
-
-      // Cache negative result to avoid repeated failures
-      MasterAgent.agentCapabilityCache.set(agentName, false);
-      return false;
-    }
-  }
 
   /**
    * Get access token for a specific agent

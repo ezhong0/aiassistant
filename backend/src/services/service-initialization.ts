@@ -22,9 +22,9 @@ import { SlackOAuthService } from './slack/slack-oauth.service';
 // Removed SlackInterfaceService - consolidated into SlackService
 // Removed WorkflowCacheService - replaced with simple in-memory state in MasterAgent
 import { DraftManager } from './draft-manager.service';
-// Removed IntentAnalysisService - using only NextStepPlanningService for all planning
+// Removed IntentAnalysisService - using only StringPlanningService for all planning
 // import { IntentAnalysisService } from './intent-analysis.service';
-import { NextStepPlanningService } from './next-step-planning.service';
+// Removed NextStepPlanningService - replaced by StringPlanningService
 // Removed OperationDetectionService - consolidated into individual agents
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
@@ -273,16 +273,9 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 39. MasterAgentService - Provides MasterAgent instance via DI
-    const { MasterAgentService } = await import('./master-agent.service');
-    const masterAgentService = new MasterAgentService();
-    serviceManager.registerService('masterAgentService', masterAgentService, {
-      dependencies: ['openaiService'],
-      priority: 59, // After OpenAI
-      autoStart: true
-    });
+    // 39. MasterAgentService - REMOVED: MasterAgent created directly in SlackService
 
-    // 38. IntentAnalysisService - REMOVED to consolidate planning in NextStepPlanningService
+    // 38. IntentAnalysisService - REMOVED to consolidate planning in StringPlanningService
     // const intentAnalysisService = new IntentAnalysisService();
     // serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
     //   dependencies: ['openaiService'],
@@ -298,7 +291,7 @@ const registerCoreServices = async (): Promise<void> => {
     const stringPlanningService = new StringPlanningService();
     serviceManager.registerService('stringPlanningService', stringPlanningService, {
       dependencies: ['openaiService'],
-      priority: 59, // Higher priority than NextStepPlanningService
+      priority: 59, // Higher priority than legacy NextStepPlanningService
       autoStart: true
     });
 

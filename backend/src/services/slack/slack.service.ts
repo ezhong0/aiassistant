@@ -8,7 +8,7 @@ import { serviceManager } from '../service-manager';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger';
 import { MasterAgent } from '../../agents/master.agent';
-import { MasterAgentService } from '../master-agent.service';
+import { createMasterAgent } from '../../config/agent-factory-init';
 
 export interface SlackServiceConfig {
   signingSecret: string;
@@ -72,9 +72,9 @@ export class SlackService extends BaseService {
       // Test connection
       await this.testSlackConnection();
 
-      // Resolve MasterAgent from DI
-      const maService = serviceManager.getService('masterAgentService') as MasterAgentService;
-      this.masterAgent = maService ? maService.getMasterAgent() : null;
+      // Create MasterAgent directly
+      const apiKey = process.env.OPENAI_API_KEY;
+      this.masterAgent = apiKey ? createMasterAgent({ openaiApiKey: apiKey, model: 'gpt-4o-mini' }) : createMasterAgent();
 
       this.logInfo('SlackService initialized successfully', {
         hasTokenManager: !!this.tokenManager,
