@@ -530,16 +530,18 @@ Edit `backend/src/services/base-service.ts`:
 ### Expected Impact
 
 #### Code Reduction
-- **~800 lines** of unused code removed
-- **8 test files** eliminated
-- **1 legacy service** removed
+- **~1,900 lines** of unused code removed
+- **10+ files** eliminated (including 8 test files, 2 services, 3 directories)
+- **2 legacy services** removed (NextStepPlanningService, MasterAgentService)
 - **78 console.log statements** replaced
+- **Service consolidation**: Reduced unnecessary service wrappers
 
 #### Benefits
 - **Cleaner codebase**: No unused files or methods
 - **Better logging**: Proper structured logging throughout
 - **Reduced maintenance**: Less code to maintain and debug
 - **Improved performance**: Smaller bundle size and faster startup
+- **Simplified architecture**: Removed redundant service layers
 
 ## Conclusion
 
