@@ -40,6 +40,7 @@ export interface NextStepPlan {
   parameters: Record<string, any>;
   reasoning: string;
   isComplete: boolean;
+  naturalLanguageRequest?: string; // NEW: Natural language request for enhanced agent communication
 }
 
 /**
@@ -119,8 +120,8 @@ export class NextStepPlanningService extends BaseService {
       });
       const response = await this.openaiService.generateText(
         planningPrompt,
-        'You are an intelligent workflow planner. Plan the next logical step based on context. Return only valid JSON.',
-        { temperature: 0.2, maxTokens: 2000 }
+        'You are an intelligent workflow planner. Plan the next logical step with both structured parameters and natural language request. Return only valid JSON.',
+        { temperature: 0.2, maxTokens: 2500 } // Increased for natural language
       );
 
       logger.debug('Received OpenAI planning response', {
@@ -166,6 +167,11 @@ export class NextStepPlanningService extends BaseService {
       });
       const validatedStep = this.validateNextStep(nextStep, context);
 
+      // Add natural language fallback if not provided by AI
+      if (!validatedStep.naturalLanguageRequest) {
+        validatedStep.naturalLanguageRequest = this.generateFallbackNaturalLanguageRequest(validatedStep, context);
+      }
+
       logger.debug('Next step planned successfully', {
         correlationId,
         operation: 'next_step_planned',
@@ -173,6 +179,7 @@ export class NextStepPlanningService extends BaseService {
           stepNumber: validatedStep.stepNumber,
           agent: validatedStep.agent,
           operation: validatedStep.operation,
+          hasNaturalLanguageRequest: !!validatedStep.naturalLanguageRequest,
           reasoning: validatedStep.reasoning.substring(0, 100)
         }
       });
@@ -360,7 +367,8 @@ RESPONSE FORMAT (JSON only):
     "param2": "value2"
   },
   "reasoning": "Detailed reasoning for why this step is needed and how it advances the goal",
-  "isComplete": false
+  "isComplete": false,
+  "naturalLanguageRequest": "Natural language version of this request that the agent can understand contextually. For example: 'Show me my calendar events for today' or 'Schedule a meeting with John tomorrow at 2pm about the project update'. This should capture the user's intent in conversational language."
 }
 
 If the task is complete, respond with:
@@ -555,5 +563,73 @@ Analyze intelligently and provide actionable insights!
     } catch {
       // Keep previous inventory on failure
     }
+  }
+
+
+  /**
+   * Generate fallback natural language request when not provided by AI
+   */
+  private generateFallbackNaturalLanguageRequest(step: NextStepPlan, context: WorkflowContext): string {
+    const { agent, operation, parameters } = step;
+
+    // Generate contextual natural language based on the agent and operation
+    if (agent === 'calendarAgent') {
+      switch (operation) {
+        case 'list':
+          if (parameters.timeMin && parameters.timeMax) {
+            return `Show me my calendar events between ${parameters.timeMin} and ${parameters.timeMax}`;
+          }
+          return `Show me my calendar events`;
+
+        case 'create':
+          const summary = parameters.summary || 'new event';
+          const attendees = parameters.attendees ? ` with ${parameters.attendees.join(', ')}` : '';
+          const time = parameters.start ? ` at ${parameters.start}` : '';
+          return `Schedule ${summary}${attendees}${time}`;
+
+        case 'check_availability':
+          return `Check if I'm available from ${parameters.startTime} to ${parameters.endTime}`;
+
+        case 'find_slots':
+          return `Find available time slots for a ${parameters.durationMinutes} minute meeting`;
+
+        default:
+          return `${operation} calendar operation: ${parameters.summary || 'calendar task'}`;
+      }
+    }
+
+    if (agent === 'emailAgent') {
+      switch (operation) {
+        case 'send':
+          const recipient = parameters.to || 'recipient';
+          const subject = parameters.subject || 'message';
+          return `Send an email to ${recipient} about ${subject}`;
+
+        case 'search':
+          return `Search for emails: ${parameters.query || 'recent messages'}`;
+
+        case 'read':
+          return `Read email: ${parameters.subject || parameters.messageId || 'message'}`;
+
+        default:
+          return `${operation} email operation`;
+      }
+    }
+
+    if (agent === 'contactAgent') {
+      switch (operation) {
+        case 'search':
+          return `Find contact information for ${parameters.query || parameters.name || 'contact'}`;
+
+        case 'resolve':
+          return `Resolve contact details for ${parameters.name || parameters.email || 'person'}`;
+
+        default:
+          return `${operation} contact operation`;
+      }
+    }
+
+    // Generic fallback
+    return `${agent} ${operation} operation: ${context.originalRequest}`;
   }
 }

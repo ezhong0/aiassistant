@@ -1,4 +1,4 @@
-import { ToolExecutionContext } from '../types/tools';
+import { ToolExecutionContext, ToolResult } from '../types/tools';
 import logger from '../utils/logger';
 import { LogContext } from '../utils/log-context';
 import { AIAgent } from '../framework/ai-agent';
@@ -1412,6 +1412,377 @@ Always return structured execution status with event details, scheduling insight
       return 'delete';
     } else {
       return 'list'; // Default operation
+    }
+  }
+
+  // ========================================
+  // NATURAL LANGUAGE PROCESSING CAPABILITIES
+  // ========================================
+
+  /**
+   * Process natural language requests with contextual responses
+   * This is the new natural language interface for agent communication
+   */
+  async processNaturalLanguageRequest(
+    request: string,
+    context: { sessionId: string, accessToken: string, slackContext?: any, userId?: string }
+  ): Promise<{ response: string, reasoning: string, metadata: any }> {
+    const logContext: LogContext = {
+      correlationId: `calendar-nl-${context.sessionId}-${Date.now()}`,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      operation: 'natural_language_processing',
+      metadata: { request: request.substring(0, 100) }
+    };
+
+    try {
+      logger.info('Processing natural language calendar request', logContext);
+
+      // AI-powered intent analysis for calendar operations
+      const intent = await this.analyzeCalendarIntent(request);
+
+      logger.debug('Calendar intent analyzed', {
+        ...logContext,
+        metadata: { ...logContext.metadata, intent }
+      });
+
+      // Execute operation based on intent using internal execution to avoid recursion
+      const toolResult = await this.executeInternalOperation(intent.operation, {
+        ...intent.parameters,
+        accessToken: context.accessToken
+      }, {
+        sessionId: context.sessionId,
+        userId: context.userId,
+        timestamp: new Date(),
+        metadata: {
+          correlationId: `calendar-nl-${context.sessionId}-${Date.now()}`,
+          toolName: 'calendarAgent',
+          naturalLanguageRequest: true
+        }
+      });
+
+      // Extract the result data from ToolResult
+      const result: CalendarAgentResponse = {
+        success: toolResult.success,
+        message: toolResult.result?.message || (toolResult.success ? 'Operation completed' : 'Operation failed'),
+        event: toolResult.result?.data?.event,
+        events: toolResult.result?.data?.events,
+        count: toolResult.result?.data?.count || toolResult.result?.data?.events?.length,
+        isAvailable: toolResult.result?.data?.isAvailable,
+        conflictingEvents: toolResult.result?.data?.conflictingEvents,
+        availableSlots: toolResult.result?.data?.availableSlots,
+        error: toolResult.error
+      };
+
+      // Generate contextual natural language response
+      const naturalResponse = await this.generateContextualResponse(request, result, intent);
+
+      logger.info('Natural language calendar request completed', {
+        ...logContext,
+        metadata: {
+          ...logContext.metadata,
+          operation: intent.operation,
+          success: result.success,
+          responseLength: naturalResponse.length
+        }
+      });
+
+      return {
+        response: naturalResponse,
+        reasoning: `Analyzed request and detected ${intent.operation} operation. ${intent.reasoning || 'Executed successfully.'}`,
+        metadata: {
+          operation: intent.operation,
+          resultsCount: result.count || (result.events?.length) || (result.event ? 1 : 0),
+          confidence: intent.confidence || 0.8,
+          parameters: intent.parameters
+        }
+      };
+
+    } catch (error) {
+      logger.error('Natural language calendar processing failed', error as Error, logContext);
+
+      return {
+        response: `I encountered an issue processing your calendar request: ${(error as Error).message}. Please try rephrasing your request or check if you have the necessary permissions.`,
+        reasoning: `Failed to process request due to: ${(error as Error).message}`,
+        metadata: {
+          operation: 'error',
+          error: (error as Error).message
+        }
+      };
+    }
+  }
+
+  /**
+   * AI-powered intent analysis for calendar operations
+   */
+  private async analyzeCalendarIntent(request: string): Promise<{
+    operation: 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots',
+    parameters: any,
+    confidence: number,
+    reasoning: string
+  }> {
+    const openaiService = this.getOpenAIService();
+    if (!openaiService) {
+      // Fallback to simple keyword detection
+      return {
+        operation: await this.detectCalendarOperation(request) as any,
+        parameters: {},
+        confidence: 0.6,
+        reasoning: 'Used fallback keyword detection'
+      };
+    }
+
+    const prompt = `Analyze this calendar request and extract structured information:
+
+REQUEST: "${request}"
+
+Determine:
+1. Operation: create, list, update, delete, check_availability, or find_slots
+2. Parameters: Extract relevant details for the operation
+3. Confidence: How confident are you in this analysis (0-1)
+4. Reasoning: Brief explanation of your analysis
+
+For CREATE operations, extract:
+- summary (event title)
+- start (ISO datetime or relative time like "tomorrow at 2pm")
+- end (ISO datetime or duration)
+- attendees (email addresses)
+- location
+- description
+
+For LIST operations, extract:
+- timeMin, timeMax (date range)
+- query (search terms)
+- maxResults
+
+For UPDATE/DELETE operations, extract:
+- eventId (if mentioned)
+- summary (for finding the event)
+- Any fields to update
+
+For AVAILABILITY/SLOTS operations, extract:
+- startTime, endTime (time range to check)
+- duration (for find_slots)
+
+Return JSON format:
+{
+  "operation": "create|list|update|delete|check_availability|find_slots",
+  "parameters": { ... },
+  "confidence": 0.0-1.0,
+  "reasoning": "explanation"
+}`;
+
+    try {
+      const analysis = await openaiService.generateStructuredData(
+        prompt,
+        'Analyze calendar requests and extract operation details',
+        { temperature: 0.1, maxTokens: 800 }
+      ) as {
+        operation: string;
+        parameters: any;
+        confidence: number;
+        reasoning: string;
+      };
+
+      // Validate the analysis
+      if (!analysis.operation || !['create', 'list', 'update', 'delete', 'check_availability', 'find_slots'].includes(analysis.operation)) {
+        throw new Error('Invalid operation detected');
+      }
+
+      return {
+        operation: analysis.operation as 'create' | 'list' | 'update' | 'delete' | 'check_availability' | 'find_slots',
+        parameters: analysis.parameters || {},
+        confidence: Math.min(Math.max(analysis.confidence || 0.7, 0), 1),
+        reasoning: analysis.reasoning || 'AI analysis completed'
+      };
+
+    } catch (error) {
+      logger.error('AI intent analysis failed, using fallback', error as Error, {
+        correlationId: `calendar-intent-fallback-${Date.now()}`,
+        operation: 'intent_analysis_fallback',
+        metadata: { request: request.substring(0, 100) }
+      });
+
+      return {
+        operation: await this.detectCalendarOperation(request) as any,
+        parameters: {},
+        confidence: 0.5,
+        reasoning: 'Fallback analysis due to AI service error'
+      };
+    }
+  }
+
+  /**
+   * Generate contextual natural language response based on the original request and results
+   */
+  private async generateContextualResponse(
+    originalRequest: string,
+    result: CalendarAgentResponse,
+    intent: any
+  ): Promise<string> {
+    const openaiService = this.getOpenAIService();
+
+    if (!openaiService) {
+      // Fallback response generation
+      return this.generateFallbackResponse(result, intent.operation);
+    }
+
+    const prompt = `The user asked: "${originalRequest}"
+
+I detected this was a ${intent.operation} operation and here's what happened:
+
+OPERATION RESULT:
+${JSON.stringify({
+  success: result.success,
+  message: result.message,
+  eventsCount: result.events?.length || (result.event ? 1 : 0),
+  events: result.events?.slice(0, 5)?.map(e => ({
+    summary: e.summary,
+    start: e.start?.dateTime || e.start?.date,
+    end: e.end?.dateTime || e.end?.date,
+    location: e.location
+  })) || (result.event ? [{
+    summary: result.event.summary,
+    start: result.event.start?.dateTime || result.event.start?.date,
+    end: result.event.end?.dateTime || result.event.end?.date,
+    location: result.event.location
+  }] : []),
+  isAvailable: result.isAvailable,
+  availableSlots: result.availableSlots?.slice(0, 3),
+  error: result.error
+}, null, 2)}
+
+Generate a natural, conversational response that:
+1. Directly addresses what the user asked
+2. Summarizes what was accomplished
+3. Includes relevant details (times, titles, locations) but not technical IDs
+4. Uses a helpful, friendly tone
+5. If there are multiple events, format them clearly
+6. If something went wrong, explain it helpfully
+
+Keep the response focused and informative. Don't use markdown formatting.`;
+
+    try {
+      const response = await openaiService.generateText(
+        prompt,
+        'Generate contextual responses for calendar operations',
+        { temperature: 0.7, maxTokens: 600 }
+      );
+
+      return response.trim();
+
+    } catch (error) {
+      logger.error('AI response generation failed, using fallback', error as Error, {
+        correlationId: `calendar-response-fallback-${Date.now()}`,
+        operation: 'response_generation_fallback'
+      });
+
+      return this.generateFallbackResponse(result, intent.operation);
+    }
+  }
+
+  /**
+   * Fallback response generation when AI services are unavailable
+   */
+  private generateFallbackResponse(result: CalendarAgentResponse, operation: string): string {
+    if (!result.success) {
+      return `I had trouble with your calendar request: ${result.error || result.message}`;
+    }
+
+    switch (operation) {
+      case 'create':
+        return result.event
+          ? `I've created your calendar event "${result.event.summary}" successfully.`
+          : 'I\'ve created your calendar event successfully.';
+
+      case 'list':
+        if (result.events && result.events.length > 0) {
+          const eventsList = result.events.slice(0, 5).map(e =>
+            `• ${e.summary}${e.start?.dateTime ? ` at ${new Date(e.start.dateTime).toLocaleString()}` : ''}`
+          ).join('\n');
+          return `I found ${result.count || result.events.length} events:\n${eventsList}${result.events.length > 5 ? '\n...and more' : ''}`;
+        } else {
+          return 'I didn\'t find any calendar events matching your request.';
+        }
+
+      case 'update':
+        return result.event
+          ? `I've updated the calendar event "${result.event.summary}" successfully.`
+          : 'I\'ve updated your calendar event successfully.';
+
+      case 'delete':
+        return 'I\'ve deleted the calendar event successfully.';
+
+      case 'check_availability':
+        return result.isAvailable
+          ? 'That time slot appears to be available.'
+          : `That time slot has conflicts. ${result.conflictingEvents?.length || 0} conflicting events found.`;
+
+      case 'find_slots':
+        if (result.availableSlots && result.availableSlots.length > 0) {
+          return `I found ${result.availableSlots.length} available time slots.`;
+        } else {
+          return 'I couldn\'t find any available time slots in that range.';
+        }
+
+      default:
+        return result.message || 'Calendar operation completed successfully.';
+    }
+  }
+
+  /**
+   * Execute operation internally without going through main execute method
+   * This prevents recursion when called from processNaturalLanguageRequest
+   */
+  private async executeInternalOperation(
+    operation: string,
+    parameters: any,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    try {
+      let result: ToolExecutionResult;
+
+      // Call the appropriate internal handler based on operation
+      switch (operation) {
+        case 'create':
+          result = await this.handleCreateEvent(parameters, context, parameters.accessToken);
+          break;
+        case 'list':
+          result = await this.handleListEvents(parameters, context, parameters.accessToken);
+          break;
+        case 'update':
+          result = await this.handleUpdateEvent(parameters, context, parameters.accessToken);
+          break;
+        case 'delete':
+          result = await this.handleDeleteEvent(parameters, context, parameters.accessToken);
+          break;
+        case 'check_availability':
+          result = await this.handleCheckAvailability(parameters, context, parameters.accessToken);
+          break;
+        case 'find_slots':
+          result = await this.handleFindSlots(parameters, context, parameters.accessToken);
+          break;
+        default:
+          throw new Error(`Unsupported calendar operation: ${operation}`);
+      }
+
+      // Convert ToolExecutionResult to ToolResult format
+      return {
+        toolName: 'calendarAgent',
+        success: result.success,
+        result: result,
+        error: result.error,
+        executionTime: 0 // Will be calculated by caller if needed
+      };
+
+    } catch (error) {
+      return {
+        toolName: 'calendarAgent',
+        success: false,
+        result: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        executionTime: 0
+      };
     }
   }
 }

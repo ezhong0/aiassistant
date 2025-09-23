@@ -233,6 +233,8 @@ export function safeParseMasterAgentResponse(data: unknown): { success: true; da
  * ```
  */
 export class MasterAgent {
+  // Cache for agent capabilities to avoid repeated dynamic loading
+  private static agentCapabilityCache = new Map<string, boolean>();
   private useOpenAI: boolean = false;
   private systemPrompt: string;
   private lastMemoryCheck: number = Date.now();
@@ -2312,7 +2314,7 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
         userId,
         operation: 'step_planning'
       });
-      // Plan next step
+      // Plan next step (now includes natural language capabilities by default)
       const nextStep = await nextStepPlanningService.planNextStep(workflowContext);
 
       // If no more steps, we're done
@@ -2358,24 +2360,68 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       });
 
       try {
-        // Execute the step
-        const toolCall: ToolCall = {
-          name: nextStep.agent,
-          parameters: {
-            operation: nextStep.operation,
-            ...nextStep.parameters
-          }
-        };
+        let toolResult: ToolResult;
+        let toolCall: ToolCall | null = null;
 
-        logger.debug('Executing tool call', {
-          toolCall: toolCall,
-          stepNumber: nextStep.stepNumber,
-          workflowId,
+        // Try natural language processing first if available
+        const usingNaturalLanguage = await this.tryNaturalLanguageExecution(
+          nextStep,
           sessionId,
           userId,
-          operation: 'tool_call_execution'
-        });
-        const toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId, slackContext);
+          slackContext
+        );
+
+        if (usingNaturalLanguage.success) {
+          logger.info('Step executed using natural language processing', {
+            stepNumber: nextStep.stepNumber,
+            agent: nextStep.agent,
+            naturalLanguageRequest: nextStep.naturalLanguageRequest?.substring(0, 100),
+            workflowId,
+            sessionId,
+            userId,
+            operation: 'natural_language_execution'
+          });
+          toolResult = usingNaturalLanguage.result!;
+
+          // Create a virtual tool call for tracking purposes
+          toolCall = {
+            name: nextStep.agent,
+            parameters: {
+              naturalLanguageRequest: nextStep.naturalLanguageRequest,
+              operation: nextStep.operation,
+              executionMode: 'natural_language'
+            }
+          };
+        } else {
+          // Fallback to structured tool call
+          logger.debug('Using fallback structured tool call execution', {
+            stepNumber: nextStep.stepNumber,
+            agent: nextStep.agent,
+            reason: usingNaturalLanguage.fallbackReason,
+            workflowId,
+            sessionId,
+            userId,
+            operation: 'structured_tool_execution'
+          });
+
+          toolCall = {
+            name: nextStep.agent,
+            parameters: {
+              operation: nextStep.operation,
+              ...nextStep.parameters
+            }
+          };
+
+          logger.debug('Executing structured tool call', {
+            toolCall: toolCall,
+            stepNumber: nextStep.stepNumber,
+            workflowId,
+            sessionId,
+            userId,
+            operation: 'tool_call_execution'
+          });
+          toolResult = await this.executeToolCallInternal(toolCall, sessionId, userId, slackContext);
+        }
         logger.debug('Tool execution completed', {
           toolResult: toolResult,
           stepNumber: nextStep.stepNumber,
@@ -2550,6 +2596,279 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
     };
   }
 
+  /**
+   * Try to execute a step using natural language processing
+   * Falls back to structured tool calls if natural language is not supported
+   */
+  private async tryNaturalLanguageExecution(
+    nextStep: NextStepPlan,
+    sessionId: string,
+    userId?: string,
+    slackContext?: any
+  ): Promise<{ success: boolean; result?: ToolResult; fallbackReason?: string }> {
+
+    // Check if the step has a natural language request and the agent supports it
+    if (!nextStep.naturalLanguageRequest) {
+      return {
+        success: false,
+        fallbackReason: 'No natural language request provided'
+      };
+    }
+
+    try {
+      // Get access token for the agent
+      const accessToken = await this.getAccessTokenForAgent(nextStep.agent, userId);
+      if (!accessToken) {
+        return {
+          success: false,
+          fallbackReason: 'No access token available for agent'
+        };
+      }
+
+      // Check if agent supports natural language processing (with caching)
+      const supportsNaturalLanguage = await this.checkAgentNaturalLanguageSupport(nextStep.agent);
+      if (!supportsNaturalLanguage) {
+        return {
+          success: false,
+          fallbackReason: 'Agent does not support natural language processing'
+        };
+      }
+
+      // Load agent instance
+      let agent: any;
+      try {
+        const { AgentFactory } = await import('../framework/agent-factory');
+        agent = await AgentFactory.getAgent(nextStep.agent);
+      } catch (error) {
+        return {
+          success: false,
+          fallbackReason: 'Could not load agent from AgentFactory'
+        };
+      }
+
+      logger.debug('Executing natural language request', {
+        agent: nextStep.agent,
+        naturalLanguageRequest: nextStep.naturalLanguageRequest.substring(0, 100),
+        sessionId,
+        userId,
+        operation: 'natural_language_request_execution'
+      });
+
+      // Execute using natural language processing
+      const nlResult = await agent.processNaturalLanguageRequest(
+        nextStep.naturalLanguageRequest,
+        {
+          sessionId,
+          userId,
+          accessToken,
+          slackContext
+        }
+      );
+
+      // Convert natural language result to ToolResult format
+      const toolResult: ToolResult = {
+        toolName: nextStep.agent,
+        success: true,
+        result: {
+          naturalLanguageResponse: nlResult.response,
+          reasoning: nlResult.reasoning,
+          metadata: nlResult.metadata,
+          // Include any structured data from the result
+          ...nlResult.metadata
+        },
+        executionTime: 0 // Will be calculated by caller if needed
+      };
+
+      logger.info('Natural language execution completed successfully', {
+        agent: nextStep.agent,
+        responseLength: nlResult.response.length,
+        confidence: nlResult.metadata?.confidence,
+        agentOperation: nlResult.metadata?.operation,
+        sessionId,
+        userId,
+        operation: 'natural_language_execution_success'
+      });
+
+      return {
+        success: true,
+        result: toolResult
+      };
+
+    } catch (error) {
+      logger.warn('Natural language execution failed, falling back to structured call', {
+        agent: nextStep.agent,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        naturalLanguageRequest: nextStep.naturalLanguageRequest?.substring(0, 100),
+        sessionId,
+        userId,
+        operation: 'natural_language_execution_fallback'
+      });
+
+      return {
+        success: false,
+        fallbackReason: `Natural language execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+
+  /**
+   * Check if agent supports natural language processing (with caching)
+   */
+  private async checkAgentNaturalLanguageSupport(agentName: string): Promise<boolean> {
+    // Check cache first
+    if (MasterAgent.agentCapabilityCache.has(agentName)) {
+      return MasterAgent.agentCapabilityCache.get(agentName)!;
+    }
+
+    try {
+      const { AgentFactory } = await import('../framework/agent-factory');
+      const agent = await AgentFactory.getAgent(agentName);
+      const supportsNL = !!(agent && typeof (agent as any).processNaturalLanguageRequest === 'function');
+
+      // Cache the result
+      MasterAgent.agentCapabilityCache.set(agentName, supportsNL);
+
+      logger.debug('Agent natural language capability cached', {
+        agentName,
+        supportsNaturalLanguage: supportsNL,
+        operation: 'agent_capability_cache'
+      });
+
+      return supportsNL;
+    } catch (error) {
+      logger.warn('Failed to check agent natural language support', {
+        agentName,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        operation: 'agent_capability_check_error'
+      });
+
+      // Cache negative result to avoid repeated failures
+      MasterAgent.agentCapabilityCache.set(agentName, false);
+      return false;
+    }
+  }
+
+  /**
+   * Get access token for a specific agent
+   */
+  private async getAccessTokenForAgent(agentName: string, userId?: string): Promise<string | null> {
+    try {
+      if (!userId) {
+        return null;
+      }
+
+      // Import and use the token manager service
+      const { TokenManager } = await import('../services/token-manager');
+      const tokenManager = getService('tokenManager') as InstanceType<typeof TokenManager>;
+      if (!tokenManager) {
+        logger.warn('TokenManager service not available', {
+          agentName,
+          userId,
+          operation: 'get_access_token_for_agent'
+        });
+        return null;
+      }
+
+      // Parse userId with robust handling for different formats
+      const { teamId, actualUserId } = this.parseUserId(userId);
+
+      if (!teamId || !actualUserId) {
+        logger.warn('Invalid userId format for token retrieval', {
+          userId,
+          agentName,
+          parsedTeamId: teamId,
+          parsedUserId: actualUserId,
+          operation: 'get_access_token_for_agent'
+        });
+        return null;
+      }
+
+      // For calendar agent, get calendar tokens
+      if (agentName === 'calendarAgent') {
+        const accessToken = await tokenManager.getValidTokensForCalendar(teamId, actualUserId);
+        return accessToken;
+      }
+
+      // For email agent, get email tokens
+      if (agentName === 'emailAgent') {
+        const accessToken = await tokenManager.getValidTokensForGmail(teamId, actualUserId);
+        return accessToken;
+      }
+
+      // For other agents, try to get general tokens
+      const accessToken = await tokenManager.getValidTokensForCalendar(teamId, actualUserId);
+      return accessToken;
+
+    } catch (error) {
+      logger.warn('Failed to get access token for agent', {
+        agentName,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        operation: 'get_access_token_for_agent'
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Parse userId string to extract teamId and actualUserId
+   * Handles various userId formats from different sources (Slack, direct API calls, etc.)
+   */
+  private parseUserId(userId?: string): { teamId: string | null; actualUserId: string | null } {
+    if (!userId) {
+      return { teamId: null, actualUserId: null };
+    }
+
+    try {
+      // Handle Slack team format: "T12345678|U87654321" or "T12345678:U87654321"
+      if (userId.includes('|') || userId.includes(':')) {
+        const separator = userId.includes('|') ? '|' : ':';
+        const [teamId, actualUserId] = userId.split(separator);
+
+        if (teamId && actualUserId && teamId.startsWith('T') && actualUserId.startsWith('U')) {
+          return { teamId: teamId.trim(), actualUserId: actualUserId.trim() };
+        }
+      }
+
+      // Handle direct Slack user ID format: "U87654321" (assume default team or extract from context)
+      if (userId.startsWith('U') && userId.length >= 9) {
+        // For direct user IDs, we might need to get team from context or use a default
+        // This is a fallback - ideally we should have team context
+        return { teamId: null, actualUserId: userId.trim() };
+      }
+
+      // Handle team ID format: "T12345678" (user requesting for the team)
+      if (userId.startsWith('T') && userId.length >= 9) {
+        return { teamId: userId.trim(), actualUserId: null };
+      }
+
+      // Handle JSON string format: '{"teamId":"T12345678","userId":"U87654321"}'
+      if (userId.startsWith('{') && userId.includes('teamId')) {
+        const parsed = JSON.parse(userId);
+        return {
+          teamId: parsed.teamId || null,
+          actualUserId: parsed.userId || parsed.actualUserId || null
+        };
+      }
+
+      // Handle email format or other custom formats - extract meaningful parts
+      if (userId.includes('@')) {
+        // For email formats, we can't extract Slack team/user IDs
+        return { teamId: null, actualUserId: userId.trim() };
+      }
+
+      // Fallback: treat as direct user ID
+      return { teamId: null, actualUserId: userId.trim() };
+
+    } catch (error) {
+      logger.warn('Failed to parse userId', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        operation: 'parse_user_id'
+      });
+      return { teamId: null, actualUserId: null };
+    }
+  }
 
   public cleanup(): void {
     // Cleanup is now handled by the extracted components
