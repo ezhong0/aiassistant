@@ -26,7 +26,6 @@ import { DraftManager } from './draft-manager.service';
 // import { IntentAnalysisService } from './intent-analysis.service';
 import { NextStepPlanningService } from './next-step-planning.service';
 // Removed OperationDetectionService - consolidated into individual agents
-import { getPersonalityConfig } from '../config/personality.config';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';

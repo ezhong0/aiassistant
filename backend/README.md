@@ -89,7 +89,6 @@ backend/
 ### Core Endpoints
 
 - **`/auth/*`** - Authentication and OAuth flows
-- **`/api/assistant/*`** - Main assistant functionality  
 - **`/protected/*`** - User profile and protected operations
 - **`/slack/*`** - Slack integration webhooks
 - **`/health`** - System health monitoring

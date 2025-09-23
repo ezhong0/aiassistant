@@ -13,6 +13,8 @@ yarn-error.log*
 
 # Credentials - never commit these!
 credentials/
+backend/config/credentials/
+backend/data/oauth-tokens/
 *.json
 !package*.json
 !tsconfig*.json
@@ -21,6 +23,7 @@ GoogleService-Info.plist
 
 # Logs
 logs/
+backend/logs/
 *.log
 
 # Runtime data
@@ -105,3 +108,4 @@ Thumbs.db
 # Build outputs
 build/
 dist/
+backend/dist/

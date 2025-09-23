@@ -64,24 +64,6 @@ export const RATE_LIMITS = {
     defaultWindowMs: 15 * 60 * 1000
   },
   
-  /** Assistant-specific rate limits */
-  assistant: {
-    /** Text command rate limit */
-    textCommand: {
-      maxRequests: 50,
-      windowMs: 15 * 60 * 1000
-    },
-    /** Session operations rate limit */
-    session: {
-      maxRequests: 20,
-      windowMs: 15 * 60 * 1000
-    },
-    /** Session deletion rate limit */
-    sessionDelete: {
-      maxRequests: 10,
-      windowMs: 15 * 60 * 1000
-    }
-  }
 } as const;
 
 /** Request size and content limits */

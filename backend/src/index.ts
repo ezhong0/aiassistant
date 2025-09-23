@@ -23,7 +23,6 @@ import {
 } from './middleware/security.middleware';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
-import assistantRoutes from './routes/assistant.routes';
 // Health routes temporarily disabled during service cleanup
 // import healthRoutes from './routes/health';
 // import enhancedHealthRoutes from './routes/enhanced-health.routes';
@@ -99,7 +98,6 @@ app.use(apiRateLimit);
 // API Routes
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
-app.use('/api/assistant', assistantRoutes);
 
 // Slack routes - pass global interfaces for event handling
 app.use('/slack', createSlackRoutes(serviceManager, () => globalInterfaces));

@@ -281,26 +281,6 @@ const getLogLevel = (statusCode: number, responseTime: number): 'info' | 'warn' 
   return 'info';
 }
 
-/**
- * Middleware specifically for assistant API endpoints with enhanced logging
- */
-export const assistantApiLogging = apiLoggingMiddleware({
-  logBody: true,
-  logHeaders: false,
-  logQuery: true,
-  logParams: true,
-  maxBodyLength: 5000,
-  sensitiveFields: [
-    'password', 
-    'token', 
-    'authorization', 
-    'cookie', 
-    'access_token', 
-    'refresh_token',
-    'apikey',
-    'api_key'
-  ]
-});
 
 /**
  * Middleware for health check endpoints (minimal logging)
