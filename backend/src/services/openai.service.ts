@@ -365,9 +365,19 @@ export class OpenAIService extends BaseService {
         temperature: options.temperature || 0.1
       });
 
-      // Convert Zod schema to OpenAI function parameters
-      const schemaDefinition = schema._def || {};
-      const openAISchema = this.convertZodToOpenAISchema(schemaDefinition);
+      // Convert schema to OpenAI function parameters
+      let openAISchema: any;
+      if (schema._def) {
+        // It's a Zod schema
+        openAISchema = this.convertZodToOpenAISchema(schema._def);
+      } else if (schema.type === 'object' && schema.properties) {
+        // It's already a plain object schema
+        openAISchema = schema;
+      } else {
+        // Fallback for unknown schema format
+        this.logWarn('Unknown schema format, treating as plain object', { schema });
+        openAISchema = schema;
+      }
 
       const response = await this.client.chat.completions.create({
         model: this.model,

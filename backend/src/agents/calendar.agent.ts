@@ -121,6 +121,24 @@ export class CalendarAgent extends AIAgent<CalendarAgentRequest, CalendarAgentRe
   private ensureServices(): void {
     if (!this.calendarService) {
       this.calendarService = serviceManager.getService(CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_SERVICE) as CalendarService;
+
+      if (!this.calendarService) {
+        logger.error('Calendar service not available in service manager', new Error('Calendar service initialization failed'), {
+          correlationId: 'calendar-service-init',
+          operation: 'ensure_services',
+          metadata: {
+            serviceName: CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_SERVICE,
+            serviceManagerState: !!serviceManager,
+            availableServices: Object.keys(serviceManager.getAllServicesHealth || {})
+          }
+        });
+      } else {
+        logger.debug('Calendar service successfully initialized', {
+          correlationId: 'calendar-service-init',
+          operation: 'ensure_services',
+          metadata: { serviceName: CALENDAR_SERVICE_CONSTANTS.SERVICE_NAMES.CALENDAR_SERVICE }
+        });
+      }
     }
     // Calendar formatting and validation now handled internally
   }
@@ -836,7 +854,15 @@ Always return structured execution status with event details, scheduling insight
         location: parameters.location as string
       };
 
-      const createdEvent = await this.calendarService!.createEvent(
+      // Check if calendar service is available
+      if (!this.calendarService) {
+        return {
+          success: false,
+          error: 'Calendar service not available. Please check your calendar integration setup.'
+        };
+      }
+
+      const createdEvent = await this.calendarService.createEvent(
         event,
         accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
@@ -905,8 +931,16 @@ Always return structured execution status with event details, scheduling insight
         };
       }
 
+      // Check if calendar service is available
+      if (!this.calendarService) {
+        return {
+          success: false,
+          error: 'Calendar service not available. Please check your calendar integration setup.'
+        };
+      }
+
       // List events
-      const events = await this.calendarService!.getEvents(
+      const events = await this.calendarService.getEvents(
         accessToken,
         {
           timeMin: timeMin,
@@ -994,7 +1028,15 @@ Always return structured execution status with event details, scheduling insight
         location: parameters.location as string
       };
 
-      const updatedEvent = await this.calendarService!.updateEvent(
+      // Check if calendar service is available
+      if (!this.calendarService) {
+        return {
+          success: false,
+          error: 'Calendar service not available. Please check your calendar integration setup.'
+        };
+      }
+
+      const updatedEvent = await this.calendarService.updateEvent(
         parameters.eventId as string,
         eventUpdate,
         accessToken,
@@ -1055,8 +1097,16 @@ Always return structured execution status with event details, scheduling insight
         };
       }
 
+      // Check if calendar service is available
+      if (!this.calendarService) {
+        return {
+          success: false,
+          error: 'Calendar service not available. Please check your calendar integration setup.'
+        };
+      }
+
       // Delete event
-      await this.calendarService!.deleteEvent(
+      await this.calendarService.deleteEvent(
         parameters.eventId as string,
         accessToken,
         (parameters.calendarId as string) || CALENDAR_SERVICE_CONSTANTS.DEFAULTS.DEFAULT_CALENDAR_ID
@@ -1087,8 +1137,16 @@ Always return structured execution status with event details, scheduling insight
    */
   private async handleCheckAvailability(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
+      // Check if calendar service is available
+      if (!this.calendarService) {
+        return {
+          success: false,
+          error: 'Calendar service not available. Please check your calendar integration setup.'
+        };
+      }
+
       // Check availability
-      const availabilityResult = await this.calendarService!.checkAvailability(
+      const availabilityResult = await this.calendarService.checkAvailability(
         accessToken,
         parameters.startTime as string,
         parameters.endTime as string,
@@ -1135,8 +1193,16 @@ Always return structured execution status with event details, scheduling insight
    */
   private async handleFindSlots(parameters: ToolParameters, context: ToolExecutionContext, accessToken: string): Promise<ToolExecutionResult> {
     try {
+      // Check if calendar service is available
+      if (!this.calendarService) {
+        return {
+          success: false,
+          error: 'Calendar service not available. Please check your calendar integration setup.'
+        };
+      }
+
       // Find available slots
-      const availableSlots = await this.calendarService!.findAvailableSlots(
+      const availableSlots = await this.calendarService.findAvailableSlots(
         accessToken,
         parameters.startDate as string,
         parameters.endDate as string,
@@ -1512,7 +1578,7 @@ Always return structured execution status with event details, scheduling insight
       throw new Error('AI service unavailable. Calendar intent analysis requires OpenAI service.');
     }
 
-    const prompt = `You are a calendar assistant. Analyze this request: "${request}"
+    const prompt = `You are a calendar assistant. Analyze the user's request and choose the appropriate operation.
 
 Choose the operation and extract parameters:
 
@@ -1559,13 +1625,24 @@ Remember: operation must be exactly one of: list, create, update, delete, check_
       });
 
       const analysis = await openaiService.generateStructuredData(
+        request,
         prompt,
-        'Analyze calendar requests and extract operation details',
+        {
+          type: 'object',
+          properties: {
+            operation: {
+              type: 'string',
+              enum: ['create', 'list', 'update', 'delete', 'check_availability', 'find_slots']
+            },
+            parameters: { type: 'object' },
+            confidence: { type: 'number' },
+            reasoning: { type: 'string' }
+          },
+          required: ['operation', 'parameters', 'confidence', 'reasoning']
+        },
         {
           temperature: 0.1,
-          maxTokens: 800,
-          // Add JSON schema for stricter validation
-          response_format: { type: "json_object" }
+          maxTokens: 800
         }
       ) as {
         operation: string;
@@ -1693,12 +1770,12 @@ Keep the response focused and informative. Don't use markdown formatting.`;
       return response.trim();
 
     } catch (error) {
-      logger.error('AI response generation failed, using fallback', error as Error, {
-        correlationId: `calendar-response-fallback-${Date.now()}`,
-        operation: 'response_generation_fallback'
+      logger.error('AI response generation failed - no fallback available', error as Error, {
+        correlationId: `calendar-response-error-${Date.now()}`,
+        operation: 'response_generation_error'
       });
 
-      return this.generateFallbackResponse(result, intent.operation);
+      throw error;
     }
   }
 

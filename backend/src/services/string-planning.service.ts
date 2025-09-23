@@ -81,13 +81,28 @@ export class StringPlanningService extends BaseService {
       // Simple, focused prompt for natural language planning
       const prompt = this.createStringPlanningPrompt(context);
 
+      logger.debug('🔍 STRING PLANNING - SENDING TO AI', {
+        correlationId,
+        promptLength: prompt.length,
+        prompt: prompt.substring(0, 500) + '...',
+        operation: 'string_planning_ai_request'
+      });
+
       const response = await this.openaiService.generateStructuredData(
+        context.originalRequest,
         prompt,
-        'Plan next step in natural language',
+        {
+          type: 'object',
+          properties: {
+            nextStep: { type: 'string' },
+            isComplete: { type: 'boolean' },
+            reasoning: { type: 'string' }
+          },
+          required: ['nextStep', 'isComplete']
+        },
         {
           temperature: 0.3,
-          maxTokens: 300,
-          response_format: { type: "json_object" }
+          maxTokens: 300
         }
       );
 
@@ -136,20 +151,8 @@ export class StringPlanningService extends BaseService {
         }
       });
 
-      // Simple fallback for when AI fails
-      if (context.completedSteps.length === 0) {
-        return {
-          nextStep: `Help with: ${context.originalRequest}`,
-          isComplete: false,
-          reasoning: 'Fallback planning due to AI service error'
-        };
-      } else {
-        return {
-          nextStep: '',
-          isComplete: true,
-          reasoning: 'Unable to plan further steps due to AI service error'
-        };
-      }
+      // No fallback - let AI failures be explicit
+      throw error;
     }
   }
 
@@ -179,6 +182,31 @@ ${context.stepResults.map((result, i) => `  ${i + 1}. ${result.substring(0, 200)
 - No previous steps completed yet`;
     }
 
+    // Check for repeated failures or similar steps
+    const recentSteps = context.completedSteps.slice(-3); // Last 3 steps
+    const recentResults = context.stepResults.slice(-3); // Last 3 results
+
+    let failureAnalysis = '';
+    if (recentSteps.length >= 2) {
+      const hasRepeatedFailures = recentResults.every(result =>
+        result.toLowerCase().includes('wasn\'t able to') ||
+        result.toLowerCase().includes('unfortunately') ||
+        result.toLowerCase().includes('failed') ||
+        result.toLowerCase().includes('error') ||
+        result.toLowerCase().includes('couldn\'t')
+      );
+
+      const hasSimilarSteps = recentSteps.every(step =>
+        step.toLowerCase().includes('access') && step.toLowerCase().includes('calendar')
+      );
+
+      if (hasRepeatedFailures && hasSimilarSteps) {
+        failureAnalysis = `
+IMPORTANT: The last ${recentSteps.length} steps have all failed with similar calendar access issues.
+Consider marking this workflow as COMPLETE rather than retrying the same approach.`;
+      }
+    }
+
     prompt += `
 
 Plan the next single step as a clear, natural language instruction that tells an expert agent what to do.
@@ -194,7 +222,8 @@ Guidelines:
 - Include relevant timeframes (use current year ${currentYear})
 - Focus on one clear action per step
 - Use natural, conversational language
-- If the request is complete, mark isComplete as true
+- If the request is complete OR if repeated attempts have failed, mark isComplete as true
+- Avoid suggesting the same action that has already failed multiple times${failureAnalysis}
 
 Respond with JSON:
 {
@@ -270,9 +299,16 @@ Respond with JSON:
         prompt,
         'Analyze step results for planning',
         {
+          type: 'object',
+          properties: {
+            summary: { type: 'string' },
+            shouldContinue: { type: 'boolean' }
+          },
+          required: ['summary', 'shouldContinue']
+        },
+        {
           temperature: 0.2,
-          maxTokens: 200,
-          response_format: { type: "json_object" }
+          maxTokens: 200
         }
       );
 

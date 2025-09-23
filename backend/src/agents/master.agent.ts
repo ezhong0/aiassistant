@@ -713,6 +713,13 @@ Return JSON with this structure:
 }`;
 
     try {
+      logger.debug('🔍 INTENT ANALYSIS - SENDING TO AI', {
+        correlationId: logContext.correlationId,
+        userInput: context.userInput,
+        promptLength: prompt.length,
+        operation: 'intent_analysis_ai_request'
+      });
+
       const response = await openaiService.generateStructuredData(
         context.userInput,
         prompt,
@@ -745,8 +752,26 @@ Return JSON with this structure:
               previewDescription: { type: 'string' }
             }
           },
-          readOperations: { type: 'array' }
+          readOperations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                operation: { type: 'string' },
+                parameters: { type: 'object' }
+              }
+            }
+          }
         }
+      });
+
+      logger.debug('🎯 INTENT ANALYSIS - AI RESPONSE RECEIVED', {
+        correlationId: logContext.correlationId,
+        response: JSON.stringify(response),
+        responseType: typeof response,
+        hasIntentType: !!(response as any)?.intentType,
+        operation: 'intent_analysis_ai_response'
       });
 
       const intentAnalysis = response as IntentAnalysis;
