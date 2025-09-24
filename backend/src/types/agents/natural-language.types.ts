@@ -66,6 +66,20 @@ export interface AgentExecutionContext {
 }
 
 /**
+ * Chain-of-Thought reasoning for intent analysis
+ */
+export interface IntentReasoning {
+  /** User's goal stated in simple terms */
+  userGoal: string;
+  /** How the operation maps to the user's goal */
+  operationMapping: string;
+  /** How parameters were extracted from context */
+  parameterExtraction: string;
+  /** Optional confidence analysis */
+  confidenceAnalysis?: string;
+}
+
+/**
  * Agent's analysis of a natural language request
  */
 export interface AgentIntent {
@@ -75,8 +89,8 @@ export interface AgentIntent {
   parameters: Record<string, any>;
   /** Confidence level in the analysis (0.0 to 1.0) */
   confidence: number;
-  /** AI's reasoning for the tool selection */
-  reasoning: string;
+  /** AI's reasoning for the tool selection (can be structured CoT or simple string) */
+  reasoning: string | IntentReasoning;
   /** Tools the agent plans to use */
   toolsUsed: string[];
   /** Optional: Alternative operations considered */
@@ -93,8 +107,8 @@ export interface AgentIntent {
 export interface NaturalLanguageResponse {
   /** Human-readable response to the user */
   response: string;
-  /** Agent's reasoning for its actions */
-  reasoning: string;
+  /** Agent's reasoning for its actions (can be structured CoT or simple string) */
+  reasoning: string | IntentReasoning;
   /** Structured metadata for MasterAgent coordination */
   metadata: Record<string, any>;
   /** Optional: Suggested follow-up actions */

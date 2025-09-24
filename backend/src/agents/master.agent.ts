@@ -2207,12 +2207,19 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
    * Now supports skip/replan for elegant handling of uncertain situations
    */
   private async determineAgentForStringStep(stepDescription: string): Promise<string> {
-    // Agent selection result type
+    // Agent selection result with CoT reasoning
+    interface AgentSelectionReasoning {
+      coreTask: string;
+      requirements: string[];
+      capabilityMatch: string;
+      confidenceAnalysis: string;
+    }
+
     interface AgentSelectionResult {
+      reasoning: AgentSelectionReasoning;
       action: 'execute' | 'skip' | 'replan';
       agent?: string;
       confidence: number;
-      reasoning: string;
       replanning?: {
         issue: string;
         suggestion: string;
@@ -2229,32 +2236,53 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
       const prompt = `Task: "${stepDescription}"
 
+Available agents with capabilities:
 ${PromptUtils.formatAgentCapabilities(agentCapabilities)}
 
-Analyze step-by-step:
-1. What is the core task?
-2. Is there a suitable agent for this? (confidence > 0.7)
-3. If no good match exists, should we:
-   - SKIP: Step is optional/redundant or already covered
-   - REPLAN: Step needs to be broken down differently
-   - EXECUTE: We have a good agent match
+THINK STEP-BY-STEP (Chain-of-Thought):
 
-Return JSON:
+Step 1 - Identify Core Task:
+[What is the primary goal of this task? Be specific]
+
+Step 2 - List Requirements:
+[What capabilities, data, or actions are needed to complete this task?]
+
+Step 3 - Match Capabilities:
+[Compare requirements to agent capabilities listed above]
+[Which agent(s) have the needed capabilities?]
+[Explain the match quality]
+
+Step 4 - Evaluate Confidence:
+[How well does the best match fit? Score 0-1]
+[Any concerns, edge cases, or ambiguities?]
+[If confidence < 0.7, should we SKIP or REPLAN?]
+
+Step 5 - Make Decision:
+[EXECUTE: Good agent match (confidence >= 0.7)]
+[SKIP: Step is optional/redundant]
+[REPLAN: Step needs better phrasing]
+
+THEN return JSON:
 {
+  "reasoning": {
+    "coreTask": "The primary goal is...",
+    "requirements": ["capability1", "capability2"],
+    "capabilityMatch": "Agent X has Y which handles Z because...",
+    "confidenceAnalysis": "High confidence (0.9) because... OR Low confidence (0.5) because..."
+  },
   "action": "execute" | "skip" | "replan",
   "agent": "agentName or null",
   "confidence": 0.9,
-  "reasoning": "This requires X which agent Y handles best",
   "replanning": {
-    "issue": "Why no agent can handle this",
-    "suggestion": "How to rephrase the step"
+    "issue": "No agent handles X",
+    "suggestion": "Rephrase as: ..."
   }
 }`;
 
       const response = await openaiService.generateText(
         prompt,
-        'Determine appropriate agent for step with skip/replan logic',
-        { temperature: 0.2, maxTokens: 200 }
+        'Determine appropriate agent for step with Chain-of-Thought reasoning',
+        { temperature: 0.2, maxTokens: 400 } // Increased for CoT
       );
 
       const selection: AgentSelectionResult = JSON.parse(response);
@@ -2263,9 +2291,10 @@ Return JSON:
       if (selection.action === 'skip') {
         logger.info('Skipping step - no suitable agent', {
           step: stepDescription,
-          reason: selection.reasoning
+          reasoning: selection.reasoning,
+          confidence: selection.confidence
         });
-        throw new Error(`SKIP: ${selection.reasoning}`);
+        throw new Error(`SKIP: ${selection.reasoning.coreTask}. ${selection.reasoning.confidenceAnalysis}`);
       }
 
       // Handle replan
@@ -2292,11 +2321,13 @@ Return JSON:
         throw new Error(`Invalid agent selected: ${selection.agent}. Available: ${availableAgents.join(', ')}`);
       }
 
-      logger.info('Agent selected for step', {
+      logger.info('Agent selected for step with CoT reasoning', {
         step: stepDescription,
         agent: selection.agent,
         confidence: selection.confidence,
-        reasoning: selection.reasoning
+        reasoning: selection.reasoning,
+        coreTask: selection.reasoning.coreTask,
+        capabilityMatch: selection.reasoning.capabilityMatch
       });
 
       return selection.agent;

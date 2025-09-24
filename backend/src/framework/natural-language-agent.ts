@@ -101,9 +101,29 @@ export interface AgentConfig {
 }
 
 /**
+ * Chain-of-Thought reasoning for intent analysis
+ */
+export interface IntentReasoning {
+  /** What the user wants to accomplish */
+  userGoal: string;
+
+  /** Which operation achieves this goal */
+  operationMapping: string;
+
+  /** How parameters were extracted */
+  parameterExtraction: string;
+
+  /** Confidence assessment rationale */
+  confidenceAnalysis?: string;
+}
+
+/**
  * Analyzed intent from natural language input
  */
 export interface AnalyzedIntent {
+  /** Chain-of-Thought reasoning process */
+  reasoning: IntentReasoning;
+
   /** The operation to execute */
   operation: string;
 
@@ -112,9 +132,6 @@ export interface AnalyzedIntent {
 
   /** Confidence level (0-1) */
   confidence: number;
-
-  /** Reasoning for the intent */
-  reasoning: string;
 }
 
 /**
@@ -411,23 +428,38 @@ Available Operations: ${config.operations.join(', ')}
 ${examples}${PromptUtils.getConversationContext(context)}
 User Query: "${query}"
 
-Analyze this request and determine:
-1. Which operation to execute
-2. What parameters are needed (consider timezone for dates/times)
-3. Your confidence level
-4. Your reasoning
+ANALYZE INTENT STEP-BY-STEP (Chain-of-Thought):
 
-Return JSON: {
+Step 1 - User Goal:
+[What does the user want to accomplish? State in simple terms]
+
+Step 2 - Operation Mapping:
+[Which operation achieves this goal? Why this operation?]
+
+Step 3 - Parameter Extraction:
+[What parameters are needed? Extract from query and context]
+[Consider timezone for dates/times: ${context.timezone || 'not specified'}]
+
+Step 4 - Confidence Assessment:
+[How certain is this interpretation? Any ambiguities?]
+
+THEN return JSON:
+{
+  "reasoning": {
+    "userGoal": "User wants to...",
+    "operationMapping": "Goal X maps to operation Y because...",
+    "parameterExtraction": "Found param1=value1 from...",
+    "confidenceAnalysis": "High confidence because..."
+  },
   "operation": "operation_name",
   "parameters": { "param1": "value1", ... },
-  "confidence": 0.95,
-  "reasoning": "User wants to..."
+  "confidence": 0.95
 }`;
 
     const response = await this.openaiService.generateText(
       prompt,
       'You analyze user requests and extract structured intent. Return only valid JSON.',
-      { temperature: 0.2, maxTokens: 500 }
+      { temperature: 0.2, maxTokens: 600 } // Increased for CoT reasoning
     );
 
     try {
@@ -584,7 +616,11 @@ Would you like me to execute this draft?`;
       operation: operation.operation as string,
       parameters: operation.parameters,
       confidence: 1.0,
-      reasoning: 'Executed confirmed draft'
+      reasoning: {
+        userGoal: 'Execute confirmed draft',
+        operationMapping: 'Draft execution maps to stored operation',
+        parameterExtraction: 'Parameters retrieved from confirmed draft'
+      }
     }, config, context);
 
     return {

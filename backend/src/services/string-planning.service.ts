@@ -30,12 +30,22 @@ export interface StringStepResult {
 }
 
 /**
+ * Chain-of-Thought reasoning for step planning
+ */
+export interface StepPlanningReasoning {
+  currentState: string;
+  gaps: string[];
+  progressCheck: string;
+  nextAction: string;
+}
+
+/**
  * String-based planning result
  */
 export interface StringStepPlan {
+  reasoning: StepPlanningReasoning;
   nextStep: string;
   isComplete: boolean;
-  reasoning?: string;
 }
 
 /**
@@ -97,15 +107,24 @@ export class StringPlanningService extends BaseService {
         {
           type: 'object',
           properties: {
+            reasoning: {
+              type: 'object',
+              properties: {
+                currentState: { type: 'string' },
+                gaps: { type: 'array', items: { type: 'string' } },
+                progressCheck: { type: 'string' },
+                nextAction: { type: 'string' }
+              },
+              required: ['currentState', 'gaps', 'progressCheck', 'nextAction']
+            },
             nextStep: { type: 'string' },
-            isComplete: { type: 'boolean' },
-            reasoning: { type: 'string' }
+            isComplete: { type: 'boolean' }
           },
-          required: ['nextStep', 'isComplete']
+          required: ['reasoning', 'nextStep', 'isComplete']
         },
         {
           temperature: 0.3,
-          maxTokens: 300
+          maxTokens: 500
         }
       );
 
@@ -125,7 +144,7 @@ export class StringPlanningService extends BaseService {
         context.currentStep,
         plan.nextStep,
         plan.isComplete,
-        plan.reasoning || 'String-based planning step',
+        plan.reasoning.nextAction,
         {
           correlationId,
           sessionId: context.userContext?.sessionId || 'unknown',
@@ -134,11 +153,13 @@ export class StringPlanningService extends BaseService {
         }
       );
 
-      logger.info('String-based step planned successfully', {
+      logger.info('String-based step planned with CoT reasoning', {
         correlationId,
         nextStep: plan.nextStep.substring(0, 100),
         isComplete: plan.isComplete,
-        reasoning: plan.reasoning?.substring(0, 100),
+        currentState: plan.reasoning.currentState,
+        progressCheck: plan.reasoning.progressCheck,
+        gaps: plan.reasoning.gaps,
         operation: 'string_step_planned'
       });
 
@@ -160,7 +181,7 @@ export class StringPlanningService extends BaseService {
   }
 
   /**
-   * Create simple, focused prompt for string planning
+   * Create Chain-of-Thought prompt for step planning
    */
   private createStringPlanningPrompt(context: StringWorkflowContext): string {
     // Use PromptUtils for consistent temporal context
@@ -170,75 +191,56 @@ export class StringPlanningService extends BaseService {
 
     let prompt = `${temporalContext}
 
-You are planning the next step to help with this request: "${context.originalRequest}"
-
-Current situation:
-- This is step ${context.currentStep} (max ${context.maxSteps} steps)`;
+Original Request: "${context.originalRequest}"
+Current Step: ${context.currentStep}/${context.maxSteps}
+`;
 
     if (context.completedSteps.length > 0) {
       prompt += `
-- Previous steps completed:
-${context.completedSteps.map((step, i) => `  ${i + 1}. ${step}`).join('\n')}`;
-
-      if (context.stepResults.length > 0) {
-        prompt += `
-- Previous results:
-${context.stepResults.map((result, i) => `  ${i + 1}. ${result.substring(0, 200)}...`).join('\n')}`;
-      }
+Previous Steps & Results:
+${context.completedSteps.map((step, i) =>
+  `${i + 1}. ${step}\n   → ${context.stepResults[i]?.substring(0, 150) || 'N/A'}`
+).join('\n')}`;
     } else {
-      prompt += `
-- No previous steps completed yet`;
-    }
-
-    // Check for repeated failures or similar steps
-    const recentSteps = context.completedSteps.slice(-3); // Last 3 steps
-    const recentResults = context.stepResults.slice(-3); // Last 3 results
-
-    let failureAnalysis = '';
-    if (recentSteps.length >= 2) {
-      const hasRepeatedFailures = recentResults.every(result =>
-        result.toLowerCase().includes('wasn\'t able to') ||
-        result.toLowerCase().includes('unfortunately') ||
-        result.toLowerCase().includes('failed') ||
-        result.toLowerCase().includes('error') ||
-        result.toLowerCase().includes('couldn\'t')
-      );
-
-      const hasSimilarSteps = recentSteps.every(step =>
-        step.toLowerCase().includes('access') && step.toLowerCase().includes('calendar')
-      );
-
-      if (hasRepeatedFailures && hasSimilarSteps) {
-        failureAnalysis = `
-IMPORTANT: The last ${recentSteps.length} steps have all failed with similar calendar access issues.
-Consider marking this workflow as COMPLETE rather than retrying the same approach.`;
-      }
+      prompt += `\nPrevious Steps: None (this is the first step)`;
     }
 
     prompt += `
 
-Plan the next single step as a clear, natural language instruction that tells an expert agent what to do.
+PLAN NEXT STEP (Chain-of-Thought):
 
-Examples of good steps:
-- "Get calendar events for next Tuesday"
-- "Find John Smith's email address from contacts"
-- "Compose an email to the team about the meeting"
-- "Schedule a 30-minute call with Sarah for tomorrow afternoon"
+Step 1 - Assess Current State:
+[What has been accomplished so far? What information/results do we have?]
+
+Step 2 - Identify Gaps:
+[What information or actions are still needed to fulfill the request?]
+[What's missing from what we have vs what was requested?]
+
+Step 3 - Evaluate Progress:
+[Are we making progress toward the goal?]
+[Are we stuck in a loop? (Check if recent steps are semantically similar)]
+[If we've tried the same approach 3+ times with failures, we're stuck]
+
+Step 4 - Plan Next Action:
+[What's the logical next step to make progress?]
+[OR should we stop if the request is fulfilled or we're stuck?]
+
+THEN return JSON:
+{
+  "reasoning": {
+    "currentState": "We have X, accomplished Y",
+    "gaps": ["Still need Z", "Missing W"],
+    "progressCheck": "Making progress" | "Stuck - same approach tried 3 times" | "Request fulfilled",
+    "nextAction": "Best to do X because Y" | "Stop because request is complete"
+  },
+  "nextStep": "Clear, specific instruction for agent" | "",
+  "isComplete": false | true
+}
 
 Guidelines:
-- Be specific about what needs to be done
-- Include relevant timeframes (use current date/time provided above)
-- Focus on one clear action per step
-- Use natural, conversational language
-- If the request is complete OR if repeated attempts have failed, mark isComplete as true
-- Avoid suggesting the same action that has already failed multiple times${failureAnalysis}
-
-Respond with JSON:
-{
-  "nextStep": "Clear instruction for what to do next",
-  "isComplete": false,
-  "reasoning": "Brief explanation of why this step is needed"
-}`;
+- Be specific and include timeframes from temporal context above
+- If progressCheck shows we're stuck or request is fulfilled, set isComplete=true
+- Use natural, conversational language for nextStep`;
 
     return prompt;
   }
@@ -251,11 +253,22 @@ Respond with JSON:
       throw new Error('Invalid AI response format');
     }
 
+    if (!response.reasoning || typeof response.reasoning !== 'object') {
+      throw new Error('AI response missing CoT reasoning');
+    }
+
+    const reasoning: StepPlanningReasoning = {
+      currentState: response.reasoning.currentState || 'Unknown state',
+      gaps: Array.isArray(response.reasoning.gaps) ? response.reasoning.gaps : [],
+      progressCheck: response.reasoning.progressCheck || 'Unknown progress',
+      nextAction: response.reasoning.nextAction || 'No action specified'
+    };
+
     if (response.isComplete === true) {
       return {
+        reasoning,
         nextStep: '',
-        isComplete: true,
-        reasoning: response.reasoning || 'Task completed'
+        isComplete: true
       };
     }
 
@@ -264,9 +277,9 @@ Respond with JSON:
     }
 
     return {
+      reasoning,
       nextStep: response.nextStep.trim(),
-      isComplete: false,
-      reasoning: response.reasoning || 'AI planning step'
+      isComplete: false
     };
   }
 
