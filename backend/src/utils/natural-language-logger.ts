@@ -180,6 +180,10 @@ class NaturalLanguageLogger {
   ): void {
     if (!this.isEnabled) return;
     
+    // Detect truncation in request and response
+    const requestTruncated = request.length > 300;
+    const responseTruncated = response.response.length > 300;
+    
     (this.logger as any).agent('AGENT_COMMUNICATION', {
       type: 'agent_communication',
       sessionId: context.sessionId,
@@ -187,8 +191,12 @@ class NaturalLanguageLogger {
       correlationId: context.correlationId,
       agent,
       request: request.substring(0, 300),
+      requestTruncated,
+      requestLength: request.length,
       response: {
         response: response.response.substring(0, 300),
+        responseTruncated,
+        responseLength: response.response.length,
         reasoning: response.reasoning,
         hasDraft: !!response.draft,
         draftId: response.draft?.draftId,

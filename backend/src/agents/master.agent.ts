@@ -2171,10 +2171,13 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       );
 
       // 📨 LOG AGENT RESPONSE
+      const responseTruncated = (result.response?.length || 0) > 200;
       logger.info('📨 RECEIVED RESPONSE FROM SUBAGENT', {
         agentName,
         success: result.success,
         response: result.response?.substring(0, 200),
+        responseTruncated,
+        responseLength: result.response?.length || 0,
         sessionId,
         operation: 'natural_language_response'
       });
@@ -2245,16 +2248,19 @@ Step 3 - Match Capabilities:
 [Compare requirements to agent capabilities listed above]
 [Which agent(s) have the needed capabilities?]
 [Explain the match quality]
+[CRITICAL: Check if task involves system issues like auth, permissions, or infrastructure]
 
 Step 4 - Evaluate Confidence:
 [How well does the best match fit? Score 0-1]
 [Any concerns, edge cases, or ambiguities?]
+[CRITICAL: If task is asking user to fix system/auth issues, NO AGENT can do this - SKIP immediately]
 [If confidence < 0.7, should we SKIP or REPLAN?]
 
 Step 5 - Make Decision:
-[EXECUTE: Good agent match (confidence >= 0.7)]
-[SKIP: Step is optional/redundant]
-[REPLAN: Step needs better phrasing]
+[EXECUTE: Good agent match (confidence >= 0.7) AND task is actionable by an agent]
+[SKIP: No agent can handle this (e.g., user needs to reconnect account, check settings, fix permissions)]
+[SKIP: Step is optional/redundant/already handled by error]
+[REPLAN: Step needs better phrasing but IS actionable]
 
 THEN return JSON:
 {
@@ -2723,6 +2729,14 @@ Return JSON: { "relatesToWorkflow": true/false, "action": "continue|new" }
       // For email agent, get email tokens
       if (agentName === 'emailAgent') {
         const accessToken = await tokenManager.getValidTokensForGmail(teamId, actualUserId);
+        logger.debug('Retrieved Gmail access token', {
+          agentName,
+          teamId,
+          actualUserId,
+          hasToken: !!accessToken,
+          tokenLength: accessToken?.length || 0,
+          operation: 'get_gmail_token'
+        });
         return accessToken;
       }
 

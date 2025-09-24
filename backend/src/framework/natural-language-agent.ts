@@ -727,11 +727,24 @@ Generate a natural, helpful response for the user. Be concise and conversational
 ${context?.userPreferences ? 'Adapt your response style to match user preferences above.' : ''}
 Do NOT return JSON - return plain text response.`;
 
-    return await this.openaiService.generateText(
+    const response = await this.openaiService.generateText(
       prompt,
       'You convert structured operation results into natural language responses for users.',
       { temperature: 0.7, maxTokens: 300 }
     );
+
+    // Log truncation detection
+    if (response.length >= 280) { // Close to token limit
+      logger.warn('Response may be truncated due to token limit', {
+        responseLength: response.length,
+        maxTokens: 300,
+        agent: config.name,
+        operation: intent.operation,
+        correlationId: context?.correlationId
+      });
+    }
+
+    return response;
   }
 
   /**
