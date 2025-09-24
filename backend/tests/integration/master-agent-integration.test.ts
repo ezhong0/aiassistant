@@ -1,12 +1,12 @@
 /**
- * Enhanced MasterAgent Integration Tests
+ * MasterAgent Integration Tests
  * Tests the new context detection, gathering, and proposal generation functionality
  */
 
 import { MasterAgent, MasterAgentResponse, ProposalResponse, ContextGatheringResult } from '../../src/agents/master.agent';
 // import { SlackMessageReaderService } from '../../src/services/slack-message-reader.service';
-import { SlackContext } from '../../src/types/slack.types';
-import { SlackMessage } from '../../src/types/slack-message-reader.types';
+import { SlackContext } from '../../src/types/slack/slack.types';
+import { SlackMessage } from '../../src/types/slack/slack-message-reader.types';
 import { ToolCall } from '../../src/types/tools';
 import { serviceManager } from '../../src/services/service-manager';
 import logger from '../../src/utils/logger';
@@ -16,7 +16,7 @@ jest.mock('../../src/services/service-manager');
 jest.mock('../../src/services/slack-message-reader.service');
 jest.mock('../../src/utils/logger');
 
-describe('Enhanced MasterAgent Integration Tests', () => {
+describe('MasterAgent Integration Tests', () => {
   let masterAgent: MasterAgent;
   let mockSlackMessageReaderService: jest.Mocked<any>; // SlackMessageReaderService>;
   let mockSlackContext: SlackContext;

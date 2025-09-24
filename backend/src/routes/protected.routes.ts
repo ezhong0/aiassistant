@@ -1,6 +1,6 @@
 import express, { Response } from 'express';
 import { z } from 'zod';
-import { validateRequest } from '../middleware/enhanced-validation.middleware';
+import { validateRequest } from '../middleware/validation.middleware';
 import { 
   authenticateToken, 
   optionalAuth, 

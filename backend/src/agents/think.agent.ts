@@ -1,5 +1,5 @@
 /**
- * Think Agent V2 - Meta-Reasoning Microservice
+ * Think Agent - Meta-Reasoning Microservice
  *
  * Reflection and analysis agent using the NaturalLanguageAgent pattern.
  *
@@ -22,7 +22,7 @@ interface ThinkResult {
 }
 
 /**
- * ThinkAgentV2 - Meta-Reasoning Microservice
+ * ThinkAgent - Meta-Reasoning Microservice
  *
  * Microservice API:
  *   Input: Natural language analysis/reflection request
@@ -33,7 +33,7 @@ interface ThinkResult {
  *   "Verify this aligns with user intent" → "Yes, this matches the user's goal..."
  *   "Suggest improvements" → "Consider these enhancements: 1. ... 2. ..."
  */
-export class ThinkAgentV2 extends NaturalLanguageAgent {
+export class ThinkAgent extends NaturalLanguageAgent {
 
   /**
    * Agent configuration - defines what this agent can do
@@ -273,7 +273,7 @@ Provide a clear evaluation.`;
    * Get OpenAI function schema (auto-generated from config)
    */
   static getOpenAIFunctionSchema(): any {
-    const instance = new ThinkAgentV2();
+    const instance = new ThinkAgent();
     const config = instance.getAgentConfig();
 
     return {
@@ -296,7 +296,7 @@ Provide a clear evaluation.`;
    * Get agent capabilities (for MasterAgent discovery)
    */
   static getCapabilities(): string[] {
-    const instance = new ThinkAgentV2();
+    const instance = new ThinkAgent();
     const config = instance.getAgentConfig();
     return config.capabilities || config.operations;
   }

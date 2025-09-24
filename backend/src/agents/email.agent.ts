@@ -1,5 +1,5 @@
 /**
- * Email Agent V2 - Email Management Microservice
+ * Email Agent - Email Management Microservice
  *
  * Gmail integration using the NaturalLanguageAgent pattern.
  *
@@ -24,7 +24,7 @@ interface EmailResult {
 }
 
 /**
- * EmailAgentV2 - Email Management Microservice
+ * EmailAgent - Email Management Microservice
  *
  * Microservice API:
  *   Input: Natural language email request
@@ -35,7 +35,7 @@ interface EmailResult {
  *   "Search for emails from Sarah about deployment" → "Found 5 emails from Sarah..."
  *   "Reply to the latest email from Mike" → "Reply sent successfully..."
  */
-export class EmailAgentV2 extends NaturalLanguageAgent {
+export class EmailAgent extends NaturalLanguageAgent {
 
   /**
    * Agent configuration - defines what this agent can do
@@ -227,7 +227,7 @@ Important:
    * Get OpenAI function schema (auto-generated from config)
    */
   static getOpenAIFunctionSchema(): any {
-    const instance = new EmailAgentV2();
+    const instance = new EmailAgent();
     const config = instance.getAgentConfig();
 
     return {
@@ -250,7 +250,7 @@ Important:
    * Get agent capabilities (for MasterAgent discovery)
    */
   static getCapabilities(): string[] {
-    const instance = new EmailAgentV2();
+    const instance = new EmailAgent();
     const config = instance.getAgentConfig();
     return config.capabilities || config.operations;
   }

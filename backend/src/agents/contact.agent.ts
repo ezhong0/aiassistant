@@ -1,5 +1,5 @@
 /**
- * Contact Agent V2 - Contact Management Microservice
+ * Contact Agent - Contact Management Microservice
  *
  * Google Contacts integration using the NaturalLanguageAgent pattern.
  *
@@ -21,7 +21,7 @@ interface ContactResult {
 }
 
 /**
- * ContactAgentV2 - Contact Management Microservice
+ * ContactAgent - Contact Management Microservice
  *
  * Microservice API:
  *   Input: Natural language contact request
@@ -32,7 +32,7 @@ interface ContactResult {
  *   "Search for contacts at Acme Corp" → "Found 3 contacts at Acme Corp..."
  *   "Lookup sarah@example.com" → "Sarah Johnson: Product Manager at..."
  */
-export class ContactAgentV2 extends NaturalLanguageAgent {
+export class ContactAgent extends NaturalLanguageAgent {
 
   /**
    * Agent configuration - defines what this agent can do
@@ -164,7 +164,7 @@ Important:
    * Get OpenAI function schema (auto-generated from config)
    */
   static getOpenAIFunctionSchema(): any {
-    const instance = new ContactAgentV2();
+    const instance = new ContactAgent();
     const config = instance.getAgentConfig();
 
     return {
@@ -187,7 +187,7 @@ Important:
    * Get agent capabilities (for MasterAgent discovery)
    */
   static getCapabilities(): string[] {
-    const instance = new ContactAgentV2();
+    const instance = new ContactAgent();
     const config = instance.getAgentConfig();
     return config.capabilities || config.operations;
   }

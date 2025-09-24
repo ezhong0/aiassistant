@@ -256,7 +256,7 @@ export class SlackService extends BaseService {
         context.threadTs
       );
 
-      const unified = await this.masterAgent.processUserInputUnified(
+      const unified = await this.masterAgent.processUserInputWithDrafts(
         messageText,
         sessionId,
         context.userId,

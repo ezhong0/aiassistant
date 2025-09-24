@@ -1,5 +1,5 @@
 /**
- * Enhanced validation middleware using Zod schemas
+ * Validation middleware using Zod schemas
  */
 
 import { Request, Response, NextFunction } from 'express';

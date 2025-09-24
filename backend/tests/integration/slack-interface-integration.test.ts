@@ -1,6 +1,6 @@
 /**
- * Enhanced SlackInterface Integration Tests
- * Tests the integration between SlackInterfaceService and the enhanced MasterAgent
+ * SlackInterface Integration Tests
+ * Tests the integration between SlackInterfaceService and the MasterAgent
  */
 
 import { SlackInterfaceService } from '../../src/services/slack-interface.service';
@@ -15,7 +15,7 @@ jest.mock('../../src/services/service-manager');
 jest.mock('../../src/agents/master.agent');
 jest.mock('../../src/utils/logger');
 
-describe('Enhanced SlackInterface Integration Tests', () => {
+describe('SlackInterface Integration Tests', () => {
   let slackInterfaceService: SlackInterfaceService;
   let mockMasterAgent: jest.Mocked<MasterAgent>;
   let mockSlackContext: SlackContext;

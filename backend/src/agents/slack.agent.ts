@@ -1,5 +1,5 @@
 /**
- * Slack Agent V2 - Context Intelligence Microservice
+ * Slack Agent - Context Intelligence Microservice
  *
  * Natural language Slack context gathering using the NaturalLanguageAgent pattern.
  *
@@ -67,7 +67,7 @@ interface SlackAnalysisResult {
 }
 
 /**
- * SlackAgentV2 - Context Intelligence Microservice
+ * SlackAgent - Context Intelligence Microservice
  *
  * Microservice API:
  *   Input: Natural language query about Slack context
@@ -78,7 +78,7 @@ interface SlackAnalysisResult {
  *   "Find deployment thread" → "Found thread started by @john at 2:45pm..."
  *   "What mentioned me?" → "You were mentioned 3 times: @john asked..."
  */
-export class SlackAgentV2 extends NaturalLanguageAgent {
+export class SlackAgent extends NaturalLanguageAgent {
 
   /**
    * Agent configuration - defines what this agent can do
@@ -500,7 +500,7 @@ Keep it concise and actionable.`;
    * Get OpenAI function schema (auto-generated from config)
    */
   static getOpenAIFunctionSchema(): any {
-    const instance = new SlackAgentV2();
+    const instance = new SlackAgent();
     const config = instance.getAgentConfig();
 
     return {
@@ -523,7 +523,7 @@ Keep it concise and actionable.`;
    * Get agent capabilities (for MasterAgent discovery)
    */
   static getCapabilities(): string[] {
-    const instance = new SlackAgentV2();
+    const instance = new SlackAgent();
     const config = instance.getAgentConfig();
     return config.capabilities || config.operations;
   }

@@ -6,7 +6,7 @@ import {
   SlackSlashCommandPayloadSchema,
   SlackInteractiveComponentPayloadSchema
 } from '../schemas/slack.schemas';
-import { validateRequest } from '../middleware/enhanced-validation.middleware';
+import { validateRequest } from '../middleware/validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackService } from '../services/slack/slack.service';
 import { SlackOAuthService } from '../services/slack/slack-oauth.service';

@@ -11,7 +11,7 @@ import { SlackContext, SlackContextSchema } from '../types/slack/slack.types';
 import { SlackMessage } from '../types/slack/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
-import { ContextGatheringResult, ContextDetectionResult } from './slack-v2.agent';
+import { ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
 // ContactAgent removed - using AgentFactory for all agent access
 // Import WorkflowOrchestrator for extracted workflow functionality
@@ -23,9 +23,9 @@ import { StringPlanningService, StringWorkflowContext, StringStepPlan, StringSte
 import { ToolExecutorService } from '../services/tool-executor.service';
 
 /**
- * Result interface for unified processing
+ * Result interface for processing
  */
-export interface UnifiedProcessingResult {
+export interface ProcessingResult {
   message: string;           // Natural language response WITH draft contents
   needsConfirmation: boolean;
   draftId?: string;         // ID for tracking draft
@@ -525,7 +525,7 @@ export class MasterAgent {
    *
    * Returns plain text optimized for Slack instead of complex response objects.
    */
-  async processUserInputUnified(
+  async processUserInputWithDrafts(
     userInput: string,
     sessionId: string,
     userId?: string,
@@ -533,14 +533,14 @@ export class MasterAgent {
       accessToken?: string;
       context?: any;
     }
-  ): Promise<UnifiedProcessingResult> {
+  ): Promise<ProcessingResult> {
     const startTime = Date.now();
     const correlationId = `master-unified-${sessionId}-${Date.now()}`;
     const logContext: LogContext = {
       correlationId,
       userId,
       sessionId,
-      operation: 'processUserInputUnified',
+      operation: 'processUserInputWithDrafts',
       metadata: { inputLength: userInput.length }
     };
 
@@ -590,7 +590,7 @@ export class MasterAgent {
       const workflowId = this.workflowOrchestrator.generateWorkflowId(sessionId);
       const result = await this.executeStringBasedStepLoop(userInput, workflowId, sessionId, userId, options?.context?.slackContext);
 
-      // Convert MasterAgentResponse to UnifiedProcessingResult
+      // Convert MasterAgentResponse to ProcessingResult
       const draftInfo = this.extractDraftInfoFromToolResults(result.toolResults || []);
 
       return {

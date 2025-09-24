@@ -3,7 +3,7 @@ import logger from '../utils/logger';
 import { createLogContext } from '../utils/log-context';
 import { z } from 'zod';
 import { GoogleOAuthCallbackSchema, TokenRefreshRequestSchema, LogoutRequestSchema, MobileTokenExchangeSchema } from '../schemas/auth.schemas';
-import { validateRequest } from '../middleware/enhanced-validation.middleware';
+import { validateRequest } from '../middleware/validation.middleware';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
 import { AuthService } from '../services/auth.service';
@@ -26,7 +26,7 @@ import {
   validateGoogleCallback,
   validateTokenRefresh,
   validateMobileTokenExchange,
-} from '../middleware/enhanced-validation.middleware';
+} from '../middleware/validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
 import { SlackOAuthService } from '../services/slack/slack-oauth.service';
 
