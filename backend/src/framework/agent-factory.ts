@@ -1,4 +1,3 @@
-import { AIAgent } from './ai-agent';
 import logger from '../utils/logger';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agents/agent.types';
@@ -37,7 +36,7 @@ export interface AgentClass {
  * This replaces the need for a separate tool registry system
  */
 export class AgentFactory {
-  private static agents = new Map<string, AIAgent | any>();
+  private static agents = new Map<string, any>();
   private static toolMetadata = new Map<string, ToolMetadata>();
   private static initialized = false;
   private static cleanupInterval: NodeJS.Timeout | null = null;
@@ -46,7 +45,7 @@ export class AgentFactory {
   /**
    * Register a single agent instance with automatic tool discovery
    */
-  static registerAgent(name: string, agent: AIAgent | any): void {
+  static registerAgent(name: string, agent: any | any): void {
     if (this.agents.has(name)) {
       logger.warn(`Agent ${name} is already registered, replacing with new instance`, {
         correlationId: `agent-register-${Date.now()}`,
@@ -65,7 +64,6 @@ export class AgentFactory {
       operation: 'agent_registration_success',
       metadata: {
         agentName: name,
-        enabled: agent.isEnabled(),
         toolCount: this.getToolsForAgent(name).length
       }
     });
@@ -76,7 +74,7 @@ export class AgentFactory {
    */
   static registerAgentClass<TParams, TResult>(
     name: string,
-    AgentClass: new () => AIAgent<TParams, TResult> | any
+    AgentClass: new () => any | any
   ): void {
     try {
       const agent = new AgentClass();
@@ -102,7 +100,7 @@ export class AgentFactory {
   /**
    * Get an agent by name
    */
-  static getAgent(name: string): AIAgent | undefined {
+  static getAgent(name: string): any | undefined {
     const agent = this.agents.get(name);
     
     if (!agent) {
@@ -126,7 +124,7 @@ export class AgentFactory {
   /**
    * Get agent by tool name using dynamic discovery
    */
-  static getAgentByToolName(toolName: string): AIAgent | undefined {
+  static getAgentByToolName(toolName: string): any | undefined {
     const agentName = this.toolToAgentMap.get(toolName);
     if (!agentName) {
       return undefined;
@@ -145,7 +143,7 @@ export class AgentFactory {
   /**
    * Auto-register tools for an agent using dynamic discovery
    */
-  private static autoRegisterTools(agentName: string, agent: AIAgent): void {
+  private static autoRegisterTools(agentName: string, agent: any): void {
     const agentClass = agent.constructor as any;
     
     try {
@@ -223,14 +221,14 @@ export class AgentFactory {
   /**
    * Get all registered agents
    */
-  static getAllAgents(): AIAgent[] {
+  static getAllAgents(): any[] {
     return Array.from(this.agents.values());
   }
   
   /**
    * Get only enabled agents
    */
-  static getEnabledAgents(): AIAgent[] {
+  static getEnabledAgents(): any[] {
     return Array.from(this.agents.values()).filter(agent => agent.isEnabled());
   }
   
@@ -1025,7 +1023,7 @@ export class AgentFactory {
       return false;
     }
     
-    // Note: AIAgent doesn't have enable/disable methods in current implementation
+    // Note: any doesn't have enable/disable methods in current implementation
     // This would require extending the AIAgent class to support dynamic enable/disable
     
     return true;
@@ -1041,7 +1039,7 @@ export class AgentFactory {
       return false;
     }
     
-    // Note: AIAgent doesn't have enable/disable methods in current implementation
+    // Note: any doesn't have enable/disable methods in current implementation
     // This would require extending the AIAgent class to support dynamic enable/disable
     
     return true;
@@ -1145,7 +1143,7 @@ export const initializeAgentFactory = (): void => {
 /**
  * Convenience function to get an agent
  */
-export const getAgent = (name: string): AIAgent | undefined => {
+export const getAgent = (name: string): any | undefined => {
   return AgentFactory.getAgent(name);
 }
 

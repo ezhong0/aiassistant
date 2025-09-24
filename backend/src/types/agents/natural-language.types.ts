@@ -6,6 +6,34 @@
  */
 
 /**
+ * User preferences for personalized responses
+ */
+export interface UserPreferences {
+  /** Response verbosity level */
+  verbosity?: 'concise' | 'normal' | 'detailed';
+  /** Response tone */
+  tone?: 'casual' | 'professional';
+  /** Whether to include technical metadata (IDs, URLs, etc.) */
+  includeMetadata?: boolean;
+  /** User's display name */
+  displayName?: string;
+}
+
+/**
+ * Conversation turn for multi-turn context
+ */
+export interface ConversationTurn {
+  /** Role of the speaker */
+  role: 'user' | 'assistant';
+  /** Message content */
+  message: string;
+  /** Timestamp of the turn */
+  timestamp: Date;
+  /** Agent that handled this turn (if assistant) */
+  agentName?: string;
+}
+
+/**
  * Context for agent execution with natural language processing
  */
 export interface AgentExecutionContext {
@@ -25,6 +53,14 @@ export interface AgentExecutionContext {
   correlationId: string;
   /** Timestamp of the request */
   timestamp: Date;
+  /** User's timezone (IANA format: "America/New_York") */
+  timezone?: string;
+  /** User's locale (e.g., "en-US") */
+  locale?: string;
+  /** Recent conversation history for multi-turn context */
+  conversationHistory?: ConversationTurn[];
+  /** User preferences for personalized responses */
+  userPreferences?: UserPreferences;
   /** Additional metadata */
   metadata?: Record<string, any>;
 }

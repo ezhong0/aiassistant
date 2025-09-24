@@ -2,6 +2,7 @@ import logger from '../utils/logger';
 import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { OpenAIService } from '../services/openai.service';
 import { LogContext } from '../utils/log-context';
+import { PromptUtils } from '../utils/prompt-utils';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
@@ -2203,44 +2204,138 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
 
   /**
    * Determine which agent should handle a string-based step
+   * Now supports skip/replan for elegant handling of uncertain situations
    */
   private async determineAgentForStringStep(stepDescription: string): Promise<string> {
+    // Agent selection result type
+    interface AgentSelectionResult {
+      action: 'execute' | 'skip' | 'replan';
+      agent?: string;
+      confidence: number;
+      reasoning: string;
+      replanning?: {
+        issue: string;
+        suggestion: string;
+      };
+    }
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
       throw new Error('OpenAI service unavailable. Agent selection requires AI-powered analysis.');
     }
 
     try {
-      const prompt = `Which agent should handle this step: "${stepDescription}"
+      // Get dynamic agent capabilities
+      const agentCapabilities = await this.getAgentCapabilitiesForSelection();
 
-Available agents:
-- calendarAgent: Handle calendar events, meetings, scheduling
-- emailAgent: Handle email sending, searching, composing
-- contactAgent: Handle contact management, finding people
-- slackAgent: Handle Slack messaging, channel management
+      const prompt = `Task: "${stepDescription}"
 
-Respond with just the agent name: calendarAgent, emailAgent, contactAgent, or slackAgent`;
+${PromptUtils.formatAgentCapabilities(agentCapabilities)}
+
+Analyze step-by-step:
+1. What is the core task?
+2. Is there a suitable agent for this? (confidence > 0.7)
+3. If no good match exists, should we:
+   - SKIP: Step is optional/redundant or already covered
+   - REPLAN: Step needs to be broken down differently
+   - EXECUTE: We have a good agent match
+
+Return JSON:
+{
+  "action": "execute" | "skip" | "replan",
+  "agent": "agentName or null",
+  "confidence": 0.9,
+  "reasoning": "This requires X which agent Y handles best",
+  "replanning": {
+    "issue": "Why no agent can handle this",
+    "suggestion": "How to rephrase the step"
+  }
+}`;
 
       const response = await openaiService.generateText(
         prompt,
-        'Determine appropriate agent for step',
-        { temperature: 0.1, maxTokens: 20 }
+        'Determine appropriate agent for step with skip/replan logic',
+        { temperature: 0.2, maxTokens: 200 }
       );
 
-      const agentName = response.trim();
-      const { AgentFactory } = await import('../framework/agent-factory');
-      const availableAgents = AgentFactory.getEnabledAgentNames();
-      
-      if (!availableAgents.includes(agentName)) {
-        throw new Error(`Invalid agent selected: ${agentName}. Available agents: ${availableAgents.join(', ')}`);
+      const selection: AgentSelectionResult = JSON.parse(response);
+
+      // Handle skip
+      if (selection.action === 'skip') {
+        logger.info('Skipping step - no suitable agent', {
+          step: stepDescription,
+          reason: selection.reasoning
+        });
+        throw new Error(`SKIP: ${selection.reasoning}`);
       }
-      
-      return agentName;
+
+      // Handle replan
+      if (selection.action === 'replan') {
+        logger.info('Step needs replanning', {
+          step: stepDescription,
+          issue: selection.replanning?.issue,
+          suggestion: selection.replanning?.suggestion
+        });
+        throw new Error(`REPLAN: ${selection.replanning?.issue}. Suggestion: ${selection.replanning?.suggestion}`);
+      }
+
+      // Validate agent for execute
+      if (!selection.agent) {
+        throw new Error('Agent selection returned execute but no agent specified');
+      }
+
+      if (selection.confidence < 0.7) {
+        throw new Error(`Low confidence (${selection.confidence}) for agent selection. ${selection.reasoning}`);
+      }
+
+      const availableAgents = AgentFactory.getEnabledAgentNames();
+      if (!availableAgents.includes(selection.agent)) {
+        throw new Error(`Invalid agent selected: ${selection.agent}. Available: ${availableAgents.join(', ')}`);
+      }
+
+      logger.info('Agent selected for step', {
+        step: stepDescription,
+        agent: selection.agent,
+        confidence: selection.confidence,
+        reasoning: selection.reasoning
+      });
+
+      return selection.agent;
 
     } catch (error) {
       logger.error('Agent determination failed', error as Error);
+      // Preserve SKIP and REPLAN errors
+      if (error instanceof Error && (error.message.startsWith('SKIP:') || error.message.startsWith('REPLAN:'))) {
+        throw error;
+      }
       throw new Error(`Failed to determine appropriate agent for step: ${stepDescription}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Get agent capabilities for selection prompts
+   */
+  private async getAgentCapabilitiesForSelection() {
+    const agentNames = AgentFactory.getEnabledAgentNames();
+    const capabilities = [];
+
+    for (const name of agentNames) {
+      try {
+        const agent = AgentFactory.getAgent(name);
+        if (agent && typeof agent.getCapabilityDescription === 'function') {
+          const caps = agent.getCapabilityDescription();
+          capabilities.push({
+            name,
+            description: caps.description,
+            capabilities: caps.capabilities,
+            limitations: caps.limitations
+          });
+        }
+      } catch (error) {
+        logger.debug(`Could not get capabilities for ${name}`, { error });
+      }
+    }
+
+    return capabilities;
   }
 
   /**
@@ -2262,7 +2357,16 @@ Respond with just the agent name: calendarAgent, emailAgent, contactAgent, or sl
     }
 
     try {
-      const prompt = `User requested: "${originalRequest}"
+      // Use consistent temporal context
+      const temporalContext = PromptUtils.getTemporalContext({
+        sessionId,
+        correlationId: `response-gen-${Date.now()}`,
+        timestamp: new Date()
+      });
+
+      const prompt = `${temporalContext}
+
+User requested: "${originalRequest}"
 
 I completed these steps:
 ${completedSteps.map((step, i) => `${i + 1}. ${step}`).join('\n')}
@@ -2270,7 +2374,18 @@ ${completedSteps.map((step, i) => `${i + 1}. ${step}`).join('\n')}
 With these results:
 ${stepResults.map((result, i) => `${i + 1}. ${result.substring(0, 300)}`).join('\n')}
 
-Provide a natural, conversational response to the user that summarizes what was accomplished and includes any relevant information they requested. Be concise but helpful.`;
+Generate a clean, natural response to the user that:
+1. Directly answers their question with the relevant information
+2. Presents calendar events in a clean, readable format (if applicable)
+3. Uses relative time references (e.g., "in two days") based on current date/time above
+4. Removes any technical details, metadata, or URLs unless specifically useful
+5. Is concise and conversational
+
+DO NOT include:
+- Raw JSON data
+- Event IDs or technical identifiers
+- Full URLs (unless they're view links for events)
+- Duplicate information`;
 
       const response = await openaiService.generateText(
         prompt,

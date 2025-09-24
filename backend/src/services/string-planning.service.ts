@@ -2,6 +2,8 @@ import { BaseService } from './base-service';
 import logger from '../utils/logger';
 import { OpenAIService } from './openai.service';
 import { getService } from './service-manager';
+import { AgentExecutionContext } from '../types/agents/natural-language.types';
+import { PromptUtils } from '../utils/prompt-utils';
 
 /**
  * Simple workflow context for string-based planning
@@ -13,6 +15,7 @@ export interface StringWorkflowContext {
   completedSteps: string[];
   stepResults: string[];
   userContext?: any;
+  agentContext?: AgentExecutionContext; // For timezone/locale/preferences
 }
 
 /**
@@ -160,9 +163,14 @@ export class StringPlanningService extends BaseService {
    * Create simple, focused prompt for string planning
    */
   private createStringPlanningPrompt(context: StringWorkflowContext): string {
-    const currentYear = new Date().getFullYear();
+    // Use PromptUtils for consistent temporal context
+    const temporalContext = context.agentContext
+      ? PromptUtils.getTemporalContext(context.agentContext)
+      : `Current date/time: ${new Date().toLocaleString('en-US')}`;
 
-    let prompt = `You are planning the next step to help with this request: "${context.originalRequest}"
+    let prompt = `${temporalContext}
+
+You are planning the next step to help with this request: "${context.originalRequest}"
 
 Current situation:
 - This is step ${context.currentStep} (max ${context.maxSteps} steps)`;
@@ -219,7 +227,7 @@ Examples of good steps:
 
 Guidelines:
 - Be specific about what needs to be done
-- Include relevant timeframes (use current year ${currentYear})
+- Include relevant timeframes (use current date/time provided above)
 - Focus on one clear action per step
 - Use natural, conversational language
 - If the request is complete OR if repeated attempts have failed, mark isComplete as true
@@ -269,7 +277,7 @@ Respond with JSON:
     stepDescription: string,
     stepResult: string,
     context: StringWorkflowContext
-  ): Promise<{ summary: string; shouldContinue: boolean }> {
+  ): Promise<{ summary: string; shouldContinue: boolean; loopDetected?: boolean; fulfillmentScore?: number }> {
     const correlationId = `string-result-analysis-${Date.now()}`;
 
     try {
@@ -280,29 +288,43 @@ Respond with JSON:
         };
       }
 
-      const prompt = `Analyze what was accomplished in this step:
+      const prompt = `Analyze this workflow step:
 
 Step: "${stepDescription}"
 Result: "${stepResult.substring(0, 500)}"
 
-Original request: "${context.originalRequest}"
+Original Request: "${context.originalRequest}"
 
-Provide a brief summary of what was accomplished and whether we should continue planning more steps.
+Previous ${context.completedSteps.length} steps:
+${context.completedSteps.map((s, i) =>
+  `${i+1}. ${s} → ${context.stepResults[i]?.substring(0, 150) || 'N/A'}`
+).join('\n')}
 
-Respond with JSON:
+Critical Analysis:
+1. Was this step successful?
+2. Does this FULLY answer the original request?
+3. Are we repeating similar attempts? (Look for semantic similarity, not exact wording)
+   - Example: "Check calendar", "List calendar events", "Get calendar" = SIMILAR
+4. Is continuing likely to help, or are we stuck?
+
+Return JSON:
 {
-  "summary": "Brief summary of what was accomplished",
-  "shouldContinue": true/false
+  "summary": "Brief summary of accomplishment",
+  "shouldContinue": boolean,
+  "loopDetected": boolean,
+  "fulfillmentScore": 0.0-1.0
 }`;
 
       const analysis = await this.openaiService.generateStructuredData(
         prompt,
-        'Analyze step results for planning',
+        'Analyze step results for planning with loop detection',
         {
           type: 'object',
           properties: {
             summary: { type: 'string' },
-            shouldContinue: { type: 'boolean' }
+            shouldContinue: { type: 'boolean' },
+            loopDetected: { type: 'boolean' },
+            fulfillmentScore: { type: 'number', minimum: 0, maximum: 1 }
           },
           required: ['summary', 'shouldContinue']
         },
@@ -312,9 +334,22 @@ Respond with JSON:
         }
       );
 
+      const result = analysis as any;
+
+      // Log loop detection
+      if (result.loopDetected) {
+        logger.warn('Loop detected in workflow', {
+          correlationId,
+          step: stepDescription,
+          fulfillmentScore: result.fulfillmentScore
+        });
+      }
+
       return {
-        summary: (analysis as any).summary || stepResult.substring(0, 200),
-        shouldContinue: (analysis as any).shouldContinue !== false
+        summary: result.summary || stepResult.substring(0, 200),
+        shouldContinue: result.shouldContinue !== false && !result.loopDetected,
+        loopDetected: result.loopDetected,
+        fulfillmentScore: result.fulfillmentScore
       };
 
     } catch (error) {

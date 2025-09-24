@@ -7,13 +7,7 @@
 
 // Core types
 export * from '../types/agents/agent-result';
-export * from './agent-execution';
-export * from './agent-capabilities';
 export * from './natural-language-agent';
 
-// Utilities
-export * from '../utils/agent-utilities';
-
-// Legacy (for backward compatibility)
-export * from './ai-agent';
+// Agent factory
 export * from './agent-factory';

@@ -55,6 +55,7 @@ import {
   INaturalLanguageAgent,
 } from '../types/agents/natural-language.types';
 import logger from '../utils/logger';
+import { PromptUtils } from '../utils/prompt-utils';
 
 /**
  * Agent configuration - single source of truth for agent metadata
@@ -225,7 +226,7 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
       const result = await this.executeOperation(intent.operation, intent.parameters, authToken);
 
       // 5. Format response using LLM
-      const responseText = await this.formatResponse(request, result, intent, config);
+      const responseText = await this.formatResponse(request, result, intent, config, context);
 
       // Log agent communication
       const nlResponse: NaturalLanguageResponse = {
@@ -299,6 +300,13 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
   }
 
   /**
+   * Check if agent is enabled
+   */
+  isEnabled(): boolean {
+    return true;
+  }
+
+  /**
    * Check if agent can handle request - implements INaturalLanguageAgent
    */
   async canHandle(request: string): Promise<boolean> {
@@ -341,6 +349,42 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
   // ============================================================================
 
   /**
+   * Get few-shot examples for intent analysis
+   */
+  private getIntentExamples(config: AgentConfig): string {
+    // Default examples based on agent type
+    const agentName = config.name.toLowerCase();
+
+    if (agentName.includes('calendar')) {
+      return PromptUtils.addFewShotExamples([
+        {
+          input: 'what\'s on my cal tomorrow',
+          output: '{"operation": "list", "parameters": {"timeframe": "tomorrow"}, "confidence": 0.9, "reasoning": "User wants to see tomorrow\'s events"}'
+        },
+        {
+          input: 'schedule meeting with john at 2pm',
+          output: '{"operation": "create", "parameters": {"summary": "Meeting with John", "startTime": "2pm"}, "confidence": 0.85, "reasoning": "User wants to create an event"}'
+        }
+      ]);
+    }
+
+    if (agentName.includes('email')) {
+      return PromptUtils.addFewShotExamples([
+        {
+          input: 'send email to john about meeting',
+          output: '{"operation": "send", "parameters": {"to": "john", "subject": "meeting"}, "confidence": 0.9, "reasoning": "User wants to compose and send email"}'
+        },
+        {
+          input: 'find emails from sarah',
+          output: '{"operation": "search", "parameters": {"from": "sarah"}, "confidence": 0.95, "reasoning": "User wants to search for emails"}'
+        }
+      ]);
+    }
+
+    return ''; // No examples for other agents
+  }
+
+  /**
    * Analyze intent from natural language using LLM
    */
   private async analyzeIntent(
@@ -352,17 +396,24 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
       throw new Error('OpenAI service not available for intent analysis');
     }
 
-    const prompt = `You are a ${config.name} that understands user requests.
+    const contextBlock = PromptUtils.buildContextBlock(context);
+
+    // Add few-shot examples for better edge case handling
+    const examples = this.getIntentExamples(config);
+
+    const prompt = `${contextBlock}
+
+You are a ${config.name} that understands user requests.
 
 System Context: ${config.systemPrompt}
 
 Available Operations: ${config.operations.join(', ')}
-
+${examples}${PromptUtils.getConversationContext(context)}
 User Query: "${query}"
 
 Analyze this request and determine:
 1. Which operation to execute
-2. What parameters are needed
+2. What parameters are needed (consider timezone for dates/times)
 3. Your confidence level
 4. Your reasoning
 
@@ -411,14 +462,8 @@ Return JSON: {
     }
 
     if (!this.openaiService) {
-      // Fallback: create draft for write operations
-      const writeOperations = ['create', 'send', 'update', 'delete', 'schedule', 'add'];
-      const shouldCreateDraft = writeOperations.some(op => intent.operation.toLowerCase().includes(op));
-      return {
-        shouldCreateDraft,
-        riskLevel: shouldCreateDraft ? 'medium' : 'low',
-        reason: shouldCreateDraft ? 'Write operation detected' : 'Read-only operation'
-      };
+      // No fallback - require AI service for draft decisions
+      throw new Error('AI service required for draft determination. Cannot proceed without proper risk assessment.');
     }
 
     const prompt = `Analyze if this operation should create a draft for user confirmation:
@@ -540,7 +585,7 @@ Would you like me to execute this draft?`;
       parameters: operation.parameters,
       confidence: 1.0,
       reasoning: 'Executed confirmed draft'
-    }, config);
+    }, config, context);
 
     return {
       response: responseText,
@@ -618,14 +663,23 @@ Return JSON: {"isDraftExecution": boolean, "draftId": string|null}`;
     query: string,
     result: any,
     intent: AnalyzedIntent,
-    config: AgentConfig
+    config: AgentConfig,
+    context?: AgentExecutionContext
   ): Promise<string> {
     if (!this.openaiService) {
       // Fallback: simple formatting
       return `Operation ${intent.operation} completed: ${JSON.stringify(result)}`;
     }
 
-    const prompt = `You are a ${config.name} responding to a user query.
+    const contextBlock = context ? PromptUtils.buildContextBlock(context, {
+      includeTemporal: true,
+      includeConversation: false,
+      includePreferences: true
+    }) : '';
+
+    const prompt = `${contextBlock}
+
+You are a ${config.name} responding to a user query.
 
 System Context: ${config.systemPrompt}
 
@@ -635,6 +689,7 @@ Operation Executed: ${intent.operation}
 Result: ${JSON.stringify(result, null, 2)}
 
 Generate a natural, helpful response for the user. Be concise and conversational.
+${context?.userPreferences ? 'Adapt your response style to match user preferences above.' : ''}
 Do NOT return JSON - return plain text response.`;
 
     return await this.openaiService.generateText(
@@ -647,29 +702,87 @@ Do NOT return JSON - return plain text response.`;
   /**
    * Format error response
    */
-  private async formatErrorResponse(error: Error, query: string): Promise<string> {
+  private async formatErrorResponse(error: Error, query: string, context?: AgentExecutionContext): Promise<string> {
     const config = this.getAgentConfig();
 
     if (!this.openaiService) {
       return `I encountered an error: ${error.message}`;
     }
 
+    const errorContext = await this.categorizeError(error);
+
     const prompt = `You are a ${config.name} that encountered an error.
 
-User Query: "${query}"
-Error: ${error.message}
+User tried: "${query}"
+Error type: ${errorContext.type}
+Error message: ${error.message}
 
-Generate a helpful, apologetic response explaining what went wrong and suggesting what the user can try.
-Be concise and user-friendly.`;
+Generate a helpful error message that:
+1. Explains WHAT went wrong (in simple terms)
+2. Explains WHY it happened (if possible)
+3. Suggests WHAT TO DO next (specific actionable steps)
+4. Offers alternative approaches if applicable
+
+Be empathetic, clear, and actionable. Avoid technical jargon.
+
+Examples:
+- Auth error: "It looks like I don't have permission to access your calendar. Try reconnecting your Google account in Settings."
+- Not found: "I couldn't find that event. Try searching with different keywords or check the date range."
+- Network error: "I'm having trouble connecting right now. Please try again in a moment."`;
 
     try {
       return await this.openaiService.generateText(
         prompt,
-        'You explain errors to users in a helpful way.',
-        { temperature: 0.5, maxTokens: 200 }
+        'You explain errors to users in a helpful, actionable way.',
+        { temperature: 0.5, maxTokens: 250 }
       );
     } catch {
       return `I'm sorry, I encountered an error: ${error.message}`;
+    }
+  }
+
+  /**
+   * Categorize error using AI for better messaging
+   */
+  private async categorizeError(error: Error): Promise<{ type: string; severity: string }> {
+    if (!this.openaiService) {
+      return { type: 'unknown', severity: 'medium' };
+    }
+
+    try {
+      const prompt = `Categorize this error:
+
+Error message: "${error.message}"
+Error type: ${error.name}
+Stack trace hint: ${error.stack?.split('\n')[0] || 'N/A'}
+
+Return JSON:
+{
+  "type": "authentication" | "not_found" | "network" | "validation" | "rate_limit" | "unknown",
+  "severity": "low" | "medium" | "high"
+}
+
+Type guidelines:
+- authentication: auth, permission, unauthorized, token issues
+- not_found: 404, resource not found, missing data
+- network: connection, timeout, offline issues
+- validation: invalid input, bad format
+- rate_limit: quota exceeded, too many requests
+- unknown: anything else`;
+
+      const response = await this.openaiService.generateText(
+        prompt,
+        'Categorize error for user-friendly messaging',
+        { temperature: 0.1, maxTokens: 50 }
+      );
+
+      const categorization = JSON.parse(response);
+      return {
+        type: categorization.type || 'unknown',
+        severity: categorization.severity || 'medium'
+      };
+    } catch {
+      return { type: 'unknown', severity: 'medium' };
     }
   }
 
