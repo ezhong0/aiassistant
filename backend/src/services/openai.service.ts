@@ -79,8 +79,7 @@ export class OpenAIService extends BaseService {
       this.model = config.model || aiOpenAIConfig.model;
       this.logInfo(`OpenAI service initialized with model: ${this.model} (from AI config)`);
     } catch (error) {
-      this.model = config.model || 'gpt-4o-mini';
-      this.logWarn(`Using fallback model: ${this.model} (AI config not available)`);
+      throw new Error(`Failed to initialize OpenAI service: AI configuration unavailable. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -143,8 +142,8 @@ export class OpenAIService extends BaseService {
    *   "session123"
    * );
    * 
-   * console.log(response.toolCalls); // Array of tool calls
-   * console.log(response.message); // Human-readable explanation
+   * // response.toolCalls contains array of tool calls
+   * // response.message contains human-readable explanation
    * ```
    * 
    * @throws {Error} When service is not ready or API key is invalid
@@ -332,8 +331,8 @@ export class OpenAIService extends BaseService {
    *   { temperature: 0.1 }
    * );
    * 
-   * console.log(result.operation); // "send_email"
-   * console.log(result.parameters); // { to: "john@example.com", subject: "meeting" }
+   * // result.operation contains "send_email"
+   * // result.parameters contains { to: "john@example.com", subject: "meeting" }
    * ```
    * 
    * @throws {Error} When service is not ready or API key is invalid

@@ -114,9 +114,9 @@ export type ToolExecutionContext = z.infer<typeof ToolExecutionContextSchema>;
  * ```typescript
  * try {
  *   const toolCall = validateToolCall({ name: 'send_email', parameters: {} });
- *   console.log(toolCall.name); // 'send_email'
+ *   // toolCall.name contains 'send_email'
  * } catch (error) {
- *   console.error('Invalid tool call:', error);
+ *   // error contains validation details
  * }
  * ```
  */
@@ -140,9 +140,9 @@ export function validateToolCall(data: unknown): ToolCall {
  *     success: true,
  *     executionTime: 150
  *   });
- *   console.log(result.toolName); // 'send_email'
+ *   // result.toolName contains 'send_email'
  * } catch (error) {
- *   console.error('Invalid tool result:', error);
+ *   // error contains validation details
  * }
  * ```
  */
@@ -165,9 +165,9 @@ export function validateToolResult(data: unknown): ToolResult {
  *     userId: 'user456',
  *     timestamp: new Date()
  *   });
- *   console.log(context.sessionId); // 'abc123'
+ *   // context.sessionId contains 'abc123'
  * } catch (error) {
- *   console.error('Invalid execution context:', error);
+ *   // error contains validation details
  * }
  * ```
  */
@@ -186,9 +186,9 @@ export function validateToolExecutionContext(data: unknown): ToolExecutionContex
  * ```typescript
  * const result = safeParseToolCall({ name: 'send_email', parameters: {} });
  * if (result.success) {
- *   console.log('Valid tool call:', result.data.name);
+ *   // result.data.name contains the tool call name
  * } else {
- *   console.error('Validation failed:', result.error.errors);
+ *   // result.error.errors contains validation errors
  * }
  * ```
  */
@@ -215,9 +215,9 @@ export function safeParseToolCall(data: unknown): { success: true; data: ToolCal
  *   executionTime: 150
  * });
  * if (result.success) {
- *   console.log('Valid tool result:', result.data.toolName);
+ *   // result.data.toolName contains the tool name
  * } else {
- *   console.error('Validation failed:', result.error.errors);
+ *   // result.error.errors contains validation errors
  * }
  * ```
  */

@@ -43,7 +43,7 @@ export interface AuthenticatedRequest extends Request {
  * ```typescript
  * // Apply to protected routes
  * app.get('/protected', authenticateToken, (req: AuthenticatedRequest, res) => {
- *   console.log('User:', req.user?.email);
+ *   // req.user?.email contains the user's email
  *   res.json({ message: 'Access granted' });
  * });
  * ```

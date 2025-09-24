@@ -1,5 +1,4 @@
 import { ToolCall, ToolResult, ToolExecutionContext } from '../tools';
-import { AIAgent } from '../../framework/ai-agent';
 import { z } from 'zod';
 
 /**

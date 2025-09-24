@@ -15,6 +15,10 @@ export interface AgentExecutionContext {
   userId?: string;
   /** Access token for authenticated operations */
   accessToken?: string;
+  /** Refresh token for OAuth token renewal (from working calendar agent pattern) */
+  refreshToken?: string;
+  /** Token expiry timestamp for proactive refresh (from working calendar agent pattern) */
+  tokenExpiry?: number;
   /** Slack context for Slack-originated requests */
   slackContext?: any;
   /** Correlation ID for request tracing */

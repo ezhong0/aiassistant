@@ -14,6 +14,11 @@ rm -rf node_modules/.cache
 echo "📦 Installing dependencies..."
 npm ci --only=production
 
+# Check memory and Node.js version
+echo "🔍 Checking environment..."
+node --version
+echo "Memory limit: $(node -e 'console.log(process.memoryUsage().heapTotal / 1024 / 1024, "MB")')"
+
 # Build for production
 echo "🔨 Building for production..."
 npm run railway:build
@@ -26,7 +31,7 @@ if [ $? -eq 0 ]; then
     
     # Deploy to Railway
     echo "🚀 Deploying to Railway..."
-    railway up
+    railway up --detach
     
     echo "🎉 Deployment complete!"
     echo "🌐 Your app should be available at:"

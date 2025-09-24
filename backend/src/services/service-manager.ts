@@ -1,4 +1,5 @@
 import { setTimeout as delay } from 'timers/promises';
+import logger from '../utils/logger';
 
 /**
  * Service lifecycle states for dependency injection and lifecycle management
@@ -144,10 +145,15 @@ export class ServiceManager {
   private serviceInstances: Map<string, IService> = new Map();
   private isShuttingDown = false;
   private initializationOrder: string[] = [];
+  private cleanupInterval: NodeJS.Timeout | null = null;
+  private lastCleanup = Date.now();
+  private readonly maxServices = 100; // Maximum services to prevent memory bloat
 
   private constructor() {
     // Set up graceful shutdown handlers
     this.setupGracefulShutdown();
+    // Start cleanup process
+    this.startCleanup();
   }
 
   /**
@@ -542,10 +548,109 @@ export class ServiceManager {
   }
 
   /**
+   * Start automatic cleanup process
+   */
+  private startCleanup(): void {
+    if (this.cleanupInterval) {
+      return; // Already running
+    }
+
+    // Clean up every 15 minutes
+    this.cleanupInterval = setInterval(() => {
+      this.performCleanup();
+    }, 15 * 60 * 1000);
+
+    logger.debug('ServiceManager cleanup started', {
+      correlationId: `service-cleanup-start-${Date.now()}`,
+      operation: 'cleanup_start'
+    });
+  }
+
+  /**
+   * Stop automatic cleanup process
+   */
+  private stopCleanup(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+      
+      logger.debug('ServiceManager cleanup stopped', {
+        correlationId: `service-cleanup-stop-${Date.now()}`,
+        operation: 'cleanup_stop'
+      });
+    }
+  }
+
+  /**
+   * Perform memory cleanup
+   */
+  private performCleanup(): void {
+    const now = Date.now();
+    
+    // Only cleanup every 15 minutes
+    if (now - this.lastCleanup < 15 * 60 * 1000) {
+      return;
+    }
+
+    this.lastCleanup = now;
+    const statsBefore = this.getServiceStats();
+    
+    // Clean up services that are in error state for too long
+    const servicesToRemove: string[] = [];
+    for (const [name, service] of this.serviceInstances.entries()) {
+      if (service.state === ServiceState.ERROR) {
+        try {
+          // Check if service has been in error state for more than 1 hour
+          const health = service.getHealth();
+          if (!health.healthy && health.details?.errorTime) {
+            const errorTime = new Date(health.details.errorTime).getTime();
+            if (now - errorTime > 60 * 60 * 1000) { // 1 hour
+              servicesToRemove.push(name);
+            }
+          }
+        } catch (error) {
+          // Service is likely destroyed, mark for removal
+          servicesToRemove.push(name);
+        }
+      }
+    }
+
+    // Remove invalid services
+    for (const name of servicesToRemove) {
+      this.unregisterService(name);
+    }
+
+    // If still over limits, remove oldest services
+    if (this.services.size > this.maxServices) {
+      const sortedServices = Array.from(this.services.entries())
+        .sort((a, b) => a[1].priority - b[1].priority);
+      
+      const toRemove = sortedServices.slice(0, this.services.size - this.maxServices);
+      for (const [name] of toRemove) {
+        this.unregisterService(name);
+      }
+    }
+
+    const statsAfter = this.getServiceStats();
+    
+    if (servicesToRemove.length > 0) {
+      logger.debug('ServiceManager cleanup completed', {
+        correlationId: `service-cleanup-${Date.now()}`,
+        operation: 'cleanup_completed',
+        metadata: {
+          removedServices: servicesToRemove.length,
+          servicesBefore: statsBefore.totalServices,
+          servicesAfter: statsAfter.totalServices
+        }
+      });
+    }
+  }
+
+  /**
    * Force cleanup of all services (for testing)
    */
   async forceCleanup(): Promise<void> {
-    
+    this.stopCleanup();
     
     for (const [name, service] of this.serviceInstances) {
       try {
@@ -553,7 +658,11 @@ export class ServiceManager {
           await service.destroy();
         }
       } catch (error) {
-        
+        logger.warn(`Error destroying service ${name}`, {
+          correlationId: `force-cleanup-${Date.now()}`,
+          operation: 'force_cleanup',
+          metadata: { serviceName: name, error: error instanceof Error ? error.message : 'Unknown error' }
+        });
       }
     }
     

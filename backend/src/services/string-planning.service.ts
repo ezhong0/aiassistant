@@ -51,7 +51,7 @@ export class StringPlanningService extends BaseService {
   protected async onInitialize(): Promise<void> {
     this.openaiService = getService('openaiService') as OpenAIService;
     if (!this.openaiService) {
-      logger.warn('OpenAI service not available - string planning will use fallbacks');
+      throw new Error('OpenAI service unavailable. String planning requires AI service.');
     }
   }
 

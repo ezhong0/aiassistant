@@ -2,11 +2,11 @@ import { AIAgent } from './ai-agent';
 import logger from '../utils/logger';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agents/agent.types';
-import { EmailAgent } from '../agents/email.agent';
-import { CalendarAgent } from '../agents/calendar.agent';
-import { ContactAgent } from '../agents/contact.agent';
-import { ThinkAgent } from '../agents/think.agent';
-import { SlackAgent } from '../agents/slack.agent';
+import { EmailAgentV2 } from '../agents/email-v2.agent';
+import { CalendarAgentV3 } from '../agents/calendar-v3.agent';
+import { ContactAgentV2 } from '../agents/contact-v2.agent';
+import { ThinkAgentV2 } from '../agents/think-v2.agent';
+import { SlackAgentV2 } from '../agents/slack-v2.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import { AgentCapabilities } from '../types/agents/natural-language.types';
 
@@ -37,14 +37,16 @@ export interface AgentClass {
  * This replaces the need for a separate tool registry system
  */
 export class AgentFactory {
-  private static agents = new Map<string, AIAgent>();
+  private static agents = new Map<string, AIAgent | any>();
   private static toolMetadata = new Map<string, ToolMetadata>();
   private static initialized = false;
+  private static cleanupInterval: NodeJS.Timeout | null = null;
+  private static lastCleanup = Date.now();
   
   /**
    * Register a single agent instance with automatic tool discovery
    */
-  static registerAgent(name: string, agent: AIAgent): void {
+  static registerAgent(name: string, agent: AIAgent | any): void {
     if (this.agents.has(name)) {
       logger.warn(`Agent ${name} is already registered, replacing with new instance`, {
         correlationId: `agent-register-${Date.now()}`,
@@ -73,8 +75,8 @@ export class AgentFactory {
    * Register an agent class with configuration
    */
   static registerAgentClass<TParams, TResult>(
-    name: string, 
-    AgentClass: new () => AIAgent<TParams, TResult>
+    name: string,
+    AgentClass: new () => AIAgent<TParams, TResult> | any
   ): void {
     try {
       const agent = new AgentClass();
@@ -439,11 +441,13 @@ export class AgentFactory {
       }
     }
 
-    // Fallback to the first available agent if no good match
-    if (!bestAgent && nlAgents.length > 0) {
-      bestAgent = nlAgents[0] || null;
-      reasoning = `Fallback to first available agent: ${bestAgent}`;
-      bestScore = 0.1;
+    // No fallback - let caller handle the case where no suitable agent is found
+    if (!bestAgent) {
+      return {
+        agentName: null,
+        confidence: 0,
+        reasoning: 'No suitable agent found for this request'
+      };
     }
 
     return {
@@ -533,14 +537,16 @@ export class AgentFactory {
 
     // Get agent schemas from agent classes
     try {
-      const { EmailAgent } = await import('../agents/email.agent');
-      const { ContactAgent } = await import('../agents/contact.agent');
-      const { CalendarAgent } = await import('../agents/calendar.agent');
-      
+      const { EmailAgentV2 } = await import('../agents/email-v2.agent');
+      const { ContactAgentV2 } = await import('../agents/contact-v2.agent');
+      const { CalendarAgentV3 } = await import('../agents/calendar-v3.agent');
+      const { ThinkAgentV2 } = await import('../agents/think-v2.agent');
+
       // Add agent-specific function schemas
-      functions.push(EmailAgent.getOpenAIFunctionSchema());
-      functions.push(ContactAgent.getOpenAIFunctionSchema() as any);
-      functions.push(CalendarAgent.getOpenAIFunctionSchema());
+      functions.push(EmailAgentV2.getOpenAIFunctionSchema());
+      functions.push(ContactAgentV2.getOpenAIFunctionSchema());
+      functions.push(CalendarAgentV3.getOpenAIFunctionSchema());
+      functions.push(ThinkAgentV2.getOpenAIFunctionSchema());
       
       // Add other tools from metadata
       const otherTools = Array.from(this.toolMetadata.values())
@@ -569,29 +575,51 @@ export class AgentFactory {
     const metadata: Record<string, any> = {};
 
     try {
-      const { EmailAgent } = await import('../agents/email.agent');
-      const { ContactAgent } = await import('../agents/contact.agent');
-      const { CalendarAgent } = await import('../agents/calendar.agent');
-      
+      const { EmailAgentV2 } = await import('../agents/email-v2.agent');
+      const { ContactAgentV2 } = await import('../agents/contact-v2.agent');
+      const { CalendarAgentV3 } = await import('../agents/calendar-v3.agent');
+      const { ThinkAgentV2 } = await import('../agents/think-v2.agent');
+
       metadata.emailAgent = {
-        schema: EmailAgent.getOpenAIFunctionSchema(),
-        capabilities: EmailAgent.getCapabilities(),
-        limitations: EmailAgent.getLimitations(),
-        enabled: this.hasAgent('emailAgent')
+        schema: EmailAgentV2.getOpenAIFunctionSchema(),
+        capabilities: EmailAgentV2.getCapabilities(),
+        limitations: [],
+        enabled: this.hasAgent('emailAgent'),
+        draftType: 'email'
       };
-      
+
       metadata.contactAgent = {
-        schema: ContactAgent.getOpenAIFunctionSchema(),
-        capabilities: ContactAgent.getCapabilities(),
-        limitations: ContactAgent.getLimitations(),
-        enabled: this.hasAgent('contactAgent')
+        schema: ContactAgentV2.getOpenAIFunctionSchema(),
+        capabilities: ContactAgentV2.getCapabilities(),
+        limitations: [],
+        enabled: this.hasAgent('contactAgent'),
+        draftType: 'contact'
+      };
+
+      metadata.calendarAgent = {
+        schema: CalendarAgentV3.getOpenAIFunctionSchema(),
+        capabilities: CalendarAgentV3.getCapabilities(),
+        limitations: [],
+        enabled: this.hasAgent('calendarAgent'),
+        draftType: 'calendar'
+      };
+
+      metadata.thinkAgent = {
+        schema: ThinkAgentV2.getOpenAIFunctionSchema(),
+        capabilities: ThinkAgentV2.getCapabilities(),
+        limitations: [],
+        enabled: this.hasAgent('Think'),
+        draftType: 'none'
       };
       
-      metadata.calendarAgent = {
-        schema: CalendarAgent.getOpenAIFunctionSchema(),
-        capabilities: CalendarAgent.getCapabilities(),
-        limitations: CalendarAgent.getLimitations(),
-        enabled: this.hasAgent('calendarAgent')
+      // Add slackAgent metadata
+      const { SlackAgentV2 } = await import('../agents/slack-v2.agent');
+      metadata.slackAgent = {
+        schema: SlackAgentV2.getOpenAIFunctionSchema(),
+        capabilities: SlackAgentV2.getCapabilities(),
+        limitations: [],
+        enabled: this.hasAgent('slackAgent'),
+        draftType: 'slack'
       };
       
     } catch (error) {
@@ -642,15 +670,18 @@ export class AgentFactory {
       return;
     }
     
+    // Start cleanup process
+    this.startCleanup();
+    
     try {
       
       
       // Register core agents
-      this.registerAgentClass('emailAgent', EmailAgent);
-      this.registerAgentClass('contactAgent', ContactAgent);
-      this.registerAgentClass('Think', ThinkAgent);
-      this.registerAgentClass('calendarAgent', CalendarAgent);
-      this.registerAgentClass('slackAgent', SlackAgent);
+      this.registerAgentClass('emailAgent', EmailAgentV2);
+      this.registerAgentClass('contactAgent', ContactAgentV2);
+      this.registerAgentClass('Think', ThinkAgentV2);
+      this.registerAgentClass('calendarAgent', CalendarAgentV3);
+      this.registerAgentClass('slackAgent', SlackAgentV2);
       
       // Register tool metadata for all agents
       this.registerToolMetadata({
@@ -849,7 +880,104 @@ export class AgentFactory {
     this.toolMetadata.clear();
     this.toolToAgentMap.clear();
     this.initialized = false;
+    this.stopCleanup();
     
+    logger.debug('AgentFactory reset completed', {
+      correlationId: `factory-reset-${Date.now()}`,
+      operation: 'factory_reset'
+    });
+  }
+
+  /**
+   * Start periodic cleanup to prevent memory leaks
+   */
+  static startCleanup(): void {
+    if (this.cleanupInterval) {
+      return; // Already running
+    }
+
+    // Clean up every 10 minutes
+    this.cleanupInterval = setInterval(() => {
+      this.performCleanup();
+    }, 10 * 60 * 1000);
+
+    logger.debug('AgentFactory cleanup started', {
+      correlationId: `factory-cleanup-start-${Date.now()}`,
+      operation: 'cleanup_start'
+    });
+  }
+
+  /**
+   * Stop periodic cleanup
+   */
+  static stopCleanup(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+      
+      logger.debug('AgentFactory cleanup stopped', {
+        correlationId: `factory-cleanup-stop-${Date.now()}`,
+        operation: 'cleanup_stop'
+      });
+    }
+  }
+
+  /**
+   * Perform memory cleanup
+   */
+  private static performCleanup(): void {
+    const now = Date.now();
+    
+    // Only cleanup every 10 minutes
+    if (now - this.lastCleanup < 10 * 60 * 1000) {
+      return;
+    }
+
+    this.lastCleanup = now;
+    const statsBefore = this.getStats();
+    
+    // Clean up agents that might have been destroyed
+    const agentsToRemove: string[] = [];
+    for (const [name, agent] of this.agents.entries()) {
+      if (!agent || typeof agent.destroy === 'function') {
+        try {
+          // Check if agent is still valid
+          if (agent && typeof agent.isEnabled === 'function' && !agent.isEnabled()) {
+            agentsToRemove.push(name);
+          }
+        } catch (error) {
+          // Agent is likely destroyed, mark for removal
+          agentsToRemove.push(name);
+        }
+      }
+    }
+
+    // Remove invalid agents
+    for (const name of agentsToRemove) {
+      this.agents.delete(name);
+      // Also clean up related tool metadata
+      const tools = this.getToolsForAgent(name);
+      for (const toolName of tools) {
+        this.toolMetadata.delete(toolName);
+        this.toolToAgentMap.delete(toolName);
+      }
+    }
+
+    const statsAfter = this.getStats();
+    
+    if (agentsToRemove.length > 0) {
+      logger.debug('AgentFactory cleanup completed', {
+        correlationId: `factory-cleanup-${Date.now()}`,
+        operation: 'cleanup_completed',
+        metadata: {
+          removedAgents: agentsToRemove.length,
+          agentsBefore: statsBefore.totalAgents,
+          agentsAfter: statsAfter.totalAgents,
+          toolsBefore: statsBefore.totalTools,
+          toolsAfter: statsAfter.totalTools
+        }
+      });
+    }
   }
   
   /**

@@ -7,7 +7,7 @@
     "prebuild": "rm -rf dist && mkdir -p dist",
     "build": "tsc --project tsconfig.prod.json",
     "build:dev": "tsc",
-    "start": "node dist/index.js",
+    "start": "node --max-old-space-size=1024 --expose-gc dist/index.js",
     "dev": "nodemon --exec ts-node src/index.ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
@@ -23,7 +23,7 @@
     "railway:deploy": "railway up",
     "prepare": "node -e \"if (!process.env.RAILWAY_ENVIRONMENT) require('husky')\"",
     "railway:build": "npm run prebuild && tsc --project tsconfig.prod.json",
-    "railway:start": "npm start",
+    "railway:start": "node --max-old-space-size=1024 --expose-gc dist/index.js",
     "db:setup": "npx ts-node scripts/setup-database.ts",
     "db:test": "npx ts-node scripts/setup-database.ts",
     "db:integration": "npx ts-node scripts/test-database-integration.ts",
@@ -33,7 +33,9 @@
     "test:token-manager": "npm run test -- tests/unit/services/token-manager.test.ts",
     "validate:caching": "npx ts-node scripts/validate-caching-integration.ts",
     "test:cache-simple": "npx ts-node scripts/simple-cache-test.ts",
-    "redis:test": "npx ts-node scripts/test-redis.ts"
+    "redis:test": "npx ts-node scripts/test-redis.ts",
+    "test:memory-cleanup": "node --max-old-space-size=1024 --expose-gc ./node_modules/.bin/ts-node scripts/test-memory-cleanup.ts",
+    "test:memory-simple": "node --max-old-space-size=512 --expose-gc ./node_modules/.bin/ts-node scripts/simple-memory-test.ts"
   },
   "keywords": [],
   "author": "",

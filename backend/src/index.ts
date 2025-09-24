@@ -12,6 +12,7 @@ import { initializeAgentFactory } from './config/agent-factory-init';
 import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import logger from './utils/logger';
 import { 
   corsMiddleware, 
   securityHeaders, 
@@ -42,7 +43,11 @@ const initializeApplication = async (): Promise<void> => {
     if (ENV_VALIDATION.isProduction()) {
       const missing = ENV_VALIDATION.validateRequired();
       if (missing.length > 0) {
-        console.error('❌ Missing required environment variables in production:', missing.join(', '));
+        logger.error('Missing required environment variables in production', new Error('Environment validation failed'), {
+          correlationId: 'startup',
+          operation: 'environment_validation',
+          metadata: { missingVariables: missing }
+        });
         throw new Error('Missing required environment variables');
       }
     }
@@ -54,7 +59,10 @@ const initializeApplication = async (): Promise<void> => {
     initializeAgentFactory();
     
   } catch (error) {
-    console.error('❌ Application initialization failed:', error);
+    logger.error('Application initialization failed', error as Error, {
+      correlationId: 'startup',
+      operation: 'app_initialization'
+    });
     throw error; // Don't continue with broken services in production
   }
 }
@@ -105,17 +113,32 @@ app.use('/slack', createSlackRoutes(serviceManager, () => globalInterfaces));
 // Slack interface integration (runs in background, completely optional)
 const setupSlackInterface = async () => {
   try {
-    console.log('🔗 Setting up Slack interface...');
+    logger.info('Setting up Slack interface', {
+      correlationId: 'startup',
+      operation: 'slack_interface_setup'
+    });
     globalInterfaces = await initializeInterfaces(serviceManager);
     if (globalInterfaces.slackInterface) {
       await startInterfaces(globalInterfaces);
-      console.log('✅ Slack interface initialized successfully');
+      logger.info('Slack interface initialized successfully', {
+        correlationId: 'startup',
+        operation: 'slack_interface_init_success'
+      });
     } else {
-      console.log('⚠️ Slack interface not available, continuing without it');
+      logger.warn('Slack interface not available, continuing without it', {
+        correlationId: 'startup',
+        operation: 'slack_interface_unavailable'
+      });
     }
   } catch (error) {
-    console.error('❌ Slack interface setup failed:', error);
-    console.log('⚠️ Continuing without Slack interface');
+    logger.error('Slack interface setup failed', error as Error, {
+      correlationId: 'startup',
+      operation: 'slack_interface_setup_error'
+    });
+    logger.warn('Continuing without Slack interface', {
+      correlationId: 'startup',
+      operation: 'slack_interface_fallback'
+    });
   }
 };
 
@@ -158,31 +181,54 @@ const startServer = async (): Promise<void> => {
     
     // Set up Slack interface in background (non-blocking)
     setupSlackInterface().catch(error => {
-      console.error('❌ Background Slack setup failed:', error);
+      logger.error('Background Slack setup failed', error as Error, {
+        correlationId: 'startup',
+        operation: 'background_slack_setup_error'
+      });
     });
 
     // Start the server
     const server = app.listen(port, () => {
-      console.log(`🚀 Server running on port ${port}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-      console.log(`📊 Health check: http://localhost:${port}/healthz`);
+      logger.info('Server started successfully', {
+        correlationId: 'startup',
+        operation: 'server_start',
+        metadata: {
+          port,
+          environment: process.env.NODE_ENV,
+          healthCheck: `http://localhost:${port}/healthz`
+        }
+      });
     });
 
     // Enhanced error handling
     server.on('error', (err: NodeJS.ErrnoException) => {
-      console.error('❌ Server error:', err);
+      logger.error('Server error occurred', err, {
+        correlationId: 'startup',
+        operation: 'server_error',
+        metadata: { errorCode: err.code }
+      });
       if (err.code === 'EADDRINUSE') {
-        console.error('❌ Port already in use');
+        logger.error('Port already in use', err, {
+          correlationId: 'startup',
+          operation: 'port_conflict',
+          metadata: { port }
+        });
         process.exit(1);
       } else {
-        console.error('❌ Unknown server error');
+        logger.error('Unknown server error', err, {
+          correlationId: 'startup',
+          operation: 'server_unknown_error'
+        });
         process.exit(1);
       }
     });
     
     // Add logging for server events
     server.on('listening', () => {
-      console.log('👂 Server is listening for connections');
+      logger.info('Server is listening for connections', {
+        correlationId: 'startup',
+        operation: 'server_listening'
+      });
     });
 
     // Add keep-alive for Railway
@@ -191,21 +237,34 @@ const startServer = async (): Promise<void> => {
 
     // Graceful shutdown handling
     const gracefulShutdown = async (signal: string) => {
-      console.log(`🛑 Received ${signal}, starting graceful shutdown...`);
+      logger.info('Received shutdown signal, starting graceful shutdown', {
+        correlationId: 'shutdown',
+        operation: 'graceful_shutdown_start',
+        metadata: { signal }
+      });
       
       server.close((err) => {
         if (err) {
-          console.error('❌ Error during server close:', err);
+          logger.error('Error during server close', err, {
+            correlationId: 'shutdown',
+            operation: 'server_close_error'
+          });
           process.exit(1);
         } else {
-          console.log('✅ Server closed gracefully');
+          logger.info('Server closed gracefully', {
+            correlationId: 'shutdown',
+            operation: 'server_close_success'
+          });
           process.exit(0);
         }
       });
 
       // Force exit after 30 seconds
       setTimeout(() => {
-        console.log('⏰ Force exit after 30 seconds');
+        logger.warn('Force exit after 30 seconds', {
+          correlationId: 'shutdown',
+          operation: 'force_exit_timeout'
+        });
         process.exit(1);
       }, 30000);
     };
@@ -215,16 +274,25 @@ const startServer = async (): Promise<void> => {
     
     // Handle unhandled errors to prevent crashes
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('❌ Unhandled rejection:', reason);
+      logger.error('Unhandled rejection detected', reason as Error, {
+        correlationId: 'error',
+        operation: 'unhandled_rejection'
+      });
       // Don't exit on unhandled rejection in production
     });
     
     process.on('uncaughtException', (error) => {
-      console.error('❌ Uncaught exception:', error);
+      logger.error('Uncaught exception detected', error, {
+        correlationId: 'error',
+        operation: 'uncaught_exception'
+      });
       gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
     
-    console.log('✅ All event handlers registered');
+    logger.info('All event handlers registered successfully', {
+      correlationId: 'startup',
+      operation: 'event_handlers_registered'
+    });
 
   } catch (error) {
     

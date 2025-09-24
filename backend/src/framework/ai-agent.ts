@@ -23,6 +23,21 @@ import {
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
 
 /**
+ * @deprecated AIAgent is deprecated. Use NaturalLanguageAgent instead.
+ *
+ * This class is kept for backwards compatibility only.
+ * All new agents should extend NaturalLanguageAgent from './natural-language-agent'
+ *
+ * Migration guide:
+ * 1. Extend NaturalLanguageAgent instead of AIAgent
+ * 2. Implement getAgentConfig() - return agent metadata
+ * 3. Implement executeOperation() - execute operations
+ * 4. Remove all other methods - base class handles them
+ *
+ * See CalendarAgentV3, SlackAgentV2, EmailAgentV2 for examples.
+ */
+
+/**
  * AI Planning Configuration
  */
 export interface AIPlanningConfig {
@@ -261,14 +276,16 @@ export abstract class AIAgent<TParams = any, TResult = any> implements INaturalL
       this.draftManager = getService<DraftManager>('draftManager') || null;
 
       if (!this.openaiService) {
-        console.warn(`OpenAI service not available for ${this.config.name}`);
+        const error = new Error(`OpenAI service not available for ${this.config.name}`);
+        this.logServiceError('openaiService', 'initialization', 'unavailable');
       }
 
       if (!this.draftManager) {
-        console.warn(`Draft manager not available for ${this.config.name}`);
+        const error = new Error(`Draft manager not available for ${this.config.name}`);
+        this.logServiceError('draftManager', 'initialization', 'unavailable');
       }
     } catch (error) {
-      console.error(`Failed to initialize AI services for ${this.config.name}:`, error);
+      this.logServiceError('aiServices', 'initialization', 'error');
     }
   }
 
@@ -1213,7 +1230,7 @@ Please provide a detailed execution plan that accomplishes this request efficien
     const startTime = Date.now();
 
     try {
-      // Log using natural language logger instead of console.log
+      // Use natural language logger for structured logging
       const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
       
       // Check if this is a draft execution request
@@ -1339,7 +1356,7 @@ Please provide a detailed execution plan that accomplishes this request efficien
         this.calculateSimilarity(lowerRequest, example.toLowerCase()) > 0.5
       );
     } catch (error) {
-      console.warn(`[${this.config.name}] Failed to check if agent can handle request: ${request}`);
+      this.logServiceError('canHandle', 'request_analysis', 'error');
       return false;
     }
   }
@@ -1441,7 +1458,7 @@ Return JSON: {"isDraftExecution": boolean, "draftId": string|null}`;
         draftId: parsed.draftId || undefined
       };
     } catch (error) {
-      console.error(`[${this.config.name}] Failed to analyze draft execution request:`, error);
+      this.logServiceError('draftAnalysis', 'execution_request', 'error');
       return { isDraftExecution: false };
     }
   }
@@ -1489,7 +1506,7 @@ Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", 
       const parsed = JSON.parse(response) as { shouldCreateDraft: boolean; riskLevel: 'low' | 'medium' | 'high'; reason: string };
       return parsed;
     } catch (error) {
-      console.error(`[${this.config.name}] Failed to analyze draft requirements:`, error);
+      this.logServiceError('draftRequirements', 'analysis', 'error');
       // Default to creating drafts for safety on write operations
       const writeOperations = ['create', 'send', 'update', 'delete', 'schedule', 'add'];
       const shouldCreateDraft = writeOperations.some(op => intent.operation.toLowerCase().includes(op));
@@ -1536,7 +1553,7 @@ Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", 
       // Generate natural language response with draft info
       const response = await this.generateDraftResponse(draft, originalRequest, context);
 
-      console.log(`[${this.config.name}] Draft created: ${draft.id} - ${previewData.description}`);
+      // Draft creation logged via structured logging in draft manager
 
       return {
         response,
@@ -1557,7 +1574,7 @@ Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", 
         }
       };
     } catch (error) {
-      console.error(`[${this.config.name}] Failed to create draft:`, error);
+      this.logServiceError('draftManager', 'create_draft', 'error');
       throw new Error(`Failed to create draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -1581,7 +1598,7 @@ Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", 
       // Generate response for the execution
       const response = await this.generateDraftExecutionResponse(result, request, context);
 
-      console.log(`[${this.config.name}] Draft executed: ${draftId} - Success: ${result.success}`);
+      // Draft execution logged via structured logging in draft manager
 
       return {
         response,
@@ -1599,7 +1616,7 @@ Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", 
         }
       };
     } catch (error) {
-      console.error(`[${this.config.name}] Failed to execute draft:`, error);
+      this.logServiceError('draftManager', 'execute_draft', 'error');
       throw new Error(`Failed to execute draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -1660,7 +1677,7 @@ Example: "I've prepared to send an email to john@example.com with the subject 'M
 
       return response.trim();
     } catch (error) {
-      console.error(`[${this.config.name}] Failed to generate draft response:`, error);
+      this.logServiceError('responseGeneration', 'draft_response', 'error');
       return `I've prepared a ${draft.operation} operation. Would you like me to proceed?`;
     }
   }
@@ -1701,7 +1718,7 @@ Example failure: "❌ Failed to send email: Invalid recipient address"`;
 
       return response.trim();
     } catch (error) {
-      console.error(`[${this.config.name}] Failed to generate execution response:`, error);
+      this.logServiceError('responseGeneration', 'execution_response', 'error');
       return result.success ? 'Operation completed successfully!' : `Operation failed: ${result.error}`;
     }
   }
@@ -1710,12 +1727,18 @@ Example failure: "❌ Failed to send email: Invalid recipient address"`;
    * Get the draft type based on the agent name
    */
   protected getDraftTypeFromAgent(): 'email' | 'calendar' | 'contact' | 'slack' | 'other' {
-    const agentName = this.config.name.toLowerCase();
-    if (agentName.includes('email')) return 'email';
-    if (agentName.includes('calendar')) return 'calendar';
-    if (agentName.includes('contact')) return 'contact';
-    if (agentName.includes('slack')) return 'slack';
-    return 'other';
+    // Use AgentFactory to get agent metadata instead of string matching
+    const { AgentFactory } = require('./agent-factory');
+    const agentMetadata = AgentFactory.getAgentDiscoveryMetadata();
+    
+    // Check if agent has draft type configured
+    const agentName = this.config.name;
+    if (agentMetadata[agentName]?.draftType) {
+      return agentMetadata[agentName].draftType;
+    }
+    
+    // If no metadata available, throw error instead of guessing
+    throw new Error(`Draft type not configured for agent: ${agentName}. Please configure draft type in agent metadata.`);
   }
 
   /**

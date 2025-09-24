@@ -10,9 +10,9 @@ import { SlackContext, SlackContextSchema } from '../types/slack/slack.types';
 import { SlackMessage } from '../types/slack/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
-import { SlackAgent, ContextGatheringResult, ContextDetectionResult } from './slack.agent';
+import { ContextGatheringResult, ContextDetectionResult } from './slack-v2.agent';
 import { z } from 'zod';
-import { ContactAgent } from './contact.agent';
+// ContactAgent removed - using AgentFactory for all agent access
 // Import WorkflowOrchestrator for extracted workflow functionality
 import { WorkflowOrchestrator, SimpleWorkflowState, SimpleWorkflowStep } from '../framework/workflow-orchestrator';
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
@@ -229,8 +229,8 @@ export function safeParseMasterAgentResponse(data: unknown): { success: true; da
  *   "user456"
  * );
  * 
- * console.log(response.message); // Human-readable response
- * console.log(response.toolCalls); // Generated tool calls
+ * // response.message contains human-readable response
+ * // response.toolCalls contains generated tool calls
  * ```
  */
 export class MasterAgent {
@@ -346,11 +346,11 @@ export class MasterAgent {
   /**
    * Get SlackAgent from AgentFactory for context gathering
    */
-  private getSlackAgent(): SlackAgent | null {
+  private getSlackAgent(): any | null {
     try {
       const agent = AgentFactory.getAgent('slackAgent');
-      if (agent && 'slackService' in agent) {
-        return agent as unknown as SlackAgent;
+      if (agent) {
+        return agent;
       }
       return null;
     } catch (error) {
@@ -368,8 +368,8 @@ export class MasterAgent {
    * 
    * @returns ContactAgent instance or null if not available
    */
-  private getContactAgent(): ContactAgent | null {
-    return AgentFactory.getAgent('contactAgent') as ContactAgent | null;
+  private getContactAgent(): any | null {
+    return AgentFactory.getAgent('contactAgent');
   }
 
 
@@ -431,9 +431,9 @@ export class MasterAgent {
    *   slackContext
    * );
    * 
-   * console.log(response.message); // Human-readable response
-   * console.log(response.toolCalls); // Generated tool calls
-   * console.log(response.proposal); // Confirmation proposal if needed
+   * // response.message contains human-readable response
+   * // response.toolCalls contains generated tool calls
+   * // response.proposal contains confirmation proposal if needed
    * ```
    * 
    * @throws {Error} When OpenAI service is not available
@@ -1235,16 +1235,19 @@ GUIDELINES:
           timestamp: new Date()
         };
 
-        // Call ContactAgent to search for the contact
-        const contactResult = await contactAgent.execute({
-          query: `Find contact information for ${recipient}`,
-          operation: 'search',
-          name: recipient,
-          accessToken: 'system-token' // Use system token for contact resolution
-        }, mockContext);
+        // Call ContactAgent V2 with natural language
+        const contactResult = await contactAgent.processNaturalLanguageRequest(
+          `Find contact information for ${recipient}`,
+          {
+            sessionId: `contact-resolution-${Date.now()}`,
+            userId: 'system',
+            correlationId: 'contact-resolution',
+            timestamp: new Date()
+          }
+        );
 
-        if (contactResult.success && contactResult.result) {
-          const contacts = (contactResult.result as any).contacts || [];
+        if (contactResult.metadata?.contacts) {
+          const contacts = contactResult.metadata.contacts || [];
           if (contacts.length > 0) {
             // Use the first contact's email address
             const email = contacts[0].email || contacts[0].emailAddress;
@@ -1308,16 +1311,19 @@ GUIDELINES:
           timestamp: new Date()
         };
 
-        // Call ContactAgent to search for the contact
-        const contactResult = await contactAgent.execute({
-          query: `Find contact information for ${recipient}`,
-          operation: 'search',
-          name: recipient,
-          accessToken: 'system-token' // Use system token for contact resolution
-        }, mockContext);
+        // Call ContactAgent V2 with natural language
+        const contactResult = await contactAgent.processNaturalLanguageRequest(
+          `Find contact information for ${recipient}`,
+          {
+            sessionId: `contact-resolution-${Date.now()}`,
+            userId: 'system',
+            correlationId: 'contact-resolution',
+            timestamp: new Date()
+          }
+        );
 
-        if (contactResult.success && contactResult.result) {
-          const contacts = (contactResult.result as any).contacts || [];
+        if (contactResult.metadata?.contacts) {
+          const contacts = contactResult.metadata.contacts || [];
           if (contacts.length > 0) {
             // Use the first contact's email address
             const email = contacts[0].email || contacts[0].emailAddress;
@@ -2201,13 +2207,7 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
   private async determineAgentForStringStep(stepDescription: string): Promise<string> {
     const openaiService = this.getOpenAIService();
     if (!openaiService) {
-      // Simple fallback logic
-      const step = stepDescription.toLowerCase();
-      if (step.includes('calendar') || step.includes('meeting') || step.includes('schedule')) return 'calendarAgent';
-      if (step.includes('email') || step.includes('message') || step.includes('send')) return 'emailAgent';
-      if (step.includes('contact') || step.includes('find') || step.includes('person')) return 'contactAgent';
-      if (step.includes('slack') || step.includes('channel')) return 'slackAgent';
-      return 'calendarAgent'; // Default fallback
+      throw new Error('OpenAI service unavailable. Agent selection requires AI-powered analysis.');
     }
 
     try {
@@ -2228,13 +2228,18 @@ Respond with just the agent name: calendarAgent, emailAgent, contactAgent, or sl
       );
 
       const agentName = response.trim();
-      const validAgents = ['calendarAgent', 'emailAgent', 'contactAgent', 'slackAgent'];
-
-      return validAgents.includes(agentName) ? agentName : 'calendarAgent';
+      const { AgentFactory } = await import('../framework/agent-factory');
+      const availableAgents = AgentFactory.getEnabledAgentNames();
+      
+      if (!availableAgents.includes(agentName)) {
+        throw new Error(`Invalid agent selected: ${agentName}. Available agents: ${availableAgents.join(', ')}`);
+      }
+      
+      return agentName;
 
     } catch (error) {
       logger.error('Agent determination failed', error as Error);
-      return 'calendarAgent'; // Safe fallback
+      throw new Error(`Failed to determine appropriate agent for step: ${stepDescription}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
