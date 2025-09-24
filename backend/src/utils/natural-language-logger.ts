@@ -1,7 +1,6 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import { IntentAnalysis } from '../agents/master.agent';
-// Legacy import removed - NextStepPlan only used for legacy logging
 import { NaturalLanguageResponse } from '../types/agents/natural-language.types';
 import { ENVIRONMENT } from '../config/environment';
 

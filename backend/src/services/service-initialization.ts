@@ -1,6 +1,5 @@
 import { serviceManager } from './service-manager';
 import logger from '../utils/logger';
-// Removed serviceDependencyManager - functionality moved to enhanced ServiceManager
 import { TokenStorageService } from './token-storage.service';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
@@ -15,17 +14,7 @@ import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { SlackService } from './slack/slack.service';
 import { SlackOAuthService } from './slack/slack-oauth.service';
-// Removed SlackEventValidator - consolidated into SlackAgent
-// EmailValidator removed - LLM handles validation directly
-// Removed CalendarFormatter and CalendarValidator - consolidated into CalendarAgent
-// Removed SlackMessageAnalyzer, SlackDraftManager, SlackFormatter - consolidated into SlackAgent
-// Removed SlackInterfaceService - consolidated into SlackService
-// Removed WorkflowCacheService - replaced with simple in-memory state in MasterAgent
 import { DraftManager } from './draft-manager.service';
-// Removed IntentAnalysisService - using only StringPlanningService for all planning
-// import { IntentAnalysisService } from './intent-analysis.service';
-// Removed NextStepPlanningService - replaced by StringPlanningService
-// Removed OperationDetectionService - consolidated into individual agents
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -52,7 +41,6 @@ export const initializeAllCoreServices = async (): Promise<void> => {
 
     // Enhanced health monitoring and logging
     try {
-      // const healthCheck = await serviceDependencyManager.healthCheck(); // Removed serviceDependencyManager
       
       logger.debug('All services initialized successfully', {
         correlationId: `service-init-${Date.now()}`,
@@ -373,6 +361,5 @@ export async function getServiceHealthReport(): Promise<{
  * Get enhanced service manager for advanced operations
  */
 export function getEnhancedServiceManager() {
-  // return serviceDependencyManager; // Removed - using simplified approach
   return serviceManager;
 }

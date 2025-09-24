@@ -13,13 +13,10 @@ import { APP_CONSTANTS } from '../config/constants';
 import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
-// ContactAgent removed - using AgentFactory for all agent access
 // Import WorkflowOrchestrator for extracted workflow functionality
 import { WorkflowOrchestrator, SimpleWorkflowState, SimpleWorkflowStep } from '../framework/workflow-orchestrator';
 import { DraftManager, Draft, WriteOperation } from '../services/draft-manager.service';
-// Legacy import removed - using StringPlanningService instead
 import { StringPlanningService, StringWorkflowContext, StringStepPlan, StringStepResult } from '../services/string-planning.service';
-// Removed OperationDetectionService - agents handle their own operation detection
 import { ToolExecutorService } from '../services/tool-executor.service';
 
 /**
@@ -804,7 +801,6 @@ Return JSON with this structure:
    * This replaces routeBasedOnIntent with planner-first execution
    */
 
-  // Deprecated method routeBasedOnIntent removed - now using step-by-step execution via executeStepByStepFromIntent
 
   /**
    * Generate natural language response that includes draft contents
@@ -987,8 +983,7 @@ Generate the response for this ${draft.type} operation:`;
    * Get recent conversation history for context
    */
   private async getRecentConversation(sessionId: string): Promise<string[]> {
-    // TODO: Implement conversation history retrieval
-    // For now, return empty array
+    // For now, return empty array - conversation history not implemented
     return [];
   }
 
@@ -1884,7 +1879,6 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
     this.workflowOrchestrator.cancelWorkflow(workflowId);
   }
 
-  // Removed getIntentAnalysisService - using only NextStepPlanningService for all planning
 
 
 
@@ -2537,14 +2531,8 @@ Respond naturally and conversationally. If the data contains calendar events, li
     return null;
   }
 
-  // Removed executeWorkflowWithSequentialExecution - using only Master Agent step-by-step execution
   // This eliminates dual execution paths and ensures consistent behavior
 
-  // Removed unused context analysis methods - consolidated into simplified step-by-step execution
-  // - continueWorkflowWithContext
-  // - pauseAndAddressInterruption
-  // - branchWorkflow
-  // - seekClarification
 
   /**
    * Abort workflow

@@ -681,8 +681,7 @@ Return JSON: {"isDraftExecution": boolean, "draftId": string|null}`;
     context: AgentExecutionContext,
     config: AgentConfig
   ): Promise<any> {
-    // For now, just return accessToken from context
-    // TODO: Implement proper auth handling based on config.auth
+    // Return accessToken from context based on auth type
     if (config.auth.type === 'oauth') {
       return context.accessToken;
     }
