@@ -53,11 +53,19 @@ export const SlackSlashCommandPayloadSchema = z.object({
 });
 
 // Slack interactive component payload schema
+// Slack sends interactive components as form-encoded with payload field
 export const SlackInteractiveComponentPayloadSchema = z.object({
+  payload: z.string(), // JSON string containing the actual payload
+});
+
+// The parsed payload schema
+export const SlackInteractivePayloadSchema = z.object({
   type: z.string(),
   user: z.object({
     id: z.string(),
-    name: z.string(),
+    name: z.string().optional(),
+    username: z.string().optional(),
+    team_id: z.string().optional(),
   }),
   channel: z.object({
     id: z.string(),
@@ -68,6 +76,13 @@ export const SlackInteractiveComponentPayloadSchema = z.object({
     block_id: z.string(),
     value: OptionalStringSchema,
     type: z.string(),
+    text: z.object({
+      type: z.string(),
+      text: z.string(),
+      emoji: z.boolean().optional(),
+    }).optional(),
+    style: z.string().optional(),
+    action_ts: z.string().optional(),
   })),
   response_url: z.string(),
   trigger_id: z.string(),
@@ -75,6 +90,19 @@ export const SlackInteractiveComponentPayloadSchema = z.object({
     id: z.string(),
     domain: z.string(),
   }),
+  container: z.object({
+    type: z.string(),
+    message_ts: z.string().optional(),
+    channel_id: z.string().optional(),
+    is_ephemeral: z.boolean().optional(),
+  }).optional(),
+  api_app_id: z.string().optional(),
+  token: z.string().optional(),
+  state: z.object({
+    values: z.record(z.any()),
+  }).optional(),
+  enterprise: z.any().optional(),
+  is_enterprise_install: z.boolean().optional(),
 });
 
 // Slack attachment schema

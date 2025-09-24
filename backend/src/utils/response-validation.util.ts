@@ -66,36 +66,4 @@ export function sendSuccessResponse<T>(
   validateAndSendResponse(res, schema, data, statusCode);
 }
 
-/**
- * Send an error response with validation
- */
-export function sendErrorResponse(
-  res: Response,
-  error: string,
-  code?: string,
-  details?: Record<string, unknown>,
-  statusCode: number = 400
-): void {
-  const errorData = {
-    success: false,
-    error,
-    code,
-    details,
-    metadata: {
-      timestamp: new Date().toISOString(),
-    }
-  };
-  
-  res.status(statusCode).json(errorData);
-}
 
-/**
- * Create a response builder with validation
- */
-export function createValidatedResponse<T>(schema: z.ZodSchema<T>) {
-  return {
-    send: (res: Response, data: unknown, statusCode: number = 200) => {
-      validateAndSendResponse(res, schema, data, statusCode);
-    }
-  };
-}

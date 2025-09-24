@@ -303,8 +303,8 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
     try {
       const { command, text, user_id, team_id, response_url } = req.body;
 
-      // Handle /auth command
-      if (command === '/auth' || text?.trim() === 'auth') {
+      // Handle /auth command (ignore any additional text)
+      if (command === '/auth') {
         // Immediate acknowledgment
         res.status(200).send();
 
@@ -321,16 +321,75 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             throw new Error('AuthStatusService not available');
           }
 
+          logger.info('Getting user connections', {
+            correlationId: logContext.correlationId,
+            operation: 'auth_get_connections',
+            metadata: { userId: user_id, teamId: team_id }
+          });
+
           const connections = await authStatusService.getUserConnections(team_id, user_id);
           const blocks = authStatusService.buildStatusBlocks(connections);
 
+          logger.info('Built auth blocks', {
+            correlationId: logContext.correlationId,
+            operation: 'auth_blocks_built',
+            metadata: {
+              userId: user_id,
+              teamId: team_id,
+              connectionsCount: connections.length,
+              blocksCount: blocks.length,
+              hasResponseUrl: !!response_url
+            }
+          });
+
           // Send response via response_url for better UX
-          const slackService = serviceManager.getService<SlackService>('SlackService');
+          const slackService = serviceManager.getService<SlackService>('slackService');
           if (slackService && response_url) {
+            logger.info('Sending auth response to Slack', {
+              correlationId: logContext.correlationId,
+              operation: 'auth_send_response',
+              metadata: { userId: user_id, teamId: team_id, responseUrl: response_url.substring(0, 50) + '...' }
+            });
+
             await slackService.sendToResponseUrl(response_url, {
               response_type: 'ephemeral',
               blocks
             });
+
+            logger.info('Auth response sent successfully', {
+              correlationId: logContext.correlationId,
+              operation: 'auth_response_sent',
+              metadata: { userId: user_id, teamId: team_id }
+            });
+          } else {
+            logger.warn('Cannot send auth response via response_url, trying direct message', {
+              correlationId: logContext.correlationId,
+              operation: 'auth_response_fallback',
+              metadata: {
+                userId: user_id,
+                teamId: team_id,
+                hasSlackService: !!slackService,
+                hasResponseUrl: !!response_url
+              }
+            });
+
+            // Fallback: try to send as direct message
+            if (slackService) {
+              try {
+                await slackService.sendMessage(user_id, '🔐 Your Connections', { blocks });
+                logger.info('Auth response sent via direct message', {
+                  correlationId: logContext.correlationId,
+                  operation: 'auth_dm_sent',
+                  metadata: { userId: user_id, teamId: team_id }
+                });
+              } catch (dmError) {
+                logger.error('Failed to send auth response via DM', dmError as Error, {
+                  correlationId: logContext.correlationId,
+                  operation: 'auth_dm_failed',
+                  metadata: { userId: user_id, teamId: team_id }
+                });
+              }
+            }
           }
         } catch (error) {
           logger.error('/auth command failed', error as Error, {
@@ -339,7 +398,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             metadata: { userId: user_id, teamId: team_id }
           });
 
-          const slackService = serviceManager.getService<SlackService>('SlackService');
+          const slackService = serviceManager.getService<SlackService>('slackService');
           if (slackService && response_url) {
             await slackService.sendToResponseUrl(response_url, {
               response_type: 'ephemeral',
@@ -373,9 +432,11 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
   /**
    * Slack interactive components endpoint - handles button clicks, modals, etc.
    */
-  router.post('/interactive', 
+  router.post('/interactive',
     validateRequest({ body: SlackInteractiveComponentPayloadSchema }),
     async (req, res): Promise<void> => {
+    const logContext = createLogContext(req);
+
     try {
       const payload = req.body.payload;
       if (!payload) {
@@ -383,7 +444,27 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         return;
       }
 
+      logger.info('Interactive payload received', {
+        correlationId: logContext.correlationId,
+        operation: 'interactive_payload_received',
+        metadata: {
+          payloadLength: payload.length,
+          payloadPreview: payload.substring(0, 100) + '...'
+        }
+      });
+
       const parsedPayload = JSON.parse(payload);
+
+      logger.info('Interactive payload parsed', {
+        correlationId: logContext.correlationId,
+        operation: 'interactive_payload_parsed',
+        metadata: {
+          type: parsedPayload.type,
+          actionsCount: parsedPayload.actions?.length || 0,
+          userId: parsedPayload.user?.id,
+          teamId: parsedPayload.team?.id
+        }
+      });
 
       // Process button clicks
       if (parsedPayload.type === 'block_actions' && parsedPayload.actions?.[0]) {

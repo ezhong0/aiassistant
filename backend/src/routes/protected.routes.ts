@@ -11,7 +11,7 @@ import {
 } from '../middleware/auth.middleware';
 import { Permission } from '../types/auth.types';
 import { ProfileResponseSchema, AdminUsersResponseSchema, SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
-import { validateAndSendResponse, sendSuccessResponse, sendErrorResponse } from '../utils/response-validation.util';
+import { validateAndSendResponse, sendSuccessResponse } from '../utils/response-validation.util';
 
 const router = express.Router();
 

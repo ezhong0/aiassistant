@@ -43,20 +43,7 @@ export const initializeAgentFactory = (): void => {
   }
 }
 
-/**
- * Get the initialized AgentFactory instance
- */
-export const getAgentFactory = () => {
-  return AgentFactory;
-}
 
-/**
- * Check if AgentFactory is properly initialized
- */
-export const isAgentFactoryInitialized = (): boolean => {
-  const stats = AgentFactory.getStats();
-  return stats.totalAgents > 0 && stats.totalTools > 0;
-}
 
 /**
  * Create a MasterAgent instance with consistent configuration

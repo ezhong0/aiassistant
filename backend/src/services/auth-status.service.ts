@@ -73,13 +73,13 @@ export class AuthStatusService extends BaseService {
         services: ['Gmail', 'Calendar'],
         status: this.determineStatus(
           tokens?.googleTokens?.access_token,
-          tokens?.googleTokens?.expires_at?.getTime()
+          tokens?.googleTokens?.expires_at ? new Date(tokens.googleTokens.expires_at).getTime() : undefined
         ),
         hasAccessToken: !!tokens?.googleTokens?.access_token,
         hasRefreshToken: !!tokens?.googleTokens?.refresh_token,
-        expiresAt: tokens?.googleTokens?.expires_at,
+        expiresAt: tokens?.googleTokens?.expires_at ? new Date(tokens.googleTokens.expires_at) : undefined,
         expiresIn: tokens?.googleTokens?.expires_at
-          ? this.formatTimeUntil(tokens.googleTokens.expires_at)
+          ? this.formatTimeUntil(new Date(tokens.googleTokens.expires_at))
           : undefined
       };
 

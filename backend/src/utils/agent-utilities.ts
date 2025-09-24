@@ -48,17 +48,6 @@ export function createServiceUnavailableError(serviceName: string): Error {
   return error;
 }
 
-/**
- * Safe service getter with validation
- */
-export function getServiceSafely<T>(
-  services: Map<string, any>,
-  serviceName: string
-): T {
-  const service = services.get(serviceName);
-  validateServiceAvailable(service, serviceName);
-  return service as T;
-}
 
 // ========== AI Schema Validation ==========
 
@@ -133,65 +122,10 @@ export function assertValidAISchema(schema: AISchema): void {
   }
 }
 
-/**
- * Create a properly formatted array schema
- *
- * Helper to ensure arrays always have items defined
- */
-export function createArraySchema(itemSchema: AISchema): AISchema {
-  return {
-    type: 'array',
-    items: itemSchema,
-  };
-}
 
-/**
- * Validate OpenAI API call parameters
- *
- * Production issue: Wrong parameter order caused empty responses
- *
- * Correct signature: generateStructuredData(userInput, systemPrompt, schema, options)
- */
-export function validateOpenAIParams(params: {
-  userInput: string;
-  systemPrompt: string;
-  schema: AISchema;
-  options?: any;
-}): void {
-  if (!params.userInput || typeof params.userInput !== 'string') {
-    throw new Error('userInput must be a non-empty string');
-  }
-
-  if (!params.systemPrompt || typeof params.systemPrompt !== 'string') {
-    throw new Error('systemPrompt must be a non-empty string');
-  }
-
-  if (!params.schema || typeof params.schema !== 'object') {
-    throw new Error('schema must be a valid object');
-  }
-
-  assertValidAISchema(params.schema);
-}
 
 // ========== Step Analysis ==========
 
-/**
- * Analyze if a step result indicates completion
- */
-export function isCompletionResult(result: string): boolean {
-  const completionIndicators = [
-    'completed',
-    'done',
-    'finished',
-    'success',
-    'created successfully',
-    'sent successfully',
-  ];
-
-  return completionIndicators.some((indicator) =>
-    result.toLowerCase().includes(indicator)
-  );
-}
 
 /**
  * Analyze if a step result indicates an error
@@ -212,71 +146,6 @@ export function isErrorResult(result: string): boolean {
   );
 }
 
-/**
- * Extract error message from result string
- */
-export function extractErrorMessage(result: string): string | null {
-  // Try to extract error message after common prefixes
-  const errorPrefixes = [
-    'error:',
-    'failed:',
-    'unfortunately,',
-    "wasn't able to:",
-  ];
-
-  for (const prefix of errorPrefixes) {
-    const index = result.toLowerCase().indexOf(prefix);
-    if (index !== -1) {
-      return result.substring(index + prefix.length).trim();
-    }
-  }
-
-  return isErrorResult(result) ? result : null;
-}
 
 // ========== Error Transparency ==========
 
-/**
- * Ensure errors are never silently swallowed
- *
- * Production requirement: "no silent fallbacks - I need to see errors"
- */
-export function ensureErrorVisibility(
-  error: any,
-  operation: string
-): AgentError {
-  return {
-    code: error.code || AgentErrorCode.OPERATION_FAILED,
-    message: error.message || `${operation} failed`,
-    originalError: error instanceof Error ? error : undefined,
-    context: {
-      operation,
-      errorType: error.constructor?.name || 'unknown',
-    },
-    suggestions: error.suggestions || [
-      'Check service logs for details',
-      'Verify all required parameters are provided',
-      'Ensure services are properly initialized',
-    ],
-  };
-}
-
-/**
- * Convert Error to AgentError (no information loss)
- */
-export function toAgentError(
-  error: Error,
-  code?: string,
-  suggestions?: string[]
-): AgentError {
-  return {
-    code: code || AgentErrorCode.UNKNOWN_ERROR,
-    message: error.message,
-    originalError: error,
-    context: {
-      stack: error.stack,
-      name: error.name,
-    },
-    suggestions,
-  };
-}
