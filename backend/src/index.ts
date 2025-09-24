@@ -24,9 +24,6 @@ import {
 } from './middleware/security.middleware';
 import authRoutes from './routes/auth.routes';
 import protectedRoutes from './routes/protected.routes';
-// Health routes temporarily disabled during service cleanup
-// import healthRoutes from './routes/health';
-// import enhancedHealthRoutes from './routes/enhanced-health.routes';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
@@ -98,10 +95,6 @@ app.use((req, res, next) => {
 // Rate limiting (apply to all routes)
 app.use(apiRateLimit);
 
-// Health check routes (before other routes)
-// Health routes temporarily disabled during service cleanup
-// app.use('/health', healthRoutes);
-// app.use('/health', enhancedHealthRoutes);
 
 // API Routes
 app.use('/auth', authRoutes);

@@ -78,7 +78,7 @@ export class SlackService extends BaseService {
 
       this.logInfo('SlackService initialized successfully', {
         hasTokenManager: !!this.tokenManager,
-        hasToolExecutor: false, // ToolExecutorService is removed
+        hasToolExecutor: false,
         botUserId: this.botUserId,
         enableDeduplication: this.config.enableDeduplication,
         enableDMOnlyMode: this.config.enableDMOnlyMode
@@ -470,6 +470,36 @@ export class SlackService extends BaseService {
   }
 
   /**
+   * Send response via response_url (for slash commands)
+   */
+  async sendToResponseUrl(responseUrl: string, payload: any): Promise<void> {
+    try {
+      const response = await fetch(responseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Response URL request failed: ${response.statusText}`);
+      }
+
+      this.logInfo('Sent response via response_url', {
+        operation: 'response_url_send',
+        statusCode: response.status
+      });
+    } catch (error) {
+      this.logError('Failed to send to response_url', error as Error, {
+        operation: 'response_url_error',
+        responseUrl
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get Slack client for advanced operations
    */
   getClient(): WebClient {
@@ -484,7 +514,7 @@ export class SlackService extends BaseService {
       healthy: this.isReady(),
       botUserId: this.botUserId,
       hasTokenManager: !!this.tokenManager,
-      hasToolExecutor: false, // ToolExecutorService is removed
+      hasToolExecutor: false,
       processedEventsCount: this.processedEvents.size
     };
   }

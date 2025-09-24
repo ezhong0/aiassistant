@@ -33,16 +33,6 @@ export const initializeAgentFactory = (): void => {
       }
     });
 
-    // Generate and log OpenAI functions for debugging
-    const openAIFunctions = AgentFactory.generateOpenAIFunctions();
-    logger.debug('Generated OpenAI functions', {
-      correlationId: `agent-factory-init-${Date.now()}`,
-      operation: 'openai_functions_generation',
-      metadata: {
-        functionCount: openAIFunctions.length,
-        functions: openAIFunctions.map(f => ({ name: f.name, description: f.description }))
-      }
-    });
 
   } catch (error) {
     logger.error('Failed to initialize AgentFactory', error as Error, {

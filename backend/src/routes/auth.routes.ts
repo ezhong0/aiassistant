@@ -847,6 +847,52 @@ router.get('/callback',
     }
 
     if (isSlackAuth) {
+      // Check if this was a reconnect from auth dashboard
+      const returnTo = slackContext?.returnTo;
+      const wasAuthDashboard = returnTo === 'auth_dashboard';
+
+      // Send success notification to Slack
+      try {
+        const slackService = getService('SlackService') as any;
+        if (slackService && slackContext?.user_id) {
+          await slackService.sendMessage(slackContext.user_id,
+            wasAuthDashboard
+              ? '✅ Successfully reconnected! Your Google connection has been refreshed.'
+              : '✅ Successfully connected! You can now use email and calendar features.',
+            {
+              blocks: wasAuthDashboard ? [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: '✅ *Successfully Reconnected!*\n\nYour Google connection has been refreshed. You can now use email and calendar features.'
+                  }
+                },
+                {
+                  type: 'actions',
+                  elements: [
+                    {
+                      type: 'button',
+                      text: {
+                        type: 'plain_text',
+                        text: '🔐 View Connections'
+                      },
+                      action_id: 'view_auth_dashboard',
+                      value: 'show'
+                    }
+                  ]
+                }
+              ] : undefined
+            }
+          );
+        }
+      } catch (error) {
+        logger.error('Failed to send Slack notification', error as Error, {
+          operation: 'slack_notification_error',
+          metadata: { userId: slackContext?.user_id }
+        });
+      }
+
       return res.send(`
         <html>
           <head><title>Authentication Successful</title></head>
@@ -860,16 +906,21 @@ router.get('/callback',
               <li>📧 Send emails through the AI Assistant</li>
               <li>📋 Read and manage your Gmail</li>
               <li>👤 Access your contacts</li>
+              <li>📅 Manage your calendar</li>
             </ul>
             <div style="background: #f0f8ff; border: 1px solid #0066cc; border-radius: 8px; padding: 20px; margin: 30px 0;">
               <h3 style="color: #0066cc; margin-top: 0;">🔄 Next Steps</h3>
               <p style="margin: 10px 0;"><strong>1.</strong> Close this tab and return to Slack</p>
-              <p style="margin: 10px 0;"><strong>2.</strong> Try your email request again</p>
-              <p style="margin: 10px 0;"><strong>3.</strong> The AI Assistant will now have access to your Gmail</p>
+              <p style="margin: 10px 0;"><strong>2.</strong> ${wasAuthDashboard ? 'Check your connections with /auth' : 'Try your request again'}</p>
+              <p style="margin: 10px 0;"><strong>3.</strong> The AI Assistant now has access to your account</p>
             </div>
             <p style="margin-top: 40px; color: #666; font-style: italic;">
-              You can close this tab and return to Slack to start using email features!
+              You can close this tab and return to Slack to start using the features!
             </p>
+            <script>
+              // Auto-close after 3 seconds
+              setTimeout(() => window.close(), 3000);
+            </script>
           </body>
         </html>
       `);

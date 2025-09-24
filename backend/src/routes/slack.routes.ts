@@ -1,7 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { createLogContext } from '../utils/log-context';
-import { 
+import {
   SlackWebhookEventSchema,
   SlackSlashCommandPayloadSchema,
   SlackInteractiveComponentPayloadSchema
@@ -10,6 +10,7 @@ import { validateRequest } from '../middleware/validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { SlackService } from '../services/slack/slack.service';
 import { SlackOAuthService } from '../services/slack/slack-oauth.service';
+import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
 
 const emptyQuerySchema = z.object({});
@@ -294,16 +295,64 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
    * Slack commands endpoint - handles slash commands
    * This endpoint will be used by the Bolt framework
    */
-  router.post('/commands', 
+  router.post('/commands',
     validateRequest({ body: SlackSlashCommandPayloadSchema }),
     async (req, res): Promise<void> => {
+    const logContext = createLogContext(req);
+
     try {
-      const { command, text, user_id, channel_id } = req.body;
-      
+      const { command, text, user_id, team_id, response_url } = req.body;
+
+      // Handle /auth command
+      if (command === '/auth' || text?.trim() === 'auth') {
+        // Immediate acknowledgment
+        res.status(200).send();
+
+        logger.info('/auth command received', {
+          correlationId: logContext.correlationId,
+          operation: 'auth_command',
+          metadata: { userId: user_id, teamId: team_id }
+        });
+
+        try {
+          // Get user connections
+          const authStatusService = serviceManager.getService<AuthStatusService>('authStatusService');
+          if (!authStatusService) {
+            throw new Error('AuthStatusService not available');
+          }
+
+          const connections = await authStatusService.getUserConnections(team_id, user_id);
+          const blocks = authStatusService.buildStatusBlocks(connections);
+
+          // Send response via response_url for better UX
+          const slackService = serviceManager.getService<SlackService>('SlackService');
+          if (slackService && response_url) {
+            await slackService.sendToResponseUrl(response_url, {
+              response_type: 'ephemeral',
+              blocks
+            });
+          }
+        } catch (error) {
+          logger.error('/auth command failed', error as Error, {
+            correlationId: logContext.correlationId,
+            operation: 'auth_command_error',
+            metadata: { userId: user_id, teamId: team_id }
+          });
+
+          const slackService = serviceManager.getService<SlackService>('SlackService');
+          if (slackService && response_url) {
+            await slackService.sendToResponseUrl(response_url, {
+              response_type: 'ephemeral',
+              text: '❌ Failed to load connections. Please try again.'
+            });
+          }
+        }
+        return;
+      }
 
       // Handle empty commands with helpful guidance
       if (!text || text.trim().length === 0) {
-        
+
         // Acknowledge receipt - actual processing handled by Bolt
         res.status(200).json({ ok: true });
         return;
@@ -311,9 +360,12 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
       // Acknowledge receipt - actual processing handled by Bolt
       res.status(200).json({ ok: true });
-      
+
     } catch (error) {
-      
+      logger.error('Command handler error', error as Error, {
+        correlationId: logContext.correlationId,
+        operation: 'command_handler_error'
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -340,11 +392,175 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         const actionValue = action.value;
         
 
+        // Handle auth button clicks
+        if (actionId?.startsWith('connect_') || actionId?.startsWith('refresh_')) {
+          const provider = actionId.replace(/^(connect_|refresh_)/, '');
+          const userId = parsedPayload.user?.id;
+          const teamId = parsedPayload.team?.id;
+
+          logger.info('Auth button clicked', {
+            correlationId: createLogContext(req).correlationId,
+            operation: 'auth_button_click',
+            metadata: { actionId, provider, userId, teamId }
+          });
+
+          // Generate OAuth URL
+          const slackOAuthService = serviceManager.getService<SlackOAuthService>('SlackOAuthService');
+          if (slackOAuthService && userId && teamId) {
+            try {
+              const state = JSON.stringify({
+                userId,
+                teamId,
+                provider,
+                action: actionId.startsWith('refresh_') ? 'refresh' : 'connect',
+                returnTo: 'auth_dashboard'
+              });
+
+              const authUrl = await slackOAuthService.generateAuthUrl({
+                userId,
+                teamId,
+                channelId: parsedPayload.channel?.id || userId
+              } as any, [
+                'https://www.googleapis.com/auth/gmail.send',
+                'https://www.googleapis.com/auth/gmail.readonly',
+                'https://www.googleapis.com/auth/calendar',
+                'https://www.googleapis.com/auth/contacts.readonly'
+              ]);
+
+              // Update message with OAuth link
+              res.status(200).json({
+                replace_original: true,
+                text: '🔐 Reconnect your account',
+                blocks: [
+                  {
+                    type: 'section',
+                    text: {
+                      type: 'mrkdwn',
+                      text: `🔐 *Reconnect ${provider.charAt(0).toUpperCase() + provider.slice(1)}*\n\nClick the button below to authorize your account.`
+                    }
+                  },
+                  {
+                    type: 'actions',
+                    elements: [
+                      {
+                        type: 'button',
+                        text: {
+                          type: 'plain_text',
+                          text: '✅ Authorize'
+                        },
+                        url: authUrl,
+                        style: 'primary'
+                      }
+                    ]
+                  },
+                  {
+                    type: 'context',
+                    elements: [
+                      {
+                        type: 'mrkdwn',
+                        text: '💡 This will open in a new window. Return to Slack when complete.'
+                      }
+                    ]
+                  }
+                ]
+              });
+              return;
+            } catch (error) {
+              logger.error('Failed to generate auth URL', error as Error, {
+                correlationId: createLogContext(req).correlationId,
+                operation: 'auth_url_generation_error',
+                metadata: { provider, userId, teamId }
+              });
+
+              res.status(200).json({
+                text: '❌ Failed to generate authorization link. Please try again.',
+                replace_original: false
+              });
+              return;
+            }
+          }
+        }
+
+        // Handle test connection button
+        if (actionId?.startsWith('test_')) {
+          const provider = actionId.replace('test_', '');
+          const userId = parsedPayload.user?.id;
+          const teamId = parsedPayload.team?.id;
+
+          logger.info('Test connection button clicked', {
+            correlationId: createLogContext(req).correlationId,
+            operation: 'test_connection_click',
+            metadata: { provider, userId, teamId }
+          });
+
+          if (userId && teamId) {
+            const authStatusService = serviceManager.getService<AuthStatusService>('authStatusService');
+            if (!authStatusService) {
+              res.status(200).json({
+                text: '❌ Service not available. Please try again.',
+                replace_original: false
+              });
+              return;
+            }
+
+            const result = await authStatusService.testConnection(teamId, userId, provider);
+
+            res.status(200).json({
+              replace_original: false,
+              text: result.message,
+              response_type: 'ephemeral'
+            });
+            return;
+          }
+        }
+
+        // Handle view auth dashboard button
+        if (actionId === 'view_auth_dashboard') {
+          const userId = parsedPayload.user?.id;
+          const teamId = parsedPayload.team?.id;
+
+          logger.info('View auth dashboard button clicked', {
+            correlationId: createLogContext(req).correlationId,
+            operation: 'view_auth_dashboard_click',
+            metadata: { userId, teamId }
+          });
+
+          if (userId && teamId) {
+            try {
+              const authStatusService = serviceManager.getService<AuthStatusService>('authStatusService');
+              if (!authStatusService) {
+                throw new Error('AuthStatusService not available');
+              }
+
+              const connections = await authStatusService.getUserConnections(teamId, userId);
+              const blocks = authStatusService.buildStatusBlocks(connections);
+
+              res.status(200).json({
+                replace_original: true,
+                blocks
+              });
+              return;
+            } catch (error) {
+              logger.error('Failed to load auth dashboard', error as Error, {
+                correlationId: createLogContext(req).correlationId,
+                operation: 'auth_dashboard_load_error',
+                metadata: { userId, teamId }
+              });
+
+              res.status(200).json({
+                text: '❌ Failed to load connections. Please try again.',
+                replace_original: false
+              });
+              return;
+            }
+          }
+        }
+
         // Handle view results buttons
         if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
-          
+
           const toolName = actionId.replace('view_', '').replace('_results', '');
-          
+
           const responseMessage = {
             text: `📋 ${toolName} Results`,
             blocks: [

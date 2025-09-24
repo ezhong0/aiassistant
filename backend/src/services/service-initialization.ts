@@ -15,6 +15,7 @@ import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { SlackService } from './slack/slack.service';
 import { SlackOAuthService } from './slack/slack-oauth.service';
 import { DraftManager } from './draft-manager.service';
+import { AuthStatusService } from './auth-status.service';
 import { ConfigService } from '../config/config.service';
 import { AIConfigService } from '../config/ai-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -111,6 +112,14 @@ const registerCoreServices = async (): Promise<void> => {
     serviceManager.registerService('tokenStorageService', tokenStorageService, {
       dependencies: ['databaseService'],
       priority: 10,
+      autoStart: true
+    });
+
+    // 4b. AuthStatusService - Depends on tokenStorageService
+    const authStatusService = new AuthStatusService();
+    serviceManager.registerService('authStatusService', authStatusService, {
+      dependencies: ['tokenStorageService'],
+      priority: 11,
       autoStart: true
     });
 

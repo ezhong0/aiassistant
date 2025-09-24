@@ -539,6 +539,17 @@ export class DatabaseService extends BaseService {
       }
 
       const row = result.rows[0];
+
+      logger.info('Database row retrieved', {
+        correlationId: `db-query-${Date.now()}`,
+        userId,
+        hasGoogleAccessToken: !!row.google_access_token,
+        hasGoogleRefreshToken: !!row.google_refresh_token,
+        hasGoogleScope: !!row.google_scope,
+        googleAccessTokenLength: row.google_access_token?.length || 0,
+        operation: 'database_row_details'
+      });
+
       return {
         userId: row.user_id,
         googleTokens: row.google_access_token ? {

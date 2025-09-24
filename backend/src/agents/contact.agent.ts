@@ -160,28 +160,6 @@ Important:
     }
   }
 
-  /**
-   * Get OpenAI function schema (auto-generated from config)
-   */
-  static getOpenAIFunctionSchema(): any {
-    const instance = new ContactAgent();
-    const config = instance.getAgentConfig();
-
-    return {
-      name: config.name,
-      description: 'Search and lookup Google Contacts. Use this to find contact information by name, email, phone, or company.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Natural language contact request (e.g., "Find John Smith", "Lookup sarah@example.com", "Search for contacts at Acme")'
-          }
-        },
-        required: ['query']
-      }
-    };
-  }
 
   /**
    * Get agent capabilities (for MasterAgent discovery)

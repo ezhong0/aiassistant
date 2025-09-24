@@ -223,28 +223,6 @@ Important:
     }
   }
 
-  /**
-   * Get OpenAI function schema (auto-generated from config)
-   */
-  static getOpenAIFunctionSchema(): any {
-    const instance = new EmailAgent();
-    const config = instance.getAgentConfig();
-
-    return {
-      name: config.name,
-      description: 'Send, search, reply to, and manage Gmail emails. Use this for any email-related tasks including sending messages, searching inbox, or replying to conversations.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Natural language email request (e.g., "Send email to john@example.com about project update", "Search for emails from Sarah", "Reply to latest email from Mike")'
-          }
-        },
-        required: ['query']
-      }
-    };
-  }
 
   /**
    * Get agent capabilities (for MasterAgent discovery)

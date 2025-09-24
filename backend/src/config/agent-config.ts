@@ -8,12 +8,6 @@ import { OpenAIService } from '../services/openai.service';
 
 /** Agent capability descriptions for AI-driven routing */
 export const AGENT_CAPABILITIES = {
-  /** Think agent - analysis and verification */
-  think: {
-    description: 'Analyze and reason about user requests, verify correct actions were taken',
-    capabilities: ['analysis', 'reasoning', 'verification', 'checking'],
-    useCases: ['verify actions', 'analyze results', 'check correctness', 'reason about problems']
-  },
   
   /** Email agent - email operations */
   email: {
@@ -46,16 +40,6 @@ export const AGENT_CAPABILITIES = {
 
 /** AI-Driven Agent Configuration */
 export const AGENT_CONFIG = {
-  think: {
-    description: AGENT_CAPABILITIES.think.description,
-    capabilities: AGENT_CAPABILITIES.think.capabilities,
-    useCases: AGENT_CAPABILITIES.think.useCases,
-    requiresConfirmation: false,
-    isCritical: false,
-    isReadOnly: true,
-    requiresAuth: false,
-    hasExternalEffects: false
-  },
   
   email: {
     description: AGENT_CAPABILITIES.email.description,

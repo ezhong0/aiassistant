@@ -4,7 +4,6 @@ import { ToolMetadata } from '../types/agents/agent.types';
 import { EmailAgent } from '../agents/email.agent';
 import { CalendarAgent } from '../agents/calendar.agent';
 import { ContactAgent } from '../agents/contact.agent';
-import { ThinkAgent } from '../agents/think.agent';
 import { SlackAgent } from '../agents/slack.agent';
 import { AGENT_CONFIG } from '../config/agent-config';
 import { AgentCapabilities } from '../types/agents/natural-language.types';
@@ -519,52 +518,7 @@ export class AgentFactory {
   /**
    * Generate OpenAI function definitions for all registered tools
    */
-  static generateOpenAIFunctions(): OpenAIFunctionSchema[] {
-    return Array.from(this.toolMetadata.values()).map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters
-    }));
-  }
 
-  /**
-   * Generate enhanced OpenAI function definitions with agent schemas
-   */
-  static async generateEnhancedOpenAIFunctions(): Promise<OpenAIFunctionSchema[]> {
-    const functions: OpenAIFunctionSchema[] = [];
-
-    // Get agent schemas from agent classes
-    try {
-      const { EmailAgent } = await import('../agents/email.agent');
-      const { ContactAgent } = await import('../agents/contact.agent');
-      const { CalendarAgent } = await import('../agents/calendar.agent');
-      const { ThinkAgent } = await import('../agents/think.agent');
-
-      // Add agent-specific function schemas
-      functions.push(EmailAgent.getOpenAIFunctionSchema());
-      functions.push(ContactAgent.getOpenAIFunctionSchema());
-      functions.push(CalendarAgent.getOpenAIFunctionSchema());
-      functions.push(ThinkAgent.getOpenAIFunctionSchema());
-      
-      // Add other tools from metadata
-      const otherTools = Array.from(this.toolMetadata.values())
-        .filter(tool => !['emailAgent', 'contactAgent', 'calendarAgent'].includes(tool.name))
-        .map(tool => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters
-        }));
-      
-      functions.push(...otherTools);
-      
-    } catch (error) {
-      
-      // Fallback to basic functions
-      return this.generateOpenAIFunctions();
-    }
-    
-    return functions;
-  }
 
   /**
    * Get agent discovery metadata for AI planning
@@ -576,10 +530,9 @@ export class AgentFactory {
       const { EmailAgent } = await import('../agents/email.agent');
       const { ContactAgent } = await import('../agents/contact.agent');
       const { CalendarAgent } = await import('../agents/calendar.agent');
-      const { ThinkAgent } = await import('../agents/think.agent');
 
       metadata.emailAgent = {
-        schema: EmailAgent.getOpenAIFunctionSchema(),
+        schema: { name: 'emailAgent', description: 'Email management agent', parameters: {} },
         capabilities: EmailAgent.getCapabilities(),
         limitations: [],
         enabled: this.hasAgent('emailAgent'),
@@ -587,7 +540,7 @@ export class AgentFactory {
       };
 
       metadata.contactAgent = {
-        schema: ContactAgent.getOpenAIFunctionSchema(),
+        schema: { name: 'contactAgent', description: 'Contact management agent', parameters: {} },
         capabilities: ContactAgent.getCapabilities(),
         limitations: [],
         enabled: this.hasAgent('contactAgent'),
@@ -595,25 +548,18 @@ export class AgentFactory {
       };
 
       metadata.calendarAgent = {
-        schema: CalendarAgent.getOpenAIFunctionSchema(),
+        schema: { name: 'calendarAgent', description: 'Calendar management agent', parameters: {} },
         capabilities: CalendarAgent.getCapabilities(),
         limitations: [],
         enabled: this.hasAgent('calendarAgent'),
         draftType: 'calendar'
       };
 
-      metadata.thinkAgent = {
-        schema: ThinkAgent.getOpenAIFunctionSchema(),
-        capabilities: ThinkAgent.getCapabilities(),
-        limitations: [],
-        enabled: this.hasAgent('Think'),
-        draftType: 'none'
-      };
       
       // Add slackAgent metadata
       const { SlackAgent } = await import('../agents/slack.agent');
       metadata.slackAgent = {
-        schema: SlackAgent.getOpenAIFunctionSchema(),
+        schema: { name: 'slackAgent', description: 'Slack management agent', parameters: {} },
         capabilities: SlackAgent.getCapabilities(),
         limitations: [],
         enabled: this.hasAgent('slackAgent'),
@@ -677,38 +623,9 @@ export class AgentFactory {
       // Register core agents
       this.registerAgentClass('emailAgent', EmailAgent);
       this.registerAgentClass('contactAgent', ContactAgent);
-      this.registerAgentClass('Think', ThinkAgent);
       this.registerAgentClass('calendarAgent', CalendarAgent);
       this.registerAgentClass('slackAgent', SlackAgent);
       
-      // Register tool metadata for all agents
-      this.registerToolMetadata({
-        name: 'Think',
-        description: 'Analyze and reason about user requests, verify correct actions were taken',
-        parameters: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'The query or request to analyze and think about'
-            },
-            context: {
-              type: 'string',
-              description: 'Additional context for analysis',
-              nullable: true
-            },
-            previousActions: {
-              type: 'array',
-              description: 'Previous tool calls that were executed',
-              items: { type: 'object' },
-              nullable: true
-            }
-          },
-          required: ['query']
-        },
-        requiresConfirmation: AGENT_CONFIG.think.requiresConfirmation,
-        isCritical: AGENT_CONFIG.think.isCritical
-      });
 
       this.registerToolMetadata({
         name: 'emailAgent',

@@ -496,28 +496,6 @@ Keep it concise and actionable.`;
     return Array.from(assignees);
   }
 
-  /**
-   * Get OpenAI function schema (auto-generated from config)
-   */
-  static getOpenAIFunctionSchema(): any {
-    const instance = new SlackAgent();
-    const config = instance.getAgentConfig();
-
-    return {
-      name: config.name,
-      description: 'Gather and analyze Slack context (messages, threads, mentions) to provide intelligent summaries and insights. Use this when you need information from Slack conversations.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Natural language request for Slack context (e.g., "Get latest messages from #general", "Find deployment thread", "What mentioned me?")'
-          }
-        },
-        required: ['query']
-      }
-    };
-  }
 
   /**
    * Get agent capabilities (for MasterAgent discovery)

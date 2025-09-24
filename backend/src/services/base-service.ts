@@ -360,8 +360,8 @@ export abstract class BaseService implements IService {
   }
 
   /**
-   * Simple error logging method (deprecated - use Winston directly)
-   * @deprecated Use logger directly instead
+   * Simple error logging method
+   * Provides consistent error logging across all services
    */
   protected logError(message: string, error?: Error | unknown, meta?: Record<string, unknown>): void {
     logger.error(message, {

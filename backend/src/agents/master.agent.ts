@@ -6,11 +6,11 @@ import { PromptUtils } from '../utils/prompt-utils';
 // Agents are now stateless
 import { ToolCall, ToolResult, MasterAgentConfig, ToolExecutionContext, ToolCallSchema, ToolResultSchema } from '../types/tools';
 import { AgentFactory } from '../framework/agent-factory';
+import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { getService } from '../services/service-manager';
 import { SlackContext, SlackContextSchema } from '../types/slack/slack.types';
 import { SlackMessage } from '../types/slack/slack-message-reader.types';
 import { APP_CONSTANTS } from '../config/constants';
-import { OpenAIFunctionSchema } from '../framework/agent-factory';
 import { ContextGatheringResult, ContextDetectionResult } from './slack.agent';
 import { z } from 'zod';
 // Import WorkflowOrchestrator for extracted workflow functionality
@@ -233,7 +233,6 @@ export function safeParseMasterAgentResponse(data: unknown): { success: true; da
  */
 export class MasterAgent {
   private useOpenAI: boolean = false;
-  private systemPrompt: string;
   private lastMemoryCheck: number = Date.now();
 
   // Extracted component for workflow management
@@ -260,8 +259,6 @@ export class MasterAgent {
     // Initialize extracted workflow component
     this.workflowOrchestrator = new WorkflowOrchestrator();
 
-    // Generate dynamic system prompt from AgentFactory
-    this.systemPrompt = this.generateSystemPrompt();
 
     if (config?.openaiApiKey) {
       // Use shared OpenAI service from service registry instead of creating a new instance
@@ -282,32 +279,6 @@ export class MasterAgent {
 
 
 
-  /**
-   * Get all agent schemas for OpenAI function calling using AgentFactory
-   */
-  public getAgentSchemas(): OpenAIFunctionSchema[] {
-    return AgentFactory.getEnabledAgentNames()
-      .map(agentName => {
-        const agent = AgentFactory.getAgent(agentName);
-        if (agent) {
-          // Try to get schema from agent if it has the method
-          const agentClass = agent.constructor as any;
-          if (typeof agentClass.getOpenAIFunctionSchema === 'function') {
-            return agentClass.getOpenAIFunctionSchema();
-          }
-        }
-        // Fallback schema for agents without getOpenAIFunctionSchema
-        return {
-          name: agentName,
-          description: `${agentName} agent`,
-          parameters: {
-            type: 'object' as const,
-            properties: {},
-            required: []
-          }
-        };
-      });
-  }
 
   /**
    * Get agent capabilities summary for AI planning using AgentFactory
@@ -1479,189 +1450,11 @@ GUIDELINES:
     }
   }
 
-  /**
-   * Generate enhanced system prompt with agent capabilities and context
-   */
-  private async generateEnhancedSystemPrompt(contextGathered?: ContextGatheringResult, intentAnalysis?: any): Promise<string> {
-    const basePrompt = this.generateSystemPrompt();
-    const agentCapabilities = await this.getAgentCapabilities();
-    
-    const capabilitiesSection = `
-## Agent Capabilities and Limitations
-
-### Email Agent (emailAgent)
-**Capabilities:**
-${agentCapabilities.emailAgent?.capabilities.map((cap: string) => `- ${cap}`).join('\n') || 'No capabilities available'}
-
-**Limitations:**
-${agentCapabilities.emailAgent?.limitations.map((lim: string) => `- ${lim}`).join('\n') || 'No limitations available'}
-
-### Contact Agent (contactAgent)
-**Capabilities:**
-${agentCapabilities.contactAgent?.capabilities.map((cap: string) => `- ${cap}`).join('\n') || 'No capabilities available'}
-
-**Limitations:**
-${agentCapabilities.contactAgent?.limitations.map((lim: string) => `- ${lim}`).join('\n') || 'No limitations available'}
-
-### Calendar Agent (calendarAgent)
-**Capabilities:**
-${agentCapabilities.calendarAgent?.capabilities.map((cap: string) => `- ${cap}`).join('\n') || 'No capabilities available'}
-
-**Limitations:**
-${agentCapabilities.calendarAgent?.limitations.map((lim: string) => `- ${lim}`).join('\n') || 'No limitations available'}
-
-## Multi-Agent Orchestration Rules
-
-### Email Operations
-- **DIRECT EMAIL ADDRESSES**: When user provides email addresses (contains @domain.com), call emailAgent DIRECTLY
-  - Example: "send email to john@company.com" → generate ONLY emailAgent call
-  - NO contact resolution needed
-- **PERSON NAMES**: When user provides person names (no @ symbol), use TWO-STEP process:
-  1. First: contactAgent with search operation for the person's name
-  2. Second: emailAgent with the resolved email address from step 1
-  - Example: "send email to John Smith" → generate contactAgent call, then emailAgent call
-
-### Calendar Operations
-- **EMAIL ATTENDEES**: When attendees are email addresses, call calendarAgent DIRECTLY
-- **NAME ATTENDEES**: When attendees are person names, use TWO-STEP process:
-  1. First: contactAgent with search operation for attendee names
-  2. Second: calendarAgent with resolved email addresses from step 1
-
-### General Rules
-- **SMART DETECTION**: Analyze the input to distinguish between email addresses and person names
-- **NO UNNECESSARY STEPS**: Don't call contactAgent when email addresses are already provided
-- **CONFIRMATION REQUIRED**: Both email and calendar operations should require user confirmation
-- Always call Think tool at the end to verify correct orchestration
-
-## Tool Call Generation Rules
-- **"send email to john@company.com"** → Generate emailAgent call ONLY (no contactAgent)
-- **"send email to John Smith"** → Generate contactAgent call first, then emailAgent call
-- **"schedule meeting with john@company.com"** → Generate calendarAgent call ONLY (no contactAgent)
-- **"schedule meeting with John Smith"** → Generate contactAgent call first, then calendarAgent call
-
-## Email Address Detection
-- Pattern: contains @ symbol and domain (e.g., user@domain.com)
-- If detected: Skip contact resolution, go directly to emailAgent
-- If NOT detected: Use contact resolution workflow`;
-
-    let contextSection = '';
-    if (contextGathered && contextGathered.relevantContext) {
-      contextSection = `
-
-## Current Context
-Based on recent Slack messages, here's relevant context for this request:
-
-${contextGathered.relevantContext}
-
-Use this context to better understand the user's intent and provide more accurate responses.`;
-    }
-
-    return `${basePrompt}\n\n${capabilitiesSection}${contextSection}`;
-  }
 
 
 
-  /**
-   * Generate AI-driven system prompt with dynamic agent capabilities
-   */
-  private generateSystemPrompt(): string {
-    const basePrompt = `# AI Personal Assistant
-You're a smart personal assistant that helps users by coordinating different tools and agents.
-
-Be helpful, professional, and take intelligent action rather than asking for clarification when possible.
-
-## Agent Orchestration Rules
-- **CRITICAL: ALWAYS CALL TOOLS FOR USER REQUESTS** - Never respond without calling appropriate tools
-- **EMAIL REQUESTS**: When user says "send email", "email", or mentions email addresses (@ symbol), ALWAYS call emailAgent tool
-- **CONTACT REQUESTS**: When user says "find contact", "search contact", or mentions person names (no @), call contactAgent tool  
-- **CALENDAR REQUESTS**: When user says "schedule", "meeting", "calendar", or mentions dates/times, call calendarAgent tool
-- **SLACK REQUESTS**: When user asks about messages, conversations, or Slack context, call slackAgent tool
-- **ALWAYS END WITH THINK**: After calling any tool, ALWAYS call Think tool to verify correct orchestration
-- **CONFIRMATION REQUIRED**: All email and calendar operations require user confirmation before execution
-- **DISTINGUISH EMAIL vs NAME**: Analyze input to detect email addresses vs person names automatically
-
-## Calendar Agent Capabilities
-**The calendarAgent can ONLY perform these specific operations:**
-- **List Events**: Retrieve and display calendar events for specific dates or time ranges
-- **Create Events**: Create new calendar events with title, time, attendees, and details
-- **Update Events**: Modify existing calendar events (requires event ID)
-- **Delete Events**: Remove calendar events (requires event ID)
-- **Check Availability**: Check if specific time slots are available
-- **Find Free Slots**: Find available time slots for meetings within a date range
-
-**Calendar Agent CANNOT:**
-- Access different calendar applications or services
-- Contact calendar support teams
-- Troubleshoot calendar integration issues
-- Access calendar settings or preferences
-- Manage calendar permissions or OAuth tokens
-- Access calendar data from other users
-
-**When delegating to calendarAgent, ONLY ask it to:**
-- "List my calendar events for [specific date/time]"
-- "Create a calendar event for [date/time] with [details]"
-- "Update calendar event [ID] with [changes]"
-- "Delete calendar event [ID]"
-- "Check my availability for [date/time]"
-- "Find free time slots between [start date] and [end date]"
-
-**DO NOT ask calendarAgent to:**
-- "Check different calendar applications"
-- "Contact calendar support"
-- "Troubleshoot calendar issues"
-- "Access calendar settings"
-- "Try alternative calendar services"
-
-## Context Gathering Strategy
-- **For ambiguous requests**: FIRST call Slack agent to read recent conversation history
-- **For follow-up questions**: Use previous message context to infer what user likely wants
-- **For email requests**: If unclear, show recent emails, unread emails, or broader email list rather than asking
-- **For calendar requests**: If unclear, show today's/upcoming events rather than asking for specifics
-- **Default to helpful action**: When in doubt, provide useful information rather than requesting clarification
-
-## Examples of Tool Usage
-- User mentions email addresses (@ symbol) → Call emailAgent tool
-- User mentions person names (no @ symbol) → Call contactAgent tool
-- User mentions dates/times/scheduling → Call calendarAgent tool
-- User asks about messages/conversations → Call slackAgent tool
-- After ANY tool call → ALWAYS call Think tool
-
-## Current Context
-- Current date/time: ${new Date().toISOString()}
-- Today is: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-- Current time: ${new Date().toLocaleTimeString('en-US', { hour12: true, timeZoneName: 'short' })}
-- Current timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-- Session-based processing for user context
-
-## Time and Date Guidelines
-- When users ask about "today", "tomorrow", "this week", etc., use the current date/time above as reference
-- For calendar operations, always specify explicit dates and times, not relative terms
-- Default to user's local timezone unless specified otherwise
-- When listing calendar events, ALWAYS show them in strict chronological order from earliest to latest with clear time labels
-- IMPORTANT: Sort all calendar events by start time before displaying to ensure proper chronological ordering
-
-## Response Guidelines
-- Be specific and actionable
-- Use clear formatting for multiple items
-- When things fail, explain what happened and suggest next steps
-
-## Error Handling
-- Give simple, clear explanations when things go wrong
-- Always suggest what to try next`;
-
-    // Get dynamic tool information from AgentFactory
-    const toolsSection = AgentFactory.generateSystemPrompts();
-    
-    return `${basePrompt}\n\n${toolsSection}`;
-  }
 
 
-  /**
-   * Get the system prompt for external use (e.g., when integrating with OpenAI)
-   */
-  getSystemPrompt(): string {
-    return this.systemPrompt;
-  }
 
   /**
    * Monitor memory usage and trigger cleanup if needed
@@ -2080,15 +1873,28 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
         context.currentStep++;
 
       } catch (error) {
+        const errorMessage = (error as Error).message;
         logger.error('String step execution failed', error as Error, {
           workflowId,
           sessionId,
           stepNumber: context.currentStep,
+          isAuthError: errorMessage.startsWith('AUTH_ERROR:'),
           operation: 'string_step_error'
         });
 
+        // If auth error, stop immediately
+        if (errorMessage.startsWith('AUTH_ERROR:')) {
+          logger.info('Auth error detected - stopping workflow immediately', {
+            workflowId,
+            sessionId,
+            operation: 'auth_error_stop'
+          });
+          allStepResults.push(errorMessage.replace('AUTH_ERROR: ', ''));
+          break;
+        }
+
         // Add error as step result and continue
-        allStepResults.push(`Step failed: ${(error as Error).message}`);
+        allStepResults.push(`Step failed: ${errorMessage}`);
         context.currentStep++;
       }
     }
@@ -2157,6 +1963,14 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
       // Get access token for the agent
       const accessToken = await this.getAccessTokenForAgent(agentName, userId, slackContext);
 
+      logger.info('Token retrieval for agent', {
+        agentName,
+        userId,
+        hasToken: !!accessToken,
+        tokenType: typeof accessToken,
+        operation: 'token_retrieval'
+      });
+
       // Execute with natural language
       const result = await AgentFactory.executeAgentWithNaturalLanguage(
         agentName,
@@ -2178,12 +1992,19 @@ Respond naturally and conversationally. Skip technical details like URLs, IDs, a
         response: result.response?.substring(0, 200),
         responseTruncated,
         responseLength: result.response?.length || 0,
+        isAuthError: result.metadata?.isAuthError,
+        errorType: result.metadata?.errorType,
         sessionId,
         operation: 'natural_language_response'
       });
 
       if (!result.success) {
         throw new Error(result.error || 'Agent execution failed');
+      }
+
+      // If this was an auth error, throw to stop workflow
+      if (result.metadata?.isAuthError) {
+        throw new Error(`AUTH_ERROR: ${result.response || 'Authentication required'}`);
       }
 
       return result.response || 'Step completed successfully';

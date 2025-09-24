@@ -2,7 +2,6 @@
  * Agent Utilities
  *
  * Critical patterns from production fixes:
- * - Loop prevention (detects repeated failures)
  * - Null safety (validates service availability)
  * - Schema validation (ensures correct AI schema format)
  *
@@ -11,104 +10,6 @@
 
 import { AgentError, AgentErrorCode, failure } from '../types/agents/agent-result';
 
-// ========== Loop Prevention ==========
-
-/**
- * Detect if we're in an infinite loop of repeated failures
- *
- * Production issue: System was creating 10+ identical "try again" steps
- * without recognizing persistent failures.
- *
- * This utility analyzes recent steps and results to detect:
- * - Repeated failure messages
- * - Similar step patterns
- * - Infinite retry loops
- */
-export function detectRepeatedFailures(
-  recentSteps: string[],
-  recentResults: string[],
-  threshold: number = 0.8
-): boolean {
-  if (recentSteps.length < 2) return false;
-
-  // Failure keywords from production logs
-  const failureKeywords = [
-    "wasn't able to",
-    'unfortunately',
-    'failed',
-    'error',
-    "couldn't",
-    'unable to',
-    'cannot',
-    'not found',
-    'unavailable',
-  ];
-
-  // Check if all recent results contain failure keywords
-  const hasRepeatedFailures = recentResults.every((result) =>
-    failureKeywords.some((keyword) => result.toLowerCase().includes(keyword))
-  );
-
-  if (!hasRepeatedFailures) return false;
-
-  // Calculate step similarity
-  const stepSimilarity = calculateStepSimilarity(recentSteps);
-
-  return stepSimilarity > threshold;
-}
-
-/**
- * Calculate similarity between steps (0-1 score)
- */
-export function calculateStepSimilarity(steps: string[]): number {
-  if (steps.length < 2) return 0;
-
-  // Simple similarity: check if steps contain similar words
-  const wordSets = steps.map((step) => new Set(step.toLowerCase().split(/\s+/)));
-
-  let totalSimilarity = 0;
-  let comparisons = 0;
-
-  for (let i = 0; i < wordSets.length - 1; i++) {
-    for (let j = i + 1; j < wordSets.length; j++) {
-      const setI = wordSets[i];
-      const setJ = wordSets[j];
-      if (!setI || !setJ) continue;
-
-      const intersection = new Set([...setI].filter((x) => setJ.has(x)));
-      const union = new Set([...setI, ...setJ]);
-      const similarity = intersection.size / union.size;
-      totalSimilarity += similarity;
-      comparisons++;
-    }
-  }
-
-  return comparisons > 0 ? totalSimilarity / comparisons : 0;
-}
-
-/**
- * Create an error for detected loop condition
- */
-export function createLoopDetectedError(
-  recentSteps: string[],
-  recentResults: string[]
-): AgentError {
-  return {
-    code: AgentErrorCode.REPEATED_FAILURES_DETECTED,
-    message: 'Detected repeated failures with similar steps. Stopping to prevent infinite loop.',
-    context: {
-      recentSteps,
-      recentResults,
-      failureCount: recentResults.length,
-    },
-    suggestions: [
-      'Check if the required service is available',
-      'Verify authentication tokens are valid',
-      'Review service configuration',
-      'Consider alternative approach to this task',
-    ],
-  };
-}
 
 // ========== Null Safety ==========
 

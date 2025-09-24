@@ -86,15 +86,25 @@ export class TokenStorageService extends BaseService {
    */
   async storeUserTokens(userId: string, tokens: { google?: GoogleTokens; slack?: SlackTokens }): Promise<void> {
     this.assertReady();
-    
+
     if (!userId) {
       throw new Error('Valid userId is required');
     }
-    
+
     const validatedUserId = validateUserId(userId);
 
+    // Validate Google tokens if present
+    if (tokens.google && !tokens.google.access_token) {
+      this.logError('Attempted to store Google tokens without access_token', {
+        userId,
+        hasGoogle: !!tokens.google,
+        hasAccessToken: !!tokens.google?.access_token
+      });
+      throw new Error('Cannot store Google tokens without access_token');
+    }
+
     let encryptedGoogleRefreshToken: string | undefined;
-    
+
     // Encrypt Google refresh token if present
     if (tokens.google?.refresh_token) {
       try {

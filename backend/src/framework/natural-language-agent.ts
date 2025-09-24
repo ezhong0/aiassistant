@@ -285,12 +285,15 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
       });
 
       const errorResponse = await this.formatErrorResponse(error as Error, request);
+      const errorType = await this.categorizeError(error as Error);
       return {
         response: errorResponse,
         reasoning: 'Error occurred during execution',
         metadata: {
           operation: 'error',
           error: (error as Error).message,
+          errorType: errorType.type,
+          isAuthError: errorType.type === 'authentication',
           executionTime
         }
       };
@@ -730,14 +733,14 @@ Do NOT return JSON - return plain text response.`;
     const response = await this.openaiService.generateText(
       prompt,
       'You convert structured operation results into natural language responses for users.',
-      { temperature: 0.7, maxTokens: 300 }
+      { temperature: 0.7, maxTokens: 1200 }
     );
 
     // Log truncation detection
-    if (response.length >= 280) { // Close to token limit
+    if (response.length >= 1100) { // Close to token limit
       logger.warn('Response may be truncated due to token limit', {
         responseLength: response.length,
-        maxTokens: 300,
+        maxTokens: 1200,
         agent: config.name,
         operation: intent.operation,
         correlationId: context?.correlationId
@@ -748,7 +751,7 @@ Do NOT return JSON - return plain text response.`;
   }
 
   /**
-   * Format error response
+   * Format error response - generates natural language explanation from LLM
    */
   private async formatErrorResponse(error: Error, query: string, context?: AgentExecutionContext): Promise<string> {
     const config = this.getAgentConfig();
@@ -758,6 +761,10 @@ Do NOT return JSON - return plain text response.`;
     }
 
     const errorContext = await this.categorizeError(error);
+
+    const authGuidance = errorContext.type === 'authentication'
+      ? '\n\nIMPORTANT: For authentication errors, recommend using the /auth command to manage connections. Example: "You can use the /auth command to reconnect your account."'
+      : '';
 
     const prompt = `You are a ${config.name} that encountered an error.
 
@@ -769,12 +776,12 @@ Generate a helpful error message that:
 1. Explains WHAT went wrong (in simple terms)
 2. Explains WHY it happened (if possible)
 3. Suggests WHAT TO DO next (specific actionable steps)
-4. Offers alternative approaches if applicable
+4. Offers alternative approaches if applicable${authGuidance}
 
 Be empathetic, clear, and actionable. Avoid technical jargon.
 
 Examples:
-- Auth error: "It looks like I don't have permission to access your calendar. Try reconnecting your Google account in Settings."
+- Auth error: "It looks like I don't have permission to access your Gmail. You can use the /auth command to reconnect your Google account."
 - Not found: "I couldn't find that event. Try searching with different keywords or check the date range."
 - Network error: "I'm having trouble connecting right now. Please try again in a moment."`;
 
@@ -886,30 +893,6 @@ Type guidelines:
   // STATIC METHODS - Auto-generated for MasterAgent Discovery
   // ============================================================================
 
-  /**
-   * Get OpenAI function schema (auto-generated from config)
-   */
-  static getOpenAIFunctionSchema(): any {
-    // This will be overridden by each agent class
-    // We need to instantiate to get config, but that's OK for static discovery
-    const instance = new (this as any)();
-    const config = instance.getAgentConfig();
-
-    return {
-      name: config.name,
-      description: config.description || config.systemPrompt.split('\n')[0],
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: `Natural language request for ${config.name}. Operations: ${config.operations.join(', ')}`
-          }
-        },
-        required: ['query']
-      }
-    };
-  }
 
   /**
    * Get capabilities (auto-generated from config)

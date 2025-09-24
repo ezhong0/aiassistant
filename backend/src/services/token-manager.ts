@@ -248,7 +248,24 @@ export class TokenManager extends BaseService {
     
     try {
       const refreshedTokens = await this.authService!.refreshGoogleToken(tokens.googleTokens.refresh_token);
-      
+
+      logger.info('Token refresh response', {
+        hasAccessToken: !!refreshedTokens.access_token,
+        hasRefreshToken: !!refreshedTokens.refresh_token,
+        hasScope: !!refreshedTokens.scope,
+        accessTokenLength: refreshedTokens.access_token?.length || 0,
+        operation: 'token_refresh_response'
+      });
+
+      if (!refreshedTokens.access_token) {
+        logger.error('Token refresh returned no access token', {
+          teamId,
+          userId,
+          operation: 'token_refresh_failed'
+        });
+        return null;
+      }
+
       // Store the refreshed tokens using TokenStorageService
       await this.tokenStorageService!.storeUserTokens(userId_key, {
         google: {
@@ -564,19 +581,38 @@ export class TokenManager extends BaseService {
    * Returns null if user doesn't have Gmail permissions or tokens need refresh
    */
   async getValidTokensForGmail(teamId: string, userId: string): Promise<string | null> {
-    
+    const correlationId = `gmail-token-${Date.now()}`;
+
+    logger.debug('getValidTokensForGmail called', {
+      correlationId,
+      teamId,
+      userId,
+      operation: 'gmail_token_retrieval_start'
+    });
 
     const userId_key = `${teamId}:${userId}`;
     const tokens = await this.tokenStorageService!.getUserTokens(userId_key);
 
     if (!tokens?.googleTokens?.access_token) {
-      
+      logger.warn('No Gmail tokens found', {
+        correlationId,
+        userId_key,
+        hasTokens: !!tokens,
+        hasGoogleTokens: !!tokens?.googleTokens,
+        operation: 'gmail_token_missing'
+      });
       return null;
     }
 
     // First check basic token validation
     const validationResult = this.validateToken(tokens.googleTokens);
     if (!validationResult.isValid) {
+      logger.debug('Gmail token validation failed', {
+        correlationId,
+        reason: validationResult.reason,
+        hasRefreshToken: !!tokens.googleTokens.refresh_token,
+        operation: 'gmail_token_invalid'
+      });
 
       // Try to refresh token
       if (tokens.googleTokens.refresh_token) {
@@ -585,7 +621,10 @@ export class TokenManager extends BaseService {
           // Re-validate after refresh
           const refreshedValidation = this.validateToken(refreshedTokens.google);
           if (refreshedValidation.isValid && this.hasGmailScopes(refreshedTokens.google)) {
-            
+            logger.info('Gmail token refreshed successfully', {
+              correlationId,
+              operation: 'gmail_token_refreshed'
+            });
             return refreshedTokens.google.access_token;
           }
         }
@@ -595,11 +634,20 @@ export class TokenManager extends BaseService {
     }
 
     // Check Gmail scopes
-    if (!this.hasGmailScopes(tokens.googleTokens)) {
+    const hasScopes = this.hasGmailScopes(tokens.googleTokens);
+    if (!hasScopes) {
+      logger.warn('Gmail token missing required scopes', {
+        correlationId,
+        scopes: tokens.googleTokens.scope,
+        operation: 'gmail_scope_missing'
+      });
       return null;
     }
 
-    
+    logger.debug('Returning valid Gmail token', {
+      correlationId,
+      operation: 'gmail_token_success'
+    });
     return tokens.googleTokens.access_token;
   }
 
