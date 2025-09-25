@@ -538,55 +538,150 @@ export class SlackService extends BaseService {
   }
 
   /**
-   * Generate user-friendly error messages
+   * Generate user-friendly error messages using AI intelligence
    */
   private async generateUserFriendlyErrorMessage(error: unknown, userInput: string): Promise<string> {
+    try {
+      // Try to get OpenAI service for intelligent error message generation
+      const openaiService = this.getOpenAIService();
+      if (openaiService) {
+        return await this.generateAIErrorMessage(error, userInput, openaiService);
+      }
+
+      // Only fallback to generic message if AI services are completely unavailable
+      return this.getGenericErrorMessage(error, userInput);
+    } catch (aiError) {
+      // Only use generic fallback when AI generation fails
+      return this.getGenericErrorMessage(error, userInput);
+    }
+  }
+
+  /**
+   * Generate AI-powered error message using OpenAI service directly
+   */
+  private async generateAIErrorMessage(error: unknown, userInput: string, openaiService: any): Promise<string> {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = this.extractErrorCode(error);
+    const errorCategory = this.extractErrorCategory(error);
 
-    // Common error patterns and user-friendly responses
-    const errorMappings = [
-      {
-        pattern: /oauth|token|auth/i,
-        message: '🔑 Looks like I need permission to access your Google account. Please check your authentication settings.'
-      },
-      {
-        pattern: /timeout|deadline|timeout/i,
-        message: '⏱️ That request took too long to process. Please try again with a simpler request.'
-      },
-      {
-        pattern: /rate.?limit/i,
-        message: '🚦 I\'m processing a lot of requests right now. Please wait a moment and try again.'
-      },
-      {
-        pattern: /network|connection|fetch/i,
-        message: '🌐 I\'m having trouble connecting to external services. Please check your internet connection and try again.'
-      },
-      {
-        pattern: /not.?found|404/i,
-        message: '🔍 I couldn\'t find what you\'re looking for. Please double-check your request and try again.'
-      },
-      {
-        pattern: /permission|forbidden|403/i,
-        message: '🚫 I don\'t have permission to perform that action. Please check your account permissions.'
-      },
-      {
-        pattern: /calendar/i,
-        message: '📅 I encountered an issue with calendar operations. Please make sure your Google Calendar is accessible and try again.'
-      },
-      {
-        pattern: /email|gmail/i,
-        message: '📧 I encountered an issue with email operations. Please make sure your Gmail access is configured properly.'
-      }
-    ];
+    const errorAnalysisPrompt = `
+You are an expert error message translator for a Slack assistant. Convert technical error messages into user-friendly responses.
 
-    // Find matching error pattern
-    for (const mapping of errorMappings) {
-      if (mapping.pattern.test(errorMessage)) {
-        return mapping.message;
-      }
+ORIGINAL ERROR: "${errorMessage}"
+ERROR CODE: "${errorCode || 'UNKNOWN'}"
+ERROR CATEGORY: "${errorCategory || 'UNKNOWN'}"
+USER REQUEST: "${userInput}"
+
+TASK: Create a helpful, non-technical error message that:
+1. Explains what went wrong in simple terms
+2. Suggests what the user can do about it
+3. Is empathetic and professional
+4. Avoids technical jargon
+5. Includes relevant emojis for better Slack experience
+
+RESPONSE FORMAT: Return only the user-friendly error message, no JSON or additional formatting.
+
+GUIDELINES:
+- For authentication errors: Suggest using /auth command to reconnect
+- For timeout errors: Suggest simpler requests or trying again
+- For rate limit errors: Suggest waiting and trying again
+- For service errors: Suggest checking configuration or trying later
+- For permission errors: Suggest checking account permissions
+- For unknown errors: Provide general troubleshooting advice
+
+Be concise but helpful. Slack users prefer shorter, actionable messages.
+`;
+
+    const response = await openaiService.generateText(
+      errorAnalysisPrompt,
+      'You are an error message translator for Slack. Return only the user-friendly message.',
+      { temperature: 0.3, maxTokens: 150 }
+    );
+
+    return response.trim();
+  }
+
+  /**
+   * Extract error code from various error types
+   */
+  private extractErrorCode(error: unknown): string | null {
+    if (!error) return null;
+
+    // AppError has structured code
+    if (error && typeof error === 'object' && 'code' in error) {
+      return (error as any).code;
     }
 
-    // Default fallback message
-    return `❌ I encountered an issue processing "${userInput.substring(0, 50)}${userInput.length > 50 ? '...' : ''}". Please try rephrasing your request or contact support if the issue persists.`;
+    // Check for common error patterns in message
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Map common patterns to error codes
+    if (/oauth|token|auth/i.test(errorMessage)) return 'AUTH_FAILED';
+    if (/timeout|deadline/i.test(errorMessage)) return 'OPERATION_TIMEOUT';
+    if (/rate.?limit/i.test(errorMessage)) return 'RATE_LIMIT_EXCEEDED';
+    if (/network|connection|fetch/i.test(errorMessage)) return 'NETWORK_ERROR';
+    if (/not.?found|404/i.test(errorMessage)) return 'RESOURCE_NOT_FOUND';
+    if (/permission|forbidden|403/i.test(errorMessage)) return 'INSUFFICIENT_PERMISSIONS';
+    if (/calendar/i.test(errorMessage)) return 'CALENDAR_ERROR';
+    if (/email|gmail/i.test(errorMessage)) return 'EMAIL_ERROR';
+
+    return null;
+  }
+
+  /**
+   * Extract error category from various error types
+   */
+  private extractErrorCategory(error: unknown): string | null {
+    if (!error) return null;
+
+    // AppError has structured category
+    if (error && typeof error === 'object' && 'category' in error) {
+      return (error as any).category;
+    }
+
+    // Infer category from error code
+    const errorCode = this.extractErrorCode(error);
+    if (!errorCode) return null;
+
+    if (errorCode.includes('AUTH')) return 'auth';
+    if (errorCode.includes('TIMEOUT') || errorCode.includes('RATE_LIMIT')) return 'service';
+    if (errorCode.includes('PERMISSION') || errorCode.includes('NOT_FOUND')) return 'api';
+    if (errorCode.includes('NETWORK')) return 'external';
+    if (errorCode.includes('CALENDAR') || errorCode.includes('EMAIL')) return 'service';
+
+    return 'service';
+  }
+
+  /**
+   * Get generic error message only when AI services are unavailable
+   */
+  private getGenericErrorMessage(error: unknown, userInput: string): string {
+    const errorCode = this.extractErrorCode(error);
+    
+    // Only provide generic messages for critical system failures
+    if (errorCode === 'SERVICE_UNAVAILABLE' || errorCode === 'AI_SERVICE_ERROR') {
+      return '🤖 I\'m having trouble processing your request right now. Please try again in a moment.';
+    }
+
+    // For other errors, provide a more specific generic message
+    return `❌ I encountered an issue processing your request. Please try rephrasing it or contact support if the issue persists.`;
+  }
+
+  /**
+   * Get OpenAI service from MasterAgent or service manager
+   */
+  private getOpenAIService(): any {
+    try {
+      // Try to get from MasterAgent first
+      if (this.masterAgent && typeof this.masterAgent.getOpenAIService === 'function') {
+        return this.masterAgent.getOpenAIService();
+      }
+
+      // Fallback to service manager
+      const serviceManager = require('../service-manager').serviceManager;
+      return serviceManager.getService('OpenAIService');
+    } catch {
+      return null;
+    }
   }
 }

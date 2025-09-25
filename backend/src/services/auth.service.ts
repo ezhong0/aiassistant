@@ -327,18 +327,27 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
-      this.logDebug('Fetching user info from Google', { tokenLength: accessToken.length });
+      this.logInfo('Fetching user info from Google', { 
+        tokenLength: accessToken.length,
+        tokenPrefix: accessToken.substring(0, 20) + '...'
+      });
       
       // Try the OpenID Connect userinfo endpoint first (more reliable)
       let response;
       let userInfo: GoogleUserInfo;
       
       try {
-        this.logDebug('Trying OpenID Connect userinfo endpoint');
+        this.logInfo('Trying OpenID Connect userinfo endpoint');
         response = await axios.get('https://openidconnect.googleapis.com/v1/userinfo', {
           headers: {
             Authorization: `Bearer ${accessToken}`
           }
+        });
+        
+        this.logInfo('OpenID Connect userinfo successful', {
+          hasSub: !!response.data.sub,
+          hasEmail: !!response.data.email,
+          email: response.data.email
         });
         
         userInfo = {
@@ -350,15 +359,24 @@ export class AuthService extends BaseService {
         };
       } catch (oidcError: any) {
         this.logWarn('OpenID Connect endpoint failed, trying OAuth2 v2 endpoint', { 
-          error: oidcError.response?.status,
+          status: oidcError.response?.status,
+          statusText: oidcError.response?.statusText,
+          data: oidcError.response?.data,
           message: oidcError.message 
         });
         
         // Fallback to OAuth2 v2 userinfo endpoint
+        this.logInfo('Trying OAuth2 v2 userinfo endpoint');
         response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
           headers: {
             Authorization: `Bearer ${accessToken}`
           }
+        });
+
+        this.logInfo('OAuth2 v2 userinfo successful', {
+          hasId: !!response.data.id,
+          hasEmail: !!response.data.email,
+          email: response.data.email
         });
 
         userInfo = {

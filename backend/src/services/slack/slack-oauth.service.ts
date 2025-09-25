@@ -103,8 +103,22 @@ export class SlackOAuthService extends BaseService {
    */
   async generateAuthUrl(context: SlackContext, scopes?: string[]): Promise<string> {
     try {
+      this.logInfo('Starting OAuth URL generation', {
+        userId: context.userId,
+        teamId: context.teamId,
+        channelId: context.channelId,
+        scopes: scopes || this.config.scopes,
+        clientId: this.config.clientId,
+        redirectUri: this.config.redirectUri
+      });
+
       const scopesToUse = scopes || this.config.scopes;
       const state = this.buildSignedState(context);
+
+      this.logInfo('OAuth state built', {
+        userId: context.userId,
+        state: state.substring(0, 50) + '...'
+      });
 
       const params = new URLSearchParams({
         client_id: this.config.clientId,
@@ -118,10 +132,11 @@ export class SlackOAuthService extends BaseService {
 
       const authUrl = `https://accounts.google.com/o/oauth2/auth?${params.toString()}`;
 
-      this.logInfo('OAuth URL generated', {
+      this.logInfo('OAuth URL generated successfully', {
         userId: context.userId,
         scopes: scopesToUse,
-        state
+        state: state.substring(0, 50) + '...',
+        authUrl: authUrl.substring(0, 100) + '...'
       });
 
       return authUrl;
@@ -311,7 +326,7 @@ export class SlackOAuthService extends BaseService {
     const nonce = crypto.randomBytes(16).toString('hex');
     const payloadObj = {
       userId: context.userId,
-      channelId: context.channelId,
+      teamId: context.teamId,
       ts: Date.now(),
       n: nonce
     };
@@ -341,7 +356,7 @@ export class SlackOAuthService extends BaseService {
         this.logWarn('OAuth state signature mismatch');
         return null;
       }
-      const obj = JSON.parse(payload) as { userId: string; channelId: string; ts: number; n: string };
+      const obj = JSON.parse(payload) as { userId: string; teamId: string; ts: number; n: string };
       if (Date.now() - obj.ts > this.nonceTtlMs) {
         this.logWarn('OAuth state expired');
         return null;
@@ -355,8 +370,8 @@ export class SlackOAuthService extends BaseService {
       this.cleanupOldNonces();
       return {
         userId: obj.userId,
-        channelId: obj.channelId,
-        teamId: '',
+        channelId: obj.userId, // Use userId as fallback for channelId
+        teamId: obj.teamId,
         isDirectMessage: true
       };
     } catch (error) {

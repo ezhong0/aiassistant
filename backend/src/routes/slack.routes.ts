@@ -486,9 +486,28 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           });
 
           // Generate OAuth URL
-          const slackOAuthService = serviceManager.getService<SlackOAuthService>('SlackOAuthService');
+          const slackOAuthService = serviceManager.getService<SlackOAuthService>('slackOAuthService');
+
+          logger.info('OAuth service check', {
+            correlationId: createLogContext(req).correlationId,
+            operation: 'oauth_service_check',
+            metadata: {
+              hasSlackOAuthService: !!slackOAuthService,
+              hasUserId: !!userId,
+              hasTeamId: !!teamId,
+              userId,
+              teamId
+            }
+          });
+
           if (slackOAuthService && userId && teamId) {
             try {
+              logger.info('Generating OAuth URL', {
+                correlationId: createLogContext(req).correlationId,
+                operation: 'oauth_url_generation_start',
+                metadata: { provider, userId, teamId }
+              });
+
               const state = JSON.stringify({
                 userId,
                 teamId,
@@ -497,53 +516,75 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
                 returnTo: 'auth_dashboard'
               });
 
+              logger.info('OAuth state created', {
+                correlationId: createLogContext(req).correlationId,
+                operation: 'oauth_state_created',
+                metadata: { state }
+              });
+
               const authUrl = await slackOAuthService.generateAuthUrl({
                 userId,
                 teamId,
                 channelId: parsedPayload.channel?.id || userId
               } as any, [
+                'openid',
+                'email',
+                'profile',
                 'https://www.googleapis.com/auth/gmail.send',
                 'https://www.googleapis.com/auth/gmail.readonly',
                 'https://www.googleapis.com/auth/calendar',
                 'https://www.googleapis.com/auth/contacts.readonly'
               ]);
 
-              // Update message with OAuth link
-              res.status(200).json({
-                replace_original: true,
-                text: '🔐 Reconnect your account',
-                blocks: [
-                  {
-                    type: 'section',
-                    text: {
-                      type: 'mrkdwn',
-                      text: `🔐 *Reconnect ${provider.charAt(0).toUpperCase() + provider.slice(1)}*\n\nClick the button below to authorize your account.`
-                    }
-                  },
-                  {
-                    type: 'actions',
-                    elements: [
-                      {
-                        type: 'button',
-                        text: {
-                          type: 'plain_text',
-                          text: '✅ Authorize'
-                        },
-                        url: authUrl,
-                        style: 'primary'
-                      }
-                    ]
-                  },
-                  {
-                    type: 'context',
-                    elements: [
-                      {
+              logger.info('OAuth URL generated successfully', {
+                correlationId: createLogContext(req).correlationId,
+                operation: 'oauth_url_generated',
+                metadata: { authUrl: authUrl.substring(0, 100) + '...' }
+              });
+
+              // Send OAuth URL via direct message instead of updating the original message
+              logger.info('Sending OAuth URL via direct message', {
+                correlationId: createLogContext(req).correlationId,
+                operation: 'oauth_dm_send',
+                metadata: { userId, authUrl: authUrl.substring(0, 100) + '...' }
+              });
+
+              // Send a direct message with the OAuth URL
+              const slackService = serviceManager.getService<SlackService>('slackService');
+              if (slackService) {
+                await slackService.sendMessage(userId, '🔐 Google Authorization Required', {
+                  blocks: [
+                    {
+                      type: 'section',
+                      text: {
                         type: 'mrkdwn',
-                        text: '💡 This will open in a new window. Return to Slack when complete.'
+                        text: `🔐 *Google Authorization Required*\n\nTo connect your Google account, please click the link below:`
                       }
-                    ]
-                  }
-                ]
+                    },
+                    {
+                      type: 'section',
+                      text: {
+                        type: 'mrkdwn',
+                        text: `<${authUrl}|🔗 Authorize Google Account>`
+                      }
+                    },
+                    {
+                      type: 'context',
+                      elements: [
+                        {
+                          type: 'mrkdwn',
+                          text: '💡 This will open in a new window. Return to Slack when complete.'
+                        }
+                      ]
+                    }
+                  ]
+                });
+              }
+
+              // Acknowledge the button click
+              res.status(200).json({
+                text: '✅ Authorization link sent to your direct messages!',
+                replace_original: false
               });
               return;
             } catch (error) {

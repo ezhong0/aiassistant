@@ -218,12 +218,21 @@ const registerCoreServices = async (): Promise<void> => {
     }
 
     // 12. SlackOAuthService - Dedicated service for Slack OAuth operations
-    if (ENV_VALIDATION.isSlackConfigured()) {
+    // Note: This service handles Google OAuth flows within Slack, so it needs Google OAuth credentials
+    if (ENV_VALIDATION.isSlackConfigured() && ENV_VALIDATION.isGoogleConfigured()) {
       const slackOAuthService = new SlackOAuthService({
-        clientId: ENVIRONMENT.slack.clientId,
-        clientSecret: ENVIRONMENT.slack.clientSecret,
-        redirectUri: ENVIRONMENT.slack.redirectUri,
-        scopes: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/calendar']
+        clientId: ENVIRONMENT.google.clientId,
+        clientSecret: ENVIRONMENT.google.clientSecret,
+        redirectUri: ENVIRONMENT.google.redirectUri,
+        scopes: [
+          'openid',
+          'email', 
+          'profile',
+          'https://www.googleapis.com/auth/gmail.readonly',
+          'https://www.googleapis.com/auth/gmail.send',
+          'https://www.googleapis.com/auth/calendar',
+          'https://www.googleapis.com/auth/contacts.readonly'
+        ]
       });
       serviceManager.registerService('slackOAuthService', slackOAuthService, {
         dependencies: ['tokenManager'],

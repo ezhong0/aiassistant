@@ -1,0 +1,16 @@
+[build]
+# Use Dockerfile for builds
+builder = "dockerfile"
+
+[deploy]
+# Health check for faster deployment validation
+healthcheckPath = "/healthz"
+healthcheckTimeout = 300
+
+# Restart policy - Railway specific
+restartPolicyType = "never"
+
+[environments.production]
+# Production-specific optimizations
+[environments.production.variables]
+NODE_ENV = "production"

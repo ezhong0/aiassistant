@@ -743,15 +743,44 @@ router.get('/callback',
 
     // Parse state parameter to detect Slack authentication
     let slackContext = null;
+    let isSlackAuth = false;
+    
+    logger.info('OAuth callback received', {
+      hasCode: !!code,
+      hasState: !!state,
+      statePreview: state ? state.substring(0, 50) + '...' : 'none'
+    });
+    
     if (state && typeof state === 'string') {
       try {
-        slackContext = JSON.parse(state);
+        // Check if this is a signed state from SlackOAuthService (format: base64.signature)
+        if (state.includes('.')) {
+          const parts = state.split('.');
+          if (parts.length === 2 && parts[0]) {
+            // This is a signed state from SlackOAuthService
+            const payload = JSON.parse(Buffer.from(parts[0], 'base64').toString('utf8'));
+            slackContext = {
+              userId: payload.userId,
+              teamId: payload.teamId, // Now using teamId from the signed state
+              source: 'slack'
+            };
+            isSlackAuth = true;
+            logger.info('Parsed Slack OAuth signed state', {
+              userId: payload.userId,
+              teamId: payload.teamId
+            });
+          }
+        } else {
+          // Try parsing as plain JSON (legacy format)
+          slackContext = JSON.parse(state);
+          isSlackAuth = slackContext?.source === 'slack';
+          logger.info('Parsed plain JSON state', { slackContext });
+        }
       } catch (e) {
-        
+        // State parsing failed, continue without Slack context
+        logger.warn('Failed to parse OAuth state', { state: state.substring(0, 50) + '...', error: (e as Error).message });
       }
     }
-
-    const isSlackAuth = slackContext?.source === 'slack';
 
     if (error) {
       
@@ -803,9 +832,29 @@ router.get('/callback',
     if (!authService) {
       throw new Error('Auth service not available');
     }
+    
+    logger.info('Starting token exchange', {
+      hasCode: !!code,
+      codeLength: code?.length,
+      isSlackAuth
+    });
+    
     const tokens: GoogleTokens = await authService.exchangeCodeForTokens(code);
     
+    logger.info('Token exchange successful', {
+      hasAccessToken: !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      tokenLength: tokens.access_token?.length,
+      expiresIn: tokens.expires_in,
+      scope: tokens.scope
+    });
+    
     // Get user info
+    logger.info('Starting Google user info request', {
+      tokenLength: tokens.access_token?.length,
+      tokenPrefix: tokens.access_token?.substring(0, 20) + '...'
+    });
+    
     const userInfo: GoogleUserInfo = await authService.getGoogleUserInfo(tokens.access_token);
     
     // Generate internal JWT token
@@ -814,15 +863,22 @@ router.get('/callback',
       picture: userInfo.picture
     });
 
+    // Handle both camelCase and snake_case field names for Slack context
+    const teamId = slackContext?.teamId || slackContext?.team_id;
+    const userId_slack = slackContext?.userId || slackContext?.user_id;
 
     // Store tokens associated with Slack user context for future use
-    if (isSlackAuth && slackContext?.user_id && slackContext?.team_id) {
+    const hasValidSlackIds = (slackContext?.user_id || slackContext?.userId) &&
+                              (slackContext?.team_id || slackContext?.teamId) &&
+                              teamId && userId_slack; // Ensure extracted values are not empty
+
+    if (isSlackAuth && hasValidSlackIds) {
       try {
-        
+
         const tokenStorageService = getService('tokenStorageService') as unknown as TokenStorageService;
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
-          const userId = `${slackContext.team_id}:${slackContext.user_id}`;
+          const userId = `${teamId}:${userId_slack}`;
           await tokenStorageService.storeUserTokens(userId, {
             google: {
               access_token: tokens.access_token,
@@ -833,8 +889,8 @@ router.get('/callback',
             },
             slack: {
               access_token: undefined, // Slack doesn't need access token for this flow
-              team_id: slackContext.team_id,
-              user_id: slackContext.user_id
+              team_id: teamId,
+              user_id: userId_slack
             }
           });
 
@@ -854,8 +910,8 @@ router.get('/callback',
       // Send success notification to Slack
       try {
         const slackService = getService('SlackService') as any;
-        if (slackService && slackContext?.user_id) {
-          await slackService.sendMessage(slackContext.user_id,
+        if (slackService && userId_slack) {
+          await slackService.sendMessage(userId_slack,
             wasAuthDashboard
               ? '✅ Successfully reconnected! Your Google connection has been refreshed.'
               : '✅ Successfully connected! You can now use email and calendar features.',
@@ -889,7 +945,7 @@ router.get('/callback',
       } catch (error) {
         logger.error('Failed to send Slack notification', error as Error, {
           operation: 'slack_notification_error',
-          metadata: { userId: slackContext?.user_id }
+          metadata: { userId: userId_slack }
         });
       }
 

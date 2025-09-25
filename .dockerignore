@@ -5,8 +5,23 @@ backend/dist/
 .DS_Store
 *.log
 .env.local
-.env.development  
+.env.development
 .env.test
 README.md
 *.md
 .gitignore
+
+# Additional optimizations
+coverage/
+.nyc_output
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.railway/
+.husky/
+*.tsbuildinfo
+docs/
+tmp/
+temp/
