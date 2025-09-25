@@ -127,7 +127,9 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 8. OpenAIService - Critical AI service, high priority
     const openaiService = new OpenAIService({
-      apiKey: process.env.OPENAI_API_KEY || 'dummy-key'
+      apiKey: process.env.OPENAI_API_KEY || (() => {
+        throw new Error('OPENAI_API_KEY environment variable is required');
+      })()
     });
     serviceManager.registerService('openaiService', openaiService, []);
 

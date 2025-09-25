@@ -327,9 +327,21 @@ export class SlackOAuthService extends BaseService {
     const payloadObj = {
       userId: context.userId,
       teamId: context.teamId,
+      channelId: context.channelId,
       ts: Date.now(),
       n: nonce
     };
+
+    this.logInfo('Building signed state payload', {
+      userId: context.userId,
+      teamId: context.teamId,
+      channelId: context.channelId,
+      hasUserId: !!context.userId,
+      hasTeamId: !!context.teamId,
+      hasChannelId: !!context.channelId,
+      fullContext: context,
+      operation: 'build_signed_state'
+    });
     const payload = JSON.stringify(payloadObj);
     const sig = this.sign(payload);
     const b64 = Buffer.from(payload).toString('base64');

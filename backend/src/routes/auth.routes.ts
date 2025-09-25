@@ -767,7 +767,9 @@ router.get('/callback',
             isSlackAuth = true;
             logger.info('Parsed Slack OAuth signed state', {
               userId: payload.userId,
-              teamId: payload.teamId
+              teamId: payload.teamId,
+              fullPayload: payload,
+              operation: 'slack_state_parsed'
             });
           }
         } else {
@@ -872,13 +874,35 @@ router.get('/callback',
                               (slackContext?.team_id || slackContext?.teamId) &&
                               teamId && userId_slack; // Ensure extracted values are not empty
 
+    logger.info('OAuth token storage validation check', {
+      isSlackAuth,
+      hasValidSlackIds,
+      teamId,
+      userId_slack,
+      slackContext_userId: slackContext?.userId,
+      slackContext_user_id: slackContext?.user_id,
+      slackContext_teamId: slackContext?.teamId,
+      slackContext_team_id: slackContext?.team_id,
+      operation: 'token_storage_validation'
+    });
+
     if (isSlackAuth && hasValidSlackIds) {
       try {
 
-        const tokenStorageService = getService('tokenStorageService') as unknown as TokenStorageService;
+        const tokenStorageService = getService('tokenStorageService') as TokenStorageService;
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
           const userId = `${teamId}:${userId_slack}`;
+
+          logger.info('Attempting to store OAuth tokens for Slack user', {
+            userId,
+            teamId,
+            userId_slack,
+            hasAccessToken: !!tokens.access_token,
+            hasRefreshToken: !!tokens.refresh_token,
+            operation: 'token_storage_attempt'
+          });
+
           await tokenStorageService.storeUserTokens(userId, {
             google: {
               access_token: tokens.access_token,
@@ -894,12 +918,37 @@ router.get('/callback',
             }
           });
 
+          logger.info('Successfully stored OAuth tokens for Slack user', {
+            userId,
+            operation: 'token_storage_success'
+          });
+
         } else {
-          
+          logger.error('TokenStorageService not available for storing OAuth tokens', {
+            teamId,
+            userId_slack,
+            operation: 'token_storage_service_missing'
+          });
         }
       } catch (error) {
+        logger.error('Failed to store OAuth tokens for Slack user', error as Error, {
+          teamId,
+          userId_slack,
+          operation: 'token_storage_error',
+          metadata: {
+            hasTokenStorageService: !!getService('tokenStorageService'),
+            errorMessage: (error as Error).message,
+            errorStack: (error as Error).stack
+          }
+        });
       }
     } else {
+      logger.info('Skipping token storage - not a Slack auth or missing Slack IDs', {
+        isSlackAuth,
+        hasValidSlackIds,
+        slackContext: slackContext ? 'present' : 'missing',
+        operation: 'token_storage_skipped'
+      });
     }
 
     if (isSlackAuth) {

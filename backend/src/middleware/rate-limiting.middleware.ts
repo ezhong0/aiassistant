@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { AuthenticatedRequest } from './auth.middleware';
-import { ConfigService } from '../config/config.service';
+import { ConfigService } from '../services/config.service';
 import { getService } from '../services/service-manager';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';

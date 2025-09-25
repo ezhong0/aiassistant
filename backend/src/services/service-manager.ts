@@ -2,6 +2,10 @@ import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState, IService } from '../types/service.types';
 
+// Re-export types and values for external use
+export type { IService };
+export { ServiceState };
+
 /**
  * Simplified Service Registration System
  * 
@@ -85,7 +89,29 @@ export class ServiceManager {
    */
   getService<T extends SimpleService>(name: string): T | undefined {
     const entry = this.services.get(name);
-    return entry ? (entry.service as T) : undefined;
+    
+    if (entry) {
+      logger.debug('Service accessed', {
+        correlationId: `service-access-${Date.now()}`,
+        operation: 'service_access',
+        metadata: {
+          serviceName: name,
+          isInitialized: entry.initialized,
+          serviceState: entry.service.state
+        }
+      });
+      return entry.service as T;
+    } else {
+      logger.warn('Service not found', {
+        correlationId: `service-not-found-${Date.now()}`,
+        operation: 'service_not_found',
+        metadata: {
+          requestedService: name,
+          availableServices: Array.from(this.services.keys())
+        }
+      });
+      return undefined;
+    }
   }
 
   /**

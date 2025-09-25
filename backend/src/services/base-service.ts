@@ -383,21 +383,30 @@ export abstract class BaseService implements IService {
    * Helper method for consistent logging
    */
   protected logInfo(message: string, meta?: Record<string, unknown>): void {
-    
+    logger.info(message, {
+      service: this.name,
+      ...meta
+    });
   }
 
   /**
    * Helper method for consistent debug logging
    */
   protected logDebug(message: string, meta?: Record<string, unknown>): void {
-    
+    logger.debug(message, {
+      service: this.name,
+      ...meta
+    });
   }
 
   /**
    * Helper method for consistent warning logging
    */
   protected logWarn(message: string, meta?: Record<string, unknown>): void {
-    
+    logger.warn(message, {
+      service: this.name,
+      ...meta
+    });
   }
 
 }

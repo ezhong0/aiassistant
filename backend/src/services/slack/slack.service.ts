@@ -75,6 +75,9 @@ export class SlackService extends BaseService {
       // Create MasterAgent directly
       const apiKey = process.env.OPENAI_API_KEY;
       this.masterAgent = apiKey ? createMasterAgent({ openaiApiKey: apiKey, model: 'gpt-4o-mini' }) : createMasterAgent();
+      
+      // Initialize MasterAgent
+      await this.masterAgent.initialize();
 
       this.logInfo('SlackService initialized successfully', {
         hasTokenManager: !!this.tokenManager,
@@ -148,30 +151,74 @@ export class SlackService extends BaseService {
    * Process Slack events with deduplication and validation
    */
   async processEvent(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
+    const eventType = (event as any).type;
+    const eventText = (event as any).text?.substring(0, 100) || '';
+    
+    this.logInfo('=== SlackService.processEvent CALLED ===', {
+      eventType,
+      eventText,
+      userId: context.userId,
+      channelId: context.channelId,
+      teamId: context.teamId,
+      isDirectMessage: context.isDirectMessage,
+      serviceName: this.name,
+      serviceState: this.state,
+      operation: 'slack_event_start'
+    });
+
     try {
       // Event deduplication (optional)
       if (this.config.enableDeduplication && this.isDuplicateEvent(event)) {
-        this.logInfo('Duplicate event ignored', { eventId: (event as any).event_id });
+        this.logInfo('Duplicate event ignored', { 
+          eventId: (event as any).event_id,
+          eventType,
+          operation: 'duplicate_event_ignored'
+        });
         return { success: true, message: 'Duplicate event ignored' };
       }
 
       // Bot message filtering
       if (this.config.enableBotMessageFiltering && this.isBotMessage(event)) {
-        this.logInfo('Bot message ignored', { eventType: (event as any).type });
+        this.logInfo('Bot message ignored', { 
+          eventType,
+          operation: 'bot_message_ignored'
+        });
         return { success: true, message: 'Bot message ignored' };
       }
 
       // DM only mode
       if (this.config.enableDMOnlyMode && !this.isDirectMessage(event)) {
-        this.logInfo('Non-DM message ignored', { eventType: (event as any).type });
+        this.logInfo('Non-DM message ignored', { 
+          eventType,
+          channelType: (event as any).channel_type,
+          operation: 'non_dm_ignored'
+        });
         return { success: true, message: 'Non-DM message ignored' };
       }
 
+      this.logInfo('Event passed all filters, processing by type', {
+        eventType,
+        operation: 'event_processing_by_type'
+      });
+
       // Process the event
-      return await this.handleEventByType(event, context);
+      const result = await this.handleEventByType(event, context);
+      
+      this.logInfo('Event processing completed', {
+        eventType,
+        success: result.success,
+        hasMessage: !!result.message,
+        operation: 'event_processing_complete'
+      });
+
+      return result;
 
     } catch (error) {
-      this.logError('Failed to process Slack event', error);
+      this.logError('Failed to process Slack event', error, {
+        eventType,
+        eventText,
+        operation: 'slack_event_error'
+      });
       return {
         success: false,
         message: 'Failed to process event',
@@ -184,13 +231,35 @@ export class SlackService extends BaseService {
    * Handle events by type
    */
   private async handleEventByType(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
-    switch ((event as any).type) {
+    const eventType = (event as any).type;
+    
+    this.logInfo('Handling event by type', {
+      eventType,
+      userId: context.userId,
+      operation: 'handle_event_by_type'
+    });
+
+    switch (eventType) {
       case 'message':
+        this.logInfo('Processing message event', {
+          eventType,
+          userId: context.userId,
+          operation: 'message_event_start'
+        });
         return await this.handleMessageEvent(event, context);
       case 'app_mention':
+        this.logInfo('Processing app mention event', {
+          eventType,
+          userId: context.userId,
+          operation: 'app_mention_event_start'
+        });
         return await this.handleAppMentionEvent(event, context);
       default:
-        this.logInfo('Unhandled event type', { eventType: (event as any).type });
+        this.logInfo('Unhandled event type', { 
+          eventType,
+          userId: context.userId,
+          operation: 'unhandled_event_type'
+        });
         return { success: true, message: 'Event type not handled' };
     }
   }
@@ -202,9 +271,27 @@ export class SlackService extends BaseService {
     try {
       // Extract message text
       const messageText = (event as any).text || '';
+      
+      this.logInfo('Handling message event', {
+        messageText: messageText.substring(0, 100),
+        messageLength: messageText.length,
+        userId: context.userId,
+        channelId: context.channelId,
+        operation: 'message_event_processing'
+      });
 
       // Check for OAuth requirements
+      this.logInfo('Checking OAuth requirements', {
+        userId: context.userId,
+        operation: 'oauth_check_start'
+      });
+      
       if (await this.requiresOAuth(messageText, context)) {
+        this.logInfo('OAuth required for message', {
+          userId: context.userId,
+          messageText: messageText.substring(0, 50),
+          operation: 'oauth_required'
+        });
         return {
           success: true,
           message: 'OAuth required',
@@ -214,15 +301,34 @@ export class SlackService extends BaseService {
       }
 
       // Check for confirmation patterns
+      this.logInfo('Checking for confirmation patterns', {
+        userId: context.userId,
+        operation: 'confirmation_check_start'
+      });
+      
       if (await this.isConfirmationMessage(messageText, context)) {
+        this.logInfo('Confirmation message detected', {
+          userId: context.userId,
+          messageText: messageText.substring(0, 50),
+          operation: 'confirmation_detected'
+        });
         return await this.handleConfirmation(messageText, context);
       }
 
       // Process as regular message through tool executor
+      this.logInfo('Processing as regular message with MasterAgent', {
+        userId: context.userId,
+        messageText: messageText.substring(0, 50),
+        operation: 'master_agent_processing_start'
+      });
+      
       return await this.processMessageWithMasterAgent(messageText, context);
 
     } catch (error) {
-      this.logError('Failed to handle message event', error);
+      this.logError('Failed to handle message event', error, {
+        userId: context.userId,
+        operation: 'message_event_error'
+      });
       return {
         success: false,
         message: 'Failed to handle message',
@@ -245,16 +351,45 @@ export class SlackService extends BaseService {
   private async processMessageWithMasterAgent(messageText: string, context: SlackContext): Promise<SlackResponse> {
     try {
       const sessionId = `slack:${context.teamId}:${context.userId}`;
+      
+      this.logInfo('Starting MasterAgent processing', {
+        sessionId,
+        userId: context.userId,
+        teamId: context.teamId,
+        messageText: messageText.substring(0, 50),
+        hasMasterAgent: !!this.masterAgent,
+        operation: 'master_agent_start'
+      });
+
       if (!this.masterAgent) {
+        this.logError('MasterAgent not available', new Error('MasterAgent not initialized'), {
+          sessionId,
+          userId: context.userId,
+          operation: 'master_agent_unavailable'
+        });
         throw new Error('MasterAgent not available');
       }
 
       // Post "working on it" message immediately
+      this.logInfo('Posting working message to Slack', {
+        sessionId,
+        userId: context.userId,
+        channelId: context.channelId,
+        operation: 'slack_working_message'
+      });
+      
       await this.postMessageToSlack(
         context.channelId,
         "🤔 Working on your request...",
         context.threadTs
       );
+
+      this.logInfo('Calling MasterAgent.processUserInputWithDrafts', {
+        sessionId,
+        userId: context.userId,
+        messageText: messageText.substring(0, 50),
+        operation: 'master_agent_process_start'
+      });
 
       const unified = await this.masterAgent.processUserInputWithDrafts(
         messageText,
@@ -263,7 +398,26 @@ export class SlackService extends BaseService {
         context
       );
 
+      this.logInfo('MasterAgent processing completed', {
+        sessionId,
+        userId: context.userId,
+        success: unified.success,
+        hasMessage: !!unified.message,
+        messageLength: unified.message?.length || 0,
+        needsConfirmation: unified.needsConfirmation,
+        hasDraftId: !!unified.draftId,
+        operation: 'master_agent_process_complete'
+      });
+
       // Post the final response back to Slack
+      this.logInfo('Posting final response to Slack', {
+        sessionId,
+        userId: context.userId,
+        channelId: context.channelId,
+        responseLength: unified.message?.length || 0,
+        operation: 'slack_final_response'
+      });
+      
       await this.postMessageToSlack(
         context.channelId,
         unified.message,
@@ -281,7 +435,11 @@ export class SlackService extends BaseService {
       };
 
     } catch (error) {
-      this.logError('Failed to process message with tools', error);
+      this.logError('Failed to process message with tools', error, {
+        userId: context.userId,
+        sessionId: `slack:${context.teamId}:${context.userId}`,
+        operation: 'master_agent_error'
+      });
       
       // Generate user-friendly error message
       const userFriendlyError = await this.generateUserFriendlyErrorMessage(error, messageText);
@@ -305,17 +463,18 @@ export class SlackService extends BaseService {
    * Check if OAuth is required
    */
   private async requiresOAuth(messageText: string, context: SlackContext): Promise<boolean> {
-    // Simple OAuth detection - could be enhanced
-    const oauthKeywords = ['email', 'calendar', 'gmail', 'google'];
-    const hasKeyword = oauthKeywords.some(keyword =>
-      messageText.toLowerCase().includes(keyword)
-    );
+    // Disable early OAuth check - let MasterAgent handle OAuth requirements when actually needed
+    // This allows all messages to be processed through the MasterAgent pipeline
+    return false;
 
-    // Check if user has tokens
-    const hasTokens = context.userId && this.tokenManager &&
-      await this.tokenManager.hasValidOAuthTokens(context.teamId, context.userId);
-
-    return hasKeyword && !hasTokens;
+    // TODO: Re-implement smarter OAuth detection if needed
+    // const oauthKeywords = ['email', 'calendar', 'gmail', 'google'];
+    // const hasKeyword = oauthKeywords.some(keyword =>
+    //   messageText.toLowerCase().includes(keyword)
+    // );
+    // const hasTokens = context.userId && this.tokenManager &&
+    //   await this.tokenManager.hasValidOAuthTokens(context.teamId, context.userId);
+    // return hasKeyword && !hasTokens;
   }
 
   /**

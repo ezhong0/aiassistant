@@ -42,6 +42,7 @@ export class OAuthStateService extends BaseService {
     const nonce = crypto.randomBytes(16).toString('hex');
     const payloadObj = {
       userId: context.userId,
+      teamId: context.teamId,
       channelId: context.channelId,
       ts: Date.now(),
       n: nonce

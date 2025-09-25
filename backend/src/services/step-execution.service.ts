@@ -61,7 +61,7 @@ export class StepExecutionService extends BaseService {
     stepDescription: string,
     workflowContext: StringWorkflowContext,
     executionContext: StepExecutionContext
-  ): Promise<{ success: boolean; result: string; error?: string }> {
+  ): Promise<{ success: boolean; result: string; error?: string; agentResponse?: any }> {
     const correlationId = `step-execution-${Date.now()}`;
 
     try {
@@ -119,7 +119,8 @@ export class StepExecutionService extends BaseService {
       return {
         success: executionResult.success,
         result: executionResult.response || 'Step completed',
-        error: executionResult.error
+        error: executionResult.error,
+        agentResponse: executionResult  // Pass full agent response
       };
 
     } catch (error) {

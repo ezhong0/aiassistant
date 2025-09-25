@@ -9,7 +9,7 @@ import {
 } from '../types/auth.types';
 import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { serviceManager } from "./service-manager";
-import { ConfigService } from '../config/config.service';
+import { ConfigService } from './config.service';
 import { BaseService } from './base-service';
 
 export class AuthService extends BaseService {

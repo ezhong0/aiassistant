@@ -2,6 +2,7 @@ import { AgentFactory } from '../framework/agent-factory';
 import logger from '../utils/logger';
 import { MasterAgent } from '../agents/master.agent';
 import { MasterAgentConfig } from '../types/tools';
+import { serviceManager } from '../services/service-manager';
 
 /**
  * Simple initialization function that only uses AgentFactory
@@ -56,9 +57,36 @@ export const createMasterAgent = (config?: MasterAgentConfig): MasterAgent => {
     
     const masterAgent = new MasterAgent();
     
+    // If config is provided, we need to ensure the OpenAI service uses the correct API key
+    if (config?.openaiApiKey) {
+      // Get the existing OpenAI service and update its API key
+      const openaiService = serviceManager.getService('openaiService');
+      if (openaiService) {
+        // Update the client with the new API key
+        (openaiService as any).client = new (require('openai').OpenAI)({
+          apiKey: config.openaiApiKey,
+        });
+        (openaiService as any).apiKey = config.openaiApiKey;
+        
+        // Update model if provided
+        if (config.model) {
+          (openaiService as any).model = config.model;
+        }
+        
+        logger.info('Updated OpenAI service with provided configuration', {
+          hasApiKey: !!config.openaiApiKey,
+          model: config.model || 'default',
+          operation: 'openai_service_config_update'
+        });
+      }
+    }
+    
     return masterAgent;
   } catch (error) {
-    
+    logger.error('Failed to create MasterAgent', error as Error, {
+      correlationId: `master-agent-create-error-${Date.now()}`,
+      operation: 'master_agent_creation_error'
+    });
     throw error;
   }
 }

@@ -461,7 +461,7 @@ export class CacheService extends BaseService {
       const info = await this.client!.info('memory');
       const memoryMatch = info.match(/used_memory:(\d+)/);
       
-      if (memoryMatch) {
+      if (memoryMatch && memoryMatch[1]) {
         const used = parseInt(memoryMatch[1], 10);
         this.memoryUsage.used = used;
         this.memoryUsage.peak = Math.max(this.memoryUsage.peak, used);

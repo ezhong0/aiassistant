@@ -69,33 +69,46 @@ Original Request: "${context.originalRequest}"
 GLOBAL CONTEXT (any service can add useful information here):
 ${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No global context yet'}
 
+AGENT CAPABILITIES:
+- calendarAgent: Complete Google Calendar management (read events, create events, update events, delete events, handle timezones, format responses)
+- emailAgent: Complete Gmail management (read emails, send emails, search emails, handle attachments, format responses)
+- contactAgent: Complete Google Contacts management (read contacts, create contacts, update contacts, search contacts, format responses)
+- slackAgent: Slack message and channel management (send messages, read messages, manage channels)
+
+PLANNING PRINCIPLES:
+1. **Single-Agent Operations**: If one agent can handle the entire request, use only 1 step
+2. **Natural Language Commands**: Each step should be a natural language request to an agent
+3. **Agent Expertise**: Let agents handle their domain completely (authentication, formatting, error handling)
+4. **Minimal Steps**: Use the fewest steps necessary - avoid over-engineering
+
 PLANNING INSTRUCTIONS:
-1. Analyze what the user wants to accomplish
-2. Break it down into logical, sequential steps
-3. Each step should be a clear, specific instruction for an agent
-4. Consider dependencies between steps
-5. Include timeframes from temporal context above
-6. Maximum 10 steps to avoid complexity
+1. **Identify the primary agent** needed for this request
+2. **Determine if it's a single-agent operation** (most common) or multi-agent workflow
+3. **For single-agent operations**: Create 1 step with the natural language request
+4. **For multi-agent workflows**: Break down only when different agents are needed
+5. **Consider agent capabilities**: Don't break down what an agent can handle internally
 
 Return JSON:
 {
   "reasoning": {
     "analysis": "What does the user want to accomplish?",
     "approach": "What's the best strategy to achieve this?",
-    "considerations": ["Important factors to consider", "Potential challenges", "Dependencies"]
+    "agentSelection": "Which agent(s) are needed and why?",
+    "complexityAssessment": "Is this a single-agent operation or multi-agent workflow?"
   },
   "steps": [
-    "Step 1: Clear, specific instruction for agent",
-    "Step 2: Next logical step",
+    "Step 1: Natural language request to the appropriate agent",
+    "Step 2: Only if a different agent is needed",
     "..."
   ]
 }
 
 Guidelines:
-- Use natural, conversational language for each step
-- Be specific and include timeframes from temporal context
-- Each step should be actionable by an agent
-- Consider the global context when planning`;
+- **PREFER SINGLE STEPS**: Most requests should be 1 step to one agent
+- **Use natural language**: "Get today's calendar events" not "Access calendar, parse date, retrieve events, format response"
+- **Trust agent capabilities**: Agents handle authentication, formatting, and error handling internally
+- **Only break down when necessary**: Different agents, sequential dependencies, or complex multi-step processes
+- **Maximum 5 steps**: Most workflows should be 1-2 steps`;
   }
 
   /**
@@ -199,43 +212,6 @@ Guidelines:
     return prompt;
   }
 
-  /**
-   * Validate and clean the AI response
-   */
-  private validatePlanResponse(response: any): StringStepPlan {
-    if (!response || typeof response !== 'object') {
-      throw new Error('Invalid AI response format');
-    }
-
-    if (!response.reasoning || typeof response.reasoning !== 'object') {
-      throw new Error('AI response missing CoT reasoning');
-    }
-
-    const reasoning: StepPlanningReasoning = {
-      currentState: response.reasoning.currentState || 'Unknown state',
-      gaps: Array.isArray(response.reasoning.gaps) ? response.reasoning.gaps : [],
-      progressCheck: response.reasoning.progressCheck || 'Unknown progress',
-      nextAction: response.reasoning.nextAction || 'No action specified'
-    };
-
-    if (response.isComplete === true) {
-      return {
-        reasoning,
-        nextStep: '',
-        isComplete: true
-      };
-    }
-
-    if (!response.nextStep || typeof response.nextStep !== 'string') {
-      throw new Error('AI response missing valid nextStep');
-    }
-
-    return {
-      reasoning,
-      nextStep: response.nextStep.trim(),
-      isComplete: false
-    };
-  }
 
   /**
    * Create a comprehensive plan upfront instead of step-by-step

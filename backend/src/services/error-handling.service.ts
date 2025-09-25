@@ -103,16 +103,7 @@ export class ErrorHandlingService {
     req: Request,
     res: Response
   ): void {
-    const appError = ErrorFactory.validationError('Validation failed', {
-      correlationId: (req as CorrelatedRequest).correlationId,
-      userId: (req as CorrelatedRequest).userId,
-      service: 'error_handling_service',
-      metadata: {
-        method: req.method,
-        url: req.url,
-        validationErrors: errors
-      }
-    });
+    const appError = ErrorFactory.validationFailed('Validation failed', 'Validation failed');
 
     this.trackError(appError);
     this.logError(appError);
@@ -123,17 +114,7 @@ export class ErrorHandlingService {
    * Handle rate limiting errors
    */
   handleRateLimitError(req: Request, res: Response, retryAfter?: number): void {
-    const appError = ErrorFactory.rateLimitError('Rate limit exceeded', {
-      correlationId: (req as CorrelatedRequest).correlationId,
-      userId: (req as CorrelatedRequest).userId,
-      service: 'error_handling_service',
-      metadata: {
-        method: req.method,
-        url: req.url,
-        ip: req.ip,
-        retryAfter
-      }
-    });
+    const appError = ErrorFactory.rateLimited('Rate limit exceeded');
 
     this.trackError(appError);
     this.logError(appError);
@@ -183,13 +164,13 @@ export class ErrorHandlingService {
       case 'critical':
         logger.error(appError.message, logData);
         break;
-      case 'error':
+      case 'high':
         logger.error(appError.message, logData);
         break;
-      case 'warning':
+      case 'medium':
         logger.warn(appError.message, logData);
         break;
-      case 'info':
+      case 'low':
         logger.info(appError.message, logData);
         break;
       default:

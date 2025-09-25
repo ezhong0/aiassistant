@@ -141,12 +141,40 @@ export class MasterAgent {
 
     try {
       // Step 1: Gather context
+      logger.info('Step 1: Gathering context', {
+        sessionId,
+        userId,
+        userInput: userInput.substring(0, 50),
+        operation: 'gather_context_start'
+      });
+      
       const gatheredContext = await this.contextManager!.gatherContext(sessionId, slackContext);
+      
+      logger.info('Context gathered successfully', {
+        sessionId,
+        userId,
+        hasAnalysis: !!gatheredContext.analysis,
+        hasConversation: !!gatheredContext.conversation,
+        operation: 'gather_context_complete'
+      });
 
       // Update conversation history
+      logger.info('Updating conversation history', {
+        sessionId,
+        userId,
+        operation: 'update_conversation_history'
+      });
+      
       await this.contextManager!.updateConversationHistory(sessionId, userInput, 'user');
 
       // Step 2: Analyze intent
+      logger.info('Step 2: Analyzing intent', {
+        sessionId,
+        userId,
+        userInput: userInput.substring(0, 50),
+        operation: 'analyze_intent_start'
+      });
+      
       const analysisContext: AnalysisContext = {
         userInput,
         sessionId,
@@ -163,8 +191,23 @@ export class MasterAgent {
       };
 
       const intent = await this.intentAnalysisService!.analyzeIntent(analysisContext);
+      
+      logger.info('Intent analysis completed', {
+        sessionId,
+        userId,
+        intentType: intent.intentType,
+        confidence: intent.confidence,
+        operation: 'analyze_intent_complete'
+      });
 
       // Step 3: Handle different intent types
+      logger.info('Step 3: Handling intent-based flow', {
+        sessionId,
+        userId,
+        intentType: intent.intentType,
+        operation: 'handle_intent_flow_start'
+      });
+      
       const result = await this.handleIntentBasedFlow(
         intent,
         gatheredContext,
@@ -174,6 +217,15 @@ export class MasterAgent {
         slackContext,
         processingStartTime
       );
+      
+      logger.info('Intent-based flow completed', {
+        sessionId,
+        userId,
+        success: result.success,
+        hasMessage: !!result.message,
+        messageLength: result.message?.length || 0,
+        operation: 'handle_intent_flow_complete'
+      });
 
       // Update conversation history with response
       await this.contextManager!.updateConversationHistory(sessionId, result.message, 'assistant');
@@ -470,7 +522,8 @@ export class MasterAgent {
         // Reevaluate plan based on step result
         const reevaluation = await this.planReevaluationService!.reevaluatePlan(
           workflowContext, 
-          stepResult.result
+          stepResult.result,
+          stepResult.agentResponse  // Pass full agent response
         );
 
         if (reevaluation.earlyTermination) {

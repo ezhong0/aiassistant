@@ -325,32 +325,14 @@ export class TokenManager extends BaseService {
       
       // Handle specific OAuth errors
       if (error.message?.includes('invalid_grant') || error.code === 'invalid_grant') {
-        
+
         // Remove the invalid refresh token to prevent future failures
         try {
-          const clearOptions: {
-            google?: GoogleTokens;
-            slack?: SlackTokens;
-          } = {};
-          
-          if (tokens.googleTokens) {
-            clearOptions.google = {
-              access_token: '', // Clear access token
-              refresh_token: undefined, // Clear refresh token
-              expires_at: new Date(0), // Set to expired
-              token_type: 'Bearer',
-              scope: undefined
-            };
-          }
-          
-          if (tokens.slackTokens) {
-            clearOptions.slack = tokens.slackTokens;
-          }
-          
-          await this.tokenStorageService!.storeUserTokens(userId_key, clearOptions);
-          
+          // Delete the tokens entirely instead of storing empty tokens
+          await this.tokenStorageService!.deleteUserTokens(userId_key);
+
         } catch (clearError) {
-          
+
         }
       }
       

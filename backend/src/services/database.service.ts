@@ -1,4 +1,4 @@
-import { Pool, PoolClient, QueryResult } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from '../types/service.types';
@@ -254,7 +254,7 @@ export class DatabaseService extends BaseService {
       });
     });
 
-    this.pool.on('release', (client: PoolClient) => {
+    this.pool.on('release', (err: Error, client: PoolClient) => {
       this.connectionStats.activeConnections = Math.max(0, this.connectionStats.activeConnections - 1);
       logger.debug('Database connection released', {
         correlationId: `db-release-${Date.now()}`,
@@ -374,7 +374,7 @@ export class DatabaseService extends BaseService {
   /**
    * Execute a query with performance monitoring
    */
-  async query<T = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+  async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
     if (!this.pool) {
       throw new Error('Database pool not initialized');
     }
@@ -516,6 +516,132 @@ export class DatabaseService extends BaseService {
   async deleteSession(sessionId: string): Promise<void> {
     const query = 'DELETE FROM sessions WHERE session_id = $1';
     await this.query(query, [sessionId]);
+  }
+
+  /**
+   * Store user tokens in the database
+   */
+  async storeUserTokens(userTokens: {
+    userId: string;
+    googleTokens?: any;
+    slackTokens?: any;
+    createdAt: Date;
+    updatedAt: Date;
+  }): Promise<void> {
+    const query = `
+      INSERT INTO user_tokens (
+        user_id, 
+        google_access_token, google_refresh_token, google_expires_at, google_token_type, google_scope,
+        slack_access_token, slack_team_id, slack_user_id,
+        created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (user_id) 
+      DO UPDATE SET 
+        google_access_token = EXCLUDED.google_access_token,
+        google_refresh_token = EXCLUDED.google_refresh_token,
+        google_expires_at = EXCLUDED.google_expires_at,
+        google_token_type = EXCLUDED.google_token_type,
+        google_scope = EXCLUDED.google_scope,
+        slack_access_token = EXCLUDED.slack_access_token,
+        slack_team_id = EXCLUDED.slack_team_id,
+        slack_user_id = EXCLUDED.slack_user_id,
+        updated_at = EXCLUDED.updated_at
+    `;
+    
+    await this.query(query, [
+      userTokens.userId,
+      userTokens.googleTokens?.access_token || null,
+      userTokens.googleTokens?.refresh_token || null,
+      userTokens.googleTokens?.expires_at || null,
+      userTokens.googleTokens?.token_type || null,
+      userTokens.googleTokens?.scope || null,
+      userTokens.slackTokens?.access_token || null,
+      userTokens.slackTokens?.team_id || null,
+      userTokens.slackTokens?.user_id || null,
+      userTokens.createdAt,
+      userTokens.updatedAt
+    ]);
+  }
+
+  /**
+   * Get user tokens from the database
+   */
+  async getUserTokens(userId: string): Promise<{
+    userId: string;
+    googleTokens?: any;
+    slackTokens?: any;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null> {
+    const query = `
+      SELECT 
+        user_id,
+        google_access_token, google_refresh_token, google_expires_at, google_token_type, google_scope,
+        slack_access_token, slack_team_id, slack_user_id,
+        created_at, updated_at
+      FROM user_tokens 
+      WHERE user_id = $1
+    `;
+    
+    const result = await this.query(query, [userId]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      userId: row.user_id,
+      googleTokens: row.google_access_token ? {
+        access_token: row.google_access_token,
+        refresh_token: row.google_refresh_token,
+        expires_at: row.google_expires_at,
+        token_type: row.google_token_type,
+        scope: row.google_scope
+      } : undefined,
+      slackTokens: row.slack_access_token ? {
+        access_token: row.slack_access_token,
+        team_id: row.slack_team_id,
+        user_id: row.slack_user_id
+      } : undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  }
+
+  /**
+   * Update user token refresh token
+   */
+  async updateUserTokenRefreshToken(userId: string, refreshToken: string | null): Promise<void> {
+    const query = `
+      UPDATE user_tokens 
+      SET google_refresh_token = $2, updated_at = NOW()
+      WHERE user_id = $1
+    `;
+    
+    await this.query(query, [userId, refreshToken]);
+  }
+
+  /**
+   * Delete user tokens from the database
+   */
+  async deleteUserTokens(userId: string): Promise<void> {
+    const query = `DELETE FROM user_tokens WHERE user_id = $1`;
+    await this.query(query, [userId]);
+  }
+
+  /**
+   * Cleanup expired tokens
+   */
+  async cleanupExpiredTokens(): Promise<number> {
+    const query = `
+      DELETE FROM user_tokens 
+      WHERE updated_at < NOW() - INTERVAL '30 days'
+    `;
+    
+    const result = await this.query(query);
+    return result.rowCount || 0;
   }
 
   async cleanupExpiredSessions(): Promise<number> {

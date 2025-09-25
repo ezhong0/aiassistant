@@ -1,7 +1,8 @@
 import winston from 'winston';
+import { ENVIRONMENT } from '../config/environment';
 
 const logger = winston.createLogger({
-  level: 'warn', // Hide info logs, only show warnings and errors
+  level: ENVIRONMENT.logLevel, // Use environment-configured log level
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),

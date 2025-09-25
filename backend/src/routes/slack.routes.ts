@@ -254,7 +254,30 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         res.status(200).json({ ok: true });
         
         // Process the event asynchronously (don't await)
+        logger.info('Attempting to get SlackService from service manager', {
+          ...logContext,
+          operation: 'get_slack_service',
+          metadata: {
+            eventType: event.type,
+            userId: event.user,
+            channelId: event.channel
+          }
+        });
+        
         const slackService = serviceManager.getService('slackService') as SlackService | undefined;
+        
+        logger.info('SlackService retrieval result', {
+          ...logContext,
+          operation: 'slack_service_retrieval',
+          metadata: {
+            hasSlackService: !!slackService,
+            serviceName: slackService?.name || 'undefined',
+            eventType: event.type,
+            userId: event.user,
+            channelId: event.channel
+          }
+        });
+        
         if (slackService) {
           const slackContext = {
             userId: event.user,
@@ -263,19 +286,75 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             threadTs: event.thread_ts,
             isDirectMessage: event.channel_type === 'im'
           };
-          slackService.processEvent(event as any, slackContext as any).catch((processError: unknown) => {
-            logger.error('Event processing failed', {
-              error: (processError as Error).message,
-              stack: (processError as Error).stack,
-              ...logContext,
-              operation: 'event_processing_error'
-            });
+          
+          logger.info('Starting async event processing', {
+            ...logContext,
+            metadata: {
+              eventType: event.type,
+              userId: event.user,
+              channelId: event.channel,
+              teamId: team_id,
+              isDirectMessage: event.channel_type === 'im',
+              eventText: event.text?.substring(0, 50)
+            },
+            operation: 'async_event_processing_start'
           });
+          
+          logger.info('About to call slackService.processEvent', {
+            ...logContext,
+            operation: 'about_to_call_process_event',
+            metadata: {
+              eventType: event.type,
+              userId: event.user,
+              channelId: event.channel,
+              slackContextKeys: Object.keys(slackContext)
+            }
+          });
+          
+          try {
+            slackService.processEvent(event as any, slackContext as any).catch((processError: unknown) => {
+              logger.error('Event processing failed', {
+                error: (processError as Error).message,
+                stack: (processError as Error).stack,
+                ...logContext,
+                metadata: {
+                  eventType: event.type,
+                  userId: event.user,
+                  channelId: event.channel
+                },
+                operation: 'event_processing_error'
+              });
+            });
+            
+            logger.info('processEvent call initiated (async)', {
+              ...logContext,
+              operation: 'process_event_call_initiated',
+              metadata: {
+                eventType: event.type,
+                userId: event.user,
+                channelId: event.channel
+              }
+            });
+          } catch (syncError) {
+            logger.error('Synchronous error in processEvent call', syncError as Error, {
+              ...logContext,
+              operation: 'sync_process_event_error',
+              metadata: {
+                eventType: event.type,
+                userId: event.user,
+                channelId: event.channel
+              }
+            });
+          }
         } else {
           logger.warn('SlackService not available - event not processed', {
             ...logContext,
             operation: 'event_processing',
-            metadata: { eventType: event.type }
+            metadata: { 
+              eventType: event.type,
+              userId: event.user,
+              channelId: event.channel
+            }
           });
         }
         return;

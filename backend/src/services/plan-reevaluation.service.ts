@@ -47,7 +47,8 @@ export class PlanReevaluationService extends BaseService {
    */
   async reevaluatePlan(
     context: StringWorkflowContext,
-    stepResult: string
+    stepResult: string,
+    agentResponse?: any  // Add full agent response
   ): Promise<PlanReevaluationResult> {
     const correlationId = `plan-reevaluation-${Date.now()}`;
 
@@ -64,7 +65,7 @@ export class PlanReevaluationService extends BaseService {
         throw new Error('AI service required for plan reevaluation');
       }
 
-      const prompt = this.createReevaluationPrompt(context, stepResult);
+      const prompt = this.createReevaluationPrompt(context, stepResult, agentResponse);
 
       logger.debug('🔍 PLAN REEVALUATION - SENDING TO AI', {
         correlationId,
@@ -175,7 +176,7 @@ export class PlanReevaluationService extends BaseService {
   /**
    * Create prompt for plan reevaluation
    */
-  private createReevaluationPrompt(context: StringWorkflowContext, stepResult: string): string {
+  private createReevaluationPrompt(context: StringWorkflowContext, stepResult: string, agentResponse?: any): string {
     const temporalContext = `Current date/time: ${new Date().toLocaleString('en-US')}`;
     const requestDescription = context.intentDescription || context.originalRequest;
 
@@ -196,6 +197,9 @@ ${context.completedSteps.map((step, i) =>
 
 LATEST STEP RESULT: "${stepResult}"
 
+AGENT RESPONSE DETAILS:
+${agentResponse ? JSON.stringify(agentResponse, null, 2) : 'No agent response details available'}
+
 GLOBAL CONTEXT (any service can add useful information here):
 ${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No global context yet'}
 
@@ -204,8 +208,25 @@ ANALYSIS INSTRUCTIONS:
 2. Assess progress toward the original goal
 3. Check for loops (repeated similar attempts)
 4. Evaluate if the current plan is still appropriate
-5. Determine the best next action
-6. Identify useful information from the step result that should be added to global context
+5. **CRITICAL: Determine if the agent is blocked by something it cannot resolve**
+6. Determine the best next action
+7. Identify useful information from the step result that should be added to global context
+
+AGENT CAPABILITIES & LIMITATIONS:
+- calendarAgent: Manages Google Calendar events. Requires Google OAuth authentication.
+- emailAgent: Manages Gmail messages. Requires Google OAuth authentication.
+- contactAgent: Manages Google Contacts. Requires Google OAuth authentication.
+- slackAgent: Manages Slack messages and channels. Cannot access external services.
+
+BLOCKING CONDITIONS:
+An agent is "blocked" when it encounters an issue it cannot resolve independently:
+- Authentication/permission errors (requires user action via /auth command)
+- Missing external service access (agent cannot grant itself permissions)
+- Service unavailability (agent cannot fix external service issues)
+- Invalid credentials (agent cannot refresh expired tokens)
+
+When an agent is blocked, DO NOT modify the plan - the same issue will occur again.
+Instead, TERMINATE the workflow and let the user resolve the blocking condition.
 
 Return JSON:
 {
@@ -213,7 +234,8 @@ Return JSON:
     "stepAnalysis": "Was the latest step successful? What did it accomplish?",
     "goalProgress": "How much progress have we made toward the original goal?",
     "loopDetection": "Are we repeating similar attempts? Any signs of being stuck?",
-    "planAssessment": "Is the current plan still appropriate given the results?"
+    "planAssessment": "Is the current plan still appropriate given the results?",
+    "blockingAnalysis": "Is the agent blocked by something it cannot resolve?"
   },
   "decision": {
     "action": "continue" | "modify" | "terminate",
@@ -226,8 +248,9 @@ Return JSON:
 
 Guidelines:
 - "continue": Current plan is working well, proceed to next step
-- "modify": Plan needs adjustment based on new information
-- "terminate": Goal achieved OR stuck in loop OR plan is no longer viable
+- "modify": Plan needs adjustment based on new information (but agent is not blocked)
+- "terminate": Goal achieved OR agent is blocked by unresolvable issue OR stuck in loop
+- If agent is blocked by authentication/permission issues, TERMINATE immediately
 - Consider the global context when making decisions
 - Be conservative with modifications - only change if necessary
 - Add useful information to global context that could help future steps

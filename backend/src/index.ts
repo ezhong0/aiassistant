@@ -33,6 +33,29 @@ import { ENV_VALIDATION, ENVIRONMENT } from './config/environment';
 // Global interfaces store
 let globalInterfaces: InterfaceManager | null = null;
 
+// Error boundary logging for unhandled errors
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+  logger.error('Unhandled Promise Rejection', reason as Error, {
+    correlationId: 'unhandled-rejection',
+    operation: 'unhandled_promise_rejection',
+    metadata: {
+      promise: promise.toString(),
+      reason: reason instanceof Error ? reason.message : String(reason)
+    }
+  });
+});
+
+process.on('uncaughtException', (error: Error) => {
+  logger.error('Uncaught Exception', error, {
+    correlationId: 'uncaught-exception',
+    operation: 'uncaught_exception',
+    metadata: {
+      stack: error.stack
+    }
+  });
+  // Don't exit immediately, let the error handler deal with it
+});
+
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
   try {
