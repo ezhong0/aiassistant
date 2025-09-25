@@ -56,7 +56,6 @@ export interface ServiceExecutionResult {
 export class ServiceCoordinator extends BaseService {
   private toolExecutorService: ToolExecutorService | null = null;
   private tokenManager: TokenManager | null = null;
-  private agentFactory: AgentFactory | null = null;
 
   constructor() {
     super('ServiceCoordinator');
@@ -68,7 +67,6 @@ export class ServiceCoordinator extends BaseService {
   protected async onInitialize(): Promise<void> {
     this.toolExecutorService = serviceManager.getService<ToolExecutorService>('toolExecutorService') || null;
     this.tokenManager = serviceManager.getService<TokenManager>('tokenManager') || null;
-    this.agentFactory = serviceManager.getService('agentFactory') || null;
 
     if (!this.toolExecutorService) {
       throw new Error('ToolExecutorService not available for service coordination');

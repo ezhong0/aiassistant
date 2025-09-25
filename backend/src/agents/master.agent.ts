@@ -1,5 +1,4 @@
 import logger from '../utils/logger';
-import { AppError } from '../utils/app-error';
 import { serviceManager } from '../services/service-manager';
 
 // Extracted services
@@ -285,7 +284,7 @@ export class MasterAgent {
       if (!draft) {
         return this.createErrorResult('No draft found to execute', context);
       }
-      const toolResults = await this.executeDraft(draft, context);
+      const toolResults = await this.executeDraft(draft);
 
       const formattedResponse = await this.responseFormatter!.formatSuccessResponse(
         toolResults,
@@ -486,7 +485,7 @@ export class MasterAgent {
     return Array.from(services);
   }
 
-  private async executeDraft(draft: Draft, context: FormattingContext): Promise<ToolResult[]> {
+  private async executeDraft(draft: Draft): Promise<ToolResult[]> {
     if (!this.draftManager) {
       throw new Error('Draft manager not available');
     }
@@ -503,7 +502,7 @@ export class MasterAgent {
     try {
       const drafts = await this.draftManager.getSessionDrafts(sessionId);
       return drafts.length > 0;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -523,7 +522,7 @@ export class MasterAgent {
         createdAt: draft.createdAt,
         riskLevel: draft.riskLevel
       }));
-    } catch (error) {
+    } catch {
       return [];
     }
   }

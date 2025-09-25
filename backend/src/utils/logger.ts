@@ -1,5 +1,4 @@
 import winston from 'winston';
-import DailyRotateFile from 'winston-daily-rotate-file';
 
 const logger = winston.createLogger({
   level: 'info', // Temporarily show info logs to debug natural language execution

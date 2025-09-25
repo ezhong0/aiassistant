@@ -47,7 +47,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: {
-          serviceCount: 22, // Updated count including extracted MasterAgent services (17 + 5 new services)
+          serviceCount: 26, // Updated count: original 17 + 5 MasterAgent extractions + 4 ServiceManager decompositions
           environment: process.env.NODE_ENV
         }
       });
@@ -323,7 +323,7 @@ const registerCoreServices = async (): Promise<void> => {
     const { ToolCallGenerator } = await import('./tool-call-generator.service');
     const toolCallGenerator = new ToolCallGenerator();
     serviceManager.registerService('toolCallGenerator', toolCallGenerator, {
-      dependencies: ['agentFactory', 'contactService'],
+      dependencies: ['contactService'],
       priority: 62,
       autoStart: true
     });
@@ -341,13 +341,50 @@ const registerCoreServices = async (): Promise<void> => {
     const { ServiceCoordinator } = await import('./service-coordinator.service');
     const serviceCoordinator = new ServiceCoordinator();
     serviceManager.registerService('serviceCoordinator', serviceCoordinator, {
-      dependencies: ['toolExecutorService', 'tokenManager', 'agentFactory'],
+      dependencies: ['toolExecutorService', 'tokenManager'],
       priority: 64,
       autoStart: true
     });
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
+
+    // NEW: ServiceManager Decomposition Components (Task 6 - SRP Compliance)
+    // These services decompose the original ServiceManager into focused components
+
+    // 48. ServiceRegistry - Service Discovery & Registration
+    const { ServiceRegistry } = await import('./service-registry.service');
+    const serviceRegistry = new ServiceRegistry();
+    serviceManager.registerService('serviceRegistry', serviceRegistry, {
+      priority: 70,
+      autoStart: true
+    });
+
+    // 49. DependencyInjector - Dependency Resolution & Injection
+    const { DependencyInjector } = await import('./dependency-injector.service');
+    const dependencyInjector = new DependencyInjector(serviceRegistry);
+    serviceManager.registerService('dependencyInjector', dependencyInjector, {
+      dependencies: ['serviceRegistry'],
+      priority: 71,
+      autoStart: true
+    });
+
+    // 50. ConfigurationManager - Configuration Loading & Validation
+    const { ConfigurationManager } = await import('./configuration-manager.service');
+    const configurationManager = new ConfigurationManager();
+    serviceManager.registerService('configurationManager', configurationManager, {
+      priority: 72,
+      autoStart: true
+    });
+
+    // 51. ServiceHealthMonitor - Service Health Monitoring
+    const { ServiceHealthMonitor } = await import('./service-health-monitor.service');
+    const serviceHealthMonitor = new ServiceHealthMonitor(serviceRegistry);
+    serviceManager.registerService('serviceHealthMonitor', serviceHealthMonitor, {
+      dependencies: ['serviceRegistry'],
+      priority: 73,
+      autoStart: true
+    });
 
   } catch (error) {
     logger.error('Failed to register core services', error as Error, {

@@ -4,7 +4,7 @@
  * Helper functions for building consistent, context-aware prompts across the system
  */
 
-import { AgentExecutionContext, ConversationTurn, UserPreferences } from '../types/agents/natural-language.types';
+import { AgentExecutionContext, UserPreferences } from '../types/agents/natural-language.types';
 
 export class PromptUtils {
   /**

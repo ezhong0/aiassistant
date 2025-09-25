@@ -154,8 +154,7 @@ Always return natural language summaries that help others understand what's happ
    */
   protected async executeOperation(
     operation: string,
-    parameters: any,
-    authToken: string
+    parameters: any
   ): Promise<any> {
     const slackService = this.getService('slackService') as SlackService;
     const openaiService = this.getService('openaiService') as OpenAIService;

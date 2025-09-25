@@ -210,8 +210,6 @@ Important:
 
       case 'draft': {
         // Save as draft - not implemented in service, return placeholder
-        const { to, subject, body } = parameters;
-
         return {
           success: true,
           messageId: 'draft-placeholder'

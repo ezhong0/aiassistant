@@ -114,7 +114,7 @@ Important:
       case 'search':
       case 'find': {
         // Search for contacts
-        const { query, name, email, phone, company, maxResults } = parameters;
+        const { query, name, email, phone, company } = parameters;
 
         // Build search query
         const searchQuery = query || name || email || phone || company || '';
