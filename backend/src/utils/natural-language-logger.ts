@@ -1,6 +1,6 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { IntentAnalysis } from '../agents/master.agent';
+import { IntentAnalysis } from '../services/intent-analysis.service';
 import { NaturalLanguageResponse } from '../types/agents/natural-language.types';
 import { ENVIRONMENT } from '../config/environment';
 

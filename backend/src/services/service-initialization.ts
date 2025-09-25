@@ -47,7 +47,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: {
-          serviceCount: 17, // Our target service count (reduced from 19 by consolidating Slack services)
+          serviceCount: 22, // Updated count including extracted MasterAgent services (17 + 5 new services)
           environment: process.env.NODE_ENV
         }
       });
@@ -301,8 +301,50 @@ const registerCoreServices = async (): Promise<void> => {
       autoStart: true
     });
 
-    // 43. OperationDetectionService - REMOVED: Consolidated into individual agents
+    // 43. IntentAnalysisService - Extracted from MasterAgent for SRP compliance
+    const { IntentAnalysisService } = await import('./intent-analysis.service');
+    const intentAnalysisService = new IntentAnalysisService();
+    serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
+      dependencies: ['openaiService', 'draftManager'],
+      priority: 60,
+      autoStart: true
+    });
 
+    // 44. ContextManager - Extracted from MasterAgent for SRP compliance
+    const { ContextManager } = await import('./context-manager.service');
+    const contextManager = new ContextManager();
+    serviceManager.registerService('contextManager', contextManager, {
+      dependencies: ['cacheService'],
+      priority: 61,
+      autoStart: true
+    });
+
+    // 45. ToolCallGenerator - Extracted from MasterAgent for SRP compliance
+    const { ToolCallGenerator } = await import('./tool-call-generator.service');
+    const toolCallGenerator = new ToolCallGenerator();
+    serviceManager.registerService('toolCallGenerator', toolCallGenerator, {
+      dependencies: ['agentFactory', 'contactService'],
+      priority: 62,
+      autoStart: true
+    });
+
+    // 46. ResponseFormatter - Extracted from MasterAgent for SRP compliance
+    const { ResponseFormatter } = await import('./response-formatter.service');
+    const responseFormatter = new ResponseFormatter();
+    serviceManager.registerService('responseFormatter', responseFormatter, {
+      dependencies: ['openaiService'],
+      priority: 63,
+      autoStart: true
+    });
+
+    // 47. ServiceCoordinator - Extracted from MasterAgent for SRP compliance
+    const { ServiceCoordinator } = await import('./service-coordinator.service');
+    const serviceCoordinator = new ServiceCoordinator();
+    serviceManager.registerService('serviceCoordinator', serviceCoordinator, {
+      dependencies: ['toolExecutorService', 'tokenManager', 'agentFactory'],
+      priority: 64,
+      autoStart: true
+    });
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

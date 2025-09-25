@@ -22,7 +22,7 @@
     "test:fast": "node --max-old-space-size=256 --expose-gc node_modules/.bin/jest tests/unit/simple.test.ts --runInBand",
     "railway:deploy": "railway up",
     "prepare": "node -e \"if (!process.env.RAILWAY_ENVIRONMENT) require('husky')\"",
-    "railway:build": "npm run prebuild && tsc --project tsconfig.prod.json",
+    "railway:build": "rm -rf dist && tsc --project tsconfig.prod.json",
     "railway:start": "node --max-old-space-size=1024 --expose-gc dist/index.js",
     "db:setup": "npx ts-node scripts/setup-database.ts",
     "db:test": "npx ts-node scripts/setup-database.ts",

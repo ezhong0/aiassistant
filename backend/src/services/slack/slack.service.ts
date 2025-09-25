@@ -260,9 +260,7 @@ export class SlackService extends BaseService {
         messageText,
         sessionId,
         context.userId,
-        {
-          context: { slackContext: context }
-        }
+        context
       );
 
       // Post the final response back to Slack
@@ -672,14 +670,9 @@ Be concise but helpful. Slack users prefer shorter, actionable messages.
    */
   private getOpenAIService(): any {
     try {
-      // Try to get from MasterAgent first
-      if (this.masterAgent && typeof this.masterAgent.getOpenAIService === 'function') {
-        return this.masterAgent.getOpenAIService();
-      }
-
-      // Fallback to service manager
+      // Get from service manager
       const serviceManager = require('../service-manager').serviceManager;
-      return serviceManager.getService('OpenAIService');
+      return serviceManager.getService('openaiService');
     } catch {
       return null;
     }

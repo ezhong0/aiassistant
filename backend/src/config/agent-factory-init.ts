@@ -54,7 +54,7 @@ export const createMasterAgent = (config?: MasterAgentConfig): MasterAgent => {
     // AgentFactory is already initialized by the main application
     // No need to check or initialize it again here
     
-    const masterAgent = new MasterAgent(config);
+    const masterAgent = new MasterAgent();
     
     return masterAgent;
   } catch (error) {

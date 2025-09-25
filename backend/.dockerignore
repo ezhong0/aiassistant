@@ -1,0 +1,75 @@
+# Node
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# Build artifacts
+dist
+build
+.tsbuildinfo
+*.tgz
+
+# Environment and config
+.env*
+!.env.example
+.envrc
+
+# Development
+.git
+.gitignore
+*.md
+README*
+CHANGELOG*
+LICENSE*
+.husky
+.vscode
+.idea
+*.swp
+*.swo
+
+# Tests
+tests
+coverage
+*.test.*
+*.spec.*
+jest.config.*
+__tests__
+
+# Logs
+logs
+*.log
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Development files
+scripts
+deploy-*.sh
+install-dependencies.sh
+check-tokens.js
+.prettierrc
+.prettierignore
+eslint.config.js
+
+# Large dirs
+data
+migrations
+config
+
+# Backup files
+*.backup.*
+*.bak
+src/agents/master.agent.backup.ts
+
+# Other
+.nyc_output
+.cache

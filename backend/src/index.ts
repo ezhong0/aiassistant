@@ -68,6 +68,25 @@ const app = express();
 // Railway provides PORT environment variable, use it or fallback to configService
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : configService.port;
 
+// CRITICAL: Health endpoints MUST be registered first before any middleware
+// This ensures Railway health checks work immediately when container starts
+const getHealthStatus = () => ({
+  status: 'ok',
+  timestamp: new Date().toISOString(),
+  uptime: process.uptime(),
+  memory: process.memoryUsage(),
+  pid: process.pid,
+  ready: true
+});
+
+app.get('/healthz', (req: Request, res: Response) => {
+  res.status(200).json(getHealthStatus());
+});
+
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json(getHealthStatus());
+});
+
 // Trust proxy (for proper IP detection behind reverse proxy)
 app.set('trust proxy', 1);
 
@@ -140,17 +159,6 @@ app.get('/test', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Railway health check endpoint
-app.get('/healthz', (req: Request, res: Response) => {
-  const healthStatus = {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    pid: process.pid
-  };
-  res.status(200).json(healthStatus);
-});
 
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
@@ -169,18 +177,7 @@ app.use(errorHandler);
 // Start server and initialize services
 const startServer = async (): Promise<void> => {
   try {
-    // Initialize application services
-    await initializeApplication();
-    
-    // Set up Slack interface in background (non-blocking)
-    setupSlackInterface().catch(error => {
-      logger.error('Background Slack setup failed', error as Error, {
-        correlationId: 'startup',
-        operation: 'background_slack_setup_error'
-      });
-    });
-
-    // Start the server
+    // CRITICAL FIX: Start server FIRST so health checks can connect immediately
     const server = app.listen(port, () => {
       logger.info('Server started successfully', {
         correlationId: 'startup',
@@ -190,6 +187,28 @@ const startServer = async (): Promise<void> => {
           environment: process.env.NODE_ENV,
           healthCheck: `http://localhost:${port}/healthz`
         }
+      });
+
+      // Initialize services AFTER server is listening (background, non-blocking)
+      initializeApplication().then(() => {
+        logger.info('Application services initialized successfully', {
+          correlationId: 'startup',
+          operation: 'services_initialized'
+        });
+
+        // Set up Slack interface after services are ready
+        setupSlackInterface().catch(error => {
+          logger.error('Background Slack setup failed', error as Error, {
+            correlationId: 'startup',
+            operation: 'background_slack_setup_error'
+          });
+        });
+      }).catch(error => {
+        logger.error('Service initialization failed', error as Error, {
+          correlationId: 'startup',
+          operation: 'service_init_error'
+        });
+        // Don't exit - server can still handle health checks
       });
     });
 
