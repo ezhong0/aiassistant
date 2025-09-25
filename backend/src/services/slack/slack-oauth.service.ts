@@ -1,7 +1,7 @@
 import { BaseService } from '../base-service';
 import { TokenManager } from '../token-manager';
 import { SlackContext } from '../../types/slack/slack.types';
-import { serviceManager } from '../service-manager';
+import { serviceManager } from "../service-manager";
 import { OAuthStateService } from '../oauth-state.service';
 import crypto from 'crypto';
 

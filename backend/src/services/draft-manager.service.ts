@@ -2,7 +2,7 @@ import { BaseService } from './base-service';
 import { CacheService } from './cache.service';
 import { ToolExecutorService } from './tool-executor.service';
 import { ToolCall, ToolResult, ToolExecutionContext } from '../types/tools';
-import { getService } from './service-manager';
+import { getService } from "./service-manager";
 import { LogContext } from '../utils/log-context';
 import { v4 as uuidv4 } from 'uuid';
 

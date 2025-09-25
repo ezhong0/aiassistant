@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { CacheService } from './cache.service';
 import { SlackContext } from '../types/slack/slack.types';
 

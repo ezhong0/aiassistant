@@ -1,4 +1,4 @@
-import { ServiceState, IService } from './service-manager';
+import { ServiceState, IService } from "./service-manager";
 import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { retryManager, RetryConfig } from '../errors/retry-manager';
 import logger from '../utils/logger';
@@ -370,6 +370,15 @@ export abstract class BaseService implements IService {
       service: this.name,
       metadata: meta
     });
+  }
+
+  /**
+   * Helper method to log errors when error is passed in metadata object
+   * This handles the common pattern: logError('message', { error, ...otherMeta })
+   */
+  protected logErrorWithMeta(message: string, meta: Record<string, unknown>): void {
+    const { error, ...otherMeta } = meta;
+    this.logError(message, error as Error | unknown, otherMeta);
   }
 
   /**

@@ -1,7 +1,7 @@
 import { BaseService } from './base-service';
 import logger from '../utils/logger';
 import { OpenAIService } from './openai.service';
-import { getService } from './service-manager';
+import { getService } from "./service-manager";
 import { AgentExecutionContext } from '../types/agents/natural-language.types';
 import { PromptUtils } from '../utils/prompt-utils';
 

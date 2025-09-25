@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'timers/promises';
 import logger from '../utils/logger';
-import { IService, ServiceState } from './service-manager';
+import { IService, ServiceState } from "./service-manager";
 import { ServiceRegistry, ServiceInfo } from './service-registry.service';
 
 /**

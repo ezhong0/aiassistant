@@ -1,5 +1,5 @@
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { OpenAIService } from './openai.service';
 import { ToolResult } from '../types/tools';
 import { Draft } from './draft-manager.service';

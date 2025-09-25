@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { IService, ServiceState } from './service-manager';
+import { IService, ServiceState } from "./service-manager";
 
 /**
  * Service information for registry management

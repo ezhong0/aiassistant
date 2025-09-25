@@ -1,5 +1,5 @@
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { ToolExecutorService } from './tool-executor.service';
 import { TokenManager } from './token-manager';
 import { AgentFactory } from '../framework/agent-factory';
@@ -129,7 +129,7 @@ export class ServiceCoordinator extends BaseService {
 
       return executionResult;
     } catch (error) {
-      this.logError('Service coordination failed', { error, context });
+      this.logErrorWithMeta('Service coordination failed', { error, context });
 
       return {
         results: [],
@@ -182,7 +182,7 @@ export class ServiceCoordinator extends BaseService {
 
       return result;
     } catch (error) {
-      this.logError('Single service execution failed', { error, toolCall, context });
+      this.logErrorWithMeta('Single service execution failed', { error, toolCall, context });
 
       return {
         toolName: toolCall.name,
@@ -239,10 +239,24 @@ export class ServiceCoordinator extends BaseService {
     }
 
     try {
-      const { teamId, actualUserId } = this.parseUserId(context.userId);
+      let { teamId, actualUserId } = this.parseUserId(context.userId);
+
+      // If userId doesn't have team info, try to extract from sessionId
+      if (!teamId && context.sessionId) {
+        const sessionParts = context.sessionId.split(':');
+        if (sessionParts.length >= 3 && sessionParts[0] === 'slack') {
+          teamId = sessionParts[1] || null;
+          actualUserId = actualUserId || sessionParts[2] || null;
+        }
+      }
 
       if (!teamId || !actualUserId) {
-        this.logWarn('Invalid user ID format for token retrieval', { userId: context.userId });
+        this.logWarn('Invalid user ID format for token retrieval', {
+          userId: context.userId,
+          sessionId: context.sessionId,
+          extractedTeamId: teamId,
+          extractedUserId: actualUserId
+        });
         return tokens;
       }
 
@@ -274,7 +288,7 @@ export class ServiceCoordinator extends BaseService {
       });
 
     } catch (error) {
-      this.logError('Failed to retrieve access tokens', { error, context });
+      this.logErrorWithMeta('Failed to retrieve access tokens', { error, context });
     }
 
     return tokens;
@@ -371,7 +385,7 @@ export class ServiceCoordinator extends BaseService {
         }
 
       } catch (error) {
-        this.logError('Service step execution failed', { error, step: i + 1, serviceName: step.serviceName });
+        this.logErrorWithMeta('Service step execution failed', { error, step: i + 1, serviceName: step.serviceName });
 
         results.push({
           toolName: step.operation,

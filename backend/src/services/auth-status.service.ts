@@ -1,7 +1,7 @@
 import { BaseService } from './base-service';
 import { TokenManager } from './token-manager';
 import { TokenStorageService } from './token-storage.service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 
 export interface ServiceConnection {
   provider: string;

@@ -2,7 +2,7 @@
  * Enhanced Service Resolver with proper typing and error handling
  */
 
-import { getService } from './service-manager';
+import { getService } from "./service-manager";
 
 export interface ServiceResolverConfig {
   /** Whether to throw errors on service resolution failure */

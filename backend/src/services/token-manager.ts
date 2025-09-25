@@ -5,7 +5,7 @@ import { CacheService } from './cache.service';
 import { GoogleTokens } from '../types/auth.types';
 import { SlackTokens } from './token-storage.service';
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { AuditLogger } from '../utils/audit-logger';
 
 export interface OAuthTokens {

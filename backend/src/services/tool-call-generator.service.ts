@@ -1,5 +1,5 @@
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 // import { AgentFactory } from '../framework/agent-factory'; // Removed to avoid circular dependency
 import { ContactService } from './contact.service';
 import { ToolCall, ToolResult } from '../types/tools';

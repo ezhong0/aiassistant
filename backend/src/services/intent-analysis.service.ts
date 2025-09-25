@@ -1,6 +1,6 @@
 import { BaseService } from './base-service';
 import { OpenAIService } from './openai.service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { DraftManager } from './draft-manager.service';
 import { z } from 'zod';
 

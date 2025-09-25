@@ -1,10 +1,10 @@
 import { WebClient } from '@slack/web-api';
 import { BaseService } from '../base-service';
-import { ServiceManager } from '../service-manager';
+import { ServiceManager } from "../service-manager";
 import { TokenManager } from '../token-manager';
 import { SlackContext, SlackEventType, SlackEvent, SlackResponse } from '../../types/slack/slack.types';
 import { SlackConfig } from '../../types/slack/slack-config.types';
-import { serviceManager } from '../service-manager';
+import { serviceManager } from "../service-manager";
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger';
 import { MasterAgent } from '../../agents/master.agent';
@@ -363,7 +363,7 @@ export class SlackService extends BaseService {
       return intent.intentType === 'confirmation_positive' || 
              intent.intentType === 'confirmation_negative';
     } catch (error) {
-      this.logError('Confirmation detection failed', { error });
+      this.logErrorWithMeta('Confirmation detection failed', { error });
       return false;
     }
   }

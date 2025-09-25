@@ -1,5 +1,5 @@
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { SlackContext } from '../types/slack/slack.types';
 import { CacheService } from './cache.service';
 

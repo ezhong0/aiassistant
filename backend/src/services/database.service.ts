@@ -1,7 +1,7 @@
 import { Pool, PoolClient, QueryResult } from 'pg';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
+import { serviceManager } from "./service-manager";
 import { ConfigService } from '../config/config.service';
 
 export interface DatabaseConfig {

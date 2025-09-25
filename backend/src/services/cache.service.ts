@@ -1,7 +1,7 @@
 import { createClient, RedisClientType } from 'redis';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
-import { ServiceState } from './service-manager';
+import { ServiceState } from "./service-manager";
 import { configService } from '../config/config.service';
 
 export class CacheService extends BaseService {

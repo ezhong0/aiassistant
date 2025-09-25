@@ -9,7 +9,7 @@ import {
 import { TIMEOUTS, EXECUTION_CONFIG } from '../config/app-config';
 import { AgentFactory } from '../framework/agent-factory';
 import { BaseService } from './base-service';
-import { getService } from './service-manager';
+import { getService } from "./service-manager";
 import { AGENT_HELPERS } from '../config/agent-config';
 
 /**
