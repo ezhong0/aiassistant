@@ -6,12 +6,41 @@ import { DependencyInjector, DependencyResolution } from './dependency-injector.
 import { ConfigurationManager, ValidationResult, ConfigSchema } from './configuration-manager.service';
 import { ServiceHealthMonitor, HealthReport, HealthStatus, AlertCallback } from './service-health-monitor.service';
 
-// Import and re-export types for compatibility
-import type { IService, ServiceRegistration } from './service-manager.old';
-import { ServiceState } from './service-manager.old';
+// Define core service management types directly
+export enum ServiceState {
+  /** Service is being initialized and dependencies are being resolved */
+  INITIALIZING = 'initializing',
+  /** Service is fully initialized and ready to handle requests */
+  READY = 'ready',
+  /** Service failed to initialize or encountered a critical error */
+  ERROR = 'error',
+  /** Service is being gracefully shut down */
+  SHUTTING_DOWN = 'shutting_down',
+  /** Service has been completely cleaned up and is no longer available */
+  DESTROYED = 'destroyed'
+}
 
-export type { IService, ServiceRegistration };
-export { ServiceState };
+export interface IService {
+  /** Unique service name for identification and dependency resolution */
+  readonly name: string;
+  /** Current service state in the lifecycle */
+  readonly state: ServiceState;
+  /** Initialize the service */
+  initialize(): Promise<void>;
+  /** Destroy the service */
+  destroy(): Promise<void>;
+  /** Check if service is ready */
+  isReady(): boolean;
+  /** Get service health status */
+  getHealth(): { healthy: boolean; details?: Record<string, unknown> };
+}
+
+export interface ServiceRegistration {
+  service: IService;
+  dependencies: string[];
+  priority: number;
+  autoStart: boolean;
+}
 
 /**
  * Simplified ServiceManager - Single Responsibility: Service Orchestration
@@ -67,7 +96,7 @@ export class ServiceManagerV2 {
    * Backward-compatible method that orchestrates service registration
    * across the registry and health monitoring components.
    */
-  registerService<T extends import('./service-manager.old').IService>(
+  registerService<T extends IService>(
     name: string,
     service: T,
     options: ServiceRegistrationOptions & {
@@ -105,7 +134,7 @@ export class ServiceManagerV2 {
   /**
    * Get a service instance by name
    */
-  getService<T extends import('./service-manager.old').IService>(name: string): T | undefined {
+  getService<T extends IService>(name: string): T | undefined {
     return this.registry.get<T>(name);
   }
 
@@ -280,8 +309,8 @@ export class ServiceManagerV2 {
   /**
    * Get all services (backward compatibility)
    */
-  getAllServices(): Map<string, import('./service-manager.old').IService> {
-    const servicesMap = new Map<string, import('./service-manager.old').IService>();
+  getAllServices(): Map<string, IService> {
+    const servicesMap = new Map<string, IService>();
 
     for (const serviceName of this.registry.getServiceNames()) {
       const service = this.registry.get(serviceName);
@@ -394,7 +423,7 @@ export const serviceManager = ServiceManagerV2.getInstance();
 export const serviceManagerV2 = serviceManager;
 
 // Convenience functions for backward compatibility
-export const getService = <T extends import('./service-manager.old').IService>(name: string): T | undefined => {
+export const getService = <T extends IService>(name: string): T | undefined => {
   return serviceManager.getService<T>(name);
 };
 
