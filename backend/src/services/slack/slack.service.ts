@@ -276,8 +276,7 @@ export class SlackService extends BaseService {
         data: {
           needsConfirmation: unified.needsConfirmation,
           draftId: unified.draftId,
-          draftContents: unified.draftContents,
-          toolResults: unified.toolResults
+          draftContents: unified.draftContents
         }
       };
 
@@ -714,7 +713,7 @@ Be concise but helpful. Slack users prefer shorter, actionable messages.
   private getIntentAnalysisService(): any {
     try {
       const serviceManager = require('../service-manager').serviceManager;
-      return serviceManager.getService('IntentAnalysisService');
+      return serviceManager.getService('intentAnalysisService');
     } catch {
       return null;
     }

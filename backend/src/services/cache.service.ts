@@ -1,7 +1,7 @@
 import { createClient, RedisClientType } from 'redis';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
-import { ServiceState } from "./service-manager";
+import { ServiceState } from '../types/service.types';
 // Use environment variables directly for Redis configuration
 
 export class CacheService extends BaseService {
@@ -9,6 +9,8 @@ export class CacheService extends BaseService {
   private isConnected = false;
   private readonly DEFAULT_TTL = 300; // 5 minutes
   private readonly REDIS_URL: string;
+  private memoryUsage: { used: number; peak: number; timestamp: number } = { used: 0, peak: 0, timestamp: Date.now() };
+  private connectionPool: Map<string, RedisClientType> = new Map();
 
   constructor() {
     super('cacheService');
@@ -200,15 +202,51 @@ export class CacheService extends BaseService {
   protected async onDestroy(): Promise<void> {
     try {
       if (this.client && this.isConnected) {
+        // Gracefully close the connection
         await this.client.quit();
-        
+        logger.debug('Redis connection closed gracefully', {
+          correlationId: `cache-destroy-${Date.now()}`,
+          operation: 'cache_service_destroy',
+          metadata: { phase: 'connection_closed' }
+        });
       }
       
+      // Clear client reference to prevent memory leaks
+      this.client = null;
       this.isConnected = false;
       
-    } catch (error) {
+      // Clean up connection pool
+      await this.cleanupConnectionPool();
       
-      throw error;
+      logger.debug('CacheService destroyed successfully', {
+        correlationId: `cache-destroy-${Date.now()}`,
+        operation: 'cache_service_destroy',
+        metadata: { phase: 'destroyed' }
+      });
+      
+    } catch (error) {
+      logger.error('Error during CacheService destruction', error as Error, {
+        correlationId: `cache-destroy-${Date.now()}`,
+        operation: 'cache_service_destroy',
+        metadata: { phase: 'destruction_error' }
+      });
+      
+      // Force cleanup even if quit() fails
+      if (this.client) {
+        try {
+          this.client.disconnect();
+        } catch (disconnectError) {
+          logger.warn('Error during forced disconnect', {
+            correlationId: `cache-destroy-${Date.now()}`,
+            operation: 'cache_service_destroy',
+            metadata: { phase: 'forced_disconnect_error', error: disconnectError }
+          });
+        }
+        this.client = null;
+      }
+      this.isConnected = false;
+      
+      // Don't throw - cleanup should always complete
     }
   }
 
@@ -408,6 +446,74 @@ export class CacheService extends BaseService {
     } catch (error) {
       
       return false;
+    }
+  }
+
+  /**
+   * Monitor memory usage and connection health
+   */
+  async monitorMemoryUsage(): Promise<void> {
+    if (!this.isAvailable()) {
+      return;
+    }
+
+    try {
+      const info = await this.client!.info('memory');
+      const memoryMatch = info.match(/used_memory:(\d+)/);
+      
+      if (memoryMatch) {
+        const used = parseInt(memoryMatch[1], 10);
+        this.memoryUsage.used = used;
+        this.memoryUsage.peak = Math.max(this.memoryUsage.peak, used);
+        this.memoryUsage.timestamp = Date.now();
+
+        // Log memory usage if it's high
+        if (used > 100 * 1024 * 1024) { // 100MB threshold
+          logger.warn('High memory usage detected', {
+            correlationId: `cache-memory-${Date.now()}`,
+            operation: 'memory_monitoring',
+            metadata: {
+              usedMB: Math.round(used / 1024 / 1024),
+              peakMB: Math.round(this.memoryUsage.peak / 1024 / 1024),
+              thresholdMB: 100
+            }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Error monitoring memory usage', error as Error, {
+        correlationId: `cache-memory-${Date.now()}`,
+        operation: 'memory_monitoring'
+      });
+    }
+  }
+
+  /**
+   * Get memory usage statistics
+   */
+  getMemoryStats(): { used: number; peak: number; timestamp: number; usedMB: number; peakMB: number } {
+    return {
+      ...this.memoryUsage,
+      usedMB: Math.round(this.memoryUsage.used / 1024 / 1024),
+      peakMB: Math.round(this.memoryUsage.peak / 1024 / 1024)
+    };
+  }
+
+  /**
+   * Clean up connection pool
+   */
+  private async cleanupConnectionPool(): Promise<void> {
+    for (const [key, client] of this.connectionPool.entries()) {
+      try {
+        await client.quit();
+        this.connectionPool.delete(key);
+      } catch (error) {
+        logger.warn('Error cleaning up connection pool', {
+          correlationId: `cache-cleanup-${Date.now()}`,
+          operation: 'connection_pool_cleanup',
+          metadata: { key, error: error instanceof Error ? error.message : 'Unknown error' }
+        });
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { ServiceState, IService } from "./service-manager";
+import { ServiceState, IService } from "../types/service.types";
 import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { retryManager, RetryConfig } from '../errors/retry-manager';
 import logger from '../utils/logger';

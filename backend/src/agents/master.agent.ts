@@ -4,14 +4,14 @@ import { serviceManager } from '../services/service-manager';
 // Extracted services
 import { IntentAnalysisService, AnalysisContext, IntentAnalysis } from '../services/intent-analysis.service';
 import { ContextManager, GatheredContext } from '../services/context-manager.service';
-import { ToolCallGenerator, ToolCallGenerationContext } from '../services/tool-call-generator.service';
+import { StringPlanningService, StringWorkflowContext, StringStepPlan } from '../services/string-planning.service';
 import { ResponseFormatter, FormattingContext, FormattedResponse } from '../services/response-formatter.service';
-import { ServiceCoordinator, ServiceCoordinationContext } from '../services/service-coordinator.service';
 import { DraftManager, Draft } from '../services/draft-manager.service';
+import { PlanReevaluationService } from '../services/plan-reevaluation.service';
+import { AgentFactory } from '../framework/agent-factory';
 
 // Types
 import { SlackContext } from '../types/slack/slack.types';
-import { ToolCall, ToolResult } from '../types/tools';
 
 /**
  * Simplified processing result interface
@@ -27,8 +27,6 @@ export interface ProcessingResult {
     body?: string;
     previewData: unknown;
   };
-  toolCall?: ToolCall;
-  toolResults?: ToolResult[];
   success: boolean;
   executionMetadata?: {
     processingTime?: number;
@@ -43,17 +41,17 @@ export interface ProcessingResult {
  *
  * Single Responsibility: Request Orchestration
  * - Orchestrates the processing pipeline using extracted services
- * - Manages the flow between intent analysis, context gathering, tool generation, and response formatting
+ * - Manages the flow between intent analysis, context gathering, planning, and response formatting
  * - Handles draft management and confirmation flows
  * - Provides a clean, simple interface for processing user requests
  */
 export class MasterAgent {
   private intentAnalysisService: IntentAnalysisService | null = null;
   private contextManager: ContextManager | null = null;
-  private toolCallGenerator: ToolCallGenerator | null = null;
+  private stringPlanningService: StringPlanningService | null = null;
   private responseFormatter: ResponseFormatter | null = null;
-  private serviceCoordinator: ServiceCoordinator | null = null;
   private draftManager: DraftManager | null = null;
+  private planReevaluationService: PlanReevaluationService | null = null;
 
   private isInitialized = false;
 
@@ -69,10 +67,10 @@ export class MasterAgent {
       // Get all required services
       this.intentAnalysisService = serviceManager.getService<IntentAnalysisService>('intentAnalysisService') || null;
       this.contextManager = serviceManager.getService<ContextManager>('contextManager') || null;
-      this.toolCallGenerator = serviceManager.getService<ToolCallGenerator>('toolCallGenerator') || null;
+      this.stringPlanningService = serviceManager.getService<StringPlanningService>('stringPlanningService') || null;
       this.responseFormatter = serviceManager.getService<ResponseFormatter>('responseFormatter') || null;
-      this.serviceCoordinator = serviceManager.getService<ServiceCoordinator>('serviceCoordinator') || null;
       this.draftManager = serviceManager.getService<DraftManager>('draftManager') || null;
+      this.planReevaluationService = serviceManager.getService<PlanReevaluationService>('planReevaluationService') || null;
 
       // Validate critical services
       if (!this.intentAnalysisService) {
@@ -81,14 +79,14 @@ export class MasterAgent {
       if (!this.contextManager) {
         throw new Error('ContextManager not available');
       }
-      if (!this.toolCallGenerator) {
-        throw new Error('ToolCallGenerator not available');
+      if (!this.stringPlanningService) {
+        throw new Error('StringPlanningService not available');
       }
       if (!this.responseFormatter) {
         throw new Error('ResponseFormatter not available');
       }
-      if (!this.serviceCoordinator) {
-        throw new Error('ServiceCoordinator not available');
+      if (!this.planReevaluationService) {
+        throw new Error('PlanReevaluationService not available');
       }
 
       this.isInitialized = true;
@@ -98,10 +96,10 @@ export class MasterAgent {
         services: [
           'intentAnalysisService',
           'contextManager',
-          'toolCallGenerator',
+          'stringPlanningService',
           'responseFormatter',
-          'serviceCoordinator',
-          'draftManager'
+          'draftManager',
+          'planReevaluationService'
         ]
       });
 
@@ -247,7 +245,7 @@ export class MasterAgent {
       case 'new_write_operation':
       case 'read_operation':
       case 'new_request':
-        return await this.handleToolExecution(
+        return await this.handleNaturalLanguageWorkflow(
           intent,
           gatheredContext,
           formattingContext,
@@ -362,7 +360,7 @@ export class MasterAgent {
     }
   }
 
-  private async handleToolExecution(
+  private async handleNaturalLanguageWorkflow(
     intent: IntentAnalysis,
     gatheredContext: GatheredContext,
     formattingContext: FormattingContext,
@@ -371,49 +369,44 @@ export class MasterAgent {
     slackContext?: SlackContext
   ): Promise<ProcessingResult> {
     try {
-      // Step 1: Generate tool calls
-      const toolCallContext: ToolCallGenerationContext = {
-        intent,
-        gatheredContext,
-        sessionId,
-        userId,
-        slackContext
+      // Step 1: Create workflow context with global textbox
+      const workflowContext: StringWorkflowContext = {
+        originalRequest: formattingContext.userInput,
+        intentDescription: intent.intentDescription,
+        intentType: intent.intentType,
+        currentStep: 1,
+        maxSteps: 10,
+        completedSteps: [],
+        stepResults: [],
+        globalContext: [],  // Global "textbox" for any service
+        userContext: {
+          sessionId,
+          userId,
+          slackContext
+        }
       };
 
-      const toolCalls = await this.toolCallGenerator!.generateToolCalls(toolCallContext);
+      // Step 2: Create comprehensive plan upfront
+      const comprehensivePlan = await this.stringPlanningService!.createComprehensivePlan(workflowContext);
+      workflowContext.comprehensivePlan = comprehensivePlan;
+      workflowContext.currentPlanStep = 1;
 
-      if (toolCalls.length === 0) {
+      if (comprehensivePlan.length === 0) {
         return this.createSuccessResult(
           "I understand what you're asking, but I'm not sure how to help with that right now. Could you try rephrasing your request?",
           formattingContext
         );
       }
 
-      // Step 2: Validate and enhance tool calls
-      const validationResult = await this.toolCallGenerator!.validateAndEnhanceToolCalls(
-        toolCalls,
-        toolCallContext
-      );
-
-      if (!validationResult.isValid) {
-        return this.createErrorResult(
-          `Tool validation failed: ${validationResult.errors.join(', ')}`,
-          formattingContext
-        );
-      }
-
-      // Step 3: Execute tool calls
-      return await this.executeToolCallsDirectly(
-        validationResult.enhancedToolCalls,
-        formattingContext,
-        sessionId,
-        userId,
-        slackContext
+      // Step 3: Execute plan step by step with reevaluation
+      return await this.executeComprehensiveWorkflow(
+        workflowContext,
+        formattingContext
       );
 
     } catch (error) {
-      logger.error('Failed to handle tool execution', { error, intent, sessionId });
-      return this.createErrorResult('Failed to execute tools', formattingContext);
+      logger.error('Failed to handle natural language workflow', { error, intent, sessionId });
+      return this.createErrorResult('Failed to execute workflow', formattingContext);
     }
   }
 
@@ -424,68 +417,129 @@ export class MasterAgent {
     );
   }
 
-  private async executeToolCallsDirectly(
-    toolCalls: ToolCall[],
-    formattingContext: FormattingContext,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext
+  private async executeComprehensiveWorkflow(
+    workflowContext: StringWorkflowContext,
+    formattingContext: FormattingContext
   ): Promise<ProcessingResult> {
-    // Step 1: Resolve dependencies
-    const requiredServices = await this.resolveServiceDependencies(toolCalls);
+    const maxSteps = 10;
 
-    // Step 2: Coordinate service execution
-    const coordinationContext: ServiceCoordinationContext = {
-      sessionId,
-      userId,
-      slackContext,
-      requiredServices
-    };
+    try {
+      while (workflowContext.currentPlanStep! <= workflowContext.comprehensivePlan!.length && 
+             workflowContext.currentStep <= maxSteps) {
+        
+        // Get next step from comprehensive plan
+        const step = await this.stringPlanningService!.getNextStepFromPlan(workflowContext);
+        
+        if (step === 'complete') {
+          break;
+        }
 
-    const executionResult = await this.serviceCoordinator!.coordinateServices(
-      toolCalls,
-      coordinationContext
-    );
+        logger.info('Executing comprehensive workflow step', {
+          stepNumber: workflowContext.currentPlanStep,
+          totalSteps: workflowContext.comprehensivePlan!.length,
+          stepDescription: step,
+          sessionId: workflowContext.userContext?.sessionId
+        });
 
-    // Step 3: Format response
-    const formattedResponse = await this.responseFormatter!.formatSuccessResponse(
-      executionResult.results,
-      formattingContext
-    );
+        // Execute current step using AgentFactory
+        const stepResult = await this.executeStepWithAgent(
+          step,
+          {
+            sessionId: workflowContext.userContext?.sessionId || '',
+            userId: workflowContext.userContext?.userId,
+            slackContext: workflowContext.userContext?.slackContext,
+            timestamp: new Date()
+          }
+        );
 
-    return this.convertResponseToProcessingResult(formattedResponse);
-  }
+        // Update workflow context with step information
+        workflowContext.completedSteps.push(step);
+        workflowContext.stepResults.push(stepResult.result || 'Step completed');
+        workflowContext.currentStepDescription = step;
+        workflowContext.currentStep++;
+        workflowContext.currentPlanStep!++;
 
-  private async resolveServiceDependencies(toolCalls: ToolCall[]): Promise<string[]> {
-    const services = new Set<string>();
+        // Reevaluate plan based on step result
+        const reevaluation = await this.planReevaluationService!.reevaluatePlan(
+          workflowContext, 
+          stepResult.result
+        );
 
-    for (const toolCall of toolCalls) {
-      const toolName = toolCall.name.toLowerCase();
+        if (reevaluation.earlyTermination) {
+          logger.info('Workflow terminated early', {
+            reason: reevaluation.reasoning,
+            sessionId: workflowContext.userContext?.sessionId
+          });
+          break;
+        }
 
-      if (toolName.includes('email') || toolName.includes('gmail')) {
-        services.add('gmailService');
-        services.add('tokenManager');
+        if (reevaluation.modifiedPlan) {
+          logger.info('Plan modified during execution', {
+            originalSteps: workflowContext.comprehensivePlan!.length,
+            newSteps: reevaluation.modifiedPlan.length,
+            reason: reevaluation.reasoning,
+            sessionId: workflowContext.userContext?.sessionId
+          });
+          workflowContext.comprehensivePlan = reevaluation.modifiedPlan;
+        }
       }
 
-      if (toolName.includes('calendar')) {
-        services.add('calendarService');
-        services.add('tokenManager');
-      }
+      // Format final response
+      const finalResponse = workflowContext.stepResults.join('\n\n');
+      return this.createSuccessResult(finalResponse, formattingContext);
 
-      if (toolName.includes('contact')) {
-        services.add('contactService');
-        services.add('tokenManager');
-      }
-
-      if (toolName.includes('slack')) {
-        services.add('slackService');
-      }
+    } catch (error) {
+      logger.error('Comprehensive workflow execution failed', { error, workflowContext });
+      return this.createErrorResult('Workflow execution failed', formattingContext);
     }
-
-    return Array.from(services);
   }
 
-  private async executeDraft(draft: Draft): Promise<ToolResult[]> {
+
+  private async executeStepWithAgent(
+    stepDescription: string,
+    context: {
+      sessionId: string;
+      userId?: string;
+      slackContext?: any;
+      timestamp: Date;
+    }
+  ): Promise<{ success: boolean; result: string; error?: string }> {
+    try {
+      // Use AgentFactory to find the best agent for this step
+      const agentResult = await AgentFactory.findBestAgentForRequest(stepDescription);
+      
+      if (!agentResult.agentName) {
+        return {
+          success: false,
+          result: 'No suitable agent found for this step',
+          error: 'Agent not found'
+        };
+      }
+
+      // Execute the step using the natural language agent
+      const executionResult = await AgentFactory.executeAgentWithNaturalLanguage(
+        agentResult.agentName,
+        stepDescription,
+        context
+      );
+
+      return {
+        success: executionResult.success,
+        result: executionResult.response || 'Step completed',
+        error: executionResult.error
+      };
+
+    } catch (error) {
+      logger.error('Failed to execute step with agent', { error, stepDescription });
+      return {
+        success: false,
+        result: 'Step execution failed',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private async executeDraft(draft: Draft): Promise<any[]> {
     if (!this.draftManager) {
       throw new Error('Draft manager not available');
     }
@@ -571,7 +625,6 @@ export class MasterAgent {
       needsConfirmation: response.needsConfirmation,
       draftId: response.draftId,
       draftContents: response.draftContents,
-      toolResults: response.toolResults,
       success: response.success,
       executionMetadata: response.executionMetadata
     };

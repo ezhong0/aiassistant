@@ -16,10 +16,7 @@ import { SlackService } from './slack/slack.service';
 import { SlackOAuthService } from './slack/slack-oauth.service';
 import { DraftManager } from './draft-manager.service';
 import { AuthStatusService } from './auth-status.service';
-import { ConfigService } from '../config/config.service';
-import { AIConfigService } from '../config/ai-config';
-import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
-import { SLACK_SERVICE_CONSTANTS } from '../config/slack-service-constants';
+import { ConfigService } from './config.service';
 
 /**
  * Register and initialize all core application services
@@ -47,7 +44,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization',
         metadata: {
-          serviceCount: 26, // Updated count: original 17 + 5 MasterAgent extractions + 4 ServiceManager decompositions
+          serviceCount: 20, // Updated count after cleanup
           environment: process.env.NODE_ENV
         }
       });
@@ -77,108 +74,61 @@ const registerCoreServices = async (): Promise<void> => {
   try {
     // 0. ConfigService - No dependencies, highest priority (configuration)
     const configService = new ConfigService();
-    serviceManager.registerService('configService', configService, {
-      priority: 1,
-      autoStart: true
-    });
+    serviceManager.registerService('configService', configService, []);
 
     // 1. AIConfigService - REMOVED: Consolidated into ConfigService
 
     // 2. DatabaseService - No dependencies, high priority
     // In development, we'll handle database failures gracefully in TokenStorageService
     const databaseService = new DatabaseService();
-    serviceManager.registerService('databaseService', databaseService, {
-      priority: 5,
-      autoStart: true
-    });
+    serviceManager.registerService('databaseService', databaseService, []);
 
     // 3. CacheService - Always register, handles DISABLE_REDIS internally
     const cacheService = new CacheService();
-    serviceManager.registerService('cacheService', cacheService, {
-      priority: 6,
-      autoStart: true
-    });
+    serviceManager.registerService('cacheService', cacheService, []);
 
     // 3b. OAuthStateService - depends on cacheService
     const oauthStateService = new OAuthStateService();
-    serviceManager.registerService('oauthStateService', oauthStateService, {
-      dependencies: ['cacheService'],
-      priority: 7,
-      autoStart: true
-    });
+    serviceManager.registerService('oauthStateService', oauthStateService, ['cacheService']);
 
     // 4. TokenStorageService - Depends on databaseService (replaces SessionService)
     const tokenStorageService = new TokenStorageService();
-    serviceManager.registerService('tokenStorageService', tokenStorageService, {
-      dependencies: ['databaseService'],
-      priority: 10,
-      autoStart: true
-    });
+    serviceManager.registerService('tokenStorageService', tokenStorageService, ['databaseService']);
 
     // 4b. AuthStatusService - Depends on tokenStorageService
     const authStatusService = new AuthStatusService();
-    serviceManager.registerService('authStatusService', authStatusService, {
-      dependencies: ['tokenStorageService'],
-      priority: 11,
-      autoStart: true
-    });
+    serviceManager.registerService('authStatusService', authStatusService, ['tokenStorageService']);
 
     // 5. AuthService - No external dependencies
     const authService = new AuthService();
-    serviceManager.registerService('authService', authService, {
-      priority: 15,
-      autoStart: true
-    });
+    serviceManager.registerService('authService', authService, []);
 
     // 6. TokenManager - Depends on tokenStorageService and authService
     const tokenManager = new TokenManager();
-    serviceManager.registerService('tokenManager', tokenManager, {
-      dependencies: ['tokenStorageService', 'authService'],
-      priority: 17,
-      autoStart: true
-    });
+    serviceManager.registerService('tokenManager', tokenManager, ['tokenStorageService', 'authService']);
 
     // 7. ToolExecutorService - Now depends on tokenStorageService instead of sessionService
     // Note: confirmationService depends on toolExecutorService, so we can't add it as a dependency here
     const toolExecutorService = new ToolExecutorService();
-    serviceManager.registerService('toolExecutorService', toolExecutorService, {
-      dependencies: ['tokenStorageService'],
-      priority: 25,
-      autoStart: true
-    });
+    serviceManager.registerService('toolExecutorService', toolExecutorService, ['tokenStorageService']);
 
     // 10. ContactService - Depends on authService
     const contactService = new ContactService();
-    serviceManager.registerService('contactService', contactService, {
-      dependencies: ['authService'],
-      priority: 30,
-      autoStart: true
-    });
+    serviceManager.registerService('contactService', contactService, ['authService']);
 
     // 11. GmailService - Depends on authService
     const gmailService = new GmailService();
-    serviceManager.registerService('gmailService', gmailService, {
-      dependencies: ['authService'],
-      priority: 35,
-      autoStart: true
-    });
+    serviceManager.registerService('gmailService', gmailService, ['authService']);
 
     // 12. CalendarService - No dependencies (handles auth internally)
     const calendarService = new CalendarService();
-    serviceManager.registerService('calendarService', calendarService, {
-      dependencies: [], // No dependencies - uses OAuth tokens passed to methods
-      priority: 20, // Higher priority since it has no dependencies
-      autoStart: true
-    });
+    serviceManager.registerService('calendarService', calendarService, []);
 
     // 8. OpenAIService - Critical AI service, high priority
     const openaiService = new OpenAIService({
       apiKey: process.env.OPENAI_API_KEY || 'dummy-key'
     });
-    serviceManager.registerService('openaiService', openaiService, {
-      priority: 15, // High priority - critical for AI-first architecture
-      autoStart: true
-    });
+    serviceManager.registerService('openaiService', openaiService, []);
 
     // 9. AIServiceCircuitBreaker - Depends on OpenAI service
     const aiCircuitBreaker = new AIServiceCircuitBreaker({
@@ -187,11 +137,7 @@ const registerCoreServices = async (): Promise<void> => {
       successThreshold: 3,
       timeout: 30000
     });
-    serviceManager.registerService('aiCircuitBreakerService', aiCircuitBreaker, {
-      dependencies: ['openaiService'],
-      priority: 16, // Just after OpenAI service
-      autoStart: true
-    });
+    serviceManager.registerService('aiCircuitBreakerService', aiCircuitBreaker, ['openaiService']);
 
 
 
@@ -210,11 +156,7 @@ const registerCoreServices = async (): Promise<void> => {
         enableDMOnlyMode: true,
         enableAsyncProcessing: true
       });
-      serviceManager.registerService('slackService', slackService, {
-        dependencies: ['tokenManager', 'toolExecutorService'],
-        priority: 70,
-        autoStart: true
-      });
+      serviceManager.registerService('slackService', slackService, ['tokenManager', 'toolExecutorService']);
     }
 
     // 12. SlackOAuthService - Dedicated service for Slack OAuth operations
@@ -234,11 +176,7 @@ const registerCoreServices = async (): Promise<void> => {
           'https://www.googleapis.com/auth/contacts.readonly'
         ]
       });
-      serviceManager.registerService('slackOAuthService', slackOAuthService, {
-        dependencies: ['tokenManager'],
-        priority: 75,
-        autoStart: true
-      });
+      serviceManager.registerService('slackOAuthService', slackOAuthService, ['tokenManager']);
     }
 
 
@@ -273,118 +211,44 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 38. DraftManager - Draft creation, storage, and execution for confirmation system
     const draftManager = new DraftManager();
-    serviceManager.registerService('draftManager', draftManager, {
-      dependencies: ['cacheService', 'toolExecutorService'],
-      priority: 51, // After cache and tool executor
-      autoStart: true
-    });
+    serviceManager.registerService('draftManager', draftManager, ['cacheService', 'toolExecutorService']);
 
     // 39. MasterAgentService - REMOVED: MasterAgent created directly in SlackService
-
-    // 38. IntentAnalysisService - REMOVED to consolidate planning in StringPlanningService
-    // const intentAnalysisService = new IntentAnalysisService();
-    // serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
-    //   dependencies: ['openaiService'],
-    //   priority: 55, // After OpenAI service, before workflow execution
-    //   autoStart: true
-    // });
-
-
     // 42. LEGACY: NextStepPlanningService - REMOVED: Replaced by StringPlanningService
 
     // 42b. StringPlanningService - Simple string-based workflow planning
     const { StringPlanningService } = await import('./string-planning.service');
     const stringPlanningService = new StringPlanningService();
-    serviceManager.registerService('stringPlanningService', stringPlanningService, {
-      dependencies: ['openaiService'],
-      priority: 59, // Higher priority than legacy NextStepPlanningService
-      autoStart: true
-    });
+    serviceManager.registerService('stringPlanningService', stringPlanningService, ['openaiService']);
 
     // 43. IntentAnalysisService - Extracted from MasterAgent for SRP compliance
     const { IntentAnalysisService } = await import('./intent-analysis.service');
     const intentAnalysisService = new IntentAnalysisService();
-    serviceManager.registerService('intentAnalysisService', intentAnalysisService, {
-      dependencies: ['openaiService', 'draftManager'],
-      priority: 60,
-      autoStart: true
-    });
+    serviceManager.registerService('intentAnalysisService', intentAnalysisService, ['openaiService', 'draftManager']);
 
     // 44. ContextManager - Extracted from MasterAgent for SRP compliance
     const { ContextManager } = await import('./context-manager.service');
     const contextManager = new ContextManager();
-    serviceManager.registerService('contextManager', contextManager, {
-      dependencies: ['cacheService'],
-      priority: 61,
-      autoStart: true
-    });
+    serviceManager.registerService('contextManager', contextManager, ['cacheService']);
 
-    // 45. ToolCallGenerator - Extracted from MasterAgent for SRP compliance
-    const { ToolCallGenerator } = await import('./tool-call-generator.service');
-    const toolCallGenerator = new ToolCallGenerator();
-    serviceManager.registerService('toolCallGenerator', toolCallGenerator, {
-      dependencies: ['contactService'],
-      priority: 62,
-      autoStart: true
-    });
+    // 45. ToolCallGenerator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
 
     // 46. ResponseFormatter - Extracted from MasterAgent for SRP compliance
     const { ResponseFormatter } = await import('./response-formatter.service');
     const responseFormatter = new ResponseFormatter();
-    serviceManager.registerService('responseFormatter', responseFormatter, {
-      dependencies: ['openaiService'],
-      priority: 63,
-      autoStart: true
-    });
+    serviceManager.registerService('responseFormatter', responseFormatter, ['openaiService']);
 
-    // 47. ServiceCoordinator - Extracted from MasterAgent for SRP compliance
-    const { ServiceCoordinator } = await import('./service-coordinator.service');
-    const serviceCoordinator = new ServiceCoordinator();
-    serviceManager.registerService('serviceCoordinator', serviceCoordinator, {
-      dependencies: ['toolExecutorService', 'tokenManager'],
-      priority: 64,
-      autoStart: true
-    });
+    // 47. PlanReevaluationService - Analyzes step results and modifies plans
+    const { PlanReevaluationService } = await import('./plan-reevaluation.service');
+    const planReevaluationService = new PlanReevaluationService();
+    serviceManager.registerService('planReevaluationService', planReevaluationService, ['openaiService']);
+
+    // 47. ServiceCoordinator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
 
-    // NEW: ServiceManager Decomposition Components (Task 6 - SRP Compliance)
-    // These services decompose the original ServiceManager into focused components
-
-    // 48. ServiceRegistry - Service Discovery & Registration
-    const { ServiceRegistry } = await import('./service-registry.service');
-    const serviceRegistry = new ServiceRegistry();
-    serviceManager.registerService('serviceRegistry', serviceRegistry, {
-      priority: 70,
-      autoStart: true
-    });
-
-    // 49. DependencyInjector - Dependency Resolution & Injection
-    const { DependencyInjector } = await import('./dependency-injector.service');
-    const dependencyInjector = new DependencyInjector(serviceRegistry);
-    serviceManager.registerService('dependencyInjector', dependencyInjector, {
-      dependencies: ['serviceRegistry'],
-      priority: 71,
-      autoStart: true
-    });
-
-    // 50. ConfigurationManager - Configuration Loading & Validation
-    const { ConfigurationManager } = await import('./configuration-manager.service');
-    const configurationManager = new ConfigurationManager();
-    serviceManager.registerService('configurationManager', configurationManager, {
-      priority: 72,
-      autoStart: true
-    });
-
-    // 51. ServiceHealthMonitor - Service Health Monitoring
-    const { ServiceHealthMonitor } = await import('./service-health-monitor.service');
-    const serviceHealthMonitor = new ServiceHealthMonitor(serviceRegistry);
-    serviceManager.registerService('serviceHealthMonitor', serviceHealthMonitor, {
-      dependencies: ['serviceRegistry'],
-      priority: 73,
-      autoStart: true
-    });
+    // ServiceManager is now simplified and doesn't need separate components
 
   } catch (error) {
     logger.error('Failed to register core services', error as Error, {

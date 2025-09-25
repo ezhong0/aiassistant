@@ -10,12 +10,18 @@ import { PromptUtils } from '../utils/prompt-utils';
  */
 export interface StringWorkflowContext {
   originalRequest: string;
+  intentDescription?: string;     // Natural language description of user intent
+  intentType?: string;           // Type of intent (read_operation, new_write_operation, etc.)
   currentStep: number;
   maxSteps: number;
   completedSteps: string[];
   stepResults: string[];
+  currentStepDescription?: string; // Current step being executed
   userContext?: any;
   agentContext?: AgentExecutionContext; // For timezone/locale/preferences
+  globalContext: string[];       // Global "textbox" for any service to add useful information
+  comprehensivePlan?: string[];  // Full plan created upfront
+  currentPlanStep?: number;     // Which step in comprehensive plan we're on
 }
 
 /**
@@ -181,6 +187,84 @@ export class StringPlanningService extends BaseService {
   }
 
   /**
+   * Create prompt for comprehensive planning
+   */
+  private createComprehensivePlanningPrompt(context: StringWorkflowContext): string {
+    const temporalContext = context.agentContext
+      ? PromptUtils.getTemporalContext(context.agentContext)
+      : `Current date/time: ${new Date().toLocaleString('en-US')}`;
+
+    const requestDescription = context.intentDescription || context.originalRequest;
+    const intentType = context.intentType ? ` (Intent: ${context.intentType})` : '';
+
+    return `${temporalContext}
+
+CREATE COMPREHENSIVE PLAN:
+
+User Intent: "${requestDescription}"${intentType}
+Original Request: "${context.originalRequest}"
+
+GLOBAL CONTEXT (any service can add useful information here):
+${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No global context yet'}
+
+PLANNING INSTRUCTIONS:
+1. Analyze what the user wants to accomplish
+2. Break it down into logical, sequential steps
+3. Each step should be a clear, specific instruction for an agent
+4. Consider dependencies between steps
+5. Include timeframes from temporal context above
+6. Maximum 10 steps to avoid complexity
+
+Return JSON:
+{
+  "reasoning": {
+    "analysis": "What does the user want to accomplish?",
+    "approach": "What's the best strategy to achieve this?",
+    "considerations": ["Important factors to consider", "Potential challenges", "Dependencies"]
+  },
+  "steps": [
+    "Step 1: Clear, specific instruction for agent",
+    "Step 2: Next logical step",
+    "..."
+  ]
+}
+
+Guidelines:
+- Use natural, conversational language for each step
+- Be specific and include timeframes from temporal context
+- Each step should be actionable by an agent
+- Consider the global context when planning`;
+  }
+
+  /**
+   * Validate comprehensive plan response
+   */
+  private validateComprehensivePlanResponse(response: any): { reasoning: any; steps: string[] } {
+    if (!response || typeof response !== 'object') {
+      throw new Error('Invalid AI response format for comprehensive plan');
+    }
+
+    if (!response.reasoning || typeof response.reasoning !== 'object') {
+      throw new Error('AI response missing reasoning for comprehensive plan');
+    }
+
+    if (!Array.isArray(response.steps) || response.steps.length === 0) {
+      throw new Error('AI response missing valid steps array');
+    }
+
+    return {
+      reasoning: {
+        analysis: response.reasoning.analysis || 'No analysis provided',
+        approach: response.reasoning.approach || 'No approach specified',
+        considerations: Array.isArray(response.reasoning.considerations) 
+          ? response.reasoning.considerations 
+          : []
+      },
+      steps: response.steps.map((step: any) => String(step).trim()).filter((step: string) => step.length > 0)
+    };
+  }
+
+  /**
    * Create Chain-of-Thought prompt for step planning
    */
   private createStringPlanningPrompt(context: StringWorkflowContext): string {
@@ -189,10 +273,18 @@ export class StringPlanningService extends BaseService {
       ? PromptUtils.getTemporalContext(context.agentContext)
       : `Current date/time: ${new Date().toLocaleString('en-US')}`;
 
+    // Use interpreted intent when available, fall back to original request
+    const requestDescription = context.intentDescription || context.originalRequest;
+    const intentType = context.intentType ? ` (Intent: ${context.intentType})` : '';
+
     let prompt = `${temporalContext}
 
+User Intent: "${requestDescription}"${intentType}
 Original Request: "${context.originalRequest}"
 Current Step: ${context.currentStep}/${context.maxSteps}
+
+GLOBAL CONTEXT (any service can add useful information here):
+${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No global context yet'}
 `;
 
     if (context.completedSteps.length > 0) {
@@ -284,6 +376,127 @@ Guidelines:
   }
 
   /**
+   * Create a comprehensive plan upfront instead of step-by-step
+   */
+  async createComprehensivePlan(context: StringWorkflowContext): Promise<string[]> {
+    const correlationId = `comprehensive-planning-${Date.now()}`;
+
+    try {
+      logger.info('Creating comprehensive plan', {
+        correlationId,
+        originalRequest: context.originalRequest.substring(0, 100),
+        intentDescription: context.intentDescription,
+        operation: 'comprehensive_planning'
+      });
+
+      if (!this.openaiService) {
+        throw new Error('AI service required for comprehensive planning');
+      }
+
+      const prompt = this.createComprehensivePlanningPrompt(context);
+
+      logger.debug('🔍 COMPREHENSIVE PLANNING - SENDING TO AI', {
+        correlationId,
+        promptLength: prompt.length,
+        prompt: prompt.substring(0, 500) + '...',
+        operation: 'comprehensive_planning_ai_request'
+      });
+
+      const response = await this.openaiService.generateStructuredData(
+        context.originalRequest,
+        prompt,
+        {
+          type: 'object',
+          properties: {
+            reasoning: {
+              type: 'object',
+              properties: {
+                analysis: { type: 'string' },
+                approach: { type: 'string' },
+                considerations: { type: 'array', items: { type: 'string' } }
+              },
+              required: ['analysis', 'approach', 'considerations']
+            },
+            steps: {
+              type: 'array',
+              items: { type: 'string' },
+              minItems: 1,
+              maxItems: 10
+            }
+          },
+          required: ['reasoning', 'steps']
+        },
+        {
+          temperature: 0.3,
+          maxTokens: 800
+        }
+      );
+
+      const plan = this.validateComprehensivePlanResponse(response);
+      
+      // Add planning reasoning to global context
+      await this.addToGlobalContext(context, `Comprehensive plan created: ${plan.reasoning.approach}`);
+
+      logger.info('Comprehensive plan created', {
+        correlationId,
+        stepCount: plan.steps.length,
+        approach: plan.reasoning.approach,
+        operation: 'comprehensive_plan_created'
+      });
+
+      return plan.steps;
+
+    } catch (error) {
+      logger.error('Comprehensive planning failed', error as Error, {
+        correlationId,
+        operation: 'comprehensive_planning_error',
+        metadata: {
+          originalRequest: context.originalRequest.substring(0, 100)
+        }
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get the next step from the comprehensive plan
+   */
+  async getNextStepFromPlan(context: StringWorkflowContext): Promise<string> {
+    if (!context.comprehensivePlan || !context.currentPlanStep) {
+      return 'complete';
+    }
+
+    const stepIndex = context.currentPlanStep - 1;
+    const step = context.comprehensivePlan[stepIndex];
+    
+    if (!step) {
+      return 'complete';
+    }
+
+    logger.debug('Retrieved next step from comprehensive plan', {
+      currentPlanStep: context.currentPlanStep,
+      totalSteps: context.comprehensivePlan.length,
+      step: step.substring(0, 100)
+    });
+
+    return step;
+  }
+
+  /**
+   * Add information to the global context "textbox"
+   */
+  async addToGlobalContext(context: StringWorkflowContext, info: string): Promise<void> {
+    const timestamp = new Date().toISOString();
+    context.globalContext.push(`${timestamp}: ${info}`);
+    
+    logger.debug('Added to global context', {
+      info: info.substring(0, 100),
+      totalContextEntries: context.globalContext.length
+    });
+  }
+
+  /**
    * Analyze step result to understand what was accomplished
    */
   async analyzeStepResult(
@@ -307,6 +520,9 @@ Step: "${stepDescription}"
 Result: "${stepResult.substring(0, 500)}"
 
 Original Request: "${context.originalRequest}"
+
+GLOBAL CONTEXT (any service can add useful information here):
+${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No global context yet'}
 
 Previous ${context.completedSteps.length} steps:
 ${context.completedSteps.map((s, i) =>

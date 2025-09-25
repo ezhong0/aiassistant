@@ -11,13 +11,13 @@ export interface IntentAnalysis {
   intentType: 'confirmation_positive' | 'confirmation_negative' | 'draft_modification' | 'new_request' | 'new_write_operation' | 'read_operation';
   confidence: number;
   reasoning: string;
+  intentDescription: string; // Natural language description of what the user wants
   targetDraftId?: string;
   modifications?: {
     fieldsToUpdate: string[];
     newValues: Record<string, unknown>;
   };
   newOperation?: WriteOperation;
-  readOperations?: ToolCall[];
 }
 
 export interface AnalysisContext {
@@ -164,21 +164,18 @@ export class IntentAnalysisService extends BaseService {
         break;
 
       case 'read_operation':
-        if (intent.readOperations) {
-          for (const operation of intent.readOperations) {
-            if (operation.name.includes('email') || operation.name.includes('gmail')) {
-              dependencies.add('gmailService');
-              dependencies.add('tokenManager');
-            }
-            if (operation.name.includes('calendar')) {
-              dependencies.add('calendarService');
-              dependencies.add('tokenManager');
-            }
-            if (operation.name.includes('contact')) {
-              dependencies.add('contactService');
-              dependencies.add('tokenManager');
-            }
-          }
+        // For read operations, we'll determine dependencies based on intent description
+        if (intent.intentDescription.toLowerCase().includes('email') || intent.intentDescription.toLowerCase().includes('gmail')) {
+          dependencies.add('gmailService');
+          dependencies.add('tokenManager');
+        }
+        if (intent.intentDescription.toLowerCase().includes('calendar')) {
+          dependencies.add('calendarService');
+          dependencies.add('tokenManager');
+        }
+        if (intent.intentDescription.toLowerCase().includes('contact')) {
+          dependencies.add('contactService');
+          dependencies.add('tokenManager');
         }
         break;
 
@@ -245,11 +242,14 @@ Your task is to analyze the user's intent and classify it into one of these cate
 6. **new_request** - General new request that may require multiple steps
    - Examples: complex tasks, multi-step operations
 
+IMPORTANT: Focus on providing a clear, natural language description of what the user wants to accomplish. This description will be used by other services to plan and execute the appropriate actions.
+
 RESPONSE FORMAT (JSON):
 {
   "intentType": "<category>",
   "confidence": <0.0-1.0>,
   "reasoning": "<explanation>",
+  "intentDescription": "<natural_language_description_of_what_user_wants>",
   "targetDraftId": "<draft_id_if_applicable>",
   "modifications": {
     "fieldsToUpdate": ["<field_names>"],
@@ -259,13 +259,7 @@ RESPONSE FORMAT (JSON):
     "type": "<email|calendar|contact>",
     "action": "<send|create|schedule>",
     "parameters": {}
-  },
-  "readOperations": [
-    {
-      "name": "<operation_name>",
-      "parameters": {}
-    }
-  ]
+  }
 }
 
 Analyze the intent and respond with valid JSON only.`;
@@ -279,7 +273,7 @@ Analyze the intent and respond with valid JSON only.`;
       // Try direct JSON parsing first
       const directParse = this.tryDirectJsonParse(response);
       if (directParse) {
-        return this.validateAndFormatIntent(directParse);
+        return this.validateAndFormatIntent(directParse, context);
       }
 
       throw new Error('No valid JSON found in response');
@@ -305,7 +299,7 @@ Analyze the intent and respond with valid JSON only.`;
   /**
    * Validate and format intent analysis result
    */
-  private validateAndFormatIntent(parsed: any): IntentAnalysis {
+  private validateAndFormatIntent(parsed: any, context: AnalysisContext): IntentAnalysis {
     // Validate required fields
     if (!parsed.intentType || !parsed.confidence || !parsed.reasoning) {
       throw new Error('Missing required fields in response');
@@ -330,10 +324,10 @@ Analyze the intent and respond with valid JSON only.`;
       intentType: parsed.intentType,
       confidence: parsed.confidence,
       reasoning: parsed.reasoning,
+      intentDescription: parsed.intentDescription || context.userInput,
       targetDraftId: parsed.targetDraftId,
       modifications: parsed.modifications,
-      newOperation: parsed.newOperation,
-      readOperations: parsed.readOperations
+      newOperation: parsed.newOperation
     };
   }
 
@@ -348,7 +342,8 @@ Analyze the intent and respond with valid JSON only.`;
       return {
         intentType: 'confirmation_positive',
         confidence: 0.8,
-        reasoning: 'Keyword-based detection of positive confirmation'
+        reasoning: 'Keyword-based detection of positive confirmation',
+        intentDescription: 'User is confirming or approving a pending action'
       };
     }
 
@@ -356,7 +351,8 @@ Analyze the intent and respond with valid JSON only.`;
       return {
         intentType: 'confirmation_negative',
         confidence: 0.8,
-        reasoning: 'Keyword-based detection of negative confirmation'
+        reasoning: 'Keyword-based detection of negative confirmation',
+        intentDescription: 'User is rejecting or cancelling a pending action'
       };
     }
 
@@ -364,7 +360,8 @@ Analyze the intent and respond with valid JSON only.`;
       return {
         intentType: 'draft_modification',
         confidence: 0.7,
-        reasoning: 'Keyword-based detection of draft modification'
+        reasoning: 'Keyword-based detection of draft modification',
+        intentDescription: 'User wants to modify an existing draft'
       };
     }
 
@@ -373,6 +370,7 @@ Analyze the intent and respond with valid JSON only.`;
         intentType: 'new_write_operation',
         confidence: 0.7,
         reasoning: 'Keyword-based detection of email operation',
+        intentDescription: 'User wants to send an email',
         newOperation: {
           type: 'email',
           operation: 'send',
@@ -394,7 +392,8 @@ Analyze the intent and respond with valid JSON only.`;
       return {
         intentType: 'read_operation',
         confidence: 0.6,
-        reasoning: 'Keyword-based detection of read operation'
+        reasoning: 'Keyword-based detection of read operation',
+        intentDescription: 'User wants to view or search for information'
       };
     }
 
@@ -402,7 +401,8 @@ Analyze the intent and respond with valid JSON only.`;
     return {
       intentType: 'new_request',
       confidence: 0.5,
-      reasoning: 'Fallback analysis - treating as new request'
+      reasoning: 'Fallback analysis - treating as new request',
+      intentDescription: context.userInput
     };
   }
 }

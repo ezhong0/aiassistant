@@ -1,4 +1,6 @@
 import logger from '../utils/logger';
+import { serviceManager } from '../services/service-manager';
+import { OpenAIService } from '../services/openai.service';
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agents/agent.types';
 import { EmailAgent } from '../agents/email.agent';
@@ -391,67 +393,89 @@ export class AgentFactory {
       };
     }
 
-    // Simple keyword-based matching for now
-    const lowerRequest = request.toLowerCase();
-    let bestAgent: string | null = null;
-    let bestScore = 0;
-    let reasoning = '';
-
-    for (const agentName of nlAgents) {
-      const caps = capabilities[agentName];
-      if (!caps) continue;
-
-      let score = 0;
-      const matchReasons: string[] = [];
-
-      // Check capabilities
-      for (const capability of caps.capabilities) {
-        if (lowerRequest.includes(capability.toLowerCase())) {
-          score += 2;
-          matchReasons.push(`matches capability: ${capability}`);
-        }
-      }
-
-      // Check examples
-      for (const example of caps.examples) {
-        const similarity = this.calculateSimilarity(lowerRequest, example.toLowerCase());
-        if (similarity > 0.3) {
-          score += similarity;
-          matchReasons.push(`similar to example: ${example}`);
-        }
-      }
-
-      // Check domains
-      if (caps.domains) {
-        for (const domain of caps.domains) {
-          if (lowerRequest.includes(domain.toLowerCase())) {
-            score += 1;
-            matchReasons.push(`matches domain: ${domain}`);
-          }
-        }
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestAgent = agentName;
-        reasoning = `Selected ${caps.name}: ${matchReasons.join(', ')}`;
-      }
-    }
-
-    // No fallback - let caller handle the case where no suitable agent is found
-    if (!bestAgent) {
+    // Use LLM to determine the best agent
+    const openaiService = serviceManager.getService<OpenAIService>('openaiService');
+    if (!openaiService) {
       return {
         agentName: null,
         confidence: 0,
-        reasoning: 'No suitable agent found for this request'
+        reasoning: 'OpenAI service not available for agent selection'
       };
     }
 
-    return {
-      agentName: bestAgent || null,
-      confidence: Math.min(bestScore / 3, 1), // Normalize to 0-1
-      reasoning
-    };
+    // Build agent descriptions for LLM
+    const agentDescriptions = nlAgents.map(agentName => {
+      const caps = capabilities[agentName];
+      if (!caps) return '';
+      
+      return `${caps.name}: ${caps.description || 'No description available'}
+Capabilities: ${caps.capabilities?.join(', ') || 'No capabilities listed'}
+Examples: ${caps.examples?.join(', ') || 'No examples provided'}
+Domains: ${caps.domains?.join(', ') || 'No domains specified'}`;
+    }).filter(desc => desc.length > 0);
+
+    const prompt = `You are an AI agent selector. Your job is to determine which agent should handle a user request.
+
+AVAILABLE AGENTS:
+${agentDescriptions.join('\n\n')}
+
+USER REQUEST: "${request}"
+
+ANALYZE STEP-BY-STEP:
+1. What does the user want to accomplish?
+2. Which agent's capabilities best match this request?
+3. What is your confidence level?
+
+Return JSON:
+{
+  "reasoning": "Step-by-step analysis of why this agent was selected",
+  "selectedAgent": "agent_name",
+  "confidence": 0.95
+}`;
+
+    try {
+      const response = await openaiService.generateStructuredData(
+        request,
+        prompt,
+        {
+          type: 'object',
+          properties: {
+            reasoning: { type: 'string' },
+            selectedAgent: { type: 'string' },
+            confidence: { type: 'number', minimum: 0, maximum: 1 }
+          },
+          required: ['reasoning', 'selectedAgent', 'confidence']
+        },
+        { temperature: 0.3, maxTokens: 400 }
+      ) as {
+        reasoning: string;
+        selectedAgent: string;
+        confidence: number;
+      };
+
+      // Validate that the selected agent exists
+      if (nlAgents.includes(response.selectedAgent)) {
+        return {
+          agentName: response.selectedAgent,
+          confidence: response.confidence,
+          reasoning: response.reasoning
+        };
+      } else {
+        return {
+          agentName: null,
+          confidence: 0,
+          reasoning: `Selected agent '${response.selectedAgent}' not found in available agents`
+        };
+      }
+
+    } catch (error) {
+      logger.error('LLM-based agent selection failed', { error, request });
+      return {
+        agentName: null,
+        confidence: 0,
+        reasoning: 'LLM-based agent selection failed'
+      };
+    }
   }
 
   /**

@@ -1,143 +1,91 @@
 import logger from '../utils/logger';
+import { BaseService } from './base-service';
+import { ServiceState, IService } from '../types/service.types';
 
-// Import the focused service components
-import { ServiceRegistry, ServiceInfo, ServiceRegistrationOptions } from './service-registry.service';
-import { DependencyInjector, DependencyResolution } from './dependency-injector.service';
-import { ConfigurationManager, ValidationResult, ConfigSchema } from './configuration-manager.service';
-import { ServiceHealthMonitor, HealthReport, HealthStatus, AlertCallback } from './service-health-monitor.service';
+/**
+ * Simplified Service Registration System
+ * 
+ * This replaces the complex dependency injection system with a simple,
+ * straightforward service registration approach that follows the
+ * principle of simplicity over complexity.
+ */
 
-// Define core service management types directly
-export enum ServiceState {
-  /** Service instance created but not yet initialized */
-  CREATED = 'created',
-  /** Service is being initialized and dependencies are being resolved */
-  INITIALIZING = 'initializing',
-  /** Service is fully initialized and ready to handle requests */
-  READY = 'ready',
-  /** Service failed to initialize or encountered a critical error */
-  ERROR = 'error',
-  /** Service is being gracefully shut down */
-  SHUTTING_DOWN = 'shutting_down',
-  /** Service has been completely cleaned up and is no longer available */
-  DESTROYED = 'destroyed'
-}
-
-export interface IService {
-  /** Unique service name for identification and dependency resolution */
-  readonly name: string;
-  /** Current service state in the lifecycle */
-  readonly state: ServiceState;
-  /** Initialize the service */
-  initialize(): Promise<void>;
-  /** Destroy the service */
-  destroy(): Promise<void>;
-  /** Check if service is ready */
-  isReady(): boolean;
-  /** Get service health status */
-  getHealth(): { healthy: boolean; details?: Record<string, unknown> };
-}
-
-export interface ServiceRegistration {
-  service: IService;
-  dependencies: string[];
-  priority: number;
-  autoStart: boolean;
+export interface SimpleService extends IService {
+  // Additional methods can be added here if needed
 }
 
 /**
- * Simplified ServiceManager - Single Responsibility: Service Orchestration
- *
- * This refactored ServiceManager follows SRP by orchestrating the focused
- * service components rather than implementing all functionality directly.
- * It provides a clean facade over the decomposed service management architecture.
- *
- * Responsibilities:
- * - Orchestrate service registration, injection, configuration, and monitoring
- * - Provide backward-compatible API for existing code
- * - Handle graceful shutdown coordination
- * - Manage service lifecycle coordination
+ * Service registration entry
  */
-export class ServiceManagerV2 {
-  private static instance: ServiceManagerV2;
+interface ServiceEntry {
+  service: SimpleService;
+  dependencies: string[];
+  initialized: boolean;
+}
 
-  private registry: ServiceRegistry;
-  private injector: DependencyInjector;
-  private configManager: ConfigurationManager;
-  private healthMonitor: ServiceHealthMonitor;
+/**
+ * Service Manager
+ * 
+ * This provides a clean, straightforward service registration and management system
+ * that focuses on essential functionality without over-engineering.
+ */
+export class ServiceManager {
+  private static instance: ServiceManager;
+  private services: Map<string, ServiceEntry> = new Map();
   private isShuttingDown = false;
 
   private constructor() {
-    // Initialize the focused components
-    this.registry = new ServiceRegistry();
-    this.injector = new DependencyInjector(this.registry);
-    this.configManager = new ConfigurationManager();
-    this.healthMonitor = new ServiceHealthMonitor(this.registry);
-
     this.setupGracefulShutdown();
-
-    logger.info('ServiceManagerV2 initialized with decomposed architecture', {
-      correlationId: `service-manager-v2-${Date.now()}`,
+    logger.info('ServiceManager initialized', {
+      correlationId: `service-manager-${Date.now()}`,
       operation: 'service_manager_init',
-      metadata: { architecture: 'decomposed', components: 4 }
+      metadata: { architecture: 'simplified' }
     });
   }
 
-  /**
-   * Get the singleton instance
-   */
-  static getInstance(): ServiceManagerV2 {
-    if (!ServiceManagerV2.instance) {
-      ServiceManagerV2.instance = new ServiceManagerV2();
+  static getInstance(): ServiceManager {
+    if (!ServiceManager.instance) {
+      ServiceManager.instance = new ServiceManager();
     }
-    return ServiceManagerV2.instance;
+    return ServiceManager.instance;
   }
 
   /**
-   * Register a service with dependency injection support
-   *
-   * Backward-compatible method that orchestrates service registration
-   * across the registry and health monitoring components.
+   * Register a service with optional dependencies
    */
-  registerService<T extends IService>(
+  registerService<T extends SimpleService>(
     name: string,
     service: T,
-    options: ServiceRegistrationOptions & {
-      dependencies?: string[];
-      priority?: number;
-      autoStart?: boolean;
-    } = {}
+    dependencies: string[] = []
   ): void {
     if (this.isShuttingDown) {
       logger.warn('Cannot register service during shutdown', {
-        correlationId: `service-manager-v2-${Date.now()}`,
+        correlationId: `simple-service-manager-${Date.now()}`,
         operation: 'register_during_shutdown',
         metadata: { serviceName: name }
       });
       return;
     }
 
-    // Register with the service registry
-    this.registry.register(name, service, options);
+    this.services.set(name, {
+      service,
+      dependencies,
+      initialized: false
+    });
 
-    logger.debug(`Service registered via ServiceManagerV2: ${name}`, {
-      correlationId: `service-manager-v2-${Date.now()}`,
+    logger.debug(`Service registered: ${name}`, {
+      correlationId: `simple-service-manager-${Date.now()}`,
       operation: 'service_registration',
-      metadata: { serviceName: name, dependencies: options.dependencies?.length || 0 }
+      metadata: { serviceName: name, dependencies: dependencies.length }
     });
   }
 
   /**
-   * Unregister a service
+   * Get a service by name
    */
-  unregisterService(name: string): boolean {
-    return this.registry.unregister(name);
-  }
-
-  /**
-   * Get a service instance by name
-   */
-  getService<T extends IService>(name: string): T | undefined {
-    return this.registry.get<T>(name);
+  getService<T extends SimpleService>(name: string): T | undefined {
+    const entry = this.services.get(name);
+    return entry ? (entry.service as T) : undefined;
   }
 
   /**
@@ -148,39 +96,105 @@ export class ServiceManagerV2 {
       throw new Error('Cannot initialize services - system is shutting down');
     }
 
-    logger.info('Starting service initialization with decomposed architecture', {
-      correlationId: `service-manager-v2-${Date.now()}`,
+    logger.info('Starting service initialization', {
+      correlationId: `simple-service-manager-${Date.now()}`,
       operation: 'initialization_start',
-      metadata: { serviceCount: this.registry.getServiceCount() }
+      metadata: { serviceCount: this.services.size }
     });
 
     try {
-      // Use the dependency injector to handle initialization
-      await this.injector.initializeServices();
+      // Simple initialization order: services with no dependencies first
+      const initializationOrder = this.calculateInitializationOrder();
+      
+      for (const serviceName of initializationOrder) {
+        await this.initializeService(serviceName);
+      }
 
-      // Start health monitoring after successful initialization
-      this.healthMonitor.startMonitoring({
-        enabled: true,
-        interval: 30000, // 30 seconds
-        timeout: 5000,
-        retryCount: 3,
-        alertThreshold: 2
-      });
-
-      logger.info('All services initialized successfully with ServiceManagerV2', {
-        correlationId: `service-manager-v2-${Date.now()}`,
+      logger.info('All services initialized successfully', {
+        correlationId: `simple-service-manager-${Date.now()}`,
         operation: 'initialization_complete',
-        metadata: {
-          initializedServices: this.registry.getServiceCount(),
-          healthMonitoringEnabled: true
-        }
+        metadata: { initializedServices: this.services.size }
       });
 
     } catch (error) {
-      logger.error('Service initialization failed', {
-        correlationId: `service-manager-v2-${Date.now()}`,
-        operation: 'initialization_error',
-        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+      logger.error('Service initialization failed', error as Error, {
+        correlationId: `simple-service-manager-${Date.now()}`,
+        operation: 'initialization_error'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate initialization order based on dependencies
+   */
+  private calculateInitializationOrder(): string[] {
+    const order: string[] = [];
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+
+    const visit = (serviceName: string) => {
+      if (visiting.has(serviceName)) {
+        throw new Error(`Circular dependency detected involving ${serviceName}`);
+      }
+      
+      if (visited.has(serviceName)) {
+        return;
+      }
+
+      visiting.add(serviceName);
+      
+      const entry = this.services.get(serviceName);
+      if (entry) {
+        // Visit dependencies first
+        for (const dep of entry.dependencies) {
+          visit(dep);
+        }
+      }
+      
+      visiting.delete(serviceName);
+      visited.add(serviceName);
+      order.push(serviceName);
+    };
+
+    // Visit all services
+    for (const serviceName of this.services.keys()) {
+      visit(serviceName);
+    }
+
+    return order;
+  }
+
+  /**
+   * Initialize a single service
+   */
+  private async initializeService(serviceName: string): Promise<void> {
+    const entry = this.services.get(serviceName);
+    if (!entry || entry.initialized) {
+      return;
+    }
+
+    try {
+      logger.debug(`Initializing service: ${serviceName}`, {
+        correlationId: `simple-service-manager-${Date.now()}`,
+        operation: 'service_initialization',
+        metadata: { serviceName, dependencies: entry.dependencies.length }
+      });
+
+      await entry.service.initialize();
+      entry.initialized = true;
+
+      logger.debug(`Service initialized: ${serviceName}`, {
+        correlationId: `simple-service-manager-${Date.now()}`,
+        operation: 'service_initialized',
+        metadata: { serviceName }
+      });
+
+    } catch (error) {
+      logger.error(`Failed to initialize service: ${serviceName}`, error as Error, {
+        correlationId: `simple-service-manager-${Date.now()}`,
+        operation: 'service_initialization_error',
+        metadata: { serviceName }
       });
       throw error;
     }
@@ -190,63 +204,57 @@ export class ServiceManagerV2 {
    * Get all registered service names
    */
   getRegisteredServices(): string[] {
-    return this.registry.getServiceNames();
+    return Array.from(this.services.keys());
   }
 
   /**
    * Get ready service names
    */
   getReadyServices(): string[] {
-    return this.registry.getReadyServices().map(info => info.name);
+    return Array.from(this.services.values())
+      .filter(entry => entry.initialized && entry.service.isReady())
+      .map(entry => entry.service.name);
   }
 
   /**
    * Get service count
    */
   getServiceCount(): number {
-    return this.registry.getServiceCount();
+    return this.services.size;
   }
 
   /**
    * Get health status of all services
    */
   getAllServicesHealth(): Record<string, any> {
-    const healthReport = this.healthMonitor.getHealthStats();
-    const serviceHealth: Record<string, any> = {};
+    const health: Record<string, any> = {};
 
-    for (const serviceName of this.registry.getServiceNames()) {
-      const health = this.healthMonitor.getCachedHealth(serviceName);
-      if (health) {
-        serviceHealth[serviceName] = {
-          state: this.getService(serviceName)?.state || 'unknown',
-          ready: this.getService(serviceName)?.isReady() || false,
-          health: {
-            healthy: health.healthy,
-            status: health.status,
-            details: health.details,
-            lastCheck: health.lastCheck,
-            responseTime: health.responseTime
-          }
-        };
-      }
+    for (const [name, entry] of this.services.entries()) {
+      health[name] = {
+        state: entry.service.state,
+        ready: entry.service.isReady(),
+        initialized: entry.initialized,
+        health: entry.service.getHealth()
+      };
     }
 
-    return serviceHealth;
+    return health;
   }
 
   /**
    * Check if all services are healthy
    */
   areAllServicesHealthy(): boolean {
-    const stats = this.healthMonitor.getHealthStats();
-    return stats.unhealthyServices === 0 && stats.degradedServices === 0;
-  }
-
-  /**
-   * Get comprehensive health report
-   */
-  async getHealthReport(): Promise<HealthReport> {
-    return await this.healthMonitor.monitorServices();
+    for (const entry of this.services.values()) {
+      if (!entry.initialized || !entry.service.isReady()) {
+        return false;
+      }
+      const health = entry.service.getHealth();
+      if (!health.healthy) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -254,99 +262,63 @@ export class ServiceManagerV2 {
    */
   getServiceStats(): {
     totalServices: number;
-    healthyServices: number;
-    unhealthyServices: number;
     readyServices: number;
     initializingServices: number;
     errorServices: number;
   } {
-    const services = this.registry.listServices();
-    const healthStats = this.healthMonitor.getHealthStats();
+    let readyServices = 0;
+    let initializingServices = 0;
+    let errorServices = 0;
 
-    return {
-      totalServices: services.length,
-      healthyServices: healthStats.healthyServices,
-      unhealthyServices: healthStats.unhealthyServices,
-      readyServices: services.filter(s => s.ready).length,
-      initializingServices: services.filter(s => s.state === 'initializing').length,
-      errorServices: services.filter(s => s.state === 'error').length
-    };
-  }
-
-  /**
-   * Load configuration with validation
-   */
-  async loadConfig<T = any>(configPath: string, schema?: ConfigSchema): Promise<T> {
-    if (schema) {
-      return await this.configManager.loadConfigWithValidation<T>(configPath, schema);
-    }
-    return await this.configManager.loadConfig<T>(configPath);
-  }
-
-  /**
-   * Watch configuration changes
-   */
-  watchConfigChanges<T = any>(configPath: string, callback: (config: T, error?: Error) => void): void {
-    this.configManager.watchConfigChanges<T>(configPath, callback);
-  }
-
-  /**
-   * Register health alert callback
-   */
-  alertOnFailure(serviceName: string, callback: AlertCallback): void {
-    this.healthMonitor.alertOnFailure(serviceName, callback);
-  }
-
-  /**
-   * Get dependency resolution information
-   */
-  getDependencyResolution(): DependencyResolution {
-    return {
-      initializationOrder: this.injector.getInitializationOrder(),
-      dependencyGraph: this.injector.getDependencyGraph(),
-      circularDependencies: this.injector.hasCircularDependencies() ? ['Circular dependencies detected'] : []
-    };
-  }
-
-  /**
-   * Get all services (backward compatibility)
-   */
-  getAllServices(): Map<string, IService> {
-    const servicesMap = new Map<string, IService>();
-
-    for (const serviceName of this.registry.getServiceNames()) {
-      const service = this.registry.get(serviceName);
-      if (service) {
-        servicesMap.set(serviceName, service);
+    for (const entry of this.services.values()) {
+      if (entry.initialized && entry.service.isReady()) {
+        readyServices++;
+      } else if (entry.service.state === ServiceState.INITIALIZING) {
+        initializingServices++;
+      } else if (entry.service.state === ServiceState.ERROR) {
+        errorServices++;
       }
     }
 
-    return servicesMap;
+    return {
+      totalServices: this.services.size,
+      readyServices,
+      initializingServices,
+      errorServices
+    };
   }
 
   /**
    * Force cleanup (for testing)
    */
   async forceCleanup(): Promise<void> {
-    logger.info('Starting force cleanup with ServiceManagerV2', {
-      correlationId: `service-manager-v2-${Date.now()}`,
+    logger.info('Starting force cleanup', {
+      correlationId: `simple-service-manager-${Date.now()}`,
       operation: 'force_cleanup_start'
     });
 
-    // Stop health monitoring
-    this.healthMonitor.destroy();
+    // Destroy all services in reverse order
+    const serviceNames = Array.from(this.services.keys()).reverse();
+    
+    for (const serviceName of serviceNames) {
+      const entry = this.services.get(serviceName);
+      if (entry && entry.initialized) {
+        try {
+          await entry.service.destroy();
+        } catch (error) {
+          logger.warn(`Error destroying service: ${serviceName}`, {
+            correlationId: `simple-service-manager-${Date.now()}`,
+            operation: 'service_destruction_error',
+            metadata: { serviceName, error: error instanceof Error ? error.message : 'Unknown error' }
+          });
+        }
+      }
+    }
 
-    // Clear registry (which handles service destruction)
-    this.registry.clear();
-
-    // Clean up configuration manager
-    this.configManager.destroy();
-
-    // Reset injector state
-    this.injector.reset();
+    this.services.clear();
 
     logger.info('Force cleanup completed', {
-      correlationId: `service-manager-v2-${Date.now()}`,
+      correlationId: `simple-service-manager-${Date.now()}`,
       operation: 'force_cleanup_complete'
     });
   }
@@ -358,7 +330,7 @@ export class ServiceManagerV2 {
     const shutdown = async (signal: string) => {
       if (this.isShuttingDown) {
         logger.warn('Shutdown already in progress', {
-          correlationId: `service-manager-v2-${Date.now()}`,
+          correlationId: `simple-service-manager-${Date.now()}`,
           operation: 'shutdown_already_in_progress',
           metadata: { signal }
         });
@@ -367,41 +339,36 @@ export class ServiceManagerV2 {
 
       this.isShuttingDown = true;
 
-      logger.info('Starting graceful shutdown with ServiceManagerV2', {
-        correlationId: `service-manager-v2-${Date.now()}`,
+      logger.info('Starting graceful shutdown', {
+        correlationId: `simple-service-manager-${Date.now()}`,
         operation: 'shutdown_start',
-        metadata: { signal, serviceCount: this.registry.getServiceCount() }
+        metadata: { signal, serviceCount: this.services.size }
       });
 
-      // Get shutdown order (reverse of initialization order)
-      const initOrder = this.injector.getInitializationOrder();
-      const shutdownOrder = [...initOrder].reverse();
-
+      // Destroy all services in reverse order
+      const serviceNames = Array.from(this.services.keys()).reverse();
       let cleanedCount = 0;
-      for (const serviceName of shutdownOrder) {
-        const service = this.registry.get(serviceName);
-        if (service && service.state !== ServiceState.DESTROYED) {
+
+      for (const serviceName of serviceNames) {
+        const entry = this.services.get(serviceName);
+        if (entry && entry.initialized) {
           try {
-            await service.destroy();
+            await entry.service.destroy();
             cleanedCount++;
           } catch (error) {
-            logger.error(`Error destroying service ${serviceName}`, {
-              correlationId: `service-manager-v2-${Date.now()}`,
+            logger.error(`Error destroying service: ${serviceName}`, error as Error, {
+              correlationId: `simple-service-manager-${Date.now()}`,
               operation: 'service_destruction_error',
-              metadata: { serviceName, error: error instanceof Error ? error.message : 'Unknown error' }
+              metadata: { serviceName }
             });
           }
         }
       }
 
-      // Cleanup components
-      this.healthMonitor.destroy();
-      this.configManager.destroy();
-
       logger.info('Graceful shutdown completed', {
-        correlationId: `service-manager-v2-${Date.now()}`,
+        correlationId: `simple-service-manager-${Date.now()}`,
         operation: 'shutdown_complete',
-        metadata: { cleanedServices: cleanedCount, totalServices: shutdownOrder.length }
+        metadata: { cleanedServices: cleanedCount, totalServices: serviceNames.length }
       });
     };
 
@@ -409,23 +376,17 @@ export class ServiceManagerV2 {
     process.on('SIGINT', () => shutdown('SIGINT'));
 
     logger.debug('Graceful shutdown handlers registered', {
-      correlationId: `service-manager-v2-${Date.now()}`,
+      correlationId: `simple-service-manager-${Date.now()}`,
       operation: 'shutdown_handlers_registered'
     });
   }
 }
 
-// Export the class with legacy name for backward compatibility
-export { ServiceManagerV2 as ServiceManager };
-
-// Export singleton instance for backward compatibility
-export const serviceManager = ServiceManagerV2.getInstance();
-
-// Legacy export name
-export const serviceManagerV2 = serviceManager;
+// Export singleton instance
+export const serviceManager = ServiceManager.getInstance();
 
 // Convenience functions for backward compatibility
-export const getService = <T extends IService>(name: string): T | undefined => {
+export const getService = <T extends SimpleService>(name: string): T | undefined => {
   return serviceManager.getService<T>(name);
 };
 
