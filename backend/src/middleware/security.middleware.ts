@@ -3,20 +3,20 @@ import logger from '../utils/logger';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import { configService } from '../config/config.service';
+// Use environment variables directly since middleware is initialized at startup
 
 /**
  * CORS configuration
  */
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    const allowedOrigins = configService.corsOrigin.split(',').map((o: string) => o.trim());
+    const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((o: string) => o.trim());
     
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
     // Allow all origins in development
-    if (configService.isDevelopment) {
+    if (process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
     
@@ -66,9 +66,9 @@ export const securityHeaders = helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
-      upgradeInsecureRequests: configService.isProduction ? [] : null
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
     },
-    reportOnly: configService.isDevelopment
+    reportOnly: process.env.NODE_ENV === 'development'
   },
   crossOriginEmbedderPolicy: false, // Disabled for API
   hsts: {
@@ -95,7 +95,7 @@ export const compressionMiddleware = compression({
     // Use compression filter function
     return compression.filter(req, res);
   },
-  level: configService.isProduction ? 6 : 1, // Higher compression in production
+  level: process.env.NODE_ENV === 'production' ? 6 : 1, // Higher compression in production
   threshold: 1024 // Only compress if response is larger than 1KB
 });
 

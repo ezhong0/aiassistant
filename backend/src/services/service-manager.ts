@@ -8,6 +8,8 @@ import { ServiceHealthMonitor, HealthReport, HealthStatus, AlertCallback } from 
 
 // Define core service management types directly
 export enum ServiceState {
+  /** Service instance created but not yet initialized */
+  CREATED = 'created',
   /** Service is being initialized and dependencies are being resolved */
   INITIALIZING = 'initializing',
   /** Service is fully initialized and ready to handle requests */

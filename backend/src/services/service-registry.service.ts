@@ -32,7 +32,7 @@ export interface ServiceRegistrationOptions {
  */
 export class ServiceRegistry implements IService {
   readonly name = 'serviceRegistry';
-  private _state: ServiceState = ServiceState.INITIALIZING;
+  private _state: ServiceState = ServiceState.CREATED;
   private services: Map<string, IService> = new Map();
   private serviceMetadata: Map<string, ServiceInfo> = new Map();
   private readonly maxServices = 100;

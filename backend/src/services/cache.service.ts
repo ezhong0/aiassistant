@@ -2,7 +2,7 @@ import { createClient, RedisClientType } from 'redis';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from "./service-manager";
-import { configService } from '../config/config.service';
+// Use environment variables directly for Redis configuration
 
 export class CacheService extends BaseService {
   private client: RedisClientType | null = null;
@@ -27,7 +27,7 @@ export class CacheService extends BaseService {
       operation: 'cache_service_init',
       metadata: {
         redisUrl: this.maskRedisUrl(this.REDIS_URL),
-        environment: configService.nodeEnv,
+        environment: process.env.NODE_ENV || 'development',
         hasRedisEnv: !!(process.env.REDIS_URL || process.env.REDISCLOUD_URL || 
                        process.env.REDIS_PRIVATE_URL || process.env.REDIS_PUBLIC_URL ||
                        process.env.RAILWAY_REDIS_URL),
@@ -72,7 +72,7 @@ export class CacheService extends BaseService {
       }
 
       // Skip Redis if we're using localhost and not in development
-      if (this.REDIS_URL.includes('localhost') && configService.nodeEnv === 'production') {
+      if (this.REDIS_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
         logger.warn('Skipping Redis connection - localhost URL in production environment', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',

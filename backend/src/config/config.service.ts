@@ -147,5 +147,5 @@ export class ConfigService extends BaseService {
   }
 }
 
-// Export singleton instance for backward compatibility
-export const configService = new ConfigService();
+// ConfigService is now managed by the service manager
+// Use getService('configService') to access it

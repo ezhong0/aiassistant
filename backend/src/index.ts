@@ -7,7 +7,7 @@ const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
-import { configService } from './config/config.service';
+// ConfigService is now managed by the service manager
 import { initializeAgentFactory } from './config/agent-factory-init';
 import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
@@ -65,8 +65,8 @@ const initializeApplication = async (): Promise<void> => {
 }
 
 const app = express();
-// Railway provides PORT environment variable, use it or fallback to configService
-const port = process.env.PORT ? parseInt(process.env.PORT, 10) : configService.port;
+// Railway provides PORT environment variable, use it or fallback to default
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // CRITICAL: Health endpoints MUST be registered first before any middleware
 // This ensures Railway health checks work immediately when container starts
@@ -165,7 +165,7 @@ app.get('/', (req: Request, res: Response) => {
   res.json({ 
     message: 'Assistant App API',
     version: '1.0.0',
-    environment: configService.nodeEnv,
+    environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
 });

@@ -44,7 +44,7 @@ import logger from '../utils/logger';
  */
 export abstract class BaseService implements IService {
   public readonly name: string;
-  protected _state: ServiceState = ServiceState.INITIALIZING;
+  protected _state: ServiceState = ServiceState.CREATED;
   public initialized = false;
   public destroyed = false;
 
@@ -104,7 +104,6 @@ export abstract class BaseService implements IService {
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
-      
       return;
     }
 
@@ -117,17 +116,16 @@ export abstract class BaseService implements IService {
 
     try {
       this._state = ServiceState.INITIALIZING;
-      
 
       // Call the abstract initialization method
       await this.onInitialize();
 
       this.initialized = true;
       this._state = ServiceState.READY;
-      
+
     } catch (error) {
       this._state = ServiceState.ERROR;
-      
+
       throw error;
     }
   }

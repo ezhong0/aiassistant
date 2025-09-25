@@ -30,7 +30,7 @@ export interface CircuitBreakerMetrics {
  */
 export class AIServiceCircuitBreaker implements IService {
   public readonly name = 'aiCircuitBreakerService';
-  private _state: ServiceState = ServiceState.INITIALIZING;
+  private _state: ServiceState = ServiceState.CREATED;
   
   private circuitState: CircuitState = CircuitState.CLOSED;
   private failureCount = 0;

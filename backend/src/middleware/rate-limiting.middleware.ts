@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { AuthenticatedRequest } from './auth.middleware';
-import { configService } from '../config/config.service';
+import { ConfigService } from '../config/config.service';
+import { getService } from '../services/service-manager';
 import { RATE_LIMITS, TIMEOUTS } from '../config/app-config';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import { serviceManager, IService, ServiceState } from '../services/service-manager';
@@ -236,8 +237,8 @@ export const rateLimit = (options: RateLimitOptions) => {
 
 // General API rate limiting
 export const apiRateLimit = rateLimit({
-  windowMs: configService.rateLimitWindowMs, // 15 minutes
-  maxRequests: configService.rateLimitMaxRequests, // 100 requests
+  windowMs: (getService<ConfigService>('configService'))?.rateLimitWindowMs || 900000, // 15 minutes
+  maxRequests: (getService<ConfigService>('configService'))?.rateLimitMaxRequests || 100, // 100 requests
   message: 'Too many API requests. Please try again later.',
   keyGenerator: (req: Request) => req.ip || 'unknown'
 });

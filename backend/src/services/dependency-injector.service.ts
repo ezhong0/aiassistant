@@ -31,7 +31,7 @@ export interface InjectionContext {
  */
 export class DependencyInjector implements IService {
   readonly name = 'dependencyInjector';
-  private _state: ServiceState = ServiceState.INITIALIZING;
+  private _state: ServiceState = ServiceState.CREATED;
   private initializationOrder: string[] = [];
   private dependencyGraph: Map<string, string[]> = new Map();
   private initializationAttempts: Map<string, number> = new Map();
@@ -203,6 +203,11 @@ export class DependencyInjector implements IService {
       return;
     }
 
+    // Service should be in CREATED state before initialization (or ERROR for retries)
+    if (service.state !== ServiceState.CREATED && service.state !== ServiceState.ERROR) {
+      throw new Error(`Service ${context.serviceName} in unexpected state: ${service.state}. Expected CREATED or ERROR state.`);
+    }
+
     // Verify dependencies are ready
     await this.verifyDependencies(context);
 
@@ -221,16 +226,6 @@ export class DependencyInjector implements IService {
       await delay(10); // Allow state transition
 
       if (!service.isReady()) {
-        // Handle partially ready services (like OpenAI with invalid keys)
-        if (service.state === ServiceState.READY) {
-          logger.warn(`Service ${context.serviceName} in READY state but isReady() returns false`, {
-            correlationId: `dependency-injector-${Date.now()}`,
-            operation: 'partial_service_ready',
-            metadata: { serviceName: context.serviceName }
-          });
-          return;
-        }
-
         throw new Error(`Service ${context.serviceName} failed to become ready. State: ${service.state}`);
       }
 
@@ -284,7 +279,7 @@ export class DependencyInjector implements IService {
   /**
    * Wait for a service to become ready
    */
-  private async waitForServiceReady(service: IService, serviceName: string, timeoutMs = 30000): Promise<void> {
+  private async waitForServiceReady(service: IService, serviceName: string, timeoutMs = 10000): Promise<void> {
     const startTime = Date.now();
 
     while (!service.isReady() && Date.now() - startTime < timeoutMs) {
@@ -296,7 +291,19 @@ export class DependencyInjector implements IService {
     }
 
     if (!service.isReady()) {
-      throw new Error(`Service ${serviceName} initialization timeout after ${timeoutMs}ms`);
+      const errorMsg = `Service ${serviceName} initialization timeout after ${timeoutMs}ms. State: ${service.state}, isReady: ${service.isReady()}`;
+      logger.error('Service initialization timeout details', {
+        correlationId: `dependency-injector-${Date.now()}`,
+        operation: 'initialization_timeout',
+        metadata: {
+          serviceName,
+          state: service.state,
+          isReady: service.isReady(),
+          timeoutMs,
+          duration: Date.now() - startTime
+        }
+      });
+      throw new Error(errorMsg);
     }
   }
 

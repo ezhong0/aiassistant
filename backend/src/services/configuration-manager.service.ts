@@ -46,7 +46,7 @@ interface ConfigWatcher {
  */
 export class ConfigurationManager implements IService {
   readonly name = 'configurationManager';
-  private _state: ServiceState = ServiceState.INITIALIZING;
+  private _state: ServiceState = ServiceState.CREATED;
   private configCache: Map<string, any> = new Map();
   private configWatchers: Map<string, ConfigWatcher> = new Map();
   private watchInterval: NodeJS.Timeout | null = null;

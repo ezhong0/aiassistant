@@ -60,7 +60,7 @@ export type AlertCallback = (serviceName: string, status: HealthStatus, error?: 
  */
 export class ServiceHealthMonitor implements IService {
   readonly name = 'serviceHealthMonitor';
-  private _state: ServiceState = ServiceState.INITIALIZING;
+  private _state: ServiceState = ServiceState.CREATED;
   private healthCache: Map<string, HealthStatus> = new Map();
   private alertCallbacks: Map<string, AlertCallback[]> = new Map();
   private monitoringInterval: NodeJS.Timeout | null = null;
