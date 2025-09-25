@@ -1,7 +1,7 @@
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: 'info', // Temporarily show info logs to debug natural language execution
+  level: 'warn', // Hide info logs, only show warnings and errors
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),

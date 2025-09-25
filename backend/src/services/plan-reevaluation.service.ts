@@ -52,7 +52,7 @@ export class PlanReevaluationService extends BaseService {
     const correlationId = `plan-reevaluation-${Date.now()}`;
 
     try {
-      logger.info('Reevaluating plan', {
+      logger.warn('Reevaluating plan', {
         correlationId,
         currentStep: context.currentPlanStep,
         totalSteps: context.comprehensivePlan?.length,
@@ -124,7 +124,7 @@ export class PlanReevaluationService extends BaseService {
       // Add reevaluation reasoning to global context
       await this.addToGlobalContext(context, `Plan reevaluation: ${result.reasoning.goalProgress}`);
 
-      logger.info('Plan reevaluation completed', {
+      logger.warn('Plan reevaluation completed', {
         correlationId,
         action: result.decision.action,
         confidence: result.decision.confidence,

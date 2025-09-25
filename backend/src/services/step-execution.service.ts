@@ -65,7 +65,7 @@ export class StepExecutionService extends BaseService {
     const correlationId = `step-execution-${Date.now()}`;
 
     try {
-      logger.info('Executing single workflow step', {
+      logger.warn('Executing single workflow step', {
         correlationId,
         stepDescription: stepDescription.substring(0, 100),
         currentStep: workflowContext.currentPlanStep,
@@ -78,7 +78,7 @@ export class StepExecutionService extends BaseService {
       const agentSelection = await this.selectAgentAndGenerateCommand(stepDescription, workflowContext);
       
       if (agentSelection.skipReason) {
-        logger.info('Step skipped', {
+        logger.warn('Step skipped', {
           correlationId,
           skipReason: agentSelection.skipReason,
           sessionId: executionContext.sessionId,
@@ -107,7 +107,7 @@ export class StepExecutionService extends BaseService {
         executionContext
       );
 
-      logger.info('Step execution completed', {
+      logger.warn('Step execution completed', {
         correlationId,
         success: executionResult.success,
         hasResponse: !!executionResult.response,
@@ -198,7 +198,7 @@ Domains: ${caps.domains?.join(', ') || 'No domains specified'}`;
 
       const result = this.validateAgentSelectionResponse(response);
       
-      logger.info('Agent selected and command generated', {
+      logger.warn('Agent selected and command generated', {
         correlationId,
         selectedAgent: result.agentName,
         confidence: result.confidence,

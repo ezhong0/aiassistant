@@ -133,6 +133,12 @@ export class OpenAIService extends BaseService {
         maxTokens: options.maxTokens || 500
       });
 
+      // Log LLM request
+      console.log(`🤖 LLM REQUEST: generateText`);
+      console.log(`📝 User Input: ${userInput.substring(0, 200)}${userInput.length > 200 ? '...' : ''}`);
+      console.log(`📋 System Prompt: ${systemPrompt.substring(0, 300)}${systemPrompt.length > 300 ? '...' : ''}`);
+      console.log(`⚙️ Model: ${this.model}, Temperature: ${options.temperature || 0.7}, Max Tokens: ${options.maxTokens || 500}`);
+
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -147,6 +153,11 @@ export class OpenAIService extends BaseService {
       if (!content) {
         throw new Error('No content in OpenAI response');
       }
+
+      // Log LLM response
+      console.log(`✅ LLM RESPONSE: generateText`);
+      console.log(`📤 Response: ${content.substring(0, 500)}${content.length > 500 ? '...' : ''}`);
+      console.log(`📊 Usage: ${response.usage?.total_tokens || 'N/A'} tokens`);
 
       // Memory monitoring
       const responseSize = JSON.stringify(response).length;
@@ -244,6 +255,12 @@ export class OpenAIService extends BaseService {
         openAISchema = schema;
       }
 
+      // Log LLM request
+      console.log(`🤖 LLM REQUEST: generateStructuredData`);
+      console.log(`📝 User Input: ${userInput.substring(0, 200)}${userInput.length > 200 ? '...' : ''}`);
+      console.log(`📋 System Prompt: ${systemPrompt.substring(0, 300)}${systemPrompt.length > 300 ? '...' : ''}`);
+      console.log(`⚙️ Model: ${this.model}, Temperature: ${options.temperature || 0.1}, Max Tokens: ${options.maxTokens || 1000}`);
+
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -279,6 +296,11 @@ export class OpenAIService extends BaseService {
         // It's a plain object schema - just return the extracted data
         validatedData = extractedData as T;
       }
+      
+      // Log LLM response
+      console.log(`✅ LLM RESPONSE: generateStructuredData`);
+      console.log(`📤 Response: ${JSON.stringify(validatedData, null, 2).substring(0, 500)}${JSON.stringify(validatedData).length > 500 ? '...' : ''}`);
+      console.log(`📊 Usage: ${response.usage?.total_tokens || 'N/A'} tokens`);
       
       this.logDebug('Structured data generated successfully', { 
         dataKeys: Object.keys(validatedData)

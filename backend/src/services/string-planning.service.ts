@@ -244,7 +244,7 @@ Guidelines:
     const correlationId = `comprehensive-planning-${Date.now()}`;
 
     try {
-      logger.info('Creating comprehensive plan', {
+      logger.warn('Creating comprehensive plan', {
         correlationId,
         originalRequest: context.originalRequest.substring(0, 100),
         intentDescription: context.intentDescription,
@@ -299,7 +299,7 @@ Guidelines:
       // Add planning reasoning to global context
       await this.addToGlobalContext(context, `Comprehensive plan created: ${plan.reasoning.approach}`);
 
-      logger.info('Comprehensive plan created', {
+      logger.warn('Comprehensive plan created', {
         correlationId,
         stepCount: plan.steps.length,
         approach: plan.reasoning.approach,
