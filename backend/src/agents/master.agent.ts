@@ -4,10 +4,11 @@ import { serviceManager } from '../services/service-manager';
 // Extracted services
 import { IntentAnalysisService, AnalysisContext, IntentAnalysis } from '../services/intent-analysis.service';
 import { ContextManager, GatheredContext } from '../services/context-manager.service';
-import { StringPlanningService, StringWorkflowContext, StringStepPlan } from '../services/string-planning.service';
+import { StringPlanningService, StringWorkflowContext } from '../services/string-planning.service';
 import { ResponseFormatter, FormattingContext, FormattedResponse } from '../services/response-formatter.service';
 import { DraftManager, Draft } from '../services/draft-manager.service';
 import { PlanReevaluationService } from '../services/plan-reevaluation.service';
+import { StepExecutionService } from '../services/step-execution.service';
 import { AgentFactory } from '../framework/agent-factory';
 
 // Types
@@ -52,6 +53,7 @@ export class MasterAgent {
   private responseFormatter: ResponseFormatter | null = null;
   private draftManager: DraftManager | null = null;
   private planReevaluationService: PlanReevaluationService | null = null;
+  private stepExecutionService: StepExecutionService | null = null;
 
   private isInitialized = false;
 
@@ -71,6 +73,7 @@ export class MasterAgent {
       this.responseFormatter = serviceManager.getService<ResponseFormatter>('responseFormatter') || null;
       this.draftManager = serviceManager.getService<DraftManager>('draftManager') || null;
       this.planReevaluationService = serviceManager.getService<PlanReevaluationService>('planReevaluationService') || null;
+      this.stepExecutionService = serviceManager.getService<StepExecutionService>('stepExecutionService') || null;
 
       // Validate critical services
       if (!this.intentAnalysisService) {
@@ -88,6 +91,9 @@ export class MasterAgent {
       if (!this.planReevaluationService) {
         throw new Error('PlanReevaluationService not available');
       }
+      if (!this.stepExecutionService) {
+        throw new Error('StepExecutionService not available');
+      }
 
       this.isInitialized = true;
 
@@ -99,7 +105,8 @@ export class MasterAgent {
           'stringPlanningService',
           'responseFormatter',
           'draftManager',
-          'planReevaluationService'
+          'planReevaluationService',
+          'stepExecutionService'
         ]
       });
 
@@ -434,16 +441,17 @@ export class MasterAgent {
           break;
         }
 
-        logger.info('Executing comprehensive workflow step', {
+        logger.info('Executing workflow step', {
           stepNumber: workflowContext.currentPlanStep,
           totalSteps: workflowContext.comprehensivePlan!.length,
           stepDescription: step,
           sessionId: workflowContext.userContext?.sessionId
         });
 
-        // Execute current step using AgentFactory
-        const stepResult = await this.executeStepWithAgent(
+        // Execute single step using StepExecutionService
+        const stepResult = await this.stepExecutionService!.executeSingleStep(
           step,
+          workflowContext,
           {
             sessionId: workflowContext.userContext?.sessionId || '',
             userId: workflowContext.userContext?.userId,
@@ -484,9 +492,22 @@ export class MasterAgent {
         }
       }
 
-      // Format final response
-      const finalResponse = workflowContext.stepResults.join('\n\n');
-      return this.createSuccessResult(finalResponse, formattingContext);
+      // Format final response using enhanced ResponseFormatter
+      const responseFormatter = serviceManager.getService<ResponseFormatter>('responseFormatter');
+      if (responseFormatter) {
+        return await responseFormatter.formatWorkflowResponse({
+          ...formattingContext,
+          workflowContext,
+          stepResults: workflowContext.stepResults,
+          completedSteps: workflowContext.completedSteps,
+          globalContext: workflowContext.globalContext,
+          originalRequest: workflowContext.originalRequest
+        });
+      } else {
+        // Fallback to simple concatenation
+        const finalResponse = workflowContext.stepResults.join('\n\n');
+        return this.createSuccessResult(finalResponse, formattingContext);
+      }
 
     } catch (error) {
       logger.error('Comprehensive workflow execution failed', { error, workflowContext });
@@ -495,49 +516,6 @@ export class MasterAgent {
   }
 
 
-  private async executeStepWithAgent(
-    stepDescription: string,
-    context: {
-      sessionId: string;
-      userId?: string;
-      slackContext?: any;
-      timestamp: Date;
-    }
-  ): Promise<{ success: boolean; result: string; error?: string }> {
-    try {
-      // Use AgentFactory to find the best agent for this step
-      const agentResult = await AgentFactory.findBestAgentForRequest(stepDescription);
-      
-      if (!agentResult.agentName) {
-        return {
-          success: false,
-          result: 'No suitable agent found for this step',
-          error: 'Agent not found'
-        };
-      }
-
-      // Execute the step using the natural language agent
-      const executionResult = await AgentFactory.executeAgentWithNaturalLanguage(
-        agentResult.agentName,
-        stepDescription,
-        context
-      );
-
-      return {
-        success: executionResult.success,
-        result: executionResult.response || 'Step completed',
-        error: executionResult.error
-      };
-
-    } catch (error) {
-      logger.error('Failed to execute step with agent', { error, stepDescription });
-      return {
-        success: false,
-        result: 'Step execution failed',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }
 
   private async executeDraft(draft: Draft): Promise<any[]> {
     if (!this.draftManager) {

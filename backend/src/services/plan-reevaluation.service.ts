@@ -103,7 +103,8 @@ export class PlanReevaluationService extends BaseService {
               items: { type: 'string' },
               minItems: 1,
               maxItems: 10
-            }
+            },
+            globalContextAddition: { type: 'string' }
           },
           required: ['reasoning', 'decision']
         },
@@ -115,6 +116,11 @@ export class PlanReevaluationService extends BaseService {
 
       const result = this.validateReevaluationResponse(response);
       
+      // Add useful information to global context if provided
+      if (result.globalContextAddition) {
+        await this.addToGlobalContext(context, result.globalContextAddition);
+      }
+
       // Add reevaluation reasoning to global context
       await this.addToGlobalContext(context, `Plan reevaluation: ${result.reasoning.goalProgress}`);
 
@@ -199,6 +205,7 @@ ANALYSIS INSTRUCTIONS:
 3. Check for loops (repeated similar attempts)
 4. Evaluate if the current plan is still appropriate
 5. Determine the best next action
+6. Identify useful information from the step result that should be added to global context
 
 Return JSON:
 {
@@ -213,7 +220,8 @@ Return JSON:
     "reason": "Why this action is best",
     "confidence": 0.95
   },
-  "modifiedPlan": ["New step 1", "New step 2", ...] // Only if action is "modify"
+  "modifiedPlan": ["New step 1", "New step 2", ...], // Only if action is "modify"
+  "globalContextAddition": "Useful information from this step result for future steps" // Optional
 }
 
 Guidelines:
@@ -221,13 +229,15 @@ Guidelines:
 - "modify": Plan needs adjustment based on new information
 - "terminate": Goal achieved OR stuck in loop OR plan is no longer viable
 - Consider the global context when making decisions
-- Be conservative with modifications - only change if necessary`;
+- Be conservative with modifications - only change if necessary
+- Add useful information to global context that could help future steps
+- Only include globalContextAddition if the step result contains valuable information`;
   }
 
   /**
    * Validate reevaluation response
    */
-  private validateReevaluationResponse(response: any): { reasoning: any; decision: any; modifiedPlan?: string[] } {
+  private validateReevaluationResponse(response: any): { reasoning: any; decision: any; modifiedPlan?: string[]; globalContextAddition?: string } {
     if (!response || typeof response !== 'object') {
       throw new Error('Invalid AI response format for plan reevaluation');
     }
@@ -259,7 +269,8 @@ Guidelines:
       },
       modifiedPlan: response.decision.action === 'modify' && Array.isArray(response.modifiedPlan)
         ? response.modifiedPlan.map((step: any) => String(step).trim()).filter((step: string) => step.length > 0)
-        : undefined
+        : undefined,
+      globalContextAddition: response.globalContextAddition || undefined
     };
   }
 }

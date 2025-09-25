@@ -50,6 +50,14 @@ export interface FormattingContext {
   workflowAction?: string;
 }
 
+export interface WorkflowFormattingContext extends FormattingContext {
+  workflowContext: any; // StringWorkflowContext
+  stepResults: string[];
+  completedSteps: string[];
+  globalContext: string[];
+  originalRequest: string;
+}
+
 /**
  * Service responsible for formatting responses and handling errors
  *
@@ -155,6 +163,64 @@ export class ResponseFormatter extends BaseService {
         needsConfirmation: false,
         success: true,
         toolResults,
+        executionMetadata: {
+          processingTime: Date.now() - context.processingStartTime
+        }
+      };
+    }
+  }
+
+  /**
+   * Format a workflow response with LLM-based formatting
+   *
+   * @param context - Workflow formatting context
+   * @returns Promise resolving to formatted response
+   */
+  async formatWorkflowResponse(
+    context: WorkflowFormattingContext
+  ): Promise<FormattedResponse> {
+    this.assertReady();
+
+    try {
+      this.logDebug('Formatting workflow response', {
+        stepCount: context.stepResults.length,
+        sessionId: context.sessionId
+      });
+
+      // Generate natural language response from workflow results
+      const message = await this.generateWorkflowResponse(context);
+
+      // Calculate processing time
+      const processingTime = Date.now() - context.processingStartTime;
+
+      const response: FormattedResponse = {
+        message,
+        needsConfirmation: false,
+        success: true,
+        executionMetadata: {
+          processingTime,
+          workflowId: context.workflowId,
+          totalSteps: context.stepResults.length,
+          workflowAction: context.workflowAction
+        }
+      };
+
+      this.logInfo('Workflow response formatted', {
+        messageLength: message.length,
+        processingTime,
+        sessionId: context.sessionId
+      });
+
+      return response;
+
+    } catch (error) {
+      this.logError('Failed to format workflow response', { error, context });
+
+      // Return fallback response
+      return {
+        message: 'Workflow completed successfully.',
+        needsConfirmation: false,
+        success: true,
         executionMetadata: {
           processingTime: Date.now() - context.processingStartTime
         }
@@ -536,5 +602,52 @@ Response:`;
   private extractBody(draft: Draft): string | undefined {
     const params = draft.parameters as Record<string, unknown>;
     return params.body as string || params.content as string;
+  }
+
+  /**
+   * Generate natural language response from workflow results
+   */
+  private async generateWorkflowResponse(context: WorkflowFormattingContext): Promise<string> {
+    if (!this.openaiService) {
+      return context.stepResults.join('\n\n');
+    }
+
+    const prompt = `You are formatting the final response for a user's request that was processed through a multi-step workflow.
+
+ORIGINAL USER REQUEST: "${context.originalRequest}"
+
+WORKFLOW STEPS COMPLETED:
+${context.completedSteps.map((step, i) => 
+  `${i + 1}. ${step}\n   Result: ${context.stepResults[i]?.substring(0, 200) || 'N/A'}`
+).join('\n\n')}
+
+GLOBAL CONTEXT GATHERED:
+${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No additional context'}
+
+INSTRUCTIONS:
+1. Create a coherent, professional response that addresses the user's original request
+2. Synthesize the step results into a natural, helpful response
+3. Include relevant information from the global context
+4. Be concise but comprehensive
+5. Use a friendly, helpful tone
+6. Focus on what was accomplished and any important findings
+
+Return a well-formatted response that the user will find helpful and informative.`;
+
+    try {
+      const response = await this.openaiService.generateText(
+        context.originalRequest,
+        prompt,
+        {
+          temperature: 0.7,
+          maxTokens: 800
+        }
+      );
+
+      return response.trim();
+    } catch (error) {
+      this.logError('Failed to generate workflow response', { error });
+      return context.stepResults.join('\n\n');
+    }
   }
 }

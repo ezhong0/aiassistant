@@ -17,6 +17,7 @@ import { SlackOAuthService } from './slack/slack-oauth.service';
 import { DraftManager } from './draft-manager.service';
 import { AuthStatusService } from './auth-status.service';
 import { ConfigService } from './config.service';
+import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 
 /**
  * Register and initialize all core application services
@@ -242,6 +243,11 @@ const registerCoreServices = async (): Promise<void> => {
     const { PlanReevaluationService } = await import('./plan-reevaluation.service');
     const planReevaluationService = new PlanReevaluationService();
     serviceManager.registerService('planReevaluationService', planReevaluationService, ['openaiService']);
+
+    // 48. StepExecutionService - Single step execution with context-aware agent selection
+    const { StepExecutionService } = await import('./step-execution.service');
+    const stepExecutionService = new StepExecutionService();
+    serviceManager.registerService('stepExecutionService', stepExecutionService, ['openaiService']);
 
     // 47. ServiceCoordinator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
 
