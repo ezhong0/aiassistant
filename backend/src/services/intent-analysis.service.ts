@@ -118,7 +118,7 @@ export class IntentAnalysisService extends BaseService {
         }
       );
 
-      const analysisResult = this.parseIntentAnalysisResponse(response, context);
+      const analysisResult = await this.parseIntentAnalysisResponse(response, context);
 
       this.logInfo('Intent analysis completed successfully', {
         intentType: analysisResult.intentType,
@@ -272,36 +272,69 @@ Analyze the intent and respond with valid JSON only.`;
   }
 
   /**
-   * Parse intent analysis response from OpenAI
+   * Parse intent analysis response from OpenAI with direct JSON parsing
    */
-  private parseIntentAnalysisResponse(response: string, context: AnalysisContext): IntentAnalysis {
+  private async parseIntentAnalysisResponse(response: string, context: AnalysisContext): Promise<IntentAnalysis> {
     try {
-      // Extract JSON from response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+      // Try direct JSON parsing first
+      const directParse = this.tryDirectJsonParse(response);
+      if (directParse) {
+        return this.validateAndFormatIntent(directParse);
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      // Validate required fields
-      if (!parsed.intentType || !parsed.confidence || !parsed.reasoning) {
-        throw new Error('Missing required fields in response');
-      }
-
-      return {
-        intentType: parsed.intentType,
-        confidence: parsed.confidence,
-        reasoning: parsed.reasoning,
-        targetDraftId: parsed.targetDraftId,
-        modifications: parsed.modifications,
-        newOperation: parsed.newOperation,
-        readOperations: parsed.readOperations
-      };
+      throw new Error('No valid JSON found in response');
     } catch (error) {
       this.logError('Failed to parse intent analysis response', { error, response });
       return this.fallbackIntentAnalysis(context);
     }
+  }
+
+  /**
+   * Try direct JSON parsing
+   */
+  private tryDirectJsonParse(response: string): any | null {
+    try {
+      return JSON.parse(response.trim());
+    } catch {
+      return null;
+    }
+  }
+
+
+
+  /**
+   * Validate and format intent analysis result
+   */
+  private validateAndFormatIntent(parsed: any): IntentAnalysis {
+    // Validate required fields
+    if (!parsed.intentType || !parsed.confidence || !parsed.reasoning) {
+      throw new Error('Missing required fields in response');
+    }
+
+    // Validate intentType is one of the allowed values
+    const validIntentTypes = [
+      'confirmation_positive', 'confirmation_negative', 'draft_modification',
+      'new_request', 'new_write_operation', 'read_operation'
+    ];
+    
+    if (!validIntentTypes.includes(parsed.intentType)) {
+      throw new Error(`Invalid intentType: ${parsed.intentType}`);
+    }
+
+    // Validate confidence is a number between 0 and 1
+    if (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 1) {
+      throw new Error(`Invalid confidence: ${parsed.confidence}`);
+    }
+
+    return {
+      intentType: parsed.intentType,
+      confidence: parsed.confidence,
+      reasoning: parsed.reasoning,
+      targetDraftId: parsed.targetDraftId,
+      modifications: parsed.modifications,
+      newOperation: parsed.newOperation,
+      readOperations: parsed.readOperations
+    };
   }
 
   /**

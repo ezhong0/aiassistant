@@ -677,7 +677,7 @@ export class GmailService extends BaseService {
       });
 
       // Extract body content
-      const body = this.extractMessageBody(message.payload);
+      const body = await this.extractMessageBody(message.payload);
 
       this.logInfo('GmailService.getFullMessage - Body extraction debug', {
         messageId,
@@ -753,7 +753,7 @@ export class GmailService extends BaseService {
   /**
    * Extract message body from Gmail payload with aggressive truncation to prevent context length issues
    */
-  private extractMessageBody(payload: any): { text?: string; html?: string } {
+  private async extractMessageBody(payload: any): Promise<{ text?: string; html?: string }> {
     if (!payload) return {};
 
     const body: { text?: string; html?: string } = {};
@@ -762,9 +762,9 @@ export class GmailService extends BaseService {
     if (payload.body?.data) {
       const content = Buffer.from(payload.body.data, 'base64').toString('utf-8');
       if (payload.mimeType === 'text/plain') {
-        body.text = this.truncateEmailContent(content, 'text');
+        body.text = await this.truncateEmailContent(content, 'text');
       } else if (payload.mimeType === 'text/html') {
-        body.html = this.truncateEmailContent(content, 'html');
+        body.html = await this.truncateEmailContent(content, 'html');
       }
       return body;
     }
@@ -774,14 +774,14 @@ export class GmailService extends BaseService {
       for (const part of payload.parts) {
         if (part.mimeType === 'text/plain' && part.body?.data) {
           const content = Buffer.from(part.body.data, 'base64').toString('utf-8');
-          body.text = this.truncateEmailContent(content, 'text');
+          body.text = await this.truncateEmailContent(content, 'text');
         } else if (part.mimeType === 'text/html' && part.body?.data) {
           const content = Buffer.from(part.body.data, 'base64').toString('utf-8');
-          body.html = this.truncateEmailContent(content, 'html');
+          body.html = await this.truncateEmailContent(content, 'html');
         }
         // Recursively check nested parts
         else if (part.parts) {
-          const nestedBody = this.extractMessageBody(part);
+          const nestedBody = await this.extractMessageBody(part);
           if (nestedBody.text) body.text = nestedBody.text;
           if (nestedBody.html) body.html = nestedBody.html;
         }
@@ -792,9 +792,9 @@ export class GmailService extends BaseService {
   }
 
   /**
-   * Truncate email content to prevent OpenAI context length issues
+   * Truncate email content to prevent OpenAI context length issues with AI-powered HTML handling
    */
-  private truncateEmailContent(content: string, type: 'text' | 'html'): string {
+  private async truncateEmailContent(content: string, type: 'text' | 'html'): Promise<string> {
     if (!content) return '';
 
     // Different limits for different content types
@@ -809,33 +809,85 @@ export class GmailService extends BaseService {
       return content;
     }
 
-    // For HTML, try to extract meaningful content before truncating
+    // For HTML, use improved cleaning strategy
     if (type === 'html') {
-      // Remove excessive whitespace and normalize
-      let cleaned = content.replace(/\s+/g, ' ').trim();
-      
-      // Try to extract text content from HTML
-      const textMatch = cleaned.match(/<body[^>]*>(.*?)<\/body>/is);
-      if (textMatch && textMatch[1]) {
-        cleaned = textMatch[1];
-      }
-      
-      // Remove HTML tags for better content extraction
-      const textContent = cleaned.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-      
-      // Use the shorter of cleaned HTML or extracted text
-      const finalContent = textContent.length < cleaned.length ? textContent : cleaned;
-      
-      if (finalContent.length <= maxLength) {
-        return finalContent;
-      }
-      
-      // Truncate with ellipsis
-      return finalContent.substring(0, maxLength - 3) + '...';
+      return await this.cleanHtmlContent(content, maxLength);
     }
 
     // For plain text, simple truncation
-    return content.substring(0, maxLength - 3) + '...';
+    return this.truncateText(content, maxLength);
+  }
+
+  /**
+   * Clean HTML content with AI-powered text extraction
+   */
+  private async cleanHtmlContent(content: string, maxLength: number): Promise<string> {
+    try {
+      // Use AI-powered HTML text extraction
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        throw new Error('AI service not available for HTML cleaning');
+      }
+
+      return await this.extractTextWithAI(content, maxLength, openaiService);
+    } catch (error) {
+      this.logError('HTML cleaning failed', { error });
+      return this.truncateText(content, maxLength);
+    }
+  }
+
+  /**
+   * Extract text from HTML using AI
+   */
+  private async extractTextWithAI(content: string, maxLength: number, openaiService: any): Promise<string> {
+    const prompt = `Extract clean, readable text from this HTML content. Remove all HTML tags, scripts, styles, and formatting. Return only the plain text content:
+
+${content}
+
+Return only the extracted text, no HTML tags or formatting.`;
+
+    try {
+      const extractedText = await openaiService.generateText(
+        prompt,
+        'You extract clean text from HTML. Return only plain text.',
+        { temperature: 0.1, maxTokens: Math.min(maxLength * 2, 2000) }
+      );
+
+      return this.truncateText(extractedText, maxLength);
+    } catch (error) {
+      throw new Error(`AI HTML extraction failed: ${error}`);
+    }
+  }
+
+  /**
+   * Get OpenAI service from service manager
+   */
+  private getOpenAIService(): any {
+    try {
+      const { serviceManager } = require('../service-manager');
+      return serviceManager.getService('OpenAIService');
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Truncate text with ellipsis, trying to break at word boundaries
+   */
+  private truncateText(text: string, maxLength: number): string {
+    if (text.length <= maxLength) {
+      return text;
+    }
+
+    // Try to truncate at word boundary
+    const truncated = text.substring(0, maxLength - 3);
+    const lastSpace = truncated.lastIndexOf(' ');
+    
+    if (lastSpace > maxLength * 0.8) { // Only use word boundary if it's not too far back
+      return truncated.substring(0, lastSpace) + '...';
+    }
+
+    return truncated + '...';
   }
 
   /**

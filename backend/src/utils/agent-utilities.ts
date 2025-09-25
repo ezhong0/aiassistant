@@ -128,22 +128,63 @@ export function assertValidAISchema(schema: AISchema): void {
 
 
 /**
- * Analyze if a step result indicates an error
+ * Analyze if a step result indicates an error using AI intelligence
  */
-export function isErrorResult(result: string): boolean {
-  const errorIndicators = [
-    'error',
-    'failed',
-    "wasn't able",
-    "couldn't",
-    'unable to',
-    'unfortunately',
-    'cannot',
-  ];
+export async function isErrorResult(result: string, openaiService?: any): Promise<boolean> {
+  // If no OpenAI service provided, try to get it from service manager
+  if (!openaiService) {
+    try {
+      const { serviceManager } = await import('../services/service-manager');
+      openaiService = serviceManager.getService('OpenAIService');
+    } catch {
+      // Service manager not available, throw error
+      throw new Error('No AI service available for error detection');
+    }
+  }
 
-  return errorIndicators.some((indicator) =>
-    result.toLowerCase().includes(indicator)
-  );
+  // Use AI-powered error detection
+  try {
+    return await detectErrorWithAI(result, openaiService);
+  } catch (error) {
+    throw new Error(`Error detection failed: ${error}`);
+  }
+}
+
+/**
+ * AI-powered error detection using OpenAI service
+ */
+async function detectErrorWithAI(result: string, openaiService: any): Promise<boolean> {
+  const prompt = `Analyze if this text indicates an error or failure:
+
+Text: "${result}"
+
+Return only "true" if this indicates an error/failure, "false" otherwise.
+
+Error indicators include:
+- Explicit error messages ("error", "failed", "unable to")
+- Negative outcomes ("couldn't find", "not found", "not available")
+- Failure descriptions ("didn't work", "wasn't successful")
+- Exception messages or stack traces
+
+Non-error indicators include:
+- Success messages ("successfully", "completed", "found")
+- Informational responses ("here are the results", "I found 5 items")
+- Questions or requests ("what would you like", "please provide")
+- Neutral statements ("the data shows", "according to the records")
+
+Be precise - only return "true" for actual errors or failures.`;
+
+  try {
+    const response = await openaiService.generateText(
+      prompt,
+      'You detect error messages. Return only "true" or "false".',
+      { temperature: 0.1, maxTokens: 10 }
+    );
+
+    return response.trim().toLowerCase() === 'true';
+  } catch (error) {
+    throw new Error(`AI error detection failed: ${error}`);
+  }
 }
 
 

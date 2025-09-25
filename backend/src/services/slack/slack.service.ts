@@ -214,7 +214,7 @@ export class SlackService extends BaseService {
       }
 
       // Check for confirmation patterns
-      if (this.isConfirmationMessage(messageText)) {
+      if (await this.isConfirmationMessage(messageText, context)) {
         return await this.handleConfirmation(messageText, context);
       }
 
@@ -331,25 +331,68 @@ export class SlackService extends BaseService {
   }
 
   /**
-   * Check if message is a confirmation
+   * Check if message is a confirmation using AI-powered intent analysis
    */
-  private isConfirmationMessage(messageText: string): boolean {
-    const confirmationPatterns = [
-      /^(yes|y|confirm|ok|proceed|do it)/i,
-      /^(no|n|cancel|stop|abort)/i
-    ];
+  private async isConfirmationMessage(messageText: string, context: SlackContext): Promise<boolean> {
+    try {
+      // Use IntentAnalysisService directly
+      const intentAnalysisService = this.getIntentAnalysisService();
+      if (!intentAnalysisService) {
+        throw new Error('IntentAnalysisService not available for confirmation detection');
+      }
 
-    return confirmationPatterns.some(pattern => pattern.test(messageText.trim()));
+      const sessionId = `slack:${context.teamId}:${context.userId}`;
+      
+      // Create analysis context for confirmation detection
+      const analysisContext = {
+        userInput: messageText,
+        sessionId,
+        hasPendingDrafts: false,
+        existingDrafts: [],
+        slackContext: {
+          channel: context.channelId,
+          userId: context.userId,
+          teamId: context.teamId,
+          threadTs: context.threadTs
+        }
+      };
+
+      // Use IntentAnalysisService directly
+      const intent = await intentAnalysisService.analyzeIntent(analysisContext);
+      
+      return intent.intentType === 'confirmation_positive' || 
+             intent.intentType === 'confirmation_negative';
+    } catch (error) {
+      this.logError('Confirmation detection failed', { error });
+      return false;
+    }
   }
 
   /**
-   * Handle confirmation messages
+   * Handle confirmation messages using AI analysis
    */
   private async handleConfirmation(messageText: string, context: SlackContext): Promise<SlackResponse> {
     try {
-      const isPositive = /^(yes|y|confirm|ok|proceed|do it)/i.test(messageText.trim());
+      // Use AI to determine if confirmation is positive or negative
+      const openaiService = this.getOpenAIService();
+      if (!openaiService) {
+        throw new Error('AI service not available for confirmation handling');
+      }
 
-      // This would integrate with the existing confirmation system
+      const prompt = `Determine if this confirmation message is positive (yes/proceed) or negative (no/cancel):
+
+Message: "${messageText}"
+
+Return only "positive" or "negative".`;
+
+      const response = await openaiService.generateText(
+        prompt,
+        'You determine confirmation intent. Return only "positive" or "negative".',
+        { temperature: 0.1, maxTokens: 10 }
+      );
+
+      const isPositive = response.trim().toLowerCase() === 'positive';
+
       return {
         success: true,
         message: isPositive ? 'Confirmation received - proceeding' : 'Confirmation cancelled',
@@ -666,13 +709,24 @@ Be concise but helpful. Slack users prefer shorter, actionable messages.
   }
 
   /**
-   * Get OpenAI service from MasterAgent or service manager
+   * Get IntentAnalysisService from service manager
+   */
+  private getIntentAnalysisService(): any {
+    try {
+      const serviceManager = require('../service-manager').serviceManager;
+      return serviceManager.getService('IntentAnalysisService');
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get OpenAI service from service manager
    */
   private getOpenAIService(): any {
     try {
-      // Get from service manager
       const serviceManager = require('../service-manager').serviceManager;
-      return serviceManager.getService('openaiService');
+      return serviceManager.getService('OpenAIService');
     } catch {
       return null;
     }
