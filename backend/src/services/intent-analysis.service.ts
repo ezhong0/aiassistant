@@ -20,6 +20,28 @@ export interface IntentAnalysis {
   newOperation?: WriteOperation;
 }
 
+/**
+ * New interfaces for simplified risk-based execution
+ */
+export interface ActionIntent {
+  type: string;
+  target?: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  needsContext: boolean;
+}
+
+export interface ExecutionStrategy {
+  action: 'execute_directly' | 'execute_with_explanation' | 'clarify_then_execute';
+  reasoning: string;
+}
+
+export interface EssentialContext {
+  recentEmails?: Array<{from: string, subject: string, date: Date}>;
+  calendarConflicts?: Array<{title: string, time: Date}>;
+  relationshipTone?: 'formal' | 'casual' | 'unknown';
+  hasUrgentItems?: boolean;
+}
+
 export interface AnalysisContext {
   userInput: string;
   sessionId: string;
@@ -61,6 +83,30 @@ import { ToolCall } from '../types/tools';
 export class IntentAnalysisService extends BaseService {
   private openaiService: OpenAIService | null = null;
   private draftManager: DraftManager | null = null;
+
+  /**
+   * Simple risk rules for Claude Code-inspired approach
+   */
+  private readonly SIMPLE_RISK_RULES: Record<string, 'low' | 'medium' | 'high'> = {
+    // Low risk - execute directly
+    'confirm_attendance': 'low',
+    'search_emails': 'low',
+    'list_events': 'low',
+    'find_contact': 'low',
+    'read_operation': 'low',
+
+    // Medium risk - execute with explanation
+    'send_email': 'medium',
+    'create_event': 'medium',
+    'update_contact': 'medium',
+    'new_write_operation': 'medium',
+
+    // High risk - clarify first
+    'send_investor_update': 'high',
+    'delete_event': 'high',
+    'send_legal_communication': 'high',
+    'draft_modification': 'high'
+  };
 
   constructor() {
     super('IntentAnalysisService');
@@ -132,6 +178,80 @@ export class IntentAnalysisService extends BaseService {
       // Fallback to basic intent analysis
       return this.fallbackIntentAnalysis(context);
     }
+  }
+
+  /**
+   * Classify action risk using simple binary rules (Claude Code approach)
+   */
+  async classifyActionRisk(intent: IntentAnalysis): Promise<ActionIntent> {
+    const riskLevel = this.getSimpleRiskLevel(intent.intentType);
+
+    return {
+      type: intent.intentType,
+      target: this.extractTarget(intent.intentDescription),
+      riskLevel,
+      needsContext: riskLevel !== 'low'
+    };
+  }
+
+  /**
+   * Determine execution strategy based on risk level
+   */
+  determineExecutionStrategy(
+    intent: ActionIntent,
+    context: EssentialContext = {}
+  ): ExecutionStrategy {
+    switch (intent.riskLevel) {
+      case 'low':
+        return {
+          action: 'execute_directly',
+          reasoning: 'Low risk action - executing immediately'
+        };
+
+      case 'medium':
+        return {
+          action: 'execute_with_explanation',
+          reasoning: `Medium risk action - executing with context: ${this.summarizeContext(context)}`
+        };
+
+      case 'high':
+        return {
+          action: 'clarify_then_execute',
+          reasoning: 'High risk action - need specific details before proceeding'
+        };
+    }
+  }
+
+  /**
+   * Simple risk level classification
+   */
+  private getSimpleRiskLevel(actionType: string): 'low' | 'medium' | 'high' {
+    return this.SIMPLE_RISK_RULES[actionType] || 'medium'; // Default to medium risk
+  }
+
+  /**
+   * Extract target from intent description
+   */
+  private extractTarget(description: string): string | undefined {
+    // Simple regex to extract email addresses or names
+    const emailMatch = description.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i);
+    if (emailMatch) return emailMatch[1];
+
+    const nameMatch = description.match(/(?:to|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+    if (nameMatch) return nameMatch[1];
+
+    return undefined;
+  }
+
+  /**
+   * Simple context summary for transparency
+   */
+  private summarizeContext(context: EssentialContext): string {
+    const parts = [];
+    if (context.recentEmails?.length) parts.push(`${context.recentEmails.length} recent emails`);
+    if (context.calendarConflicts?.length) parts.push(`${context.calendarConflicts.length} conflicts`);
+    if (context.relationshipTone) parts.push(`${context.relationshipTone} tone`);
+    return parts.join(', ') || 'no additional context';
   }
 
   /**

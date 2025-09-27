@@ -612,9 +612,13 @@ Response:`;
       return context.stepResults.join('\n\n');
     }
 
-    const prompt = `You are formatting the final response for a user's request that was processed through a multi-step workflow.
+    const prompt = `You are a virtual executive assistant responding to a user's request. Your job is to provide a helpful, professional response that directly addresses what the user asked for.
 
-ORIGINAL USER REQUEST: "${context.originalRequest}"
+USER'S ORIGINAL REQUEST: "${context.originalRequest}"
+
+INITIAL INTENT ANALYSIS:
+- Intent Type: ${context.workflowContext?.intentType || 'Not specified'}
+- Intent Description: ${context.workflowContext?.intentDescription || 'Not specified'}
 
 WORKFLOW STEPS COMPLETED:
 ${context.completedSteps.map((step, i) => 
@@ -625,14 +629,25 @@ GLOBAL CONTEXT GATHERED:
 ${context.globalContext.length > 0 ? context.globalContext.join('\n') : 'No additional context'}
 
 INSTRUCTIONS:
-1. Create a coherent, professional response that addresses the user's original request
-2. Synthesize the step results into a natural, helpful response
-3. Include relevant information from the global context
-4. Be concise but comprehensive
-5. Use a friendly, helpful tone
-6. Focus on what was accomplished and any important findings
+You are a virtual executive assistant. Create a response that:
+1. Directly addresses the user's original request with the information they wanted
+2. Synthesizes all the workflow results into a coherent, helpful response
+3. Uses the global context to provide additional relevant information
+4. Maintains a professional yet friendly executive assistant tone
+5. Focuses on delivering the specific information the user requested
+6. Be concise but comprehensive - give them what they need to know
+7. If there are multiple findings or results, organize them clearly
+8. End with a helpful follow-up offer if appropriate
 
-Return a well-formatted response that the user will find helpful and informative.`;
+FORMATTING GUIDELINES:
+- Use ONLY natural language - no markdown formatting, links, or technical elements
+- Present information in a conversational, easy-to-read format
+- Focus on the content the user cares about, not technical details or system-generated elements
+- Think about what a human assistant would naturally say when sharing this information
+- Avoid including URLs, technical IDs, or system-generated links unless specifically requested
+- Use simple, clear language that flows naturally in conversation
+
+Respond as a virtual executive assistant who has completed the user's request and is providing them with the information they asked for in a natural, conversational way.`;
 
     try {
       const response = await this.openaiService.generateText(

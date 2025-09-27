@@ -241,6 +241,18 @@ export class SlackService extends BaseService {
 
     switch (eventType) {
       case 'message':
+        // Check for message subtypes
+        const subtype = (event as any).subtype;
+        if (subtype === 'message_changed') {
+          this.logInfo('Processing message_changed event', {
+            eventType,
+            subtype,
+            userId: context.userId,
+            operation: 'message_changed_event_start'
+          });
+          return await this.handleMessageChangedEvent(event, context);
+        }
+        
         this.logInfo('Processing message event', {
           eventType,
           userId: context.userId,
@@ -343,6 +355,48 @@ export class SlackService extends BaseService {
   private async handleAppMentionEvent(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
     // Similar to message handling but for mentions
     return await this.handleMessageEvent(event, context);
+  }
+
+  /**
+   * Handle message_changed events (when bot messages are updated)
+   */
+  private async handleMessageChangedEvent(event: SlackEvent, context: SlackContext): Promise<SlackResponse> {
+    try {
+      const messageChangedEvent = event as any;
+      
+      this.logInfo('Handling message_changed event', {
+        userId: context.userId,
+        channelId: context.channelId,
+        messageTs: messageChangedEvent.ts,
+        operation: 'message_changed_processing'
+      });
+
+      // For message_changed events, we typically want to ignore them
+      // as they represent bot message updates, not user input
+      // This prevents infinite loops when the bot updates its own messages
+      
+      this.logInfo('Message_changed event ignored (bot message update)', {
+        userId: context.userId,
+        channelId: context.channelId,
+        operation: 'message_changed_ignored'
+      });
+
+      return { 
+        success: true, 
+        message: 'Message_changed event ignored - bot message update' 
+      };
+
+    } catch (error) {
+      this.logError('Failed to handle message_changed event', error, {
+        userId: context.userId,
+        operation: 'message_changed_event_error'
+      });
+      return {
+        success: false,
+        message: 'Failed to handle message_changed event',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 
   /**
@@ -884,7 +938,7 @@ Be concise but helpful. Slack users prefer shorter, actionable messages.
   private getOpenAIService(): any {
     try {
       const serviceManager = require('../service-manager').serviceManager;
-      return serviceManager.getService('OpenAIService');
+      return serviceManager.getService('openaiService');
     } catch {
       return null;
     }

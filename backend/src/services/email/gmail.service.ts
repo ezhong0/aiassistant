@@ -865,7 +865,7 @@ Return only the extracted text, no HTML tags or formatting.`;
   private getOpenAIService(): any {
     try {
       const { serviceManager } = require('../service-manager');
-      return serviceManager.getService('OpenAIService');
+      return serviceManager.getService('openaiService');
     } catch {
       return null;
     }

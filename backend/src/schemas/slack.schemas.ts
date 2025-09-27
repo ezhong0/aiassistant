@@ -27,6 +27,38 @@ export const SlackMessageEventSchema = z.object({
   channel_type: OptionalStringSchema,
 });
 
+// Slack message changed event schema (for bot message updates)
+export const SlackMessageChangedEventSchema = z.object({
+  type: z.literal('message'),
+  subtype: z.literal('message_changed'),
+  channel: z.string(),
+  ts: z.string(),
+  message: z.object({
+    type: z.string(),
+    user: z.string(),
+    text: z.string(),
+    ts: z.string(),
+    bot_id: OptionalStringSchema,
+    app_id: OptionalStringSchema,
+    team: z.string(),
+    blocks: z.any().optional(),
+    attachments: z.any().optional(),
+  }),
+  previous_message: z.object({
+    type: z.string(),
+    user: z.string(),
+    text: z.string(),
+    ts: z.string(),
+    bot_id: OptionalStringSchema,
+    app_id: OptionalStringSchema,
+    team: z.string(),
+    blocks: z.any().optional(),
+    attachments: z.any().optional(),
+  }),
+  hidden: z.boolean().optional(),
+  event_ts: z.string().optional(),
+});
+
 // Slack app mention event schema
 export const SlackAppMentionEventSchema = z.object({
   type: z.literal('app_mention'),
@@ -210,7 +242,7 @@ export const SlackWebhookEventSchema = z.object({
   token: z.string(),
   team_id: z.string(),
   api_app_id: z.string(),
-  event: z.union([SlackMessageEventSchema, SlackAppMentionEventSchema]),
+  event: z.union([SlackMessageEventSchema, SlackMessageChangedEventSchema, SlackAppMentionEventSchema]),
   type: z.string(),
   event_id: z.string(),
   event_time: z.number(),

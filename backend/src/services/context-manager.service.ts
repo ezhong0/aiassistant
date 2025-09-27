@@ -2,6 +2,7 @@ import { BaseService } from './base-service';
 import { serviceManager } from "./service-manager";
 import { SlackContext } from '../types/slack/slack.types';
 import { CacheService } from './cache.service';
+import { EssentialContext, ActionIntent } from './intent-analysis.service';
 
 /**
  * Context interfaces
@@ -433,5 +434,161 @@ export class ContextManager extends BaseService {
     }
 
     return relevantMessages.slice(-7); // Limit relevant history
+  }
+
+  /**
+   * Discover essential context for risk-based execution (Claude Code approach)
+   * Only gathers immediately relevant information - no deep analysis
+   */
+  async discoverEssentialContext(
+    intent: ActionIntent,
+    sessionId: string
+  ): Promise<EssentialContext> {
+    this.assertReady();
+
+    if (!intent.needsContext) {
+      return {}; // Skip context discovery for low-risk actions
+    }
+
+    this.logDebug('Gathering essential context', {
+      sessionId,
+      intentType: intent.type,
+      riskLevel: intent.riskLevel
+    });
+
+    const context: EssentialContext = {};
+
+    try {
+      // Parallel discovery of essential context elements
+      const discoveries = await Promise.all([
+        intent.target ? this.getRecentEmailsFrom(intent.target) : Promise.resolve([]),
+        intent.type.includes('schedule') || intent.type.includes('calendar') ? this.getCalendarConflicts() : Promise.resolve([]),
+        intent.target ? this.getBasicTone(intent.target) : Promise.resolve('unknown' as const)
+      ]);
+
+      context.recentEmails = discoveries[0];
+      context.calendarConflicts = discoveries[1];
+      context.relationshipTone = discoveries[2];
+
+      // Check for urgent items in recent conversations
+      context.hasUrgentItems = await this.checkForUrgentItems(sessionId);
+
+      this.logInfo('Essential context discovery completed', {
+        sessionId,
+        emailsFound: context.recentEmails?.length || 0,
+        conflictsFound: context.calendarConflicts?.length || 0,
+        relationshipTone: context.relationshipTone,
+        hasUrgentItems: context.hasUrgentItems
+      });
+
+      return context;
+    } catch (error) {
+      this.logError('Failed to discover essential context', { error, sessionId, intent });
+      return {}; // Return empty context on failure
+    }
+  }
+
+  /**
+   * Get recent emails from a specific contact (simplified)
+   */
+  private async getRecentEmailsFrom(target: string): Promise<Array<{from: string, subject: string, date: Date}>> {
+    try {
+      // Try to get EmailAgent if available
+      const emailAgent = serviceManager.getService('emailAgent');
+      if (!emailAgent) return [];
+
+      // Simple search for recent emails from target
+      const result = await emailAgent.executeOperation?.('search', {
+        query: `from:${target}`,
+        maxResults: 3
+      });
+
+      if (result?.emails) {
+        return result.emails.map((email: any) => ({
+          from: email.from || target,
+          subject: email.subject || 'No subject',
+          date: new Date(email.date || Date.now())
+        }));
+      }
+
+      return [];
+    } catch (error) {
+      this.logWarn('Failed to get recent emails', { error, target });
+      return [];
+    }
+  }
+
+  /**
+   * Check for calendar conflicts (simplified)
+   */
+  private async getCalendarConflicts(): Promise<Array<{title: string, time: Date}>> {
+    try {
+      // Try to get CalendarAgent if available
+      const calendarAgent = serviceManager.getService('calendarAgent');
+      if (!calendarAgent) return [];
+
+      // Simple check for today's events
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+
+      const result = await calendarAgent.executeOperation?.('list', {
+        timeMin: today,
+        timeMax: tomorrow
+      });
+
+      if (result?.events) {
+        return result.events.slice(0, 3).map((event: any) => ({
+          title: event.title || event.summary || 'Untitled event',
+          time: new Date(event.start?.dateTime || event.start?.date || Date.now())
+        }));
+      }
+
+      return [];
+    } catch (error) {
+      this.logWarn('Failed to get calendar conflicts', { error });
+      return [];
+    }
+  }
+
+  /**
+   * Get basic relationship tone (simplified)
+   */
+  private async getBasicTone(target: string): Promise<'formal' | 'casual' | 'unknown'> {
+    try {
+      const emails = await this.getRecentEmailsFrom(target);
+
+      // Simple heuristic: if we have recent email history, default to casual
+      if (emails.length > 0) {
+        // Could analyze email content here for more sophistication
+        // For now, simple rule: if target is an email domain we recognize as business, formal
+        if (target.includes('@company.com') || target.includes('@corp.') || target.includes('.gov')) {
+          return 'formal';
+        }
+        return 'casual';
+      }
+
+      return 'unknown';
+    } catch (error) {
+      this.logWarn('Failed to determine relationship tone', { error, target });
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Check for urgent items in recent conversation
+   */
+  private async checkForUrgentItems(sessionId: string): Promise<boolean> {
+    try {
+      const recentHistory = await this.getRecentConversation(sessionId);
+      const recentText = recentHistory.slice(-5).join(' ').toLowerCase();
+
+      // Simple urgency indicators
+      const urgentKeywords = ['urgent', 'asap', 'immediately', 'emergency', 'critical', 'deadline'];
+      return urgentKeywords.some(keyword => recentText.includes(keyword));
+    } catch (error) {
+      this.logWarn('Failed to check for urgent items', { error, sessionId });
+      return false;
+    }
   }
 }

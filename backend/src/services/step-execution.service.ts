@@ -100,11 +100,43 @@ export class StepExecutionService extends BaseService {
         operation: 'agent_selected'
       });
 
-      // 2. Execute with selected agent
+      // 2. Get access token for the user (required for OAuth agents like calendar/email)
+      let accessToken: string | undefined;
+      if (executionContext.userId && executionContext.slackContext?.teamId) {
+        try {
+          const tokenManager = getService('tokenManager') as any;
+          if (tokenManager) {
+            const tokens = await tokenManager.getValidTokens(executionContext.slackContext.teamId, executionContext.userId);
+            accessToken = tokens;
+
+            logger.debug('Retrieved access token for agent execution', {
+              correlationId,
+              teamId: executionContext.slackContext.teamId,
+              userId: executionContext.userId,
+              hasAccessToken: !!accessToken,
+              tokenLength: accessToken?.length,
+              operation: 'access_token_retrieved'
+            });
+          }
+        } catch (tokenError) {
+          logger.warn('Failed to retrieve access token for agent execution', {
+            correlationId,
+            teamId: executionContext.slackContext?.teamId,
+            userId: executionContext.userId,
+            error: (tokenError as Error).message,
+            operation: 'access_token_retrieval_failed'
+          });
+        }
+      }
+
+      // 3. Execute with selected agent (including access token)
       const executionResult = await AgentFactory.executeAgentWithNaturalLanguage(
         agentSelection.agentName,
         agentSelection.optimizedCommand,
-        executionContext
+        {
+          ...executionContext,
+          accessToken
+        }
       );
 
       logger.warn('Step execution completed', {
