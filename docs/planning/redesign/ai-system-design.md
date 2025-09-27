@@ -4,6 +4,16 @@
 
 An intelligent executive assistant system architected on Claude Code's principles of specialized agents, deep context awareness, and intelligent orchestration. The system uses a Master Orchestrator Agent that delegates complex workflows to domain-specialized agents through natural language conversation, creating a powerful yet elegant multi-agent coordination framework.
 
+## MVP Scope and Constraints
+
+- Natural-language messaging between agents; no bespoke protocol layer. Use simple structured NL messages with minimal envelope (ids/correlation/timeouts) as needed.
+- Planning is linear (or simple single-branch) for MVP; avoid complex graphs.
+- Email Agent (MVP): draft/send emails, basic thread/label fetch, single follow-up sequence to non-responders.
+- Calendar Agent (MVP): primary calendar free/busy, event create/update, simple room selection via static tag/list.
+- Context (MVP): metadata-only bootstrap for recent email threads and calendar events; manual preferences for tone/working hours/VIPs; no signature scraping.
+- Execution: TodoWrite workflow tracking with linear dependencies, previews and approvals for medium/high-risk actions, durable persistence.
+- Defer to later phases: full Gmail/Calendar coverage, multi-calendar optimization, advanced analytics/segmentation, influence mapping, proactive suggestions, complex negotiation loops.
+
 ## Core Architecture Philosophy
 
 **Agent-Based Design**: Following Claude Code's sub-agent model, the system is built around specialized domain agents that communicate through natural language conversation.
@@ -37,12 +47,12 @@ An intelligent executive assistant system architected on Claude Code's principle
 
 #### Email Agent
 **Domain Authority:**
-- Complete Gmail API ecosystem (100+ endpoints)
-- Email composition, sending, tracking, and analytics
-- Thread analysis and conversation context
-- Template management and personalization
-- Sequence orchestration and campaign management
-- Multi-channel communication coordination
+- MVP Gmail subset only
+- Email composition and sending
+- Basic thread/label fetch for context
+- One follow-up sequence for non-responders
+- Optional simple templates; advanced personalization deferred
+- Multi-channel coordination deferred beyond MVP
 
 **Conversational Interface:**
 - Receives natural language requests from Master Agent
@@ -52,12 +62,11 @@ An intelligent executive assistant system architected on Claude Code's principle
 
 #### Calendar Agent
 **Domain Authority:**
-- Complete Google Calendar API ecosystem (80+ endpoints)
-- Multi-calendar availability analysis and optimization
-- Meeting logistics and resource coordination
-- Timezone complexity and travel time calculations
-- Recurring pattern management and optimization
-- Calendar health analysis and suggestions
+- MVP Google Calendar subset only
+- Primary calendar free/busy and event create/update
+- Simple room selection via static list/tag
+- Timezone basics supported; complex travel/buffer logic deferred
+- Recurring and health optimization deferred beyond MVP
 
 **Conversational Interface:**
 - Receives scheduling requests through natural language
@@ -65,48 +74,59 @@ An intelligent executive assistant system architected on Claude Code's principle
 - Negotiates constraints and alternatives
 - Provides calendar optimization recommendations
 
-## Shared Intelligence Infrastructure
+## Context Gathering and Intelligence Infrastructure
 
-### Context Management System (Shared Across All Agents)
-**Entity Graph System:**
-- **People**: Contact profiles, communication preferences, relationship strength, interaction history
-- **Organizations**: Company relationships, hierarchies, communication patterns, project associations
-- **Projects**: Stakeholder mapping, timelines, communication threads, meeting history, deliverables
-- **Events**: Meeting context, outcomes, follow-up requirements, relationship impacts
-- **Communications**: Thread analysis, tone patterns, response requirements, sequence context
+### Context Bootstrap and Discovery
+**Initial Context Gathering:**
+- **Email Analysis**: Scan recent email threads to identify key contacts, communication patterns, and relationships
+- **Calendar Analysis**: Analyze meeting patterns, recurring events, and attendee relationships
+- **Interaction Learning**: Learn communication styles and relationship dynamics from ongoing interactions
+- **Manual Context Input**: Allow user to provide explicit relationship and preference information
+
+**Ongoing Context Updates:**
+- **Real-time Learning**: Update relationship intelligence from each email and meeting interaction
+- **Pattern Detection**: Identify changes in communication frequency, tone, and scheduling patterns
+- **Context Validation**: Periodically verify learned patterns against recent behavior
+- **Privacy Boundaries**: Only store essential relationship metadata, not content
+
+### Entity Graph System (Shared Across All Agents)
+**Core Entities:**
+- **People**: Contact info, relationship strength (calculated from interaction frequency), communication preferences (learned from patterns)
+- **Organizations**: Company relationships, hierarchies discovered from email signatures and domains
+- **Projects**: Stakeholder mapping derived from email threads and meeting attendees
+- **Events**: Meeting context, outcomes inferred from follow-up patterns
+- **Communications**: Thread analysis for relationship context and response patterns
 
 **Relationship Intelligence Engine:**
-- Dynamic relationship scoring based on interaction frequency, context, and outcomes
-- Communication style learning and adaptation per relationship
-- Influence mapping and stakeholder prioritization analysis
-- Conflict detection and preference management across relationships
-- Cross-domain relationship insights (email + calendar patterns)
+- **Dynamic Scoring**: Relationship strength calculated from email frequency, response times, meeting patterns
+- **Communication Style Learning**: Formal vs casual tone preferences learned from email exchanges
+- **Influence Mapping**: Stakeholder importance inferred from CC patterns and meeting inclusion
+- **Pattern Detection**: Identifies changes in relationship dynamics over time
 
-### Temporal Intelligence (Shared Context)
-**Time-Aware Decision Making:**
-- **Historical Analysis**: Past interaction patterns, successful workflows, outcome tracking
-- **Current State**: Active workflows, pending actions, immediate priorities, resource availability
-- **Future Planning**: Scheduled events, planned sequences, anticipated needs, pattern predictions
-- **Temporal Optimization**: Timing analysis for communications, meetings, and workflows
+### Context-Driven Decision Making
+**Real-time Context Synthesis:**
+- **Relationship Context**: Current relationship strength and communication preferences for message tone
+- **Temporal Context**: Recent interaction patterns to inform scheduling and communication timing
+- **Project Context**: Active project associations to provide relevant context for meetings and emails
+- **Workflow Context**: Current active workflows to avoid conflicts and optimize coordination
 
-**Cross-Agent State Management:**
-- Multi-agent workflow coordination and dependency tracking
-- Shared state persistence across agent interactions
-- Recovery and continuation capabilities after system interruptions
-- Success/failure pattern learning for cross-domain optimization
+**Context Application:**
+- **Email Composition**: Apply relationship-appropriate tone and include relevant context
+- **Meeting Scheduling**: Consider relationship importance for priority and timing
+- **Workflow Planning**: Use past success patterns to optimize new workflow approaches
+- **Proactive Suggestions**: Identify opportunities based on relationship and temporal patterns
 
-### Learning and Optimization Engine
-**Pattern Recognition Across Domains:**
-- Communication effectiveness analysis (email response rates, meeting outcomes)
-- Scheduling optimization patterns (optimal meeting times, duration preferences)
-- Workflow efficiency measurement and improvement suggestions
-- Cross-domain correlation analysis (email frequency vs meeting success)
+### Learning and Pattern Recognition
+**Cross-Domain Pattern Analysis:**
+- **Communication Effectiveness**: Track email response rates and meeting acceptance rates
+- **Scheduling Success**: Identify optimal meeting times and duration preferences
+- **Workflow Efficiency**: Measure multi-step workflow completion rates and bottlenecks
+- **Relationship Dynamics**: Monitor changes in communication patterns and relationship strength
 
 **Adaptive Intelligence:**
-- User preference learning from agent interaction patterns
-- Context relevance scoring and refinement
-- Proactive opportunity identification across domains
-- Safety and risk assessment for complex multi-agent workflows
+- **Context Relevance Scoring**: Continuously refine which context factors are most predictive
+- **Pattern Evolution**: Adapt to changing user behavior and relationship dynamics
+- **Success Optimization**: Learn from successful workflows to improve future recommendations
 
 ## Conversational Workflow Engine
 
@@ -129,7 +149,7 @@ User Request → Intent Analysis → Context Synthesis → Agent Delegation → 
 - Dynamic reassignment based on agent responses
 
 **Inter-Agent Communication Framework:**
-- Structured conversation protocols between agents
+- Natural-language messages only (no bespoke protocol); minimal structure such as correlation IDs, timeouts, and safety tags
 - Context synchronization through natural language
 - Collaborative problem-solving for complex workflows
 - Result aggregation and user reporting
@@ -151,6 +171,36 @@ User Request → Intent Analysis → Context Synthesis → Agent Delegation → 
 - User intervention through conversational interruption
 - Learning integration through conversation analysis
 
+### Workflow State Management (TodoWrite System)
+**Multi-Step Process Tracking:**
+- Each complex workflow broken into atomic tasks with clear states
+- State tracking: pending → in_progress → completed → failed
+- Linear dependency management between tasks across agents for MVP
+- Progress visibility for user with ability to modify in-flight workflows
+
+**Workflow State Engine:**
+- **Workflow Creation**: Master Agent decomposes complex requests into tracked tasks
+- **State Persistence**: All workflow states maintained across system restarts
+- **Progress Monitoring**: Real-time updates as agents complete individual tasks
+- **Dependency Resolution**: Automatic task progression when dependencies are met
+- **Interruption Handling**: User can pause, modify, or cancel workflows at any point
+
+**Example Workflow State:**
+```
+Workflow: "Set up board meeting next month"
+Task 1: [completed] "Find optimal meeting time for 8 executives"
+Task 2: [completed] "Book Conference Room A with AV setup"
+Task 3: [in_progress] "Send formal invitations to board members"
+Task 4: [pending] "Set up agenda collection deadline"
+Task 5: [pending] "Configure RSVP tracking and follow-ups"
+```
+
+**State Synchronization:**
+- Agents update task states through conversational status reports
+- Master Agent maintains authoritative workflow state
+- User can query workflow status or modify remaining tasks
+- Failed tasks trigger alternative approaches or user notification
+
 ### Safety and Validation Framework
 **Conversational Safety:**
 - Agent-level risk assessment through dialogue
@@ -159,71 +209,141 @@ User Request → Intent Analysis → Context Synthesis → Agent Delegation → 
 - Clear explanation of planned actions and impacts
 
 **Confirmation Protocols:**
-- **Implicit Confirmation**: Low-risk, learned patterns proceed automatically
+- **Implicit Confirmation**: Low-risk, routine tasks proceed automatically
 - **Conversational Preview**: Medium-risk actions explained before execution
 - **Explicit Approval**: High-risk workflows require detailed user confirmation
-- **Dry-run Conversation**: Complex workflows simulated through agent dialogue
+- **Workflow Preview**: Complex multi-step workflows shown before execution
 
 **Safety Mechanisms:**
 - Agent-level rollback capabilities
-- Conversational checkpoints for user intervention
+- Workflow checkpoint system for user intervention
 - Real-time monitoring through agent status updates
 - Complete audit trail of all agent conversations and actions
 
-## Domain Agent Integration
+## Operational Flows and Error Handling
 
-### Agent API Ownership
-**Complete Domain Control:**
-- Each agent owns and manages all APIs within their domain
-- Direct API integration without middleware or abstraction layers
-- Domain-specific optimization, caching, and error handling
-- Natural language interface to Master Agent shields API complexity
-
-**Email Agent Domain:**
-- Gmail API (100+ endpoints): Complete email ecosystem management
-- Internal optimization: Batch operations, rate limiting, intelligent retry
-- Cross-platform readiness: Architecture supports Outlook, Office365 expansion
-- Conversational interface: Receives requests, reports results in natural language
-
-**Calendar Agent Domain:**
-- Google Calendar API (80+ endpoints): Complete scheduling ecosystem management
-- Internal intelligence: Availability caching, timezone handling, conflict resolution
-- Resource coordination: Meeting rooms, equipment, travel logistics
-- Conversational interface: Scheduling requests and status updates through dialogue
-
-### Agent Communication Framework
-**Conversational Coordination:**
-- Agents communicate through structured natural language
-- Master Agent orchestrates through conversation, not API calls
-- Context sharing through conversational handoffs
-- Real-time status updates and collaborative problem-solving
-
-**Shared Infrastructure Access:**
-- All agents access shared entity graph and context systems
-- Learning and pattern recognition shared across domains
-- Security and safety validation accessible to all agents
-- Unified audit trail of all conversations and actions
-
-### Agent Ecosystem Expansion
-**New Agent Integration:**
-- Self-contained agents with complete domain expertise
-- Conversational interfaces following established protocols
-- Independent development and deployment cycles
-- Plug-and-play addition to agent ecosystem
-
-**Future Agent Domains:**
+### Standard Workflow Execution Flow
+**Single-Agent Tasks:**
 ```
-Communication Agent: Slack, Teams, SMS with conversational coordination
-CRM Agent: Salesforce, HubSpot with customer relationship management
-Document Agent: Google Drive, SharePoint with content intelligence
-Travel Agent: Booking systems, expense management with logistics coordination
+1. User Request → Master Agent parses intent
+2. Master Agent identifies required domain agent
+3. Master Agent delegates with context via conversation
+4. Domain Agent executes and reports status
+5. Master Agent confirms completion with user
 ```
 
-**Agent Development Standards:**
-- Conversational interface protocols for Master Agent communication
-- Shared context and learning system integration
-- Domain-specific API management and optimization
-- Independent scaling and performance optimization
+**Multi-Agent Workflows:**
+```
+1. User Request → Master Agent decomposes into workflow with tasks
+2. Master Agent creates TodoWrite workflow with dependencies
+3. Master Agent delegates first task(s) to appropriate agents
+4. Agents execute, report completion, update workflow state
+5. Master Agent progresses workflow based on dependencies
+6. Process continues until all tasks completed
+7. Master Agent reports final workflow completion
+```
+
+### Error Handling and Recovery
+**API Failure Handling:**
+- **Transient Failures**: Automatic retry with exponential backoff
+- **Service Outages**: Agent reports capability loss, suggests alternatives
+- **Authentication Issues**: Agent requests credential refresh, notifies user
+- **Rate Limiting**: Agent queues operations, provides status updates
+
+**Workflow Error Recovery:**
+```
+Error Scenario: Calendar Agent cannot book requested room
+1. Calendar Agent reports: "Conference Room A unavailable for March 15"
+2. Master Agent evaluates alternatives: "Room B available, or reschedule to March 16"
+3. Master Agent asks user: "Room A unavailable. Use Room B or reschedule?"
+4. User responds, Master Agent updates workflow, delegates new task
+5. Calendar Agent executes alternative, workflow continues
+```
+
+**Agent Communication Failures:**
+- **Agent Unresponsive**: Master Agent timeout, switch to alternative approach
+- **Malformed Responses**: Master Agent requests clarification from agent
+- **Context Loss**: Master Agent re-provides context, resumes workflow
+- **State Desynchronization**: Master Agent queries agent state, reconciles differences
+
+### Confirmation and Safety Protocols
+**Risk Assessment Levels:**
+- **Low Risk**: Routine calendar blocks, standard email responses → Automatic execution
+- **Medium Risk**: Meeting rescheduling, non-standard emails → Preview and confirm
+- **High Risk**: Mass communications, important meeting changes → Explicit approval required
+
+**Confirmation Flow Example:**
+```
+High-Risk Action: Reschedule board meeting
+1. Calendar Agent identifies need to reschedule board meeting
+2. Calendar Agent reports to Master Agent with impact analysis
+3. Master Agent presents to user: "Board meeting conflict detected. Proposed reschedule affects 8 executives. Approve change to March 16?"
+4. User approves, Master Agent delegates rescheduling tasks
+5. Email Agent drafts notification, shows preview to user
+6. User approves, agents execute coordinated rescheduling
+```
+
+### Context Validation and Learning
+**Context Accuracy Checking:**
+- **Relationship Validation**: Periodically verify learned relationship strengths against recent interactions
+- **Pattern Verification**: Test learned patterns against new data, adjust confidence scores
+- **Preference Validation**: Occasionally confirm learned preferences with user
+- **Context Expiry**: Mark old context as less reliable, prioritize recent patterns
+
+**Learning Feedback Loops:**
+```
+Learning Cycle:
+1. Agent executes task (e.g., sends email)
+2. System tracks outcome (response rate, timing, user satisfaction)
+3. Pattern recognition analyzes success factors
+4. Adjusts future decision-making based on learned patterns
+5. User feedback further refines learning
+```
+
+## Agent Coordination Infrastructure
+
+### Inter-Agent Communication Protocol
+**Structured Conversation Format:**
+- **Status Reports**: Agents report task completion, failures, and progress
+- **Context Requests**: Agents request additional context for task execution
+- **Capability Queries**: Agents check what other agents can do
+- **Handoff Protocols**: Agents transfer context when delegating sub-tasks
+
+**Message Structure:**
+```
+Agent: Email Agent
+Status: Task Complete
+Task: "Send board meeting invitations"
+Result: "8 invitations sent successfully, RSVP tracking enabled"
+Context Updates: "Board member Sarah prefers morning meetings (learned from response)"
+Next Actions: "Monitor RSVPs, follow up in 48 hours if low response rate"
+```
+
+### Shared State Management
+**Workflow State Synchronization:**
+- Master Agent maintains authoritative workflow state
+- All agents can query current workflow status
+- Agents update task states through conversational status reports
+- State changes trigger dependent task availability
+
+**Context Sharing:**
+- All agents access shared entity graph for relationship context
+- Context updates from one agent benefit all other agents
+- Privacy boundaries prevent inappropriate context sharing
+- Context versioning tracks changes over time
+
+### System Health and Monitoring
+**Agent Health Monitoring:**
+- Each agent reports health status and capability availability
+- Master Agent tracks agent response times and success rates
+- Automatic fallback when agents become unavailable
+- Performance optimization based on agent efficiency metrics
+
+**System Recovery:**
+- Workflow state persistence survives system restarts
+- Context recovery from last known good state
+- Agent restart procedures restore capability without data loss
+- User notification of any service interruptions or limitations
 
 ## Natural Language Understanding
 
@@ -270,13 +390,6 @@ Email Agent → Master: "Logistics email sent to 12 attendees with room details"
 - Stakeholder influence mapping for appropriate formality levels
 - Cultural and temporal context considerations
 
-**Adaptive Template System:**
-- Context-driven template selection from learned patterns
-- Dynamic placeholder population from entity graph
-- Situation-specific customization (urgency, relationship, project context)
-- A/B testing and optimization based on response patterns
-- Version control with approval workflows for sensitive communications
-
 ## Workflow Examples
 
 ### Complex Meeting Coordination
@@ -318,6 +431,7 @@ Email Agent → Master Agent:
 ```
 
 ### Email Campaign with Learning
+Note: For MVP, simplify to a single follow-up; advanced segmentation/analytics deferred.
 ```
 User: "Launch the customer satisfaction survey: send initial email, follow up with non-responders in 1 week"
 
@@ -351,6 +465,7 @@ Email Agent → Master Agent:
 ```
 
 ### Proactive Calendar Optimization
+Note: Deferred beyond MVP. Kept for future scope clarity.
 ```
 System Proactive Analysis: "I notice you have 6 back-to-back meetings tomorrow with no prep time"
 
@@ -389,7 +504,7 @@ Master Agent → User:
 ### Conversational Intelligence
 **Agent Coordination:**
 - Natural language delegation with context-aware handoffs
-- Parallel agent execution for independent domains
+- Parallel agent execution for independent domains (deferred beyond MVP)
 - Collaborative problem-solving through structured dialogue
 - Real-time status updates and progress coordination
 
@@ -417,74 +532,35 @@ Master Agent → User:
 - Pattern recognition across all agent domains
 - Success/failure analysis for workflow optimization
 - Communication effectiveness tracking and improvement
-- User preference learning from agent interactions
 
 **System Evolution:**
 - Continuous improvement of conversational coordination
 - Agent performance optimization based on outcomes
 - Context relevance refinement through usage patterns
-- User feedback integration across all agent interactions
 
 ## Evolution and Expansion Strategy
 
 ### Phase 1: Core Foundation (Current Scope)
 **Master Agent + Core Domain Agents:**
 - Master Orchestrator with natural language delegation capabilities
-- Email Agent with complete Gmail API management (100+ endpoints)
-- Calendar Agent with complete Google Calendar API management (80+ endpoints)
+- Email Agent with MVP Gmail subset (draft/send, basic thread/label fetch, one follow-up)
+- Calendar Agent with MVP Calendar subset (primary free/busy, event create/update, simple room tags)
 - Shared context architecture with entity graph and relationship intelligence
 - Cross-agent workflow coordination with safety validation and state management
-- Learning system for user preference adaptation across domains
 
 ### Phase 2: Intelligence Enhancement
 **Advanced Cross-Agent Learning:**
-- **Predictive Intelligence**: ML-driven optimization using data from all agents
-- **Communication Intelligence**: Advanced tone analysis and response optimization
-- **Pattern Recognition**: Deep workflow pattern learning across email and calendar domains
-- **Context Synthesis**: Cross-domain intelligence linking communication patterns with scheduling success
+- Pattern recognition across email and calendar domains
+- Context synthesis linking communication patterns with scheduling success
 
 **Enhanced Agent Capabilities:**
-- **Email Agent Evolution**: Advanced campaign analytics, sentiment analysis, relationship scoring
-- **Calendar Agent Evolution**: Predictive scheduling, resource optimization, meeting outcome analysis
-- **Master Agent Evolution**: Sophisticated multi-agent orchestration and opportunity identification
+- Email Agent evolution with improved context awareness
+- Calendar Agent evolution with better optimization
+- Master Agent evolution with sophisticated multi-agent orchestration
 
 ### Phase 3: Domain Agent Expansion
 **New Specialized Agents:**
-- **Communication Agent**: Slack (200+ endpoints), Teams, SMS with unified messaging context
-- **CRM Agent**: Salesforce (1000+ endpoints), HubSpot with customer lifecycle automation
-- **Document Agent**: Google Drive, SharePoint with content intelligence and meeting prep automation
-- **Travel Agent**: Booking systems, expense management with calendar integration
+- Communication Agent: Slack, Teams, SMS integration
+- Document Agent: Google Drive, SharePoint integration
 
-**Agent Ecosystem Benefits:**
-- Independent domain expertise without cross-contamination
-- Natural language coordination between specialized agents
-- Scalable addition of new domains without architectural changes
-- Deep API knowledge contained within relevant domain agents
-
-### Phase 4: Enterprise Agent Orchestration
-**Multi-User Agent Coordination:**
-- **Team Agents**: Shared agent instances for team-level workflow coordination
-- **Organization Agents**: Company-wide agents for policy and compliance automation
-- **Role-Based Agents**: Specialized agents for specific job functions (sales, marketing, etc.)
-- **Delegation Agents**: Smart routing and escalation between human and AI agents
-
-**Enterprise Agent Framework:**
-- **Compliance Agents**: Automated record-keeping and audit trail management
-- **Security Agents**: Enterprise SSO integration and security policy enforcement
-- **Analytics Agents**: Organization-wide productivity and communication analytics
-- **Custom Domain Agents**: Industry-specific agents for specialized business processes
-
-### Technical Architecture Evolution
-**Scalability Enhancements:**
-- **Distributed Architecture**: Multi-tenant, cloud-native deployment
-- **Real-time Processing**: Event-driven architecture for immediate response
-- **AI Model Integration**: Custom model training for organization-specific optimization
-- **Edge Computing**: Local processing for sensitive data and low-latency operations
-
-**Advanced Intelligence:**
-- **Multi-Modal Understanding**: Voice, document, and image analysis capabilities
-- **Predictive Analytics**: Advanced forecasting for resource planning and optimization
-- **Autonomous Workflows**: Fully automated execution of routine patterns
-- **Cross-Platform Intelligence**: Unified intelligence across all integrated services
-
-This domain agent architecture provides superior scalability by containing API complexity within specialized agents while enabling sophisticated multi-agent coordination through natural language interfaces. The system can evolve from personal assistance to comprehensive organizational intelligence while maintaining the core principles of safety, user control, and continuous learning across all agent domains.
+This domain agent architecture provides superior scalability by containing API complexity within specialized agents while enabling sophisticated multi-agent coordination through natural language interfaces.
