@@ -1,4 +1,4 @@
-// Master Agent Prompt Builders
+// Main Agent Prompt Builders
 export { SituationAnalysisPromptBuilder } from './situation-analysis-prompt-builder';
 export { WorkflowPlanningPromptBuilder } from './workflow-planning-prompt-builder';
 export { EnvironmentCheckPromptBuilder } from './environment-check-prompt-builder';
@@ -6,7 +6,7 @@ export { ActionExecutionPromptBuilder } from './action-execution-prompt-builder'
 export { ProgressAssessmentPromptBuilder } from './progress-assessment-prompt-builder';
 export { FinalResponsePromptBuilder } from './final-response-prompt-builder';
 
-// Type exports
+// Main Agent Type exports
 export type { SituationAnalysisResponse } from './situation-analysis-prompt-builder';
 export type { WorkflowPlanningResponse } from './workflow-planning-prompt-builder';
 export type { EnvironmentCheckResponse } from './environment-check-prompt-builder';
