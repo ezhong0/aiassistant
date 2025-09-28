@@ -5,6 +5,9 @@ import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, SlackValidationSchemas } from '../../validation/api-client.validation';
 import { ISlackDomainService } from './interfaces/domain-service.interfaces';
+import { SlackOAuthManager } from '../oauth/slack-oauth-manager';
+import { serviceManager } from '../service-manager';
+import { SlackContext } from '../../types/slack/slack.types';
 
 /**
  * Slack Domain Service - High-level Slack operations using standardized API client
@@ -22,6 +25,7 @@ import { ISlackDomainService } from './interfaces/domain-service.interfaces';
  */
 export class SlackDomainService extends BaseService implements ISlackDomainService {
   private slackClient: SlackAPIClient | null = null;
+  private slackOAuthManager: SlackOAuthManager | null = null;
 
   constructor() {
     super('SlackDomainService');
@@ -36,6 +40,9 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
       
       // Get Slack API client
       this.slackClient = await getAPIClient<SlackAPIClient>('slack');
+      
+      // Get OAuth manager
+      this.slackOAuthManager = serviceManager.getService<SlackOAuthManager>('slackOAuthManager') || null;
       
       this.logInfo('Slack Domain Service initialized successfully');
     } catch (error) {
@@ -57,7 +64,71 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
   }
 
   /**
-   * Authenticate with Slack API
+   * OAuth management methods
+   */
+  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+    this.assertReady();
+    
+    if (!this.slackOAuthManager) {
+      throw new Error('SlackOAuthManager not available');
+    }
+    
+    const authUrl = await this.slackOAuthManager.generateAuthUrl(context);
+    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+  }
+
+  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.slackOAuthManager) {
+      throw new Error('SlackOAuthManager not available');
+    }
+    
+    const result = await this.slackOAuthManager.exchangeCodeForTokens(code, state);
+    if (!result.success) {
+      throw new Error(result.error || 'OAuth completion failed');
+    }
+  }
+
+  async refreshTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.slackOAuthManager) {
+      throw new Error('SlackOAuthManager not available');
+    }
+    
+    // Slack doesn't typically use refresh tokens, but we can implement token validation
+    const isValid = await this.slackOAuthManager.validateTokens(userId);
+    if (!isValid.isValid) {
+      throw new Error('Token validation failed');
+    }
+  }
+
+  async revokeTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.slackOAuthManager) {
+      throw new Error('SlackOAuthManager not available');
+    }
+    
+    const success = await this.slackOAuthManager.revokeTokens(userId);
+    if (!success) {
+      throw new Error('Token revocation failed');
+    }
+  }
+
+  async requiresOAuth(userId: string): Promise<boolean> {
+    this.assertReady();
+    
+    if (!this.slackOAuthManager) {
+      return true; // Assume OAuth required if manager not available
+    }
+    
+    return await this.slackOAuthManager.requiresOAuth(userId);
+  }
+
+  /**
+   * Legacy authentication method (to be removed)
    */
   async authenticate(botToken: string): Promise<void> {
     this.assertReady();
@@ -87,9 +158,9 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
   }
 
   /**
-   * Send a message to a channel
+   * Send a message to a channel (with automatic authentication)
    */
-  async sendMessage(params: {
+  async sendMessage(userId: string, params: {
     channel: string;
     text?: string;
     blocks?: any[];
@@ -755,7 +826,7 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
       });
 
       // Send acknowledgment
-      await this.sendMessage({
+      await this.sendMessage(context.userId, {
         channel: context.channelId,
         text: "🤔 Processing your request...",
         threadTs: event.thread_ts
@@ -763,7 +834,7 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
 
       // TODO: Integrate with MasterAgent for actual processing
       // For now, just send a placeholder response
-      await this.sendMessage({
+      await this.sendMessage(context.userId, {
         channel: context.channelId,
         text: "I received your message and I'm working on it!",
         threadTs: event.thread_ts

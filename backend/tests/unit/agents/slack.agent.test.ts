@@ -21,15 +21,15 @@ jest.mock('../../src/utils/logger', () => ({
 
 describe('SlackAgent', () => {
   let slackAgent: SlackAgent;
-  let mockSlackService: any;
+  let mockSlackDomainService: any;
   let mockExecutionContext: ToolExecutionContext;
 
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
     
-    // Create mock Slack service
-    mockSlackService = {
+    // Create mock Slack domain service
+    mockSlackDomainService = {
       readChannelMessages: jest.fn(),
       readThreadMessages: jest.fn(),
       detectDraftMessages: jest.fn(),
@@ -39,7 +39,7 @@ describe('SlackAgent', () => {
     // Mock service manager
     (getService as jest.Mock).mockImplementation((serviceName: string) => {
       if (serviceName === 'slackInterfaceService') {
-        return mockSlackService;
+        return mockSlackDomainService;
       }
       return null;
     });
@@ -175,7 +175,7 @@ describe('SlackAgent', () => {
       };
 
       // Mock successful execution
-      mockSlackService.readChannelMessages.mockResolvedValue([]);
+      mockSlackDomainService.readChannelMessages.mockResolvedValue([]);
 
       const result = await slackAgent.execute(validParams, mockExecutionContext);
       expect(result.success).toBe(true);
@@ -246,7 +246,7 @@ describe('SlackAgent', () => {
         }
       ];
 
-      mockSlackService.readChannelMessages.mockResolvedValue(mockMessages);
+      mockSlackDomainService.readChannelMessages.mockResolvedValue(mockMessages);
 
       const params: SlackAgentRequest = {
         query: 'read recent messages',
@@ -276,7 +276,7 @@ describe('SlackAgent', () => {
         }
       ];
 
-      mockSlackService.readThreadMessages.mockResolvedValue(mockMessages);
+      mockSlackDomainService.readThreadMessages.mockResolvedValue(mockMessages);
 
       const params: SlackAgentRequest = {
         query: 'read thread messages',
@@ -320,7 +320,7 @@ describe('SlackAgent', () => {
         }
       ];
 
-      mockSlackService.detectDraftMessages.mockResolvedValue(mockDrafts);
+      mockSlackDomainService.detectDraftMessages.mockResolvedValue(mockDrafts);
 
       const params: SlackAgentRequest = {
         query: 'check for drafts',
@@ -338,7 +338,7 @@ describe('SlackAgent', () => {
 
   describe('Confirmation Handling Operations', () => {
     it('should handle confirmation_handling operation successfully', async () => {
-      mockSlackService.checkConfirmationStatus.mockResolvedValue('pending');
+      mockSlackDomainService.checkConfirmationStatus.mockResolvedValue('pending');
 
       const params: SlackAgentRequest = {
         query: 'check confirmation status',
@@ -369,7 +369,7 @@ describe('SlackAgent', () => {
     });
 
     it('should handle service errors gracefully', async () => {
-      mockSlackService.readChannelMessages.mockRejectedValue(new Error('Slack API error'));
+      mockSlackDomainService.readChannelMessages.mockRejectedValue(new Error('Slack API error'));
 
       const params: SlackAgentRequest = {
         query: 'read messages',

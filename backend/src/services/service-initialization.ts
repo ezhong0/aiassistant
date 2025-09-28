@@ -2,18 +2,19 @@ import { serviceManager } from "./service-manager";
 import logger from '../utils/logger';
 import { TokenStorageService } from './token-storage.service';
 import { TokenManager } from './token-manager';
-import { ToolExecutorService } from './tool-executor.service';
 import { AuthService } from './auth.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
-import { SlackOAuthService } from './slack/slack-oauth.service';
+// import { SlackOAuthService } from './slack/slack-oauth.service'; // REMOVED: Replaced by OAuth managers
 import { AuthStatusService } from './auth-status.service';
 import { ConfigService } from './config.service';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
 import { initializeDomainServices } from './domain';
 import { GenericAIService } from './generic-ai.service';
+import { GoogleOAuthManager } from './oauth/google-oauth-manager';
+import { SlackOAuthManager } from './oauth/slack-oauth-manager';
 
 /**
  * Register and initialize all core application services
@@ -107,10 +108,7 @@ const registerCoreServices = async (): Promise<void> => {
     const tokenManager = new TokenManager();
     serviceManager.registerService('tokenManager', tokenManager, ['tokenStorageService', 'authService']);
 
-    // 7. ToolExecutorService - Now depends on tokenStorageService instead of sessionService
-    // Note: confirmationService depends on toolExecutorService, so we can't add it as a dependency here
-    const toolExecutorService = new ToolExecutorService();
-    serviceManager.registerService('toolExecutorService', toolExecutorService, ['tokenStorageService']);
+    // 7. ToolExecutorService - REMOVED: Not used by any components
 
     // 8. GenericAIService - Centralized AI operations with structured output
     const genericAIService = new GenericAIService();
@@ -134,10 +132,9 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 11. SlackService - REMOVED: Replaced by SlackDomainService in domain services
 
-    // 12. SlackOAuthService - Dedicated service for Slack OAuth operations
-    // Note: This service handles Google OAuth flows within Slack, so it needs Google OAuth credentials
-    if (ENV_VALIDATION.isSlackConfigured() && ENV_VALIDATION.isGoogleConfigured()) {
-      const slackOAuthService = new SlackOAuthService({
+    // 12. GoogleOAuthManager - Shared OAuth manager for all Google services
+    if (ENV_VALIDATION.isGoogleConfigured()) {
+      const googleOAuthManager = new GoogleOAuthManager({
         clientId: ENVIRONMENT.google.clientId,
         clientSecret: ENVIRONMENT.google.clientSecret,
         redirectUri: ENVIRONMENT.google.redirectUri,
@@ -151,8 +148,21 @@ const registerCoreServices = async (): Promise<void> => {
           'https://www.googleapis.com/auth/contacts.readonly'
         ]
       });
-      serviceManager.registerService('slackOAuthService', slackOAuthService, ['tokenManager']);
+      serviceManager.registerService('googleOAuthManager', googleOAuthManager, ['authService', 'tokenManager', 'oauthStateService']);
     }
+
+    // 13. SlackOAuthManager - Shared OAuth manager for Slack services
+    if (ENV_VALIDATION.isSlackConfigured()) {
+      const slackOAuthManager = new SlackOAuthManager({
+        clientId: ENVIRONMENT.slack.clientId,
+        clientSecret: ENVIRONMENT.slack.clientSecret,
+        redirectUri: ENVIRONMENT.slack.redirectUri,
+        scopes: ['chat:write', 'channels:read', 'users:read']
+      });
+      serviceManager.registerService('slackOAuthManager', slackOAuthManager, ['tokenManager', 'oauthStateService']);
+    }
+
+    // 14. SlackOAuthService - REMOVED: Replaced by GoogleOAuthManager and SlackOAuthManager
 
 
     // 17. SlackEventValidator - REMOVED: Consolidated into SlackAgent

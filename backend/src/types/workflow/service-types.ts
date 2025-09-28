@@ -24,11 +24,9 @@ export enum ServiceType {
   AUTH = 'authService',
   CRYPTO = 'cryptoService',
 
-  // External service integrations
-  GOOGLE_CALENDAR = 'googleCalendarService',
-  GMAIL = 'gmailService',
-  GOOGLE_CONTACTS = 'googleContactsService',
-  SLACK = 'slackService',
+  // OAuth managers
+  GOOGLE_OAUTH_MANAGER = 'googleOAuthManager',
+  SLACK_OAUTH_MANAGER = 'slackOAuthManager',
 
   // Utility services
   EMAIL_VALIDATION = 'emailValidationService',
@@ -64,7 +62,9 @@ export const AGENT_CAPABILITIES = {
 /**
  * Type for agent operations
  */
-export type AgentOperation<T extends AgentType> = typeof AGENT_CAPABILITIES[T][number];
+export type AgentOperation<T extends AgentType> = T extends keyof typeof AGENT_CAPABILITIES 
+  ? typeof AGENT_CAPABILITIES[T][number] 
+  : never;
 
 /**
  * Service dependency mapping for validation
@@ -79,10 +79,8 @@ export const SERVICE_DEPENDENCIES = {
   [ServiceType.CACHE]: [],
   [ServiceType.AUTH]: [ServiceType.DATABASE],
   [ServiceType.CRYPTO]: [],
-  [ServiceType.GOOGLE_CALENDAR]: [ServiceType.AUTH, ServiceType.TOKEN_MANAGER],
-  [ServiceType.GMAIL]: [ServiceType.AUTH, ServiceType.TOKEN_MANAGER],
-  [ServiceType.GOOGLE_CONTACTS]: [ServiceType.AUTH, ServiceType.TOKEN_MANAGER],
-  [ServiceType.SLACK]: [ServiceType.AUTH, ServiceType.TOKEN_MANAGER],
+  [ServiceType.GOOGLE_OAUTH_MANAGER]: [ServiceType.AUTH, ServiceType.TOKEN_MANAGER],
+  [ServiceType.SLACK_OAUTH_MANAGER]: [ServiceType.TOKEN_MANAGER],
   [ServiceType.EMAIL_VALIDATION]: [],
   [ServiceType.RATE_LIMITER]: [ServiceType.CACHE],
   [ServiceType.AUDIT_LOGGER]: [ServiceType.DATABASE]
@@ -92,10 +90,10 @@ export const SERVICE_DEPENDENCIES = {
  * Agent to service mapping for automatic service resolution
  */
 export const AGENT_SERVICE_MAPPING = {
-  [AgentType.EMAIL]: [ServiceType.GMAIL, ServiceType.TOKEN_MANAGER],
-  [AgentType.CALENDAR]: [ServiceType.GOOGLE_CALENDAR, ServiceType.TOKEN_MANAGER],
-  [AgentType.CONTACT]: [ServiceType.GOOGLE_CONTACTS, ServiceType.TOKEN_MANAGER],
-  [AgentType.SLACK]: [ServiceType.SLACK, ServiceType.TOKEN_MANAGER],
+  [AgentType.EMAIL]: [ServiceType.GOOGLE_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
+  [AgentType.CALENDAR]: [ServiceType.GOOGLE_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
+  [AgentType.CONTACT]: [ServiceType.GOOGLE_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
+  [AgentType.SLACK]: [ServiceType.SLACK_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
   [AgentType.MASTER]: [ServiceType.GENERIC_AI, ServiceType.CONTEXT_MANAGER, ServiceType.WORKFLOW_TOKEN],
   [AgentType.ORCHESTRATOR]: [ServiceType.GENERIC_AI, ServiceType.CONTEXT_MANAGER]
 } as const;
@@ -113,10 +111,8 @@ export const SERVICE_INIT_PRIORITY = {
   [ServiceType.WORKFLOW_TOKEN]: 6,
   [ServiceType.GENERIC_AI]: 3,
   [ServiceType.CONTEXT_MANAGER]: 4,
-  [ServiceType.GOOGLE_CALENDAR]: 7,
-  [ServiceType.GMAIL]: 7,
-  [ServiceType.GOOGLE_CONTACTS]: 7,
-  [ServiceType.SLACK]: 7,
+  [ServiceType.GOOGLE_OAUTH_MANAGER]: 7,
+  [ServiceType.SLACK_OAUTH_MANAGER]: 7,
   [ServiceType.EMAIL_VALIDATION]: 3,
   [ServiceType.RATE_LIMITER]: 4,
   [ServiceType.AUDIT_LOGGER]: 5
@@ -137,7 +133,7 @@ export function isValidAgentOperation<T extends AgentType>(
   agentType: T,
   operation: string
 ): operation is AgentOperation<T> {
-  return AGENT_CAPABILITIES[agentType].includes(operation as any);
+  return (AGENT_CAPABILITIES as any)[agentType]?.includes(operation) || false;
 }
 
 /**

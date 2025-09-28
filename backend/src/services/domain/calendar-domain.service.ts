@@ -5,6 +5,9 @@ import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, CalendarValidationSchemas } from '../../validation/api-client.validation';
 import { ICalendarDomainService } from './interfaces/domain-service.interfaces';
+import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
+import { serviceManager } from '../service-manager';
+import { SlackContext } from '../../types/slack/slack.types';
 
 /**
  * Calendar Domain Service - High-level calendar operations using standardized API client
@@ -23,6 +26,7 @@ import { ICalendarDomainService } from './interfaces/domain-service.interfaces';
  */
 export class CalendarDomainService extends BaseService implements ICalendarDomainService {
   private googleClient: GoogleAPIClient | null = null;
+  private googleOAuthManager: GoogleOAuthManager | null = null;
 
   constructor() {
     super('CalendarDomainService');
@@ -37,6 +41,9 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       
       // Get Google API client
       this.googleClient = await getAPIClient<GoogleAPIClient>('google');
+      
+      // Get OAuth manager
+      this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
       
       this.logInfo('Calendar Domain Service initialized successfully');
     } catch (error) {
@@ -58,7 +65,70 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   }
 
   /**
-   * Authenticate with Google Calendar API
+   * OAuth management methods
+   */
+  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const authUrl = await this.googleOAuthManager.generateAuthUrl(context);
+    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+  }
+
+  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
+    if (!result.success) {
+      throw new Error(result.error || 'OAuth completion failed');
+    }
+  }
+
+  async refreshTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const success = await this.googleOAuthManager.refreshTokens(userId);
+    if (!success) {
+      throw new Error('Token refresh failed');
+    }
+  }
+
+  async revokeTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const success = await this.googleOAuthManager.revokeTokens(userId);
+    if (!success) {
+      throw new Error('Token revocation failed');
+    }
+  }
+
+  async requiresOAuth(userId: string): Promise<boolean> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      return true; // Assume OAuth required if manager not available
+    }
+    
+    return await this.googleOAuthManager.requiresOAuth(userId);
+  }
+
+  /**
+   * Legacy authentication method (to be removed)
    */
   async authenticate(accessToken: string, refreshToken?: string): Promise<void> {
     this.assertReady();
@@ -89,9 +159,9 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   }
 
   /**
-   * Create a calendar event
+   * Create a calendar event (with automatic authentication)
    */
-  async createEvent(params: {
+  async createEvent(userId: string, params: {
     summary: string;
     description?: string;
     start: {
@@ -137,6 +207,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(CalendarValidationSchemas.createEvent, params);
 
@@ -199,7 +278,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * List calendar events
    */
-  async listEvents(params: {
+  async listEvents(userId: string, params: {
     calendarId?: string;
     timeMin?: string;
     timeMax?: string;
@@ -225,6 +304,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Listing calendar events', {
         calendarId: params.calendarId || 'primary',
         timeMin: params.timeMin,
@@ -331,7 +419,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * Update a calendar event
    */
-  async updateEvent(params: {
+  async updateEvent(userId: string, params: {
     eventId: string;
     calendarId?: string;
     summary?: string;
@@ -365,6 +453,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Updating calendar event', {
         eventId: params.eventId,
         calendarId: params.calendarId || 'primary'
@@ -415,7 +512,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * Delete a calendar event
    */
-  async deleteEvent(eventId: string, calendarId: string = 'primary'): Promise<void> {
+  async deleteEvent(userId: string, eventId: string, calendarId: string = 'primary'): Promise<void> {
     this.assertReady();
     
     if (!this.googleClient) {
@@ -445,7 +542,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * Check availability
    */
-  async checkAvailability(params: {
+  async checkAvailability(userId: string, params: {
     timeMin: string;
     timeMax: string;
     calendarIds?: string[];
@@ -463,6 +560,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Checking availability', {
         timeMin: params.timeMin,
         timeMax: params.timeMax,
@@ -507,7 +613,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * Find available time slots
    */
-  async findAvailableSlots(params: {
+  async findAvailableSlots(userId: string, params: {
     startDate: string;
     endDate: string;
     durationMinutes: number;
@@ -523,6 +629,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Finding available time slots', {
         startDate: params.startDate,
         endDate: params.endDate,
@@ -607,7 +722,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * List user's calendars
    */
-  async listCalendars(): Promise<Array<{
+  async listCalendars(userId: string): Promise<Array<{
     id: string;
     summary: string;
     description?: string;
@@ -623,6 +738,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Listing user calendars');
 
       const response = await this.googleClient.makeRequest({

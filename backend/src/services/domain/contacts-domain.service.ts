@@ -5,6 +5,9 @@ import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService } from './interfaces/domain-service.interfaces';
+import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
+import { serviceManager } from '../service-manager';
+import { SlackContext } from '../../types/slack/slack.types';
 
 /**
  * Contacts Domain Service - High-level contacts operations using standardized API client
@@ -22,6 +25,7 @@ import { IContactsDomainService } from './interfaces/domain-service.interfaces';
  */
 export class ContactsDomainService extends BaseService implements IContactsDomainService {
   private googleClient: GoogleAPIClient | null = null;
+  private googleOAuthManager: GoogleOAuthManager | null = null;
 
   constructor() {
     super('ContactsDomainService');
@@ -36,6 +40,9 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
       
       // Get Google API client
       this.googleClient = await getAPIClient<GoogleAPIClient>('google');
+      
+      // Get OAuth manager
+      this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
       
       this.logInfo('Contacts Domain Service initialized successfully');
     } catch (error) {
@@ -57,7 +64,70 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   }
 
   /**
-   * Authenticate with Google People API
+   * OAuth management methods
+   */
+  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const authUrl = await this.googleOAuthManager.generateAuthUrl(context);
+    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+  }
+
+  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
+    if (!result.success) {
+      throw new Error(result.error || 'OAuth completion failed');
+    }
+  }
+
+  async refreshTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const success = await this.googleOAuthManager.refreshTokens(userId);
+    if (!success) {
+      throw new Error('Token refresh failed');
+    }
+  }
+
+  async revokeTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const success = await this.googleOAuthManager.revokeTokens(userId);
+    if (!success) {
+      throw new Error('Token revocation failed');
+    }
+  }
+
+  async requiresOAuth(userId: string): Promise<boolean> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      return true; // Assume OAuth required if manager not available
+    }
+    
+    return await this.googleOAuthManager.requiresOAuth(userId);
+  }
+
+  /**
+   * Legacy authentication method (to be removed)
    */
   async authenticate(accessToken: string, refreshToken?: string): Promise<void> {
     this.assertReady();
@@ -88,9 +158,9 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   }
 
   /**
-   * List contacts
+   * List contacts (with automatic authentication)
    */
-  async listContacts(params: {
+  async listContacts(userId: string, params: {
     pageSize?: number;
     pageToken?: string;
     personFields?: string[];
@@ -318,7 +388,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   /**
    * Get a specific contact
    */
-  async getContact(resourceName: string, personFields?: string[]): Promise<{
+  async getContact(userId: string, resourceName: string, personFields?: string[]): Promise<{
     resourceName: string;
     names?: Array<{
       displayName?: string;
@@ -361,6 +431,15 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Getting contact', { resourceName });
 
       const response = await this.googleClient.makeRequest({
@@ -541,7 +620,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   /**
    * Search contacts
    */
-  async searchContacts(params: {
+  async searchContacts(userId: string, params: {
     query: string;
     pageSize?: number;
     pageToken?: string;
@@ -589,6 +668,15 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       this.logInfo('Searching contacts', {
         query: params.query,
         pageSize: params.pageSize || 100

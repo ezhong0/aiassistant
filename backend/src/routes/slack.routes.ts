@@ -10,7 +10,7 @@ import { validateRequest } from '../middleware/validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { DomainServiceResolver } from '../services/domain';
 import { ISlackDomainService } from '../services/domain/interfaces/domain-service.interfaces';
-import { SlackOAuthService } from '../services/slack/slack-oauth.service';
+// import { SlackOAuthService } from '../services/slack/slack-oauth.service'; // REMOVED: Replaced by OAuth managers
 import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
 
@@ -456,7 +456,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             // Fallback: try to send as direct message
             if (slackService) {
               try {
-                await slackService.sendMessage({
+                await slackService.sendMessage(user_id, {
                   channel: user_id,
                   text: '🔐 Your Connections',
                   blocks
@@ -569,14 +569,14 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             metadata: { actionId, provider, userId, teamId }
           });
 
-          // Generate OAuth URL
-          const slackOAuthService = serviceManager.getService<SlackOAuthService>('slackOAuthService');
+          // Generate OAuth URL - using domain service instead
+          const slackService = DomainServiceResolver.getSlackService();
 
           logger.info('OAuth service check', {
             correlationId: createLogContext(req).correlationId,
             operation: 'oauth_service_check',
             metadata: {
-              hasSlackOAuthService: !!slackOAuthService,
+              hasSlackService: !!slackService,
               hasUserId: !!userId,
               hasTeamId: !!teamId,
               userId,
@@ -584,7 +584,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             }
           });
 
-          if (slackOAuthService && userId && teamId) {
+          if (slackService && userId && teamId) {
             try {
               logger.info('Generating OAuth URL', {
                 correlationId: createLogContext(req).correlationId,
@@ -606,19 +606,12 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
                 metadata: { state }
               });
 
-              const authUrl = await slackOAuthService.generateAuthUrl({
+              const authResult = await slackService.initializeOAuth(userId, {
                 userId,
                 teamId,
                 channelId: parsedPayload.channel?.id || userId
-              } as any, [
-                'openid',
-                'email',
-                'profile',
-                'https://www.googleapis.com/auth/gmail.send',
-                'https://www.googleapis.com/auth/gmail.readonly',
-                'https://www.googleapis.com/auth/calendar',
-                'https://www.googleapis.com/auth/contacts.readonly'
-              ]);
+              } as any);
+              const authUrl = authResult.authUrl;
 
               logger.info('OAuth URL generated successfully', {
                 correlationId: createLogContext(req).correlationId,
@@ -634,9 +627,9 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
               });
 
               // Send a direct message with the OAuth URL
-              const slackService = DomainServiceResolver.getSlackService();
+              // slackService already declared above
               if (slackService) {
-                await slackService.sendMessage({
+                await slackService.sendMessage(userId, {
                   channel: userId,
                   text: '🔐 Google Authorization Required',
                   blocks: [

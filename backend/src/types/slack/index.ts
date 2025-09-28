@@ -1,10 +1,10 @@
 import { ServiceManager } from '../../services/service-manager';
-import { SlackService } from '../../services/slack/slack.service';
+import { ISlackDomainService } from '../../services/domain/interfaces/domain-service.interfaces';
 import { SlackConfig } from './slack-config.types';
 import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
 
 export interface InterfaceManager {
-  slackInterface?: SlackService;
+  slackInterface?: ISlackDomainService;
   start(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -18,11 +18,11 @@ export const initializeInterfaces = async (
 ): Promise<InterfaceManager> => {
   const interfaces: InterfaceManager = {
     async start() {
-      // SlackService is already initialized by ServiceManager
+      // SlackDomainService is already initialized by DomainServiceResolver
       // No additional initialization needed
     },
     async stop() {
-      // SlackService cleanup is handled by ServiceManager
+      // SlackDomainService cleanup is handled by DomainServiceResolver
       // No additional cleanup needed
     }
   };
@@ -39,8 +39,8 @@ export const initializeInterfaces = async (
         development: !ENV_VALIDATION.isProduction()
       };
 
-      // Get the already-initialized SlackService from ServiceManager
-      interfaces.slackInterface = serviceManager.getService('slackService') as SlackService;
+      // Get the already-initialized SlackDomainService from DomainServiceResolver
+      interfaces.slackInterface = require('../../services/domain').DomainServiceResolver.getSlackService();
       // Don't initialize here - let startInterfaces handle it
       
     } else {

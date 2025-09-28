@@ -6,6 +6,7 @@
  */
 
 import { APIClientError } from '../../../errors/api-client.errors';
+import { SlackContext } from '../../../types/slack/slack.types';
 
 // Base domain service interface
 export interface IDomainService {
@@ -16,8 +17,17 @@ export interface IDomainService {
 
 // Email domain service interface
 export interface IEmailDomainService extends IDomainService {
+  // OAuth management
+  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  completeOAuth(userId: string, code: string, state: string): Promise<void>;
+  refreshTokens(userId: string): Promise<void>;
+  revokeTokens(userId: string): Promise<void>;
+  requiresOAuth(userId: string): Promise<boolean>;
+  
+  // Legacy authentication (to be removed)
   authenticate(accessToken: string, refreshToken?: string): Promise<void>;
-  sendEmail(params: {
+  // Domain operations (with automatic authentication)
+  sendEmail(userId: string, params: {
     to: string;
     subject: string;
     body: string;
@@ -34,7 +44,7 @@ export interface IEmailDomainService extends IDomainService {
     messageId: string;
     threadId: string;
   }>;
-  searchEmails(params: {
+  searchEmails(userId: string, params: {
     query: string;
     maxResults?: number;
     includeSpamTrash?: boolean;
@@ -100,8 +110,17 @@ export interface IEmailDomainService extends IDomainService {
 
 // Calendar domain service interface
 export interface ICalendarDomainService extends IDomainService {
+  // OAuth management
+  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  completeOAuth(userId: string, code: string, state: string): Promise<void>;
+  refreshTokens(userId: string): Promise<void>;
+  revokeTokens(userId: string): Promise<void>;
+  requiresOAuth(userId: string): Promise<boolean>;
+  
+  // Legacy authentication (to be removed)
   authenticate(accessToken: string, refreshToken?: string): Promise<void>;
-  createEvent(params: {
+  // Domain operations (with automatic authentication)
+  createEvent(userId: string, params: {
     summary: string;
     description?: string;
     start: {
@@ -136,7 +155,7 @@ export interface ICalendarDomainService extends IDomainService {
     location?: string;
     htmlLink: string;
   }>;
-  listEvents(params: {
+  listEvents(userId: string, params: {
     calendarId?: string;
     timeMin?: string;
     timeMax?: string;
@@ -167,7 +186,7 @@ export interface ICalendarDomainService extends IDomainService {
     status: string;
     recurrence?: string[];
   }>;
-  updateEvent(params: {
+  updateEvent(userId: string, params: {
     eventId: string;
     calendarId?: string;
     summary?: string;
@@ -194,8 +213,8 @@ export interface ICalendarDomainService extends IDomainService {
     location?: string;
     htmlLink: string;
   }>;
-  deleteEvent(eventId: string, calendarId?: string): Promise<void>;
-  checkAvailability(params: {
+  deleteEvent(userId: string, eventId: string, calendarId?: string): Promise<void>;
+  checkAvailability(userId: string, params: {
     timeMin: string;
     timeMax: string;
     calendarIds?: string[];
@@ -206,7 +225,7 @@ export interface ICalendarDomainService extends IDomainService {
       end: string;
     }>;
   }>;
-  findAvailableSlots(params: {
+  findAvailableSlots(userId: string, params: {
     startDate: string;
     endDate: string;
     durationMinutes: number;
@@ -215,7 +234,7 @@ export interface ICalendarDomainService extends IDomainService {
     start: string;
     end: string;
   }>>;
-  listCalendars(): Promise<Array<{
+  listCalendars(userId: string): Promise<Array<{
     id: string;
     summary: string;
     description?: string;
@@ -228,8 +247,17 @@ export interface ICalendarDomainService extends IDomainService {
 
 // Contacts domain service interface
 export interface IContactsDomainService extends IDomainService {
+  // OAuth management
+  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  completeOAuth(userId: string, code: string, state: string): Promise<void>;
+  refreshTokens(userId: string): Promise<void>;
+  revokeTokens(userId: string): Promise<void>;
+  requiresOAuth(userId: string): Promise<boolean>;
+  
+  // Legacy authentication (to be removed)
   authenticate(accessToken: string, refreshToken?: string): Promise<void>;
-  listContacts(params: {
+  // Domain operations (with automatic authentication)
+  listContacts(userId: string, params: {
     pageSize?: number;
     pageToken?: string;
     personFields?: string[];
@@ -341,7 +369,7 @@ export interface IContactsDomainService extends IDomainService {
       type?: string;
     }>;
   }>;
-  getContact(resourceName: string, personFields?: string[]): Promise<{
+  getContact(userId: string, resourceName: string, personFields?: string[]): Promise<{
     resourceName: string;
     names?: Array<{
       displayName?: string;
@@ -445,8 +473,8 @@ export interface IContactsDomainService extends IDomainService {
       type?: string;
     }>;
   }>;
-  deleteContact(resourceName: string): Promise<void>;
-  searchContacts(params: {
+  deleteContact(userId: string, resourceName: string): Promise<void>;
+  searchContacts(userId: string, params: {
     query: string;
     pageSize?: number;
     pageToken?: string;
@@ -491,8 +519,17 @@ export interface IContactsDomainService extends IDomainService {
 
 // Slack domain service interface
 export interface ISlackDomainService extends IDomainService {
+  // OAuth management
+  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  completeOAuth(userId: string, code: string, state: string): Promise<void>;
+  refreshTokens(userId: string): Promise<void>;
+  revokeTokens(userId: string): Promise<void>;
+  requiresOAuth(userId: string): Promise<boolean>;
+  
+  // Legacy authentication (to be removed)
   authenticate(botToken: string): Promise<void>;
-  sendMessage(params: {
+  // Domain operations (with automatic authentication)
+  sendMessage(userId: string, params: {
     channel: string;
     text?: string;
     blocks?: any[];

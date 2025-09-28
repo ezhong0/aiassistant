@@ -1,6 +1,6 @@
 import logger from '../utils/logger';
 import { serviceManager } from '../services/service-manager';
-import { OpenAIService } from '../services/openai.service';
+// import { OpenAIService } from '../services/openai.service'; // REMOVED: Replaced by GenericAIService
 import { ToolExecutionContext, ToolResult, AgentConfig } from '../types/tools';
 import { ToolMetadata } from '../types/agents/agent.types';
 import { EmailAgent } from '../agents/email.agent';
@@ -453,7 +453,7 @@ export class AgentFactory {
 
       metadata.emailAgent = {
         schema: { name: 'emailAgent', description: 'Email management agent', parameters: {} },
-        capabilities: EmailAgent.getCapabilities(),
+        capabilities: ['send', 'search', 'reply', 'read', 'draft', 'delete'], // Boilerplate capabilities
         limitations: [],
         enabled: this.hasAgent('emailAgent'),
         draftType: 'email'
@@ -461,7 +461,7 @@ export class AgentFactory {
 
       metadata.contactAgent = {
         schema: { name: 'contactAgent', description: 'Contact management agent', parameters: {} },
-        capabilities: ContactAgent.getCapabilities(),
+        capabilities: ['list', 'search', 'create', 'update', 'delete'], // Boilerplate capabilities
         limitations: [],
         enabled: this.hasAgent('contactAgent'),
         draftType: 'contact'
@@ -469,7 +469,7 @@ export class AgentFactory {
 
       metadata.calendarAgent = {
         schema: { name: 'calendarAgent', description: 'Calendar management agent', parameters: {} },
-        capabilities: CalendarAgent.getCapabilities(),
+        capabilities: ['create', 'update', 'delete', 'list', 'check', 'find'], // Boilerplate capabilities
         limitations: [],
         enabled: this.hasAgent('calendarAgent'),
         draftType: 'calendar'
@@ -480,7 +480,7 @@ export class AgentFactory {
       const { SlackAgent } = await import('../agents/slack.agent');
       metadata.slackAgent = {
         schema: { name: 'slackAgent', description: 'Slack management agent', parameters: {} },
-        capabilities: SlackAgent.getCapabilities(),
+        capabilities: ['send', 'receive', 'manage'], // Boilerplate capabilities
         limitations: [],
         enabled: this.hasAgent('slackAgent'),
         draftType: 'slack'

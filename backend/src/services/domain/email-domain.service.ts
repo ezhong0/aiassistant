@@ -5,6 +5,9 @@ import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
 import { IEmailDomainService } from './interfaces/domain-service.interfaces';
+import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
+import { serviceManager } from '../service-manager';
+import { SlackContext } from '../../types/slack/slack.types';
 
 /**
  * Email Domain Service - High-level email operations using standardized API client
@@ -23,6 +26,7 @@ import { IEmailDomainService } from './interfaces/domain-service.interfaces';
  */
 export class EmailDomainService extends BaseService implements IEmailDomainService {
   private googleClient: GoogleAPIClient | null = null;
+  private googleOAuthManager: GoogleOAuthManager | null = null;
 
   constructor() {
     super('EmailDomainService');
@@ -37,6 +41,9 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
       
       // Get Google API client
       this.googleClient = await getAPIClient<GoogleAPIClient>('google');
+      
+      // Get OAuth manager
+      this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
       
       this.logInfo('Email Domain Service initialized successfully');
     } catch (error) {
@@ -58,7 +65,70 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
   }
 
   /**
-   * Authenticate with Google Gmail API
+   * OAuth management methods
+   */
+  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const authUrl = await this.googleOAuthManager.generateAuthUrl(context);
+    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+  }
+
+  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
+    if (!result.success) {
+      throw new Error(result.error || 'OAuth completion failed');
+    }
+  }
+
+  async refreshTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const success = await this.googleOAuthManager.refreshTokens(userId);
+    if (!success) {
+      throw new Error('Token refresh failed');
+    }
+  }
+
+  async revokeTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      throw new Error('GoogleOAuthManager not available');
+    }
+    
+    const success = await this.googleOAuthManager.revokeTokens(userId);
+    if (!success) {
+      throw new Error('Token revocation failed');
+    }
+  }
+
+  async requiresOAuth(userId: string): Promise<boolean> {
+    this.assertReady();
+    
+    if (!this.googleOAuthManager) {
+      return true; // Assume OAuth required if manager not available
+    }
+    
+    return await this.googleOAuthManager.requiresOAuth(userId);
+  }
+
+  /**
+   * Legacy authentication method (to be removed)
    */
   async authenticate(accessToken: string, refreshToken?: string): Promise<void> {
     this.assertReady();
@@ -89,9 +159,9 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
   }
 
   /**
-   * Send an email
+   * Send an email (with automatic authentication)
    */
-  async sendEmail(params: {
+  async sendEmail(userId: string, params: {
     to: string;
     subject: string;
     body: string;
@@ -116,6 +186,15 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.sendEmail, params);
 
@@ -160,7 +239,7 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
   /**
    * Search emails
    */
-  async searchEmails(params: {
+  async searchEmails(userId: string, params: {
     query: string;
     maxResults?: number;
     includeSpamTrash?: boolean;
@@ -187,6 +266,15 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
     }
 
     try {
+      // Get valid tokens for user
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      if (!token) {
+        throw new Error('OAuth required - call initializeOAuth first');
+      }
+      
+      // Authenticate with valid token
+      await this.authenticate(token);
+      
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.searchEmails, params);
 
