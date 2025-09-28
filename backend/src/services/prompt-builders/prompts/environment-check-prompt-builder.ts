@@ -44,16 +44,7 @@ export class EnvironmentCheckPromptBuilder extends BasePromptBuilder<string, Env
         - If iteration count exceeds maximum, flag for graceful exit
         - If workflow is blocked, determine if user input can resolve it
         
-        Context Format:
-        GOAL: [Primary user intent and desired outcome]
-        ENTITIES: [People, companies, meetings, emails referenced]
-        CONSTRAINTS: [Time limits, approval requirements, risk factors]
-        DATA: [Information gathered from domain agents]
-        PROGRESS: [Actions completed, decisions made]
-        BLOCKERS: [Current issues preventing progress]
-        NEXT: [Immediate next action in workflow]
-        
-        Free-form Notes: [Additional context, reasoning, edge cases]
+        ${this.CONTEXT_FORMAT}
       `,
       userPrompt: `
         Check the environment and assess readiness for this workflow:

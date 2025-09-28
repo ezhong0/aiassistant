@@ -44,7 +44,7 @@ export class SlackService extends BaseService {
   private webClient: WebClient;
   private config: SlackServiceConfig;
   private tokenManager: TokenManager | null = null;
-  private masterAgent: MasterAgent | null = null;
+  private masterAgent: any | null = null;
 
   // Event handling state
   private processedEvents = new Map<string, any>();
@@ -72,12 +72,12 @@ export class SlackService extends BaseService {
       // Test connection
       await this.testSlackConnection();
 
-      // Create MasterAgent directly
-      const apiKey = process.env.OPENAI_API_KEY;
-      this.masterAgent = apiKey ? createMasterAgent({ openaiApiKey: apiKey, model: 'gpt-4o-mini' }) : createMasterAgent();
+      // Create NewMasterAgent directly
+      const { NewMasterAgent } = await import('../../agents/new-master-agent');
+      this.masterAgent = new NewMasterAgent();
       
-      // Initialize MasterAgent
-      await this.masterAgent.initialize();
+      // Initialize NewMasterAgent
+      await this.masterAgent!.initialize();
 
       this.logInfo('SlackService initialized successfully', {
         hasTokenManager: !!this.tokenManager,
@@ -438,14 +438,14 @@ export class SlackService extends BaseService {
         context.threadTs
       );
 
-      this.logInfo('Calling MasterAgent.processUserInputWithDrafts', {
+      this.logInfo('Calling NewMasterAgent.processUserInput', {
         sessionId,
         userId: context.userId,
         messageText: messageText.substring(0, 50),
         operation: 'master_agent_process_start'
       });
 
-      const unified = await this.masterAgent.processUserInputWithDrafts(
+      const unified = await this.masterAgent.processUserInput(
         messageText,
         sessionId,
         context.userId,

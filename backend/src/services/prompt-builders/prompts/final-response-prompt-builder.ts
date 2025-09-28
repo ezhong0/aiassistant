@@ -50,16 +50,7 @@ export class FinalResponsePromptBuilder extends BasePromptBuilder<string, FinalR
         - Note any remaining limitations
         - Prepare for next user interaction
         
-        Context Format:
-        GOAL: [Primary user intent and desired outcome]
-        ENTITIES: [People, companies, meetings, emails referenced]
-        CONSTRAINTS: [Time limits, approval requirements, risk factors]
-        DATA: [Information gathered from domain agents]
-        PROGRESS: [Actions completed, decisions made]
-        BLOCKERS: [Current issues preventing progress]
-        NEXT: [Immediate next action in workflow]
-        
-        Free-form Notes: [Additional context, reasoning, edge cases]
+        ${this.CONTEXT_FORMAT}
       `,
       userPrompt: `
         Generate the final response for this completed workflow:

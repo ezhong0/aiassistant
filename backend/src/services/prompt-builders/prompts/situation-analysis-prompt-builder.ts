@@ -40,18 +40,11 @@ export class SituationAnalysisPromptBuilder extends BasePromptBuilder<string, Si
         - Preview: Medium risk operations that should show a draft first
         - Confirmation: High risk operations that require explicit user approval
         
-        Context Format:
-        GOAL: [Primary user intent and desired outcome]
-        ENTITIES: [People, companies, meetings, emails referenced]
-        CONSTRAINTS: [Time limits, approval requirements, risk factors]
-        DATA: [Information gathered from domain agents]
-        PROGRESS: [Actions completed, decisions made]
-        BLOCKERS: [Current issues preventing progress]
-        NEXT: [Immediate next action in workflow]
+        ${this.CONTEXT_FORMAT}
+        
+        Additional Fields for Situation Analysis:
         RISK_LEVEL: [low/medium/high - risk assessment of the operation]
         OUTPUT_STRATEGY: [direct/preview/confirmation - how to present results]
-        
-        Free-form Notes: [Additional context, reasoning, edge cases]
       `,
       userPrompt: `
         Analyze this user request and provide your analysis:

@@ -50,16 +50,7 @@ export class ActionExecutionPromptBuilder extends BasePromptBuilder<string, Acti
         - "Search for contact information for David Smith"
         - "Draft a follow-up email to John about the meeting"
         
-        Context Format:
-        GOAL: [Primary user intent and desired outcome]
-        ENTITIES: [People, companies, meetings, emails referenced]
-        CONSTRAINTS: [Time limits, approval requirements, risk factors]
-        DATA: [Information gathered from domain agents]
-        PROGRESS: [Actions completed, decisions made]
-        BLOCKERS: [Current issues preventing progress]
-        NEXT: [Immediate next action in workflow]
-        
-        Free-form Notes: [Additional context, reasoning, edge cases]
+        ${this.CONTEXT_FORMAT}
       `,
       userPrompt: `
         Translate this workflow step into a specific agent request:
