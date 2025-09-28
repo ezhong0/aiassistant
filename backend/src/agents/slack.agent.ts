@@ -135,11 +135,7 @@ Always return natural language summaries that help others understand what's happ
         'Assess conversation sentiment and urgency'
       ],
 
-      // Slack is read-only, no risky operations
-      draftRules: {
-        operations: [],
-        defaultRiskLevel: 'low'
-      },
+      // Removed draft rules - no longer needed
 
       limitations: [
         'Read-only access - cannot post or modify messages',

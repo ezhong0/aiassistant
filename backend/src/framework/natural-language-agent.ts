@@ -46,7 +46,7 @@
 
 import { OpenAIService } from '../services/openai.service';
 import { serviceManager } from '../services/service-manager';
-import { DraftManager, WriteOperation, Draft } from '../services/draft-manager.service';
+// Removed DraftManager dependency
 import {
   AgentExecutionContext,
   AgentIntent,
@@ -144,7 +144,7 @@ export interface AnalyzedIntent {
  */
 export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
   protected openaiService: OpenAIService | null = null;
-  protected draftManager: DraftManager | null = null;
+  // Removed draftManager - no longer needed
   protected services: Map<string, any> = new Map();
   private isInitialized = false;
 
@@ -179,17 +179,7 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
       // Natural language logging
       const { naturalLanguageLogger } = await import('../utils/natural-language-logger');
 
-      // Check if this is a draft execution request
-      const isDraftExecution = await this.isDraftExecutionRequest(request, context);
-      if (isDraftExecution.isDraftExecution && isDraftExecution.draftId) {
-        naturalLanguageLogger.logDraftWorkflow('executed', isDraftExecution.draftId, 'unknown', {
-          correlationId: context.correlationId,
-          sessionId: context.sessionId,
-          userId: context.userId,
-          operation: 'draft_execution'
-        });
-        return await this.executeDraft(isDraftExecution.draftId, request, context);
-      }
+      // Removed draft execution check - no longer needed
 
       // 1. Analyze intent using LLM
       const intent = await this.analyzeIntent(request, context, config);
@@ -209,40 +199,15 @@ export abstract class NaturalLanguageAgent implements INaturalLanguageAgent {
         operation: 'agent_intent_analysis'
       });
 
-      // 2. Determine if draft is needed
-      const shouldDraft = await this.shouldCreateDraft(intent, context, config);
+      // Removed draft creation logic - no longer needed
 
-      if (shouldDraft.shouldCreateDraft) {
-        const draftResponse = await this.createDraft(intent, request, context, config, shouldDraft);
-
-        if (draftResponse.draft) {
-          naturalLanguageLogger.logDraftWorkflow('created', draftResponse.draft.draftId, draftResponse.draft.type, {
-            correlationId: context.correlationId,
-            sessionId: context.sessionId,
-            userId: context.userId,
-            operation: 'draft_creation'
-          }, draftResponse.draft.previewData);
-        }
-
-        return {
-          response: draftResponse.response,
-          reasoning: intent.reasoning,
-          metadata: {
-            operation: 'draft_created',
-            confidence: intent.confidence,
-            executionTime: Date.now() - startTime,
-            draft: draftResponse.draft
-          }
-        };
-      }
-
-      // 3. Authenticate (get token from context or fetch)
+      // 2. Authenticate (get token from context or fetch)
       const authToken = await this.authenticate(context, config);
 
-      // 4. Execute operation (agent-specific implementation)
+      // 3. Execute operation (agent-specific implementation)
       const result = await this.executeOperation(intent.operation, intent.parameters, authToken);
 
-      // 5. Format response using LLM
+      // 4. Format response using LLM
       const responseText = await this.formatResponse(request, result, intent, config, context);
 
       // Log agent communication
@@ -479,105 +444,9 @@ THEN return JSON:
     }
   }
 
-  /**
-   * Determine if operation should create a draft
-   */
-  private async shouldCreateDraft(
-    intent: AnalyzedIntent,
-    context: AgentExecutionContext,
-    config: AgentConfig
-  ): Promise<{ shouldCreateDraft: boolean; riskLevel?: 'low' | 'medium' | 'high'; reason?: string }> {
-    // Check explicit draft rules first
-    if (config.draftRules?.operations?.includes(intent.operation)) {
-      return {
-        shouldCreateDraft: true,
-        riskLevel: config.draftRules.defaultRiskLevel || 'medium',
-        reason: 'Operation configured to require draft'
-      };
-    }
+  // Removed draft creation logic - no longer needed
 
-    if (!this.openaiService) {
-      // No fallback - require AI service for draft decisions
-      throw new Error('AI service required for draft determination. Cannot proceed without proper risk assessment.');
-    }
-
-    const prompt = `Analyze if this operation should create a draft for user confirmation:
-
-Agent: ${config.name}
-Operation: ${intent.operation}
-Parameters: ${JSON.stringify(intent.parameters, null, 2)}
-Confidence: ${intent.confidence}
-
-Operations that typically need drafts:
-- Sending emails or messages
-- Creating calendar events with attendees
-- Making permanent changes to data
-- High-risk or irreversible operations
-- Operations involving external parties
-
-Operations that don't need drafts:
-- Reading/searching data
-- Getting information
-- Checking availability
-- Simple lookups
-
-Return JSON: {"shouldCreateDraft": boolean, "riskLevel": "low"|"medium"|"high", "reason": string}`;
-
-    const response = await this.openaiService.generateText(
-      prompt,
-      'You analyze if operations need user confirmation drafts. Return only valid JSON.',
-      { temperature: 0.1, maxTokens: 200 }
-    );
-
-    return JSON.parse(response);
-  }
-
-  /**
-   * Create draft from intent
-   */
-  private async createDraft(
-    intent: AnalyzedIntent,
-    originalQuery: string,
-    context: AgentExecutionContext,
-    config: AgentConfig,
-    draftInfo: { riskLevel?: 'low' | 'medium' | 'high'; reason?: string }
-  ): Promise<{ response: string; draft?: any }> {
-    if (!this.draftManager) {
-      throw new Error('Draft manager not available');
-    }
-
-    const writeOperation: WriteOperation = {
-      type: 'other', // Generic type for NaturalLanguageAgent
-      operation: intent.operation,
-      parameters: intent.parameters,
-      toolCall: {
-        name: config.name,
-        parameters: intent.parameters
-      },
-      confirmationReason: draftInfo.reason || 'Operation requires confirmation',
-      riskLevel: draftInfo.riskLevel || 'medium',
-      previewDescription: `${intent.operation}: ${JSON.stringify(intent.parameters)}`
-    };
-
-    const draft = await this.draftManager.createDraft(context.sessionId, writeOperation);
-
-    const response = `I've prepared a draft for this operation. ${draftInfo.reason || ''}
-
-Draft ID: ${draft.id}
-Operation: ${intent.operation}
-Risk Level: ${draftInfo.riskLevel}
-
-Would you like me to execute this draft?`;
-
-    return {
-      response,
-      draft: {
-        draftId: draft.id,
-        type: config.name,
-        previewData: draft.previewData
-      }
-    };
-  }
+  // Removed draft creation method - no longer needed
 
   /**
    * Execute a draft
@@ -637,45 +506,7 @@ Would you like me to execute this draft?`;
     };
   }
 
-  /**
-   * Check if request is asking to execute a draft
-   */
-  private async isDraftExecutionRequest(
-    query: string,
-    context: AgentExecutionContext
-  ): Promise<{ isDraftExecution: boolean; draftId?: string }> {
-    if (!this.openaiService || !this.draftManager) {
-      return { isDraftExecution: false };
-    }
-
-    const drafts = await this.draftManager.getSessionDrafts(context.sessionId);
-    if (drafts.length === 0) {
-      return { isDraftExecution: false };
-    }
-
-    const prompt = `Analyze if this user request is asking to execute an existing draft:
-
-Request: "${query}"
-
-Available drafts:
-${drafts.map(d => `- ${d.id}: ${d.previewData.description}`).join('\n')}
-
-Common execution phrases: "yes", "confirm", "send it", "execute", "go ahead", "do it", "proceed"
-
-Return JSON: {"isDraftExecution": boolean, "draftId": string|null}`;
-
-    const response = await this.openaiService.generateText(
-      prompt,
-      'You analyze if requests are asking to execute drafts. Return only valid JSON.',
-      { temperature: 0.1, maxTokens: 100 }
-    );
-
-    const parsed = JSON.parse(response) as { isDraftExecution: boolean; draftId: string | null };
-    return {
-      isDraftExecution: parsed.isDraftExecution,
-      draftId: parsed.draftId || undefined
-    };
-  }
+  // Removed draft execution request check - no longer needed
 
   /**
    * Authenticate and get token
@@ -852,8 +683,7 @@ Type guidelines:
     // Initialize OpenAI service (required for all agents)
     this.openaiService = (serviceManager.getService('openaiService') as OpenAIService) || null;
 
-    // Initialize draft manager (required for all agents)
-    this.draftManager = (serviceManager.getService('draftManager') as DraftManager) || null;
+    // Removed draft manager initialization
 
     // Initialize agent-specific services
     for (const serviceName of config.services) {

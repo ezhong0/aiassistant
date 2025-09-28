@@ -91,11 +91,7 @@ Important:
         'Create email drafts'
       ],
 
-      // Email operations are risky - require drafts
-      draftRules: {
-        operations: ['send', 'reply'],
-        defaultRiskLevel: 'high'
-      },
+      // Removed draft rules - no longer needed
 
       limitations: [
         'Requires Gmail OAuth authentication',

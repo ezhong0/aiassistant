@@ -1,35 +1,27 @@
 import logger from '../utils/logger';
 import { serviceManager } from '../services/service-manager';
-
-// Extracted services
-import { IntentAnalysisService, AnalysisContext, IntentAnalysis } from '../services/intent-analysis.service';
-import { ContextManager, GatheredContext } from '../services/context-manager.service';
-import { StringPlanningService, StringWorkflowContext } from '../services/string-planning.service';
-import { ResponseFormatter, FormattingContext, FormattedResponse } from '../services/response-formatter.service';
-import { DraftManager, Draft } from '../services/draft-manager.service';
-import { PlanReevaluationService } from '../services/plan-reevaluation.service';
-import { StepExecutionService } from '../services/step-execution.service';
+import { GenericAIService } from '../services/generic-ai.service';
+import { ContextManager } from '../services/context-manager.service';
 import { AgentFactory } from '../framework/agent-factory';
+import { 
+  SituationAnalysisPromptBuilder,
+  WorkflowPlanningPromptBuilder,
+  EnvironmentCheckPromptBuilder,
+  ActionExecutionPromptBuilder,
+  ProgressAssessmentPromptBuilder,
+  FinalResponsePromptBuilder
+} from '../services/prompt-builders/prompts';
 
 // Types
 import { SlackContext } from '../types/slack/slack.types';
 
 /**
- * Simplified processing result interface
+ * Processing result interface for the new Master Agent
  */
 export interface ProcessingResult {
   message: string;
-  needsConfirmation: boolean;
-  draftId?: string;
-  draftContents?: {
-    action: string;
-    recipient?: string;
-    subject?: string;
-    body?: string;
-    previewData: unknown;
-  };
   success: boolean;
-  executionMetadata?: {
+  metadata?: {
     processingTime?: number;
     workflowId?: string;
     totalSteps?: number;
@@ -38,27 +30,27 @@ export interface ProcessingResult {
 }
 
 /**
- * Refactored MasterAgent with Single Responsibility Principle compliance
- *
- * Single Responsibility: Request Orchestration
- * - Orchestrates the processing pipeline using extracted services
- * - Manages the flow between intent analysis, context gathering, planning, and response formatting
- * - Handles draft management and confirmation flows
- * - Provides a clean, simple interface for processing user requests
+ * Master Agent following the redesigned architecture
+ * 
+ * 1. Understanding & Planning
+ * 2. Execution Loop (Max 10 Iterations)
+ * 3. Final Output Generation
  */
 export class MasterAgent {
-  private intentAnalysisService: IntentAnalysisService | null = null;
+  private aiService: GenericAIService | null = null;
   private contextManager: ContextManager | null = null;
-  private stringPlanningService: StringPlanningService | null = null;
-  private responseFormatter: ResponseFormatter | null = null;
-  private draftManager: DraftManager | null = null;
-  private planReevaluationService: PlanReevaluationService | null = null;
-  private stepExecutionService: StepExecutionService | null = null;
-
   private isInitialized = false;
 
+  // Prompt builders
+  private situationAnalysisBuilder: SituationAnalysisPromptBuilder | null = null;
+  private workflowPlanningBuilder: WorkflowPlanningPromptBuilder | null = null;
+  private environmentCheckBuilder: EnvironmentCheckPromptBuilder | null = null;
+  private actionExecutionBuilder: ActionExecutionPromptBuilder | null = null;
+  private progressAssessmentBuilder: ProgressAssessmentPromptBuilder | null = null;
+  private finalResponseBuilder: FinalResponsePromptBuilder | null = null;
+
   /**
-   * Initialize MasterAgent and get service dependencies
+   * Initialize the new Master Agent
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -66,48 +58,32 @@ export class MasterAgent {
     }
 
     try {
-      // Get all required services
-      this.intentAnalysisService = serviceManager.getService<IntentAnalysisService>('intentAnalysisService') || null;
-      this.contextManager = serviceManager.getService<ContextManager>('contextManager') || null;
-      this.stringPlanningService = serviceManager.getService<StringPlanningService>('stringPlanningService') || null;
-      this.responseFormatter = serviceManager.getService<ResponseFormatter>('responseFormatter') || null;
-      this.draftManager = serviceManager.getService<DraftManager>('draftManager') || null;
-      this.planReevaluationService = serviceManager.getService<PlanReevaluationService>('planReevaluationService') || null;
-      this.stepExecutionService = serviceManager.getService<StepExecutionService>('stepExecutionService') || null;
+      // Get AI service
+      this.aiService = serviceManager.getService<GenericAIService>('genericAIService') || null;
+      
+      if (!this.aiService) {
+        throw new Error('GenericAIService not available for NewMasterAgent');
+      }
 
-      // Validate critical services
-      if (!this.intentAnalysisService) {
-        throw new Error('IntentAnalysisService not available');
-      }
+      // Get context manager
+      this.contextManager = serviceManager.getService<ContextManager>('contextManager') || null;
+      
       if (!this.contextManager) {
-        throw new Error('ContextManager not available');
+        throw new Error('ContextManager not available for NewMasterAgent');
       }
-      if (!this.stringPlanningService) {
-        throw new Error('StringPlanningService not available');
-      }
-      if (!this.responseFormatter) {
-        throw new Error('ResponseFormatter not available');
-      }
-      if (!this.planReevaluationService) {
-        throw new Error('PlanReevaluationService not available');
-      }
-      if (!this.stepExecutionService) {
-        throw new Error('StepExecutionService not available');
-      }
+
+      // Initialize prompt builders
+      this.situationAnalysisBuilder = new SituationAnalysisPromptBuilder(this.aiService);
+      this.workflowPlanningBuilder = new WorkflowPlanningPromptBuilder(this.aiService);
+      this.environmentCheckBuilder = new EnvironmentCheckPromptBuilder(this.aiService);
+      this.actionExecutionBuilder = new ActionExecutionPromptBuilder(this.aiService);
+      this.progressAssessmentBuilder = new ProgressAssessmentPromptBuilder(this.aiService);
+      this.finalResponseBuilder = new FinalResponsePromptBuilder(this.aiService);
 
       this.isInitialized = true;
 
-      logger.info('MasterAgent initialized successfully with decomposed services', {
-        operation: 'master_agent_init',
-        services: [
-          'intentAnalysisService',
-          'contextManager',
-          'stringPlanningService',
-          'responseFormatter',
-          'draftManager',
-          'planReevaluationService',
-          'stepExecutionService'
-        ]
+      logger.info('MasterAgent initialized successfully', {
+        operation: 'master_agent_init'
       });
 
     } catch (error) {
@@ -119,7 +95,7 @@ export class MasterAgent {
   }
 
   /**
-   * Process user input with full orchestration pipeline
+   * Process user input with the new architecture
    */
   async processUserInput(
     userInput: string,
@@ -131,7 +107,7 @@ export class MasterAgent {
 
     const processingStartTime = Date.now();
 
-    logger.info('Processing user input with refactored MasterAgent', {
+    logger.info('Processing user input with Master Agent', {
       userInputLength: userInput.length,
       sessionId,
       userId,
@@ -140,97 +116,19 @@ export class MasterAgent {
     });
 
     try {
-      // Step 1: Gather context
-      logger.info('Step 1: Gathering context', {
-        sessionId,
-        userId,
-        userInput: userInput.substring(0, 50),
-        operation: 'gather_context_start'
-      });
+      // Gather conversation history and build message history
+      const messageHistory = await this.buildMessageHistory(userInput, sessionId, slackContext);
       
-      const gatheredContext = await this.contextManager!.gatherContext(sessionId, slackContext);
+      // Understanding & Planning
+      const workflowContext = await this.analyzeAndPlan(messageHistory, sessionId, userId);
       
-      logger.info('Context gathered successfully', {
-        sessionId,
-        userId,
-        hasAnalysis: !!gatheredContext.analysis,
-        hasConversation: !!gatheredContext.conversation,
-        operation: 'gather_context_complete'
-      });
+      // Execution Loop (Max 10 Iterations)
+      const executionResult = await this.executeWorkflow(workflowContext, sessionId, userId);
+      
+      // Final Output Generation
+      const finalResult = await this.generateFinalResponse(executionResult, processingStartTime);
 
-      // Update conversation history
-      logger.info('Updating conversation history', {
-        sessionId,
-        userId,
-        operation: 'update_conversation_history'
-      });
-      
-      await this.contextManager!.updateConversationHistory(sessionId, userInput, 'user');
-
-      // Step 2: Analyze intent
-      logger.info('Step 2: Analyzing intent', {
-        sessionId,
-        userId,
-        userInput: userInput.substring(0, 50),
-        operation: 'analyze_intent_start'
-      });
-      
-      const analysisContext: AnalysisContext = {
-        userInput,
-        sessionId,
-        hasPendingDrafts: await this.hasPendingDrafts(sessionId),
-        existingDrafts: await this.getExistingDrafts(sessionId),
-        conversationHistory: gatheredContext.analysis.relevantHistory,
-        slackContext: slackContext ? {
-          channel: slackContext.channelId || 'unknown',
-          userId: slackContext.userId || 'unknown',
-          teamId: slackContext.teamId || 'unknown',
-          threadTs: slackContext.threadTs,
-          recentMessages: gatheredContext.conversation.recentMessages
-        } : undefined
-      };
-
-      const intent = await this.intentAnalysisService!.analyzeIntent(analysisContext);
-      
-      logger.info('Intent analysis completed', {
-        sessionId,
-        userId,
-        intentType: intent.intentType,
-        confidence: intent.confidence,
-        operation: 'analyze_intent_complete'
-      });
-
-      // Step 3: Handle different intent types
-      logger.info('Step 3: Handling intent-based flow', {
-        sessionId,
-        userId,
-        intentType: intent.intentType,
-        operation: 'handle_intent_flow_start'
-      });
-      
-      const result = await this.handleIntentBasedFlow(
-        intent,
-        gatheredContext,
-        userInput,
-        sessionId,
-        userId,
-        slackContext,
-        processingStartTime
-      );
-      
-      logger.info('Intent-based flow completed', {
-        sessionId,
-        userId,
-        success: result.success,
-        hasMessage: !!result.message,
-        messageLength: result.message?.length || 0,
-        operation: 'handle_intent_flow_complete'
-      });
-
-      // Update conversation history with response
-      await this.contextManager!.updateConversationHistory(sessionId, result.message, 'assistant');
-
-      return result;
+      return finalResult;
 
     } catch (error) {
       logger.error('Failed to process user input', error as Error, {
@@ -240,21 +138,162 @@ export class MasterAgent {
         operation: 'process_user_input_error'
       });
 
-      // Generate error response
-      return await this.handleProcessingError(error, userInput, sessionId, processingStartTime);
+      return this.createErrorResult('I encountered an error while processing your request. Please try again.', processingStartTime);
     }
   }
 
   /**
-   * Alias method for backward compatibility
+   * Build message history from user input and conversation context
    */
-  async processUserInputWithDrafts(
+  private async buildMessageHistory(
     userInput: string,
     sessionId: string,
-    userId?: string,
     slackContext?: SlackContext
+  ): Promise<string> {
+    logger.info('Building message history', { sessionId });
+
+    // Start with user input
+    let messageHistory = userInput;
+    
+    // Add conversation history if available
+    if (slackContext && this.contextManager) {
+      try {
+        const gatheredContext = await this.contextManager.gatherContext(sessionId, slackContext);
+        
+        // Add recent messages to context
+        if (gatheredContext.conversation.recentMessages.length > 0) {
+          const historyText = gatheredContext.conversation.recentMessages
+            .map(msg => `${msg.user}: ${msg.text}`)
+            .join('\n');
+          messageHistory = `Previous conversation:\n${historyText}\n\nCurrent request: ${userInput}`;
+        }
+      } catch (error) {
+        logger.warn('Failed to gather conversation context', { error, sessionId });
+        // Continue with just user input if context gathering fails
+      }
+    }
+
+    return messageHistory;
+  }
+
+  /**
+   * Analyze the situation and create a workflow plan
+   */
+  private async analyzeAndPlan(
+    messageHistory: string,
+    sessionId: string,
+    userId?: string
+  ): Promise<string> {
+    logger.info('Analyzing situation and creating plan', { sessionId, userId });
+    
+    // Situation Analysis
+    const situationResult = await this.situationAnalysisBuilder!.execute(messageHistory);
+    let workflowContext = situationResult.parsed.context;
+
+    // Workflow Planning
+    const planningResult = await this.workflowPlanningBuilder!.execute(workflowContext);
+    workflowContext = planningResult.parsed.context;
+
+    return workflowContext;
+  }
+
+  /**
+   * Execute the workflow with iterative steps
+   */
+  private async executeWorkflow(
+    workflowContext: string,
+    sessionId: string,
+    userId?: string
+  ): Promise<string> {
+    logger.info('Executing workflow', { sessionId, userId });
+
+    const maxIterations = 10;
+    let currentContext = workflowContext;
+    let iteration = 0;
+
+    while (iteration < maxIterations) {
+      iteration++;
+
+      // Environment & Readiness Check
+      const environmentResult = await this.environmentCheckBuilder!.execute(currentContext);
+      currentContext = environmentResult.parsed.context;
+
+      // Check if user input is needed
+      if (environmentResult.parsed.needsUserInput) {
+        logger.info('User input needed, exiting execution loop', { 
+          sessionId, 
+          iteration,
+          requiredInfo: environmentResult.parsed.requiredInfo 
+        });
+        break;
+      }
+
+      // Action Execution
+      const actionResult = await this.actionExecutionBuilder!.execute(currentContext);
+      currentContext = actionResult.parsed.context;
+
+      // Execute the action if agent and request are provided
+      if (actionResult.parsed.agent && actionResult.parsed.request) {
+        try {
+          const agentResult = await this.executeAgentAction(
+            actionResult.parsed.agent,
+            actionResult.parsed.request,
+            sessionId,
+            userId
+          );
+          
+          // Update context with agent execution results
+          currentContext = `${currentContext}\n\nAgent Execution Result:\nAgent: ${actionResult.parsed.agent}\nRequest: ${actionResult.parsed.request}\nResult: ${JSON.stringify(agentResult, null, 2)}`;
+        } catch (error) {
+          logger.error('Agent execution failed', error as Error, { 
+            sessionId, 
+            agent: actionResult.parsed.agent,
+            request: actionResult.parsed.request
+          });
+          
+          // Update context with error information
+          currentContext = `${currentContext}\n\nAgent Execution Error:\nAgent: ${actionResult.parsed.agent}\nRequest: ${actionResult.parsed.request}\nError: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      }
+
+      // Progress Assessment
+      const progressResult = await this.progressAssessmentBuilder!.execute(currentContext);
+      currentContext = progressResult.parsed.context;
+
+      // Check if workflow is complete
+      if (progressResult.parsed.newSteps && progressResult.parsed.newSteps.length === 0) {
+        logger.info('Workflow complete, exiting execution loop', { sessionId, iteration });
+        break;
+      }
+    }
+
+    if (iteration >= maxIterations) {
+      logger.warn('Execution loop reached maximum iterations', { sessionId, iteration });
+    }
+
+    return currentContext;
+  }
+
+  /**
+   * Generate the final response from the completed workflow
+   */
+  private async generateFinalResponse(
+    workflowContext: string,
+    processingStartTime: number
   ): Promise<ProcessingResult> {
-    return this.processUserInput(userInput, sessionId, userId, slackContext);
+    logger.info('Generating final response');
+
+    const finalResult = await this.finalResponseBuilder!.execute(workflowContext);
+    const finalContext = finalResult.parsed.context;
+    const response = finalResult.parsed.response;
+
+    return {
+      message: response,
+      success: true,
+      metadata: {
+        processingTime: Date.now() - processingStartTime
+      }
+    };
   }
 
   /**
@@ -268,396 +307,59 @@ export class MasterAgent {
   /**
    * Private helper methods
    */
-
   private async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
       await this.initialize();
     }
   }
 
-  private async handleIntentBasedFlow(
-    intent: IntentAnalysis,
-    gatheredContext: GatheredContext,
-    userInput: string,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext,
-    processingStartTime: number = Date.now()
-  ): Promise<ProcessingResult> {
-    const formattingContext: FormattingContext = {
-      sessionId,
-      userId,
-      userInput,
-      processingStartTime
-    };
-
-    switch (intent.intentType) {
-      case 'confirmation_positive':
-        return await this.handleConfirmationPositive(sessionId, formattingContext);
-
-      case 'confirmation_negative':
-        return await this.handleConfirmationNegative(sessionId, formattingContext);
-
-      case 'draft_modification':
-        return await this.handleDraftModification(intent, formattingContext);
-
-      case 'new_write_operation':
-      case 'read_operation':
-      case 'new_request':
-        return await this.handleNaturalLanguageWorkflow(
-          intent,
-          gatheredContext,
-          formattingContext,
-          sessionId,
-          userId,
-          slackContext
-        );
-
-      default:
-        return await this.handleUnknownIntent(formattingContext);
-    }
-  }
-
-  private async handleConfirmationPositive(
-    sessionId: string,
-    context: FormattingContext
-  ): Promise<ProcessingResult> {
-    if (!this.draftManager) {
-      return this.createErrorResult('Draft manager not available', context);
-    }
-
-    try {
-      const pendingDrafts = await this.draftManager.getSessionDrafts(sessionId);
-
-      if (pendingDrafts.length === 0) {
-        return this.createSuccessResult(
-          "I don't see any pending actions to confirm. What would you like me to help you with?",
-          context
-        );
-      }
-
-      // Execute the most recent draft
-      const draft = pendingDrafts[0];
-      if (!draft) {
-        return this.createErrorResult('No draft found to execute', context);
-      }
-      const toolResults = await this.executeDraft(draft);
-
-      const formattedResponse = await this.responseFormatter!.formatSuccessResponse(
-        toolResults,
-        context
-      );
-
-      return this.convertResponseToProcessingResult(formattedResponse);
-
-    } catch (error) {
-      logger.error('Failed to handle confirmation positive', { error, sessionId });
-      return this.createErrorResult('Failed to execute confirmation', context);
-    }
-  }
-
-  private async handleConfirmationNegative(
-    sessionId: string,
-    context: FormattingContext
-  ): Promise<ProcessingResult> {
-    if (!this.draftManager) {
-      return this.createErrorResult('Draft manager not available', context);
-    }
-
-    try {
-      const pendingDrafts = await this.draftManager.getSessionDrafts(sessionId);
-
-      if (pendingDrafts.length === 0) {
-        return this.createSuccessResult(
-          "I don't see any pending actions to cancel. What would you like me to help you with?",
-          context
-        );
-      }
-
-      // Cancel the most recent draft
-      const draft = pendingDrafts[0];
-      if (!draft) {
-        return this.createErrorResult('No draft found to cancel', context);
-      }
-      await this.draftManager.removeDraft(draft.id);
-
-      return this.createSuccessResult(
-        "Got it, I've cancelled that action. What else can I help you with?",
-        context
-      );
-
-    } catch (error) {
-      logger.error('Failed to handle confirmation negative', { error, sessionId });
-      return this.createErrorResult('Failed to cancel action', context);
-    }
-  }
-
-  private async handleDraftModification(
-    intent: IntentAnalysis,
-    context: FormattingContext
-  ): Promise<ProcessingResult> {
-    if (!this.draftManager || !intent.targetDraftId || !intent.modifications) {
-      return this.createErrorResult('Cannot modify draft: missing information', context);
-    }
-
-    try {
-      const updatedDraft = await this.draftManager.updateDraft(
-        intent.targetDraftId,
-        intent.modifications.newValues
-      );
-
-      const formattedResponse = await this.responseFormatter!.formatDraftResponse(
-        updatedDraft,
-        context
-      );
-
-      return this.convertResponseToProcessingResult(formattedResponse);
-
-    } catch (error) {
-      logger.error('Failed to handle draft modification', { error, intent });
-      return this.createErrorResult('Failed to modify draft', context);
-    }
-  }
-
-  private async handleNaturalLanguageWorkflow(
-    intent: IntentAnalysis,
-    gatheredContext: GatheredContext,
-    formattingContext: FormattingContext,
-    sessionId: string,
-    userId?: string,
-    slackContext?: SlackContext
-  ): Promise<ProcessingResult> {
-    try {
-      // Step 1: Create workflow context with global textbox
-      const workflowContext: StringWorkflowContext = {
-        originalRequest: formattingContext.userInput,
-        intentDescription: intent.intentDescription,
-        intentType: intent.intentType,
-        currentStep: 1,
-        maxSteps: 10,
-        completedSteps: [],
-        stepResults: [],
-        globalContext: [],  // Global "textbox" for any service
-        userContext: {
-          sessionId,
-          userId,
-          slackContext
-        }
-      };
-
-      // Step 2: Create comprehensive plan upfront
-      const comprehensivePlan = await this.stringPlanningService!.createComprehensivePlan(workflowContext);
-      workflowContext.comprehensivePlan = comprehensivePlan;
-      workflowContext.currentPlanStep = 1;
-
-      if (comprehensivePlan.length === 0) {
-        return this.createSuccessResult(
-          "I understand what you're asking, but I'm not sure how to help with that right now. Could you try rephrasing your request?",
-          formattingContext
-        );
-      }
-
-      // Step 3: Execute plan step by step with reevaluation
-      return await this.executeComprehensiveWorkflow(
-        workflowContext,
-        formattingContext
-      );
-
-    } catch (error) {
-      logger.error('Failed to handle natural language workflow', { error, intent, sessionId });
-      return this.createErrorResult('Failed to execute workflow', formattingContext);
-    }
-  }
-
-  private async handleUnknownIntent(context: FormattingContext): Promise<ProcessingResult> {
-    return this.createSuccessResult(
-      "I'm not sure I understand what you're asking. Could you please rephrase your request or be more specific?",
-      context
-    );
-  }
-
-  private async executeComprehensiveWorkflow(
-    workflowContext: StringWorkflowContext,
-    formattingContext: FormattingContext
-  ): Promise<ProcessingResult> {
-    const maxSteps = 10;
-
-    try {
-      while (workflowContext.currentPlanStep! <= workflowContext.comprehensivePlan!.length && 
-             workflowContext.currentStep <= maxSteps) {
-        
-        // Get next step from comprehensive plan
-        const step = await this.stringPlanningService!.getNextStepFromPlan(workflowContext);
-        
-        if (step === 'complete') {
-          break;
-        }
-
-        logger.info('Executing workflow step', {
-          stepNumber: workflowContext.currentPlanStep,
-          totalSteps: workflowContext.comprehensivePlan!.length,
-          stepDescription: step,
-          sessionId: workflowContext.userContext?.sessionId
-        });
-
-        // Execute single step using StepExecutionService
-        const stepResult = await this.stepExecutionService!.executeSingleStep(
-          step,
-          workflowContext,
-          {
-            sessionId: workflowContext.userContext?.sessionId || '',
-            userId: workflowContext.userContext?.userId,
-            slackContext: workflowContext.userContext?.slackContext,
-            timestamp: new Date()
-          }
-        );
-
-        // Update workflow context with step information
-        workflowContext.completedSteps.push(step);
-        workflowContext.stepResults.push(stepResult.result || 'Step completed');
-        workflowContext.currentStepDescription = step;
-        workflowContext.currentStep++;
-        workflowContext.currentPlanStep!++;
-
-        // Reevaluate plan based on step result
-        const reevaluation = await this.planReevaluationService!.reevaluatePlan(
-          workflowContext, 
-          stepResult.result,
-          stepResult.agentResponse  // Pass full agent response
-        );
-
-        if (reevaluation.earlyTermination) {
-          logger.info('Workflow terminated early', {
-            reason: reevaluation.reasoning,
-            sessionId: workflowContext.userContext?.sessionId
-          });
-          break;
-        }
-
-        if (reevaluation.modifiedPlan) {
-          logger.info('Plan modified during execution', {
-            originalSteps: workflowContext.comprehensivePlan!.length,
-            newSteps: reevaluation.modifiedPlan.length,
-            reason: reevaluation.reasoning,
-            sessionId: workflowContext.userContext?.sessionId
-          });
-          workflowContext.comprehensivePlan = reevaluation.modifiedPlan;
-        }
-      }
-
-      // Format final response using enhanced ResponseFormatter
-      const responseFormatter = serviceManager.getService<ResponseFormatter>('responseFormatter');
-      if (responseFormatter) {
-        return await responseFormatter.formatWorkflowResponse({
-          ...formattingContext,
-          workflowContext,
-          stepResults: workflowContext.stepResults,
-          completedSteps: workflowContext.completedSteps,
-          globalContext: workflowContext.globalContext,
-          originalRequest: workflowContext.originalRequest
-        });
-      } else {
-        // Fallback to simple concatenation
-        const finalResponse = workflowContext.stepResults.join('\n\n');
-        return this.createSuccessResult(finalResponse, formattingContext);
-      }
-
-    } catch (error) {
-      logger.error('Comprehensive workflow execution failed', { error, workflowContext });
-      return this.createErrorResult('Workflow execution failed', formattingContext);
-    }
-  }
-
-
-
-  private async executeDraft(draft: Draft): Promise<any[]> {
-    if (!this.draftManager) {
-      throw new Error('Draft manager not available');
-    }
-
-    const result = await this.draftManager.executeDraft(draft.id);
-    return [result];
-  }
-
-  private async hasPendingDrafts(sessionId: string): Promise<boolean> {
-    if (!this.draftManager) {
-      return false;
-    }
-
-    try {
-      const drafts = await this.draftManager.getSessionDrafts(sessionId);
-      return drafts.length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  private async getExistingDrafts(sessionId: string): Promise<any[]> {
-    if (!this.draftManager) {
-      return [];
-    }
-
-    try {
-      const drafts = await this.draftManager.getSessionDrafts(sessionId);
-      return drafts.map((draft: Draft) => ({
-        id: draft.id,
-        type: draft.type,
-        description: draft.previewData.description || `${draft.type} operation`,
-        parameters: draft.parameters,
-        createdAt: draft.createdAt,
-        riskLevel: draft.riskLevel
-      }));
-    } catch {
-      return [];
-    }
-  }
-
-  private async handleProcessingError(
-    error: unknown,
-    userInput: string,
-    sessionId: string,
-    processingStartTime: number
-  ): Promise<ProcessingResult> {
+  private createErrorResult(message: string, processingStartTime: number): ProcessingResult {
     return {
-      message: 'I encountered an error while processing your request. Please try again.',
-      needsConfirmation: false,
+      message,
       success: false,
-      executionMetadata: {
+      metadata: {
         processingTime: Date.now() - processingStartTime
       }
     };
   }
 
-  private createSuccessResult(message: string, context: FormattingContext): ProcessingResult {
-    return {
-      message,
-      needsConfirmation: false,
-      success: true,
-      executionMetadata: {
-        processingTime: Date.now() - context.processingStartTime
+  /**
+   * Execute an agent action using the AgentFactory
+   */
+  private async executeAgentAction(
+    agentName: string,
+    request: string,
+    sessionId: string,
+    userId?: string
+  ): Promise<any> {
+    try {
+      // Get access token if available (for OAuth agents)
+      let accessToken: string | undefined;
+      if (userId) {
+        // TODO: Get access token from token manager
+        // For now, we'll proceed without it
       }
-    };
-  }
 
-  private createErrorResult(message: string, context: FormattingContext): ProcessingResult {
-    return {
-      message,
-      needsConfirmation: false,
-      success: false,
-      executionMetadata: {
-        processingTime: Date.now() - context.processingStartTime
-      }
-    };
-  }
+      const result = await AgentFactory.executeAgentWithNaturalLanguage(
+        agentName,
+        request,
+        {
+          sessionId,
+          userId,
+          accessToken,
+          correlationId: `master-agent-${Date.now()}`
+        }
+      );
 
-  private convertResponseToProcessingResult(response: FormattedResponse): ProcessingResult {
-    return {
-      message: response.message,
-      needsConfirmation: response.needsConfirmation,
-      draftId: response.draftId,
-      draftContents: response.draftContents,
-      success: response.success,
-      executionMetadata: response.executionMetadata
-    };
+      return result;
+    } catch (error) {
+      logger.error('Failed to execute agent action', error as Error, {
+        agentName,
+        request: request.substring(0, 100),
+        sessionId,
+        userId
+      });
+      throw error;
+    }
   }
 }

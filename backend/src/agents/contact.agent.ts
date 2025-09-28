@@ -82,11 +82,7 @@ Important:
         'Retrieve contact details'
       ],
 
-      // Contact operations are read-only, low risk
-      draftRules: {
-        operations: [],
-        defaultRiskLevel: 'low'
-      },
+      // Removed draft rules - no longer needed
 
       limitations: [
         'Read-only access - cannot create or modify contacts',

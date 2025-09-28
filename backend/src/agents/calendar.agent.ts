@@ -68,10 +68,7 @@ You're helpful, efficient, and respect users' time.`,
         provider: 'google'
       },
 
-      draftRules: {
-        operations: ['create', 'update', 'delete'], // These require confirmation
-        defaultRiskLevel: 'medium'
-      },
+      // Removed draft rules - no longer needed
 
       description: 'Comprehensive calendar management using Google Calendar API',
 

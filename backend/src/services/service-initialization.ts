@@ -14,7 +14,7 @@ import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { SlackService } from './slack/slack.service';
 import { SlackOAuthService } from './slack/slack-oauth.service';
-import { DraftManager } from './draft-manager.service';
+// Removed DraftManager import - no longer needed
 import { AuthStatusService } from './auth-status.service';
 import { ConfigService } from './config.service';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
@@ -213,21 +213,12 @@ const registerCoreServices = async (): Promise<void> => {
     // 37. WorkflowCacheService - REMOVED: Replaced with simple in-memory state in MasterAgent
 
     // 38. DraftManager - Draft creation, storage, and execution for confirmation system
-    const draftManager = new DraftManager();
-    serviceManager.registerService('draftManager', draftManager, ['cacheService', 'toolExecutorService']);
+    // Removed DraftManager - no longer needed
 
     // 39. MasterAgentService - REMOVED: MasterAgent created directly in SlackService
     // 42. LEGACY: NextStepPlanningService - REMOVED: Replaced by StringPlanningService
 
-    // 42b. StringPlanningService - Simple string-based workflow planning
-    const { StringPlanningService } = await import('./string-planning.service');
-    const stringPlanningService = new StringPlanningService();
-    serviceManager.registerService('stringPlanningService', stringPlanningService, ['openaiService']);
-
-    // 43. IntentAnalysisService - Extracted from MasterAgent for SRP compliance
-    const { IntentAnalysisService } = await import('./intent-analysis.service');
-    const intentAnalysisService = new IntentAnalysisService();
-    serviceManager.registerService('intentAnalysisService', intentAnalysisService, ['openaiService', 'draftManager']);
+    // Removed StringPlanningService and IntentAnalysisService - no longer needed
 
     // 44. ContextManager - Extracted from MasterAgent for SRP compliance
     const { ContextManager } = await import('./context-manager.service');
@@ -236,20 +227,7 @@ const registerCoreServices = async (): Promise<void> => {
 
     // 45. ToolCallGenerator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
 
-    // 46. ResponseFormatter - Extracted from MasterAgent for SRP compliance
-    const { ResponseFormatter } = await import('./response-formatter.service');
-    const responseFormatter = new ResponseFormatter();
-    serviceManager.registerService('responseFormatter', responseFormatter, ['openaiService']);
-
-    // 47. PlanReevaluationService - Analyzes step results and modifies plans
-    const { PlanReevaluationService } = await import('./plan-reevaluation.service');
-    const planReevaluationService = new PlanReevaluationService();
-    serviceManager.registerService('planReevaluationService', planReevaluationService, ['openaiService']);
-
-    // 48. StepExecutionService - Single step execution with context-aware agent selection
-    const { StepExecutionService } = await import('./step-execution.service');
-    const stepExecutionService = new StepExecutionService();
-    serviceManager.registerService('stepExecutionService', stepExecutionService, ['openaiService']);
+    // Removed ResponseFormatter, PlanReevaluationService, and StepExecutionService - no longer needed
 
     // 47. ServiceCoordinator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
 
