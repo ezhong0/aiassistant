@@ -4,20 +4,16 @@ import { TokenStorageService } from './token-storage.service';
 import { TokenManager } from './token-manager';
 import { ToolExecutorService } from './tool-executor.service';
 import { AuthService } from './auth.service';
-import { ContactService } from './contact.service';
-import { GmailService } from './email/gmail.service';
-import { CalendarService } from './calendar/calendar.service';
-import { OpenAIService } from './openai.service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
-import { SlackService } from './slack/slack.service';
 import { SlackOAuthService } from './slack/slack-oauth.service';
-// Removed DraftManager import - no longer needed
 import { AuthStatusService } from './auth-status.service';
 import { ConfigService } from './config.service';
 import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
+import { initializeDomainServices } from './domain';
+import { GenericAIService } from './generic-ai.service';
 
 /**
  * Register and initialize all core application services
@@ -29,6 +25,9 @@ export const initializeAllCoreServices = async (): Promise<void> => {
   }
 
   try {
+    // Initialize domain services first
+    initializeDomainServices();
+
     // Register core services with dependencies
     await registerCoreServices();
 
@@ -113,54 +112,27 @@ const registerCoreServices = async (): Promise<void> => {
     const toolExecutorService = new ToolExecutorService();
     serviceManager.registerService('toolExecutorService', toolExecutorService, ['tokenStorageService']);
 
-    // 10. ContactService - Depends on authService
-    const contactService = new ContactService();
-    serviceManager.registerService('contactService', contactService, ['authService']);
+    // 8. GenericAIService - Centralized AI operations with structured output
+    const genericAIService = new GenericAIService();
+    serviceManager.registerService('genericAIService', genericAIService, []);
 
-    // 11. GmailService - Depends on authService
-    const gmailService = new GmailService();
-    serviceManager.registerService('gmailService', gmailService, ['authService']);
+    // Note: Old services (ContactService, GmailService, CalendarService, OpenAIService) 
+    // have been replaced by domain services that are initialized via initializeDomainServices()
 
-    // 12. CalendarService - No dependencies (handles auth internally)
-    const calendarService = new CalendarService();
-    serviceManager.registerService('calendarService', calendarService, []);
-
-    // 8. OpenAIService - Critical AI service, high priority
-    const openaiService = new OpenAIService({
-      apiKey: process.env.OPENAI_API_KEY || (() => {
-        throw new Error('OPENAI_API_KEY environment variable is required');
-      })()
-    });
-    serviceManager.registerService('openaiService', openaiService, []);
-
-    // 9. AIServiceCircuitBreaker - Depends on OpenAI service
+    // 9. AIServiceCircuitBreaker - No longer depends on OpenAI service directly
+    // The circuit breaker is now integrated into the API client layer
     const aiCircuitBreaker = new AIServiceCircuitBreaker({
       failureThreshold: 5,
       recoveryTimeout: 60000,
       successThreshold: 3,
       timeout: 30000
     });
-    serviceManager.registerService('aiCircuitBreakerService', aiCircuitBreaker, ['openaiService']);
+    serviceManager.registerService('aiCircuitBreakerService', aiCircuitBreaker, []);
 
 
 
 
-    // 11. SlackService - Consolidated service for all main Slack operations
-    if (ENV_VALIDATION.isSlackConfigured()) {
-      const slackService = new SlackService({
-        signingSecret: ENVIRONMENT.slack.signingSecret,
-        botToken: ENVIRONMENT.slack.botToken,
-        clientId: ENVIRONMENT.slack.clientId,
-        clientSecret: ENVIRONMENT.slack.clientSecret,
-        redirectUri: ENVIRONMENT.slack.redirectUri,
-        development: ENVIRONMENT.nodeEnv === 'development',
-        enableDeduplication: true,
-        enableBotMessageFiltering: true,
-        enableDMOnlyMode: true,
-        enableAsyncProcessing: true
-      });
-      serviceManager.registerService('slackService', slackService, ['tokenManager', 'toolExecutorService']);
-    }
+    // 11. SlackService - REMOVED: Replaced by SlackDomainService in domain services
 
     // 12. SlackOAuthService - Dedicated service for Slack OAuth operations
     // Note: This service handles Google OAuth flows within Slack, so it needs Google OAuth credentials
@@ -248,29 +220,15 @@ const registerCoreServices = async (): Promise<void> => {
 
 /**
  * Setup circuit breaker connections after service initialization
+ * Note: Circuit breaker is now integrated into API client layer, no manual setup needed
  */
 const setupCircuitBreakerConnections = async (): Promise<void> => {
   try {
-    const circuitBreaker = serviceManager.getService('aiCircuitBreakerService') as AIServiceCircuitBreaker;
-    const openaiService = serviceManager.getService('openaiService') as OpenAIService;
-
-    if (circuitBreaker && openaiService) {
-      circuitBreaker.setOpenAIService(openaiService);
-      logger.debug('Circuit breaker connected to OpenAI service', {
-        correlationId: `service-init-${Date.now()}`,
-        operation: 'circuit_breaker_setup',
-        metadata: { status: 'connected' }
-      });
-    } else {
-      logger.warn('Failed to connect circuit breaker to OpenAI service', {
-        correlationId: `service-init-${Date.now()}`,
-        operation: 'circuit_breaker_setup',
-        metadata: {
-          hasCircuitBreaker: !!circuitBreaker,
-          hasOpenAIService: !!openaiService
-        }
-      });
-    }
+    logger.debug('Circuit breaker setup completed - now integrated into API client layer', {
+      correlationId: `service-init-${Date.now()}`,
+      operation: 'circuit_breaker_setup',
+      metadata: { status: 'integrated' }
+    });
   } catch (error) {
     logger.error('Failed to setup circuit breaker connections', error as Error, {
       correlationId: `service-init-${Date.now()}`,

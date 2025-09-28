@@ -11,7 +11,8 @@
  */
 
 import { NaturalLanguageAgent, AgentConfig } from '../framework/natural-language-agent';
-import { GmailService } from '../services/email/gmail.service';
+import { DomainServiceResolver } from '../services/domain';
+import { IEmailDomainService } from '../services/domain/interfaces/domain-service.interfaces';
 
 interface EmailResult {
   messageId?: string;
@@ -107,12 +108,14 @@ Important:
   protected async executeOperation(
     operation: string,
     parameters: any,
-    authToken: string
+    authToken: any
   ): Promise<EmailResult> {
-    const gmailService = this.getService('gmailService') as GmailService;
-
-    if (!gmailService) {
-      throw new Error('GmailService not available');
+    const emailService = DomainServiceResolver.getEmailService();
+    await emailService.initialize();
+    
+    // Authenticate with the provided access token
+    if (authToken && typeof authToken === 'object') {
+      await emailService.authenticate(authToken.accessToken, authToken.refreshToken);
     }
 
     switch (operation) {
@@ -124,13 +127,13 @@ Important:
           throw new Error('Recipient email address is required');
         }
 
-        const result = await gmailService.sendEmail(
-          authToken,
+        const result = await emailService.sendEmail({
           to,
-          subject || 'No Subject',
-          body || '',
-          { cc, bcc }
-        );
+          subject: subject || 'No Subject',
+          body: body || '',
+          cc,
+          bcc
+        });
 
         return {
           success: true,
@@ -152,11 +155,10 @@ Important:
         if (after) searchQuery += ` after:${after}`;
         if (before) searchQuery += ` before:${before}`;
 
-        const result = await gmailService.searchEmails(
-          authToken,
-          searchQuery.trim(),
-          { maxResults: maxResults || 10 }
-        );
+        const result = await emailService.searchEmails({
+          query: searchQuery.trim(),
+          maxResults: maxResults || 10
+        });
 
         return {
           success: true,
@@ -173,12 +175,10 @@ Important:
           throw new Error('Message ID or Thread ID is required to reply');
         }
 
-        const result = await gmailService.replyToEmail(
-          authToken,
-          messageId || threadId,
-          body || '',
-          {}
-        );
+        const result = await emailService.replyToEmail({
+          messageId: messageId || threadId,
+          replyBody: body || ''
+        });
 
         return {
           success: true,
@@ -195,7 +195,7 @@ Important:
           throw new Error('Message ID is required');
         }
 
-        const email = await gmailService.getEmail(authToken, messageId);
+        const email = await emailService.getEmail(messageId);
 
         return {
           success: true,

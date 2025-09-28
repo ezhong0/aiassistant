@@ -8,7 +8,6 @@
  */
 
 import { AgentFactory } from '../src/framework/agent-factory';
-import { WorkflowOrchestrator } from '../src/framework/workflow-orchestrator';
 import { serviceManager } from '../src/services/service-manager';
 import logger from '../src/utils/logger';
 
@@ -115,16 +114,12 @@ class MemoryCleanupTester {
   }
 
   /**
-   * Test WorkflowOrchestrator memory cleanup
    */
-  async testWorkflowOrchestratorCleanup(): Promise<void> {
-    const testName = 'WorkflowOrchestrator Memory Cleanup';
     logger.info(`Starting test: ${testName}`);
 
     const memoryBefore = this.getMemoryUsage();
 
     try {
-      const orchestrator = new WorkflowOrchestrator();
       
       // Start cleanup
       orchestrator.startCleanup();
@@ -145,7 +140,6 @@ class MemoryCleanupTester {
 
       // Get initial stats
       const initialStats = orchestrator.getStats();
-      logger.info('Initial WorkflowOrchestrator stats', { stats: initialStats });
 
       // Wait for cleanup to potentially run
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -155,7 +149,6 @@ class MemoryCleanupTester {
 
       // Get final stats
       const finalStats = orchestrator.getStats();
-      logger.info('Final WorkflowOrchestrator stats', { stats: finalStats });
 
       // Destroy orchestrator
       orchestrator.destroy();
@@ -323,7 +316,6 @@ class MemoryCleanupTester {
     logger.info('Starting memory cleanup tests...');
 
     await this.testAgentFactoryCleanup();
-    await this.testWorkflowOrchestratorCleanup();
     await this.testServiceManagerCleanup();
     await this.testMemoryPressure();
 

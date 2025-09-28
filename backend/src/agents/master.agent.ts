@@ -3,14 +3,15 @@ import { serviceManager } from '../services/service-manager';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
 import { AgentFactory } from '../framework/agent-factory';
-import { 
-  SituationAnalysisPromptBuilder,
-  WorkflowPlanningPromptBuilder,
-  EnvironmentCheckPromptBuilder,
-  ActionExecutionPromptBuilder,
-  ProgressAssessmentPromptBuilder,
-  FinalResponsePromptBuilder
-} from '../services/prompt-builders/prompts';
+// Prompt builders are now created via factory - no direct imports needed
+
+// Utilities and error handling
+import { BuilderGuard, createBuilderContext, PromptBuilderMap } from '../utils/builder-guard';
+import { PromptBuilderFactory } from '../utils/prompt-builder-factory';
+import { UnifiedErrorFactory, ErrorContextBuilder, UNIFIED_ERROR_CODES } from '../types/workflow/unified-errors';
+import { TokenManager } from '../services/token-manager';
+import { WorkflowExecutor } from '../services/workflow-executor.service';
+// Token types no longer needed - using TokenManager directly
 
 // Types
 import { SlackContext } from '../types/slack/slack.types';
@@ -39,15 +40,12 @@ export interface ProcessingResult {
 export class MasterAgent {
   private aiService: GenericAIService | null = null;
   private contextManager: ContextManager | null = null;
+  private tokenManager: TokenManager | null = null;
+  private workflowExecutor: WorkflowExecutor | null = null;
   private isInitialized = false;
 
-  // Prompt builders
-  private situationAnalysisBuilder: SituationAnalysisPromptBuilder | null = null;
-  private workflowPlanningBuilder: WorkflowPlanningPromptBuilder | null = null;
-  private environmentCheckBuilder: EnvironmentCheckPromptBuilder | null = null;
-  private actionExecutionBuilder: ActionExecutionPromptBuilder | null = null;
-  private progressAssessmentBuilder: ProgressAssessmentPromptBuilder | null = null;
-  private finalResponseBuilder: FinalResponsePromptBuilder | null = null;
+  // Prompt builders - single object instead of individual properties
+  private builders: PromptBuilderMap | null = null;
 
   /**
    * Initialize the new Master Agent
@@ -67,23 +65,41 @@ export class MasterAgent {
 
       // Get context manager
       this.contextManager = serviceManager.getService<ContextManager>('contextManager') || null;
-      
+
       if (!this.contextManager) {
         throw new Error('ContextManager not available for NewMasterAgent');
       }
 
-      // Initialize prompt builders
-      this.situationAnalysisBuilder = new SituationAnalysisPromptBuilder(this.aiService);
-      this.workflowPlanningBuilder = new WorkflowPlanningPromptBuilder(this.aiService);
-      this.environmentCheckBuilder = new EnvironmentCheckPromptBuilder(this.aiService);
-      this.actionExecutionBuilder = new ActionExecutionPromptBuilder(this.aiService);
-      this.progressAssessmentBuilder = new ProgressAssessmentPromptBuilder(this.aiService);
-      this.finalResponseBuilder = new FinalResponsePromptBuilder(this.aiService);
+      // Get token manager
+      this.tokenManager = serviceManager.getService<TokenManager>('tokenManager') || null;
+      
+      if (!this.tokenManager) {
+        throw new Error('TokenManager not available for MasterAgent');
+      }
+
+      // Initialize all prompt builders using factory
+      this.builders = PromptBuilderFactory.createAllBuilders(this.aiService);
+
+      // Validate all builders are properly initialized
+      BuilderGuard.validateAllBuilders(this.builders);
+
+      // Initialize workflow executor with required builders
+      this.workflowExecutor = new WorkflowExecutor(
+        this.builders.environment,
+        this.builders.action,
+        this.builders.progress,
+        this.tokenManager,
+        10 // maxIterations
+      );
 
       this.isInitialized = true;
 
+      const initStatus = BuilderGuard.getInitializationStatus(this.builders);
+
       logger.info('MasterAgent initialized successfully', {
-        operation: 'master_agent_init'
+        operation: 'master_agent_init',
+        buildersInitialized: initStatus.initializedCount,
+        totalBuilders: initStatus.totalCount
       });
 
     } catch (error) {
@@ -185,93 +201,61 @@ export class MasterAgent {
     userId?: string
   ): Promise<string> {
     logger.info('Analyzing situation and creating plan', { sessionId, userId });
-    
+
+    const context = createBuilderContext(sessionId, userId, 'analyze_and_plan');
+
     // Situation Analysis
-    const situationResult = await this.situationAnalysisBuilder!.execute(messageHistory);
+    const situationResult = await BuilderGuard.safeExecute(
+      this.builders?.situation,
+      'situation',
+      messageHistory,
+      context
+    );
     let workflowContext = situationResult.parsed.context;
 
     // Workflow Planning
-    const planningResult = await this.workflowPlanningBuilder!.execute(workflowContext);
+    const planningResult = await BuilderGuard.safeExecute(
+      this.builders?.planning,
+      'planning',
+      workflowContext,
+      context
+    );
     workflowContext = planningResult.parsed.context;
 
     return workflowContext;
   }
 
   /**
-   * Execute the workflow with iterative steps
+   * Execute the workflow with iterative steps (now using WorkflowExecutor)
    */
   private async executeWorkflow(
     workflowContext: string,
     sessionId: string,
     userId?: string
   ): Promise<string> {
-    logger.info('Executing workflow', { sessionId, userId });
+    if (!this.workflowExecutor) {
+      const errorContext = ErrorContextBuilder.create()
+        .component('master-agent')
+        .operation('execute_workflow')
+        .sessionId(sessionId)
+        .userId(userId)
+        .build();
 
-    const maxIterations = 10;
-    let currentContext = workflowContext;
-    let iteration = 0;
-
-    while (iteration < maxIterations) {
-      iteration++;
-
-      // Environment & Readiness Check
-      const environmentResult = await this.environmentCheckBuilder!.execute(currentContext);
-      currentContext = environmentResult.parsed.context;
-
-      // Check if user input is needed
-      if (environmentResult.parsed.needsUserInput) {
-        logger.info('User input needed, exiting execution loop', { 
-          sessionId, 
-          iteration,
-          requiredInfo: environmentResult.parsed.requiredInfo 
-        });
-        break;
-      }
-
-      // Action Execution
-      const actionResult = await this.actionExecutionBuilder!.execute(currentContext);
-      currentContext = actionResult.parsed.context;
-
-      // Execute the action if agent and request are provided
-      if (actionResult.parsed.agent && actionResult.parsed.request) {
-        try {
-          const agentResult = await this.executeAgentAction(
-            actionResult.parsed.agent,
-            actionResult.parsed.request,
-            sessionId,
-            userId
-          );
-          
-          // Update context with agent execution results
-          currentContext = `${currentContext}\n\nAgent Execution Result:\nAgent: ${actionResult.parsed.agent}\nRequest: ${actionResult.parsed.request}\nResult: ${JSON.stringify(agentResult, null, 2)}`;
-        } catch (error) {
-          logger.error('Agent execution failed', error as Error, { 
-            sessionId, 
-            agent: actionResult.parsed.agent,
-            request: actionResult.parsed.request
-          });
-          
-          // Update context with error information
-          currentContext = `${currentContext}\n\nAgent Execution Error:\nAgent: ${actionResult.parsed.agent}\nRequest: ${actionResult.parsed.request}\nError: ${error instanceof Error ? error.message : String(error)}`;
-        }
-      }
-
-      // Progress Assessment
-      const progressResult = await this.progressAssessmentBuilder!.execute(currentContext);
-      currentContext = progressResult.parsed.context;
-
-      // Check if workflow is complete
-      if (progressResult.parsed.newSteps && progressResult.parsed.newSteps.length === 0) {
-        logger.info('Workflow complete, exiting execution loop', { sessionId, iteration });
-        break;
-      }
+      throw UnifiedErrorFactory.serviceUnavailable('WorkflowExecutor', errorContext);
     }
 
-    if (iteration >= maxIterations) {
-      logger.warn('Execution loop reached maximum iterations', { sessionId, iteration });
-    }
+    logger.info('Executing workflow with WorkflowExecutor', { sessionId, userId });
 
-    return currentContext;
+    try {
+      return await this.workflowExecutor.execute(workflowContext, sessionId, userId);
+    } catch (error) {
+      logger.error('Workflow execution failed', error as Error, {
+        sessionId,
+        userId,
+        operation: 'execute_workflow'
+      });
+      throw error;
+    }
   }
 
   /**
@@ -283,7 +267,14 @@ export class MasterAgent {
   ): Promise<ProcessingResult> {
     logger.info('Generating final response');
 
-    const finalResult = await this.finalResponseBuilder!.execute(workflowContext);
+    const context = createBuilderContext(undefined, undefined, 'generate_final_response');
+
+    const finalResult = await BuilderGuard.safeExecute(
+      this.builders?.final,
+      'final',
+      workflowContext,
+      context
+    );
     const finalContext = finalResult.parsed.context;
     const response = finalResult.parsed.response;
 
@@ -323,43 +314,4 @@ export class MasterAgent {
     };
   }
 
-  /**
-   * Execute an agent action using the AgentFactory
-   */
-  private async executeAgentAction(
-    agentName: string,
-    request: string,
-    sessionId: string,
-    userId?: string
-  ): Promise<any> {
-    try {
-      // Get access token if available (for OAuth agents)
-      let accessToken: string | undefined;
-      if (userId) {
-        // TODO: Get access token from token manager
-        // For now, we'll proceed without it
-      }
-
-      const result = await AgentFactory.executeAgentWithNaturalLanguage(
-        agentName,
-        request,
-        {
-          sessionId,
-          userId,
-          accessToken,
-          correlationId: `master-agent-${Date.now()}`
-        }
-      );
-
-      return result;
-    } catch (error) {
-      logger.error('Failed to execute agent action', error as Error, {
-        agentName,
-        request: request.substring(0, 100),
-        sessionId,
-        userId
-      });
-      throw error;
-    }
-  }
 }

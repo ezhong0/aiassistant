@@ -7,43 +7,10 @@
  * excessive memory pressure.
  */
 
-import { WorkflowOrchestrator } from '../src/framework/workflow-orchestrator';
+// Removed WorkflowOrchestrator import - no longer needed
 import logger from '../src/utils/logger';
 
-async function testWorkflowOrchestratorCleanup() {
-  logger.info('Testing WorkflowOrchestrator cleanup...');
-  
-  const orchestrator = new WorkflowOrchestrator();
-  
-  // Create a few test workflows
-  for (let i = 0; i < 5; i++) {
-    const workflow = {
-      workflowId: `test-workflow-${i}`,
-      sessionId: `session-${i}`,
-      status: 'active' as const,
-      totalSteps: 3,
-      currentStep: 0,
-      context: { test: true },
-      createdAt: new Date(),
-      lastActivity: new Date(Date.now() - (i * 1000))
-    };
-    orchestrator.createWorkflow(workflow);
-  }
-  
-  const initialStats = orchestrator.getStats();
-  logger.info('Initial stats:', initialStats);
-  
-  // Force cleanup
-  orchestrator.cleanupOldWorkflows();
-  
-  const finalStats = orchestrator.getStats();
-  logger.info('Final stats:', finalStats);
-  
-  // Destroy orchestrator
-  orchestrator.destroy();
-  
-  logger.info('✅ WorkflowOrchestrator cleanup test completed');
-}
+// Removed WorkflowOrchestrator test - no longer needed
 
 async function testMemoryUsage() {
   logger.info('Testing memory usage...');
@@ -87,7 +54,6 @@ async function main() {
   logger.info('Starting simple memory tests...');
   
   try {
-    await testWorkflowOrchestratorCleanup();
     await testMemoryUsage();
     
     logger.info('🎉 All memory tests completed successfully!');

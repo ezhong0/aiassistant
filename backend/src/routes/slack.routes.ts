@@ -8,7 +8,8 @@ import {
 } from '../schemas/slack.schemas';
 import { validateRequest } from '../middleware/validation.middleware';
 import { ServiceManager } from '../services/service-manager';
-import { SlackService } from '../services/slack/slack.service';
+import { DomainServiceResolver } from '../services/domain';
+import { ISlackDomainService } from '../services/domain/interfaces/domain-service.interfaces';
 import { SlackOAuthService } from '../services/slack/slack-oauth.service';
 import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
@@ -232,7 +233,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         return;
       }
 
-      // For actual events, handle them directly via SlackService
+      // For actual events, handle them directly via SlackDomainService
       if (type === 'event_callback' && event) {
         logger.debug('Event callback processing', {
           ...logContext,
@@ -254,7 +255,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         res.status(200).json({ ok: true });
         
         // Process the event asynchronously (don't await)
-        logger.info('Attempting to get SlackService from service manager', {
+        logger.info('Attempting to get SlackDomainService from domain resolver', {
           ...logContext,
           operation: 'get_slack_service',
           metadata: {
@@ -264,14 +265,14 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           }
         });
         
-        const slackService = serviceManager.getService('slackService') as SlackService | undefined;
+        const slackService = DomainServiceResolver.getSlackService();
         
-        logger.info('SlackService retrieval result', {
+        logger.info('SlackDomainService retrieval result', {
           ...logContext,
           operation: 'slack_service_retrieval',
           metadata: {
             hasSlackService: !!slackService,
-            serviceName: slackService?.name || 'undefined',
+            serviceName: 'SlackDomainService',
             eventType: event.type,
             userId: event.user,
             channelId: event.channel
@@ -347,7 +348,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             });
           }
         } else {
-          logger.warn('SlackService not available - event not processed', {
+          logger.warn('SlackDomainService not available - event not processed', {
             ...logContext,
             operation: 'event_processing',
             metadata: { 
@@ -422,7 +423,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           });
 
           // Send response via response_url for better UX
-          const slackService = serviceManager.getService<SlackService>('slackService');
+          const slackService = DomainServiceResolver.getSlackService();
           if (slackService && response_url) {
             logger.info('Sending auth response to Slack', {
               correlationId: logContext.correlationId,
@@ -447,7 +448,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
               metadata: {
                 userId: user_id,
                 teamId: team_id,
-                hasSlackService: !!slackService,
+                hasSlackDomainService: !!slackService,
                 hasResponseUrl: !!response_url
               }
             });
@@ -455,7 +456,11 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             // Fallback: try to send as direct message
             if (slackService) {
               try {
-                await slackService.sendMessage(user_id, '🔐 Your Connections', { blocks });
+                await slackService.sendMessage({
+                  channel: user_id,
+                  text: '🔐 Your Connections',
+                  blocks
+                });
                 logger.info('Auth response sent via direct message', {
                   correlationId: logContext.correlationId,
                   operation: 'auth_dm_sent',
@@ -477,7 +482,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             metadata: { userId: user_id, teamId: team_id }
           });
 
-          const slackService = serviceManager.getService<SlackService>('slackService');
+          const slackService = DomainServiceResolver.getSlackService();
           if (slackService && response_url) {
             await slackService.sendToResponseUrl(response_url, {
               response_type: 'ephemeral',
@@ -629,9 +634,11 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
               });
 
               // Send a direct message with the OAuth URL
-              const slackService = serviceManager.getService<SlackService>('slackService');
+              const slackService = DomainServiceResolver.getSlackService();
               if (slackService) {
-                await slackService.sendMessage(userId, '🔐 Google Authorization Required', {
+                await slackService.sendMessage({
+                  channel: userId,
+                  text: '🔐 Google Authorization Required',
                   blocks: [
                     {
                       type: 'section',

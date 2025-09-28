@@ -21,7 +21,8 @@
  */
 
 import { NaturalLanguageAgent, AgentConfig } from '../framework/natural-language-agent';
-import { CalendarService } from '../services/calendar/calendar.service';
+import { DomainServiceResolver } from '../services/domain';
+import { ICalendarDomainService } from '../services/domain/interfaces/domain-service.interfaces';
 
 /**
  * Calendar Agent - Microservice for Google Calendar operations
@@ -99,7 +100,14 @@ You're helpful, efficient, and respect users' time.`,
     parameters: Record<string, any>,
     authToken: any
   ): Promise<any> {
-    const calendarService = this.getService<CalendarService>('calendarService');
+    const calendarService = DomainServiceResolver.getCalendarService();
+    await calendarService.initialize();
+    
+    // Authenticate with the provided access token
+    if (authToken) {
+      await calendarService.authenticate(authToken.accessToken, authToken.refreshToken);
+    }
+    
     const calendarId = parameters.calendarId || 'primary';
 
     switch (operation) {
@@ -131,7 +139,7 @@ You're helpful, efficient, and respect users' time.`,
   // ============================================================================
 
   private async createEvent(
-    service: CalendarService,
+    service: ICalendarDomainService,
     params: Record<string, any>,
     token: string,
     calendarId: string
@@ -140,18 +148,15 @@ You're helpful, efficient, and respect users' time.`,
       throw new Error('Required fields: summary, start, end');
     }
 
-    const event = await service.createEvent(
-      {
-        summary: params.summary,
-        description: params.description,
-        start: { dateTime: params.start },
-        end: { dateTime: params.end },
-        attendees: params.attendees?.map((email: string) => ({ email })),
-        location: params.location,
-      },
-      token,
+    const event = await service.createEvent({
+      summary: params.summary,
+      description: params.description,
+      start: { dateTime: params.start },
+      end: { dateTime: params.end },
+      attendees: params.attendees?.map((email: string) => ({ email })),
+      location: params.location,
       calendarId
-    );
+    });
 
     return {
       action: 'created',
@@ -163,19 +168,16 @@ You're helpful, efficient, and respect users' time.`,
   }
 
   private async listEvents(
-    service: CalendarService,
+    service: ICalendarDomainService,
     params: Record<string, any>,
     token: string,
     calendarId: string
   ) {
-    const events = await service.getEvents(
-      token,
-      {
-        timeMin: params.timeMin,
-        timeMax: params.timeMax,
-      },
-      calendarId
-    );
+    const events = await service.listEvents({
+      calendarId,
+      timeMin: params.timeMin,
+      timeMax: params.timeMax
+    });
 
     return {
       action: 'listed',
@@ -185,7 +187,7 @@ You're helpful, efficient, and respect users' time.`,
   }
 
   private async updateEvent(
-    service: CalendarService,
+    service: ICalendarDomainService,
     params: Record<string, any>,
     token: string,
     calendarId: string
@@ -194,19 +196,16 @@ You're helpful, efficient, and respect users' time.`,
       throw new Error('Event ID required for update');
     }
 
-    const event = await service.updateEvent(
-      params.eventId,
-      {
-        summary: params.summary,
-        description: params.description,
-        start: params.start ? { dateTime: params.start } : undefined,
-        end: params.end ? { dateTime: params.end } : undefined,
-        attendees: params.attendees?.map((email: string) => ({ email })),
-        location: params.location,
-      },
-      token,
-      calendarId
-    );
+    const event = await service.updateEvent({
+      eventId: params.eventId,
+      calendarId,
+      summary: params.summary,
+      description: params.description,
+      start: params.start ? { dateTime: params.start } : undefined,
+      end: params.end ? { dateTime: params.end } : undefined,
+      attendees: params.attendees?.map((email: string) => ({ email })),
+      location: params.location
+    });
 
     return {
       action: 'updated',
@@ -216,7 +215,7 @@ You're helpful, efficient, and respect users' time.`,
   }
 
   private async deleteEvent(
-    service: CalendarService,
+    service: ICalendarDomainService,
     params: Record<string, any>,
     token: string,
     calendarId: string
@@ -225,7 +224,7 @@ You're helpful, efficient, and respect users' time.`,
       throw new Error('Event ID required for delete');
     }
 
-    await service.deleteEvent(params.eventId, token, calendarId);
+    await service.deleteEvent(params.eventId, calendarId);
 
     return {
       action: 'deleted',
@@ -235,7 +234,7 @@ You're helpful, efficient, and respect users' time.`,
   }
 
   private async checkAvailability(
-    service: CalendarService,
+    service: ICalendarDomainService,
     params: Record<string, any>,
     token: string,
     calendarId: string
@@ -244,14 +243,11 @@ You're helpful, efficient, and respect users' time.`,
       throw new Error('Start and end times required for availability check');
     }
 
-    const events = await service.getEvents(
-      token,
-      {
-        timeMin: params.start,
-        timeMax: params.end,
-      },
-      calendarId
-    );
+    const events = await service.listEvents({
+      calendarId,
+      timeMin: params.start,
+      timeMax: params.end
+    });
 
     const isAvailable = events.length === 0;
     const conflictingEvents = events;
@@ -267,7 +263,7 @@ You're helpful, efficient, and respect users' time.`,
   }
 
   private async findAvailableSlots(
-    service: CalendarService,
+    service: ICalendarDomainService,
     params: Record<string, any>,
     token: string,
     calendarId: string
@@ -278,14 +274,11 @@ You're helpful, efficient, and respect users' time.`,
 
     const duration = params.duration || 30; // Default 30 minutes
 
-    const events = await service.getEvents(
-      token,
-      {
-        timeMin: params.timeMin,
-        timeMax: params.timeMax,
-      },
-      calendarId
-    );
+    const events = await service.listEvents({
+      calendarId,
+      timeMin: params.timeMin,
+      timeMax: params.timeMax
+    });
 
     // Find gaps between events
     const availableSlots: Array<{ start: string; end: string }> = [];

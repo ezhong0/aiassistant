@@ -429,3 +429,356 @@ Benefits:
 - Preserves both facts and reasoning
 - Handles question shortcuts seamlessly
 ```
+
+## Implementation Evaluation & Improvement Todos
+
+### Implementation Status ✅
+The current MasterAgent implementation successfully follows the core 3-phase architecture:
+1. **Understanding & Planning**: Uses SituationAnalysisPromptBuilder and WorkflowPlanningPromptBuilder
+2. **Execution Loop**: Implements max 10 iterations with EnvironmentCheckPromptBuilder, ActionExecutionPromptBuilder, and ProgressAssessmentPromptBuilder
+3. **Final Output**: Uses FinalResponsePromptBuilder for response generation
+
+**Strengths:**
+- Modular prompt builder architecture enables easy customization
+- Proper integration with domain agents via AgentFactory.executeAgentWithNaturalLanguage()
+- Context management using structured format (GOAL, ENTITIES, CONSTRAINTS, etc.)
+- Error handling and logging throughout the workflow
+- Natural language interface for all domain agents
+
+### Critical Improvements Needed
+
+#### 1. Rate Limiting & Circuit Breakers
+**Priority: HIGH** | **Effort: Medium**
+- [ ] Implement rate limiting for AI service calls to prevent quota exhaustion
+- [ ] Add circuit breakers for external APIs (Gmail, Calendar, Contacts)
+- [ ] Implement exponential backoff for failed requests
+- [ ] Add monitoring for API health and response times
+
+#### 2. Interruption Handling
+**Priority: HIGH** | **Effort: High**
+- [ ] Implement "New Flow Strategy" for user interruptions during execution
+- [ ] Add workflow state persistence and suspension capabilities
+- [ ] Enable seamless context handoff between interrupted and new workflows
+- [ ] Prevent workflow corruption from concurrent user inputs
+
+#### 3. Enhanced User Input Shortcut Strategy
+**Priority: MEDIUM** | **Effort: Medium**
+- [ ] Improve confidence calculation logic (currently basic implementation)
+- [ ] Add sophisticated ambiguity detection beyond basic parsing
+- [ ] Implement better question generation with context awareness
+- [ ] Add user input validation and guided input collection
+
+#### 4. Advanced Error Recovery & Plan Adaptation
+**Priority: MEDIUM** | **Effort: High**
+- [ ] Implement intelligent error categorization (temporary vs permanent)
+- [ ] Add automatic retry logic with different strategies per error type
+- [ ] Build sophisticated plan adaptation based on partial success scenarios
+- [ ] Implement graceful degradation paths for missing capabilities
+
+#### 5. High-Risk Operation Management
+**Priority: MEDIUM** | **Effort: Medium**
+- [ ] Enhance preview generation with rich formatting and risk visualization
+- [ ] Add confirmation workflow management (accept/revise/cancel flows)
+- [ ] Implement proper risk assessment scoring beyond basic categorization
+- [ ] Add audit logging for all high-risk operations
+
+#### 6. Monitoring & Observability
+**Priority: MEDIUM** | **Effort: Low**
+- [ ] Add comprehensive workflow metrics (execution time, success rates, iteration counts)
+- [ ] Implement real-time workflow state monitoring
+- [ ] Add performance profiling for prompt builder execution
+- [ ] Create dashboards for workflow health and agent utilization
+
+#### 7. Context Persistence & Session Management
+**Priority: LOW** | **Effort: Medium**
+- [ ] Implement context persistence across sessions (currently lost on restart)
+- [ ] Add conversation history integration with long-term memory
+- [ ] Build context compression for long-running conversations
+- [ ] Implement context search and retrieval capabilities
+
+#### 8. Security & Compliance
+**Priority: HIGH** | **Effort: Medium**
+- [ ] Add input sanitization and validation for all user inputs
+- [ ] Implement access control checks for sensitive operations
+- [ ] Add data encryption for stored contexts and session data
+- [ ] Build audit trails for compliance and debugging
+
+#### 9. Performance Optimization
+**Priority: LOW** | **Effort: Medium**
+- [ ] Implement prompt caching to reduce AI service calls
+- [ ] Add parallel execution for independent agent operations
+- [ ] Optimize context size to reduce token usage
+- [ ] Implement lazy loading for non-critical context information
+
+#### 10. Testing & Quality Assurance
+**Priority: MEDIUM** | **Effort: High**
+- [ ] Add comprehensive integration tests for all workflow scenarios
+- [ ] Implement chaos testing for error handling robustness
+- [ ] Create automated testing for prompt builder effectiveness
+- [ ] Build regression testing suite for workflow reliability
+
+## Coding Patterns & Architecture Analysis
+
+### ✅ Strengths in Current Implementation
+
+#### 1. **Clean Separation of Concerns**
+```typescript
+// Good: Each prompt builder handles one specific workflow phase
+private situationAnalysisBuilder: SituationAnalysisPromptBuilder;
+private workflowPlanningBuilder: WorkflowPlanningPromptBuilder;
+private environmentCheckBuilder: EnvironmentCheckPromptBuilder;
+// etc...
+```
+**Why this works:** Single Responsibility Principle applied correctly, making each component testable and maintainable.
+
+#### 2. **Proper Dependency Injection Pattern**
+```typescript
+// Good: Services injected via service manager, not hardcoded
+this.aiService = serviceManager.getService<GenericAIService>('genericAIService');
+this.contextManager = serviceManager.getService<ContextManager>('contextManager');
+```
+**Why this works:** Enables testing with mocks, reduces coupling, follows IoC principles.
+
+#### 3. **Defensive Programming with Null Safety**
+```typescript
+// Good: Explicit null checks with meaningful error messages
+if (!this.aiService) {
+  throw new Error('GenericAIService not available for NewMasterAgent');
+}
+```
+**Why this works:** Fails fast with clear error messages rather than mysterious null reference errors.
+
+#### 4. **Structured Error Handling**
+```typescript
+// Good: Consistent error logging with context
+logger.error('Agent execution failed', error as Error, {
+  sessionId,
+  agent: actionResult.parsed.agent,
+  request: actionResult.parsed.request
+});
+```
+**Why this works:** Provides debugging context without exposing sensitive data.
+
+#### 5. **Template Method Pattern Implementation**
+```typescript
+// Good: Clear workflow phases with consistent structure
+const workflowContext = await this.analyzeAndPlan(messageHistory, sessionId, userId);
+const executionResult = await this.executeWorkflow(workflowContext, sessionId, userId);
+const finalResult = await this.generateFinalResponse(executionResult, processingStartTime);
+```
+**Why this works:** Makes the algorithm structure explicit and easy to follow.
+
+### ⚠️ Architecture Concerns & Improvements
+
+#### 1. **String-Based Context Management**
+**Issue:** Context is passed as plain strings between phases
+```typescript
+// Current: Context as string - fragile and hard to validate
+let currentContext = workflowContext;
+currentContext = `${currentContext}\n\nAgent Execution Result:\nAgent: ${actionResult.parsed.agent}...`;
+```
+
+**Better Approach:** Structured context objects
+```typescript
+// Improved: Type-safe context management
+interface WorkflowContext {
+  goal: string;
+  entities: Entity[];
+  constraints: Constraint[];
+  data: Record<string, any>;
+  progress: ProgressStep[];
+  blockers: Blocker[];
+  next: string;
+  notes: string;
+}
+
+class ContextManager {
+  updateWithAgentResult(context: WorkflowContext, result: AgentResult): WorkflowContext {
+    return {
+      ...context,
+      data: { ...context.data, [result.agent]: result.data },
+      progress: [...context.progress, { phase: 'agent_execution', agent: result.agent, timestamp: Date.now() }]
+    };
+  }
+}
+```
+
+#### 2. **Non-null Assertion Operator Overuse**
+**Issue:** Unsafe use of `!` operator
+```typescript
+// Risky: Could cause runtime errors
+const environmentResult = await this.environmentCheckBuilder!.execute(currentContext);
+```
+
+**Better Approach:** Proper null handling
+```typescript
+// Safer: Explicit null checks with early returns
+if (!this.environmentCheckBuilder) {
+  throw new Error('Environment check builder not initialized');
+}
+const environmentResult = await this.environmentCheckBuilder.execute(currentContext);
+```
+
+#### 3. **Monolithic Execution Loop**
+**Issue:** 70-line executeWorkflow method with multiple responsibilities
+```typescript
+// Current: Single method handles too many concerns
+private async executeWorkflow(workflowContext: string, sessionId: string, userId?: string): Promise<string> {
+  // Environment check
+  // Action execution
+  // Agent delegation
+  // Progress assessment
+  // Context updates
+  // Iteration management
+}
+```
+
+**Better Approach:** Extract smaller methods
+```typescript
+// Improved: Decomposed into focused methods
+private async executeWorkflow(context: WorkflowContext, sessionId: string, userId?: string): Promise<WorkflowContext> {
+  for (let iteration = 1; iteration <= this.maxIterations; iteration++) {
+    context = await this.checkEnvironmentReadiness(context);
+
+    if (this.needsUserInput(context)) {
+      return this.pauseForUserInput(context);
+    }
+
+    context = await this.executeActions(context, sessionId, userId);
+    context = await this.assessProgress(context);
+
+    if (this.isComplete(context)) {
+      return context;
+    }
+  }
+
+  return this.handleMaxIterationsReached(context);
+}
+```
+
+#### 4. **Magic String Dependencies**
+**Issue:** Hardcoded service names and agent names
+```typescript
+// Fragile: Service names as magic strings
+this.aiService = serviceManager.getService<GenericAIService>('genericAIService');
+
+// Fragile: Agent names passed as strings
+await AgentFactory.executeAgentWithNaturalLanguage(agentName, request, ...);
+```
+
+**Better Approach:** Type-safe service and agent references
+```typescript
+// Improved: Enum-based service registration
+enum ServiceType {
+  GENERIC_AI = 'genericAIService',
+  CONTEXT_MANAGER = 'contextManager'
+}
+
+enum AgentType {
+  EMAIL = 'emailAgent',
+  CALENDAR = 'calendarAgent',
+  CONTACT = 'contactAgent'
+}
+```
+
+#### 5. **Incomplete Token Management**
+**Issue:** TODO comments in production code
+```typescript
+// TODO: Get access token from token manager
+// For now, we'll proceed without it
+```
+
+**Better Approach:** Proper abstraction for token management
+```typescript
+// Improved: Dedicated token management
+class TokenManager {
+  async getAccessToken(userId: string, service: string): Promise<string | null>;
+  async refreshToken(userId: string, service: string): Promise<string>;
+  async isTokenValid(token: string): Promise<boolean>;
+}
+```
+
+#### 6. **Lack of Circuit Breaker Pattern**
+**Issue:** No protection against cascading failures
+```typescript
+// Current: Direct agent calls without protection
+const result = await AgentFactory.executeAgentWithNaturalLanguage(...);
+```
+
+**Better Approach:** Circuit breaker for external calls
+```typescript
+// Improved: Protected external calls
+class CircuitBreaker {
+  async execute<T>(operation: () => Promise<T>, operationName: string): Promise<T> {
+    if (this.isOpen(operationName)) {
+      throw new CircuitBreakerOpenError(`${operationName} circuit breaker is open`);
+    }
+
+    try {
+      const result = await operation();
+      this.recordSuccess(operationName);
+      return result;
+    } catch (error) {
+      this.recordFailure(operationName);
+      throw error;
+    }
+  }
+}
+```
+
+#### 7. **Insufficient Type Safety in Agent Communication**
+**Issue:** `any` return types from agent calls
+```typescript
+// Weak typing: No compile-time guarantees about agent responses
+private async executeAgentAction(...): Promise<any> {
+```
+
+**Better Approach:** Strongly typed agent contracts
+```typescript
+// Improved: Type-safe agent responses
+interface AgentResponse<TData = any> {
+  success: boolean;
+  data?: TData;
+  error?: AgentError;
+  metadata: {
+    agent: string;
+    operation: string;
+    duration: number;
+    confidence: number;
+  };
+}
+
+private async executeAgentAction<TData>(
+  agentName: string,
+  request: string,
+  sessionId: string,
+  userId?: string
+): Promise<AgentResponse<TData>> {
+```
+
+### 🔧 Specific Refactoring Recommendations
+
+#### 1. **Extract Context Management Service**
+- Move string-based context manipulation to a dedicated service
+- Implement type-safe context updates
+- Add context validation and sanitization
+
+#### 2. **Implement Strategy Pattern for Prompt Builders**
+- Create `PromptBuilderStrategy` interface
+- Enable runtime switching of prompt strategies
+- Support A/B testing of different prompt approaches
+
+#### 3. **Add Workflow State Machine**
+- Replace manual iteration tracking with proper state machine
+- Enable workflow pause/resume capabilities
+- Support workflow branching and conditional paths
+
+#### 4. **Implement Command Pattern for Agent Actions**
+- Encapsulate agent calls as command objects
+- Enable undo/redo capabilities
+- Support queuing and batching of agent operations
+
+#### 5. **Add Metrics and Telemetry**
+- Instrument all workflow phases with metrics
+- Add performance monitoring for prompt builders
+- Implement SLA tracking for end-to-end workflows

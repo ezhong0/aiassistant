@@ -6,6 +6,7 @@ import { GoogleOAuthCallbackSchema, TokenRefreshRequestSchema, LogoutRequestSche
 import { validateRequest } from '../middleware/validation.middleware';
 import axios from 'axios';
 import { getService } from '../services/service-manager';
+import { DomainServiceResolver } from '../services/domain';
 import { AuthService } from '../services/auth.service';
 import { TokenStorageService } from '../services/token-storage.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
@@ -958,14 +959,14 @@ router.get('/callback',
 
       // Send success notification to Slack
       try {
-        const slackService = getService('SlackService') as any;
+        const slackService = DomainServiceResolver.getSlackService();
         if (slackService && userId_slack) {
-          await slackService.sendMessage(userId_slack,
-            wasAuthDashboard
+          await slackService.sendMessage({
+            channel: userId_slack,
+            text: wasAuthDashboard
               ? '✅ Successfully reconnected! Your Google connection has been refreshed.'
               : '✅ Successfully connected! You can now use email and calendar features.',
-            {
-              blocks: wasAuthDashboard ? [
+            blocks: wasAuthDashboard ? [
                 {
                   type: 'section',
                   text: {
@@ -988,8 +989,7 @@ router.get('/callback',
                   ]
                 }
               ] : undefined
-            }
-          );
+          });
         }
       } catch (error) {
         logger.error('Failed to send Slack notification', error as Error, {

@@ -1,6 +1,6 @@
 import { BaseService } from './base-service';
-import { serviceManager } from './service-manager';
-import { OpenAIService } from './openai.service';
+import { DomainServiceResolver } from './domain';
+import { IAIDomainService } from './domain/interfaces/domain-service.interfaces';
 import logger from '../utils/logger';
 
 /**
@@ -68,7 +68,7 @@ const DEFAULT_CONFIG = {
  * - Flow control support for dynamic workflows
  */
 export class GenericAIService extends BaseService {
-  private openaiService: OpenAIService | null = null;
+  private aiDomainService: IAIDomainService | null = null;
   private config: typeof DEFAULT_CONFIG;
 
   constructor(config?: Partial<typeof DEFAULT_CONFIG>) {
@@ -80,13 +80,15 @@ export class GenericAIService extends BaseService {
    * Service initialization
    */
   protected async onInitialize(): Promise<void> {
-    this.openaiService = serviceManager.getService<OpenAIService>('openaiService') || null;
-    
-    if (!this.openaiService) {
-      throw new Error('OpenAIService not available for GenericAIService');
+    try {
+      this.aiDomainService = DomainServiceResolver.getAIService();
+      await this.aiDomainService.initialize();
+      
+      this.logInfo('GenericAIService initialized successfully');
+    } catch (error) {
+      this.logError('Failed to initialize GenericAIService', error);
+      throw new Error('AIDomainService not available for GenericAIService');
     }
-
-    this.logInfo('GenericAIService initialized successfully');
   }
 
   /**
@@ -110,8 +112,8 @@ export class GenericAIService extends BaseService {
     const startTime = Date.now();
 
     try {
-      if (!this.openaiService) {
-        throw new Error('OpenAI service not available');
+      if (!this.aiDomainService) {
+        throw new Error('AI domain service not available');
       }
 
       this.logDebug('Executing structured AI prompt', {
@@ -121,13 +123,14 @@ export class GenericAIService extends BaseService {
       });
 
       // Always use structured output with function calling
-      const structuredResponse = await this.openaiService.generateStructuredData(
+      const structuredResponse = await this.aiDomainService.generateStructuredData(
         prompt.userPrompt,
         prompt.systemPrompt,
         schema,
         {
           temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
-          maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS
+          maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
+          model: prompt.options?.model ?? this.config.MODEL
         }
       );
 
