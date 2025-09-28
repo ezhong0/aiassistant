@@ -1,6 +1,6 @@
 import { ServiceManager } from '../../services/service-manager';
 import { ISlackDomainService } from '../../services/domain/interfaces/domain-service.interfaces';
-import { SlackConfig } from './slack-config.types';
+import { SlackConfig } from './slack.types';
 import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
 
 export interface InterfaceManager {
@@ -90,4 +90,4 @@ export const stopInterfaces = async (interfaces: InterfaceManager): Promise<void
 
 // Export individual interfaces for direct use
 export * from './slack.types';
-export type { SlackConfig } from './slack-config.types';
+export type { SlackConfig } from './slack.types';

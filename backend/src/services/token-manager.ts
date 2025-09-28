@@ -655,4 +655,74 @@ export class TokenManager extends BaseService {
 
     return { needsReauth: false };
   }
+
+  /**
+   * Store OAuth tokens for a user (used by OAuth managers)
+   */
+  async storeTokens(userId: string, tokens: OAuthTokens): Promise<void> {
+    this.assertReady();
+    
+    if (!this.tokenStorageService) {
+      throw new Error('TokenStorageService not available');
+    }
+
+    try {
+      await this.tokenStorageService.storeUserTokens(userId, tokens);
+      
+      // Invalidate cache to force refresh
+      if (this.cacheService) {
+        const cacheKey = this.getTokenCacheKey('', userId); // Extract teamId from userId if needed
+        await this.cacheService.del(cacheKey);
+      }
+      
+      this.logInfo('Successfully stored tokens', { userId });
+    } catch (error) {
+      this.logError('Failed to store tokens', error as Error, { userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get user tokens (used by OAuth managers)
+   */
+  async getUserTokens(userId: string): Promise<UserTokens | null> {
+    this.assertReady();
+    
+    if (!this.tokenStorageService) {
+      throw new Error('TokenStorageService not available');
+    }
+
+    try {
+      return await this.tokenStorageService.getUserTokens(userId);
+    } catch (error) {
+      this.logError('Failed to get user tokens', error as Error, { userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove tokens for a user (used by OAuth managers)
+   */
+  async removeTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    if (!this.tokenStorageService) {
+      throw new Error('TokenStorageService not available');
+    }
+
+    try {
+      await this.tokenStorageService.removeUserTokens(userId);
+      
+      // Invalidate cache
+      if (this.cacheService) {
+        const cacheKey = this.getTokenCacheKey('', userId);
+        await this.cacheService.del(cacheKey);
+      }
+      
+      this.logInfo('Successfully removed tokens', { userId });
+    } catch (error) {
+      this.logError('Failed to remove tokens', error as Error, { userId });
+      throw error;
+    }
+  }
 }

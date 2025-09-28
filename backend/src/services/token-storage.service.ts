@@ -526,4 +526,34 @@ export class TokenStorageService extends BaseService {
     }
     return 0;
   }
+
+  /**
+   * Remove user tokens (used by TokenManager)
+   */
+  async removeUserTokens(userId: string): Promise<void> {
+    this.assertReady();
+    
+    try {
+      if (this.databaseService) {
+        // Remove from database
+        await this.databaseService.query(
+          'DELETE FROM user_tokens WHERE user_id = $1',
+          [userId]
+        );
+      }
+      
+      // Remove from memory
+      this.inMemoryTokens.delete(userId);
+      
+      // Remove from cache
+      if (this.cacheService) {
+        await this.cacheService.del(`tokens:${userId}`);
+      }
+      
+      this.logInfo('Successfully removed user tokens', { userId });
+    } catch (error) {
+      this.logError('Failed to remove user tokens', error as Error, { userId });
+      throw error;
+    }
+  }
 }

@@ -2,6 +2,8 @@ import { BaseService } from './base-service';
 import { TokenManager } from './token-manager';
 import { TokenStorageService } from './token-storage.service';
 import { serviceManager } from "./service-manager";
+import { GoogleOAuthManager } from './oauth/google-oauth-manager';
+import { SlackOAuthManager } from './oauth/slack-oauth-manager';
 
 export interface ServiceConnection {
   provider: string;
@@ -29,6 +31,8 @@ export interface SlackBlock {
 export class AuthStatusService extends BaseService {
   private tokenManager: TokenManager;
   private tokenStorageService: TokenStorageService | null = null;
+  private googleOAuthManager: GoogleOAuthManager | null = null;
+  private slackOAuthManager: SlackOAuthManager | null = null;
 
   constructor() {
     super('AuthStatusService');
@@ -41,6 +45,11 @@ export class AuthStatusService extends BaseService {
     if (!this.tokenStorageService) {
       this.logWarn('TokenStorageService not available, auth status will be limited');
     }
+    
+    // Get OAuth managers
+    this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
+    this.slackOAuthManager = serviceManager.getService<SlackOAuthManager>('slackOAuthManager') || null;
+    
     this.logInfo('AuthStatusService initialized');
   }
 
@@ -49,41 +58,36 @@ export class AuthStatusService extends BaseService {
   }
 
   async getUserConnections(teamId: string, userId: string): Promise<ServiceConnection[]> {
-    if (!this.tokenStorageService) {
-      this.logWarn('TokenStorageService not available, returning disconnected status');
-      return [{
-        provider: 'google',
-        providerName: 'Google',
-        emoji: '🔵',
-        services: ['Gmail', 'Calendar'],
-        status: 'disconnected',
-        hasAccessToken: false,
-        hasRefreshToken: false
-      }];
-    }
+    const connections: ServiceConnection[] = [];
+    const combinedUserId = `${teamId}:${userId}`;
 
     try {
-      const combinedUserId = `${teamId}:${userId}`;
-      const tokens = await this.tokenStorageService.getUserTokens(combinedUserId);
+      // Get Google connection status
+      if (this.googleOAuthManager) {
+        const googleStatus = await this.getGoogleConnectionStatus(combinedUserId);
+        connections.push(googleStatus);
+      }
 
-      const googleConnection: ServiceConnection = {
-        provider: 'google',
-        providerName: 'Google',
-        emoji: '🔵',
-        services: ['Gmail', 'Calendar'],
-        status: this.determineStatus(
-          tokens?.googleTokens?.access_token,
-          tokens?.googleTokens?.expires_at ? new Date(tokens.googleTokens.expires_at).getTime() : undefined
-        ),
-        hasAccessToken: !!tokens?.googleTokens?.access_token,
-        hasRefreshToken: !!tokens?.googleTokens?.refresh_token,
-        expiresAt: tokens?.googleTokens?.expires_at ? new Date(tokens.googleTokens.expires_at) : undefined,
-        expiresIn: tokens?.googleTokens?.expires_at
-          ? this.formatTimeUntil(new Date(tokens.googleTokens.expires_at))
-          : undefined
-      };
+      // Get Slack connection status
+      if (this.slackOAuthManager) {
+        const slackStatus = await this.getSlackConnectionStatus(combinedUserId);
+        connections.push(slackStatus);
+      }
 
-      return [googleConnection];
+      // If no OAuth managers available, return disconnected status
+      if (connections.length === 0) {
+        return [{
+          provider: 'google',
+          providerName: 'Google',
+          emoji: '🔵',
+          services: ['Gmail', 'Calendar', 'Contacts'],
+          status: 'disconnected',
+          hasAccessToken: false,
+          hasRefreshToken: false
+        }];
+      }
+
+      return connections;
     } catch (error) {
       this.logError('Failed to get user connections', error as Error, {
         operation: 'getUserConnections_error',
@@ -95,12 +99,81 @@ export class AuthStatusService extends BaseService {
         provider: 'google',
         providerName: 'Google',
         emoji: '🔵',
-        services: ['Gmail', 'Calendar'],
+        services: ['Gmail', 'Calendar', 'Contacts'],
         status: 'disconnected',
         hasAccessToken: false,
         hasRefreshToken: false
       }];
     }
+  }
+
+  private async getGoogleConnectionStatus(userId: string): Promise<ServiceConnection> {
+    try {
+      if (!this.googleOAuthManager) {
+        return this.createDisconnectedConnection('google', 'Google', '🔵', ['Gmail', 'Calendar', 'Contacts']);
+      }
+
+      const validation = await this.googleOAuthManager.validateTokens(userId);
+      const tokens = await this.googleOAuthManager.getValidTokens(userId);
+
+      return {
+        provider: 'google',
+        providerName: 'Google',
+        emoji: '🔵',
+        services: ['Gmail', 'Calendar', 'Contacts'],
+        status: validation.isValid ? 'connected' : 'disconnected',
+        hasAccessToken: !!tokens,
+        hasRefreshToken: false, // Google refresh tokens are handled internally
+        expiresAt: undefined, // OAuth manager handles expiry
+        expiresIn: undefined
+      };
+    } catch (error) {
+      this.logError('Failed to get Google connection status', error as Error, { userId });
+      return this.createDisconnectedConnection('google', 'Google', '🔵', ['Gmail', 'Calendar', 'Contacts']);
+    }
+  }
+
+  private async getSlackConnectionStatus(userId: string): Promise<ServiceConnection> {
+    try {
+      if (!this.slackOAuthManager) {
+        return this.createDisconnectedConnection('slack', 'Slack', '🟣', ['Messaging', 'Channels']);
+      }
+
+      const validation = await this.slackOAuthManager.validateTokens(userId);
+      const tokens = await this.slackOAuthManager.getValidTokens(userId);
+
+      return {
+        provider: 'slack',
+        providerName: 'Slack',
+        emoji: '🟣',
+        services: ['Messaging', 'Channels'],
+        status: validation.isValid ? 'connected' : 'disconnected',
+        hasAccessToken: !!tokens,
+        hasRefreshToken: false, // Slack doesn't use refresh tokens
+        expiresAt: undefined,
+        expiresIn: undefined
+      };
+    } catch (error) {
+      this.logError('Failed to get Slack connection status', error as Error, { userId });
+      return this.createDisconnectedConnection('slack', 'Slack', '🟣', ['Messaging', 'Channels']);
+    }
+  }
+
+  private createDisconnectedConnection(
+    provider: string,
+    providerName: string,
+    emoji: string,
+    services: string[]
+  ): ServiceConnection {
+    return {
+      provider,
+      providerName,
+      emoji,
+      services,
+      status: 'disconnected',
+      hasAccessToken: false,
+      hasRefreshToken: false
+    };
   }
 
   private determineStatus(
@@ -252,19 +325,49 @@ export class AuthStatusService extends BaseService {
     message: string;
   }> {
     try {
-      if (provider === 'google') {
-        const tokens = await this.tokenManager.getValidTokensForGmail(teamId, userId);
+      const combinedUserId = `${teamId}:${userId}`;
 
-        if (!tokens) {
+      if (provider === 'google') {
+        if (!this.googleOAuthManager) {
           return {
             success: false,
-            message: 'No valid tokens found. Please reconnect your Google account.'
+            message: 'Google OAuth manager not available.'
+          };
+        }
+
+        const validation = await this.googleOAuthManager.validateTokens(combinedUserId);
+        if (!validation.isValid) {
+          return {
+            success: false,
+            message: 'Google connection is not valid. Please reconnect your account.'
           };
         }
 
         return {
           success: true,
           message: 'Google connection is working! ✅'
+        };
+      }
+
+      if (provider === 'slack') {
+        if (!this.slackOAuthManager) {
+          return {
+            success: false,
+            message: 'Slack OAuth manager not available.'
+          };
+        }
+
+        const validation = await this.slackOAuthManager.validateTokens(combinedUserId);
+        if (!validation.isValid) {
+          return {
+            success: false,
+            message: 'Slack connection is not valid. Please reconnect your account.'
+          };
+        }
+
+        return {
+          success: true,
+          message: 'Slack connection is working! ✅'
         };
       }
 

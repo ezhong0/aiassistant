@@ -6,12 +6,13 @@
  * - Reducing error factory complexity
  * - Providing consistent patterns
  * - Easy integration with existing logging
+ * - Includes workflow-specific error handling
  */
 
 import { AppError, ErrorFactory, ERROR_CATEGORIES, ERROR_SEVERITY } from '../../utils/app-error';
 
 /**
- * Unified workflow error codes (simplified)
+ * Unified workflow error codes (consolidated from workflow-errors.ts)
  */
 export const UNIFIED_ERROR_CODES = {
   // Service errors
@@ -21,22 +22,39 @@ export const UNIFIED_ERROR_CODES = {
   // Workflow errors
   WORKFLOW_EXECUTION_FAILED: 'WORKFLOW_EXECUTION_FAILED',
   WORKFLOW_ITERATION_LIMIT: 'WORKFLOW_ITERATION_LIMIT',
+  WORKFLOW_ITERATION_LIMIT_EXCEEDED: 'WORKFLOW_ITERATION_LIMIT_EXCEEDED',
+  WORKFLOW_INTERRUPTED: 'WORKFLOW_INTERRUPTED',
+  WORKFLOW_STATE_INVALID: 'WORKFLOW_STATE_INVALID',
 
   // Builder errors
   BUILDER_NOT_INITIALIZED: 'BUILDER_NOT_INITIALIZED',
   BUILDER_EXECUTION_FAILED: 'BUILDER_EXECUTION_FAILED',
 
+  // Context errors
+  CONTEXT_INVALID: 'CONTEXT_INVALID',
+  CONTEXT_PARSING_FAILED: 'CONTEXT_PARSING_FAILED',
+  CONTEXT_UPDATE_FAILED: 'CONTEXT_UPDATE_FAILED',
+
+  // Agent errors
+  AGENT_EXECUTION_FAILED: 'AGENT_EXECUTION_FAILED',
+  AGENT_NOT_AVAILABLE: 'AGENT_NOT_AVAILABLE',
+  AGENT_RESPONSE_INVALID: 'AGENT_RESPONSE_INVALID',
+
   // Token errors
   TOKEN_UNAVAILABLE: 'TOKEN_UNAVAILABLE',
   TOKEN_AUTHENTICATION_FAILED: 'TOKEN_AUTHENTICATION_FAILED',
 
-  // Agent errors
-  AGENT_EXECUTION_FAILED: 'AGENT_EXECUTION_FAILED',
+  // User input errors
+  USER_INPUT_REQUIRED: 'USER_INPUT_REQUIRED',
+  USER_INPUT_TIMEOUT: 'USER_INPUT_TIMEOUT',
+  USER_INPUT_INVALID: 'USER_INPUT_INVALID',
 
   // Validation errors
   INVALID_INPUT: 'INVALID_INPUT',
   CONFIGURATION_ERROR: 'CONFIGURATION_ERROR'
 } as const;
+
+export type UnifiedErrorCode = typeof UNIFIED_ERROR_CODES[keyof typeof UNIFIED_ERROR_CODES];
 
 /**
  * Unified error context interface
@@ -198,6 +216,134 @@ export class UnifiedErrorFactory {
   }
 
   /**
+   * Builder initialization error
+   */
+  static builderNotInitialized(builderName: string, context?: UnifiedErrorContext): AppError {
+    return new AppError(
+      `${builderName} is not initialized. Ensure the Master Agent is properly initialized before executing workflows.`,
+      UNIFIED_ERROR_CODES.BUILDER_NOT_INITIALIZED,
+      {
+        category: ERROR_CATEGORIES.SERVICE,
+        severity: ERROR_SEVERITY.CRITICAL,
+        service: 'master-agent',
+        operation: context?.operation || 'builder_access',
+        metadata: { builderName, ...context?.metadata },
+        correlationId: context?.sessionId,
+        userId: context?.userId,
+        retryable: false,
+        userFriendly: true
+      }
+    );
+  }
+
+  /**
+   * Context validation error
+   */
+  static contextInvalid(reason: string, context?: UnifiedErrorContext): AppError {
+    return new AppError(
+      `Workflow context is invalid: ${reason}`,
+      UNIFIED_ERROR_CODES.CONTEXT_INVALID,
+      {
+        category: ERROR_CATEGORIES.VALIDATION,
+        severity: ERROR_SEVERITY.MEDIUM,
+        service: 'master-agent',
+        operation: context?.operation || 'context_validation',
+        metadata: { reason, ...context?.metadata },
+        correlationId: context?.sessionId,
+        userId: context?.userId,
+        retryable: false,
+        userFriendly: true
+      }
+    );
+  }
+
+  /**
+   * Context parsing error
+   */
+  static contextParsingFailed(originalError: Error, contextSnippet?: string, context?: UnifiedErrorContext): AppError {
+    return new AppError(
+      `Failed to parse workflow context: ${originalError.message}`,
+      UNIFIED_ERROR_CODES.CONTEXT_PARSING_FAILED,
+      {
+        category: ERROR_CATEGORIES.SERVICE,
+        severity: ERROR_SEVERITY.MEDIUM,
+        service: 'master-agent',
+        operation: context?.operation || 'context_parsing',
+        metadata: { contextSnippet: contextSnippet?.substring(0, 100), ...context?.metadata },
+        correlationId: context?.sessionId,
+        userId: context?.userId,
+        originalError,
+        retryable: true,
+        retryAfter: 2
+      }
+    );
+  }
+
+  /**
+   * Agent not available error
+   */
+  static agentNotAvailable(agentName: string, reason?: string, context?: UnifiedErrorContext): AppError {
+    return new AppError(
+      `Agent '${agentName}' is not available${reason ? `: ${reason}` : ''}`,
+      UNIFIED_ERROR_CODES.AGENT_NOT_AVAILABLE,
+      {
+        category: ERROR_CATEGORIES.SERVICE,
+        severity: ERROR_SEVERITY.HIGH,
+        service: 'agent-factory',
+        operation: context?.operation || 'agent_access',
+        metadata: { agentName, reason, ...context?.metadata },
+        correlationId: context?.sessionId,
+        userId: context?.userId,
+        retryable: true,
+        retryAfter: 10,
+        userFriendly: true
+      }
+    );
+  }
+
+  /**
+   * User input required (not an error, but a workflow pause)
+   */
+  static userInputRequired(requiredInfo: string, context?: UnifiedErrorContext): AppError {
+    return new AppError(
+      `User input required: ${requiredInfo}`,
+      UNIFIED_ERROR_CODES.USER_INPUT_REQUIRED,
+      {
+        category: ERROR_CATEGORIES.BUSINESS,
+        severity: ERROR_SEVERITY.LOW,
+        service: 'master-agent',
+        operation: context?.operation || 'workflow_pause',
+        metadata: { requiredInfo, ...context?.metadata },
+        correlationId: context?.sessionId,
+        userId: context?.userId,
+        retryable: false,
+        userFriendly: true
+      }
+    );
+  }
+
+  /**
+   * Workflow state invalid
+   */
+  static workflowStateInvalid(currentState: string, expectedStates: string[], context?: UnifiedErrorContext): AppError {
+    return new AppError(
+      `Invalid workflow state '${currentState}'. Expected one of: ${expectedStates.join(', ')}`,
+      UNIFIED_ERROR_CODES.WORKFLOW_STATE_INVALID,
+      {
+        category: ERROR_CATEGORIES.SERVICE,
+        severity: ERROR_SEVERITY.HIGH,
+        service: 'master-agent',
+        operation: context?.operation || 'workflow_state_validation',
+        metadata: { currentState, expectedStates, ...context?.metadata },
+        correlationId: context?.sessionId,
+        userId: context?.userId,
+        retryable: false,
+        userFriendly: false
+      }
+    );
+  }
+
+  /**
    * Wrap any error with context
    */
   static wrapError(error: Error, context?: UnifiedErrorContext): AppError {
@@ -330,5 +476,29 @@ export class ErrorUtils {
       return error.retryAfter * 1000; // Convert seconds to ms
     }
     return 1000; // Default 1 second
+  }
+}
+
+/**
+ * Workflow-specific error class (consolidated from workflow-errors.ts)
+ */
+export class WorkflowError extends AppError {
+  constructor(
+    message: string,
+    code: UnifiedErrorCode,
+    options: {
+      builderName?: string;
+      agentName?: string;
+      sessionId?: string;
+      iteration?: number;
+      contextSnippet?: string;
+      [key: string]: any;
+    } = {}
+  ) {
+    super(message, code, {
+      ...options,
+      category: ERROR_CATEGORIES.SERVICE,
+      service: options.service || 'master-agent'
+    });
   }
 }
