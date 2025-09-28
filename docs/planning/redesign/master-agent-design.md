@@ -1,275 +1,231 @@
-# Master Agent Design - Enhanced Flow Chart
+# Master Agent Design - Refined Architecture
 
-## Initial Analysis Phase
+## Phase 1: Comprehensive Understanding & Planning
 
 ```
 User Message Input
         ↓
 ┌─────────────────────────────────────┐
-│ 1. Judge Past Message Context      │
-│    - Analyze conversation history   │
-│    - Understand ongoing context     │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 2. Safety & Risk Pre-Assessment    │
-│    - Identify potential risks early │
-│    - Flag sensitive operations      │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 3. Determine Intent                 │
-│    - Classify user's primary goal   │
-│    - Identify request type          │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 4. Identify Missing Context         │
-│    - What information is needed?    │
-│    - What gaps exist?               │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 5. Define Output Strategy           │
-│    - Read commands → output style   │
-│    - Write commands → draft proposal│
-│    - Confirmations → execute + msg  │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 6. Create Workflow Steps            │
-│    - Define concrete actions        │
-│    - Set success criteria           │
-│    - Add max iteration limit (10)   │
-│    - Prioritize steps by:           │
-│      1. Safety/Risk Assessment      │
-│      2. Intent Clarification        │
-│      3. Critical Context Gathering  │
-│      4. Non-critical Context        │
-│      5. Action Planning             │
-│      6. Action Execution            │
+│ 1. Analyze Situation & Create Plan  │
 │                                     │
-│ Context Box Updates:                │
-│ GOAL: [User intent clarified]       │
-│ ENTITIES: [Key entities identified] │
-│ CONSTRAINTS: [Risk/time factors]    │
-│ PROGRESS: [Workflow planned]        │
-│ NEXT: [First prioritized step]      │
-│ Free-form Notes: [Planning details] │
+│ Understanding:                      │
+│ • Analyze conversation history      │
+│ • Assess safety & risk early       │
+│ • Determine user intent & goals     │
+│ • Identify missing context gaps     │
+│                                     │
+│ Planning:                           │
+│ • Define output strategy            │
+│   - Read commands → direct output   │
+│   - Write commands → preview first  │
+│   - Confirmations → execute + show  │
+│ • Create prioritized workflow:      │
+│   1. Safety/Risk Assessment         │
+│   2. Intent Clarification           │
+│   3. Critical Context Gathering     │
+│   4. Non-critical Context           │
+│   5. Action Planning                │
+│   6. Action Execution               │
+│ • Set success criteria (max 10 iter)│
+│                                     │
+│ Context Box Initialization:         │
+│ GOAL: [Primary user intent]         │
+│ ENTITIES: [Key people/companies]    │
+│ CONSTRAINTS: [Risk level, time limits]│
+│ DATA: [Available information]       │
+│ PROGRESS: [Situation analyzed, plan created]│
+│ BLOCKERS: [Missing critical info]   │
+│ NEXT: [First execution step]        │
+│ Free-form Notes: [Context details]  │
 └─────────────────────────────────────┘
 ```
 
-## Main Execution Loop (Max 10 Iterations)
+## Phase 2: Execution Loop (Max 10 Iterations)
 
 ```
         ↓
 ┌─────────────────────────────────────┐
-│ LOOP START (iteration_count = 0)    │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 7. Iteration Limit Check            │
-│    - iteration_count < 10?          │
-│    - If exceeded: force exit        │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 7.5 Check for User Interruptions    │
-│     - Check for new user messages   │
-│     - If new message exists:        │
-│       → Save current workflow state │
-│       → Start entirely new flow     │
-│       → Previous context preserved  │
-│         for potential resumption    │
+│ 2. Environment & Readiness Check    │
+│                                     │
+│ Interruption Handling:              │
+│ • Check for new user messages       │
+│ • If found: Save state → Start new flow│
+│ • New flow gets fresh context +     │
+│   reference to suspended work       │
+│                                     │
+│ Iteration Management:               │
+│ • Check iteration count < 10        │
+│ • If exceeded: Force graceful exit  │
+│                                     │
+│ User Input Assessment:              │
+│ • Evaluate if user input needed:    │
+│   - Multiple interpretations exist  │
+│   - Critical information missing    │
+│   - Confidence level below 70%     │
+│   - Ambiguous entity references    │
+│ • If needed: SHORTCUT → Jump to     │
+│   Final Output to ask question      │
 │                                     │
 │ Context Box Updates:                │
-│ + Interruption detected             │
-│ + Current workflow state saved      │
-│ + New flow initiated                │
-│ ? Still needed: Handle new request  │
+│ PROGRESS: [Environment checked]     │
+│ BLOCKERS: [User input needs/interruptions]│
+│ NEXT: [Execute or ask question]     │
 └─────────────────────────────────────┘
         ↓
-┌─────────────────────────────────────┐
-│ 8. Check for User Input Needed      │
-│    - Is there immediate info needed?│
-│    - Can we proceed without user?   │
-└─────────────────────────────────────┘
+   Need User Input? → SHORTCUT to Step 5
+   Continue? → Step 3
         ↓
-    ┌─────────┐                    ┌─────────┐
-    │  YES    │                    │   NO    │
-    │  ↓      │                    │   ↓     │
-    │ Ask User│                    │ Continue│
-    │Question │                    │   ↓     │
-    └─────────┘                    └─────────┘
-        ↓                              ↓
-        └──────────────┬─────────────────┘
-                       ↓
 ┌─────────────────────────────────────┐
-│ 9. Delegate to Domain Sub-Agents    │
-│     (Natural Language Interface)    │
-│     Agent Types:                    │
-│     - Email Agent                   │
-│     - Calendar Agent                │
-│     - Contacts Agent                │
+│ 3. Execute Action & Process Results │
 │                                     │
-│     All other tasks (intent analysis,│
-│     context gathering, risk         │
-│     assessment, drafting) handled   │
-│     by Master Agent directly        │
+│ Domain Agent Delegation:            │
+│ • Email Agent: Send/search/read emails│
+│ • Calendar Agent: Schedule/check availability│
+│ • Contacts Agent: Find/update contacts│
+│ • Master Agent: Intent analysis, drafting,│
+│   risk assessment, content creation │
 │                                     │
-│     Sub-agents return:              │
-│     - Success: Data + confidence    │
-│     - Error: Error type + context   │
-│     - Partial: Data + limitations   │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 10. Process Sub-Agent Response      │
-│     - Analyze response type         │
-│     - Extract data/error info       │
-│     - Update confidence tracking    │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 11. Update Global Context Handler   │
-│     - Integrate successful data     │
-│     - Log error context             │
-│     - Track failed attempts         │
-│     - Revise predetermined data     │
-└─────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────┐
-│ 12. Enhanced Completion Check       │
-│     - Calculate confidence (0-100%) │
-│     - Evaluate error impact         │
-│     - Check for blocking issues     │
-│     - Assess if goals still viable  │
-└─────────────────────────────────────┘
-        ↓
-    ┌─────────┐    ┌─────────┐    ┌─────────┐
-    │COMPLETE │    │PARTIAL  │    │ BLOCKED │
-    │(90%+)   │    │(50-89%) │    │(<50%)   │
-    │  ↓      │    │   ↓     │    │   ↓     │
-    └─────────┘    └─────────┘    └─────────┘
-        ↓              ↓              ↓
-        │              ↓              ↓
-        │      ┌─────────────────┐    ↓
-        │      │ 12.1 Handle     │    ↓
-        │      │     Partial     │    ↓
-        │      │     Success     │    ↓
-        │      │ - Notify user   │    ↓
-        │      │ - Continue with │    ↓
-        │      │   what we have  │    ↓
-        │      └─────────────────┘    ↓
-        │              ↓              ↓
-        └──────────────┬──────────────┘
-                       ↓
-┌─────────────────────────────────────┐
-│ 13. Intelligent Plan Adaptation     │
+│ Response Processing:                │
+│ • Success: Extract data + confidence│
+│ • Error: Analyze type + context     │
+│ • Partial: Extract data + limitations│
 │                                     │
-│     The Master Agent evaluates      │
-│     errors, context, and user goals │
-│     to determine optimal adaptation  │
-│     strategy. Considers alternative │
-│     approaches, user input needs,   │
-│     and graceful degradation        │
-│     options based on specific       │
-│     circumstances rather than       │
-│     predetermined patterns.         │
+│ Error Integration:                  │
+│ Master Agent evaluates errors and   │
+│ determines optimal adaptation:      │
+│ • Can goal be achieved differently? │
+│ • Is this temporary or permanent?   │
+│ • Does this require user input?     │
+│ • Should we try alternative approach?│
 │                                     │
-│     For High Risk/Write Operations: │
-│     → Generate detailed preview     │
-│     → Output preview as final result│
-│     → User confirmations/revisions  │
-│       come as entirely new flows    │
-│     → New flow context includes     │
-│       previous proposal + feedback  │
+│ Context Integration:                │
+│ • Integrate successful data         │
+│ • Log error context & patterns      │
+│ • Track failed attempts             │
+│ • Update confidence tracking        │
 │                                     │
 │ Context Box Updates:                │
-│ + Plan adaptation strategy          │
-│ + Alternative approaches identified │
-│ + Decision reasoning                │
-│ + Required user actions             │
-│ + Preview/proposal details          │
-│ ? Still needed: Final output format │
+│ DATA: [New information gathered]    │
+│ PROGRESS: [Actions completed]       │
+│ BLOCKERS: [Errors/limitations found]│
+│ Free-form Notes: [Detailed reasoning]│
 └─────────────────────────────────────┘
         ↓
-    ┌─────────┐     ┌─────────┐     ┌─────────┐
-    │ REVISE  │     │CONTINUE │     │  EXIT   │
-    │  PLAN   │     │         │     │  LOOP   │
-    │   ↓     │     │   ↓     │     │   ↓     │
-    └─────────┘     └─────────┘     └─────────┘
-        ↓               ↓               ↓
-        │               │               │
-        │ increment     │               │
-        │ iteration_    │               │
-        │ count ↓       │               │
-        └──────────────┬┘               │
-                       ↓                │
-                                       │
-                                       ↓
-                                ┌─────────────────┐
-                                │ Generate Final  │
-                                │ Error Response  │
-                                │ - Explain what  │
-                                │   failed        │
-                                │ - Why it failed │
-                                │ - What user can │
-                                │   do instead    │
-                                └─────────────────┘
-                                       ↓
-                                    TO END
-                       ↓
 ┌─────────────────────────────────────┐
-│ 14. Loop Completion Check           │
-│     - All steps complete?           │
-│     - Confidence threshold met?     │
-│     - Ready for final output?       │
-│     - OR max iterations reached?    │
+│ 4. Assess Progress & Adapt Strategy │
+│                                     │
+│ Comprehensive Assessment:           │
+│ • Calculate confidence (0-100%):    │
+│   - Data completeness (0-40%)       │
+│   - Entity resolution (0-20%)       │
+│   - API reliability (0-20%)         │
+│   - User clarity (0-20%)            │
+│ • Evaluate error impact on goals    │
+│ • Check for blocking issues         │
+│ • Assess if original goals viable   │
+│                                     │
+│ Completion Status:                  │
+│ • COMPLETE (90%+): Ready for output │
+│ • PARTIAL (50-89%): Continue with   │
+│   limitations or ask for guidance   │
+│ • BLOCKED (<50%): Need adaptation   │
+│                                     │
+│ Intelligent Plan Adaptation:        │
+│ Master Agent evaluates errors,      │
+│ context, and goals to determine     │
+│ optimal strategy. Considers:        │
+│ • Alternative approaches available  │
+│ • User input requirements           │
+│ • Graceful degradation options     │
+│ • Risk mitigation strategies        │
+│                                     │
+│ High-Risk Operation Handling:       │
+│ • Generate detailed preview         │
+│ • Present with full context         │
+│ • End workflow (user starts new    │
+│   flow for confirmation/revision)   │
+│                                     │
+│ User Input Decision:                │
+│ • If user input needed: SHORTCUT    │
+│   → Jump to Final Output to ask     │
+│                                     │
+│ Adaptation Decisions:               │
+│ • CONTINUE: Next iteration          │
+│ • REVISE PLAN: Modify approach      │
+│ • EXIT: Generate final response     │
+│                                     │
+│ Context Box Updates:                │
+│ PROGRESS: [Confidence assessment]   │
+│ BLOCKERS: [Adaptation needs]        │
+│ NEXT: [Strategy decision]           │
+│ Free-form Notes: [Reasoning details]│
 └─────────────────────────────────────┘
         ↓
-    ┌─────────┐                    ┌─────────┐
-    │  DONE   │                    │CONTINUE │
-    │   ↓     │                    │   ↓     │
-    └─────────┘                    └─────────┘
-        ↓                              │
-        │                              │
-        └──────────────┬─────────────────┘
-                       ↓               │
-                                      │ LOOP BACK
-                                      │ to step 7
-                                      └─────────┐
-                                                │
-┌─────────────────────────────────────┐        │
-│ 15. Final Output Generation         │        │
-│     - Compare results to criteria   │        │
-│     - Generate appropriate response │        │
-│                                     │        │
-│     Low/Medium Risk:                │        │
-│     → Execute actions + show results│        │
-│                                     │        │
-│     High Risk:                      │        │
-│     → Generate detailed preview     │        │
-│     → Present to user               │        │
-│     → End workflow (confirmations/  │        │
-│       revisions start new flows)    │        │
-│                                     │        │
-│     - Report confidence levels      │        │
-│     - Include any limitations       │        │
-└─────────────────────────────────────┘        │
-        ↓                                      │
-┌─────────────────────────────────────┐        │
-│ END                                 │        │
-└─────────────────────────────────────┘        │
-                                               │
-                                              ↓
-                                    ┌─────────────────┐
-                                    │ LOOP CONTINUES  │
-                                    │ Back to Step 7  │
-                                    └─────────────────┘
+    Need User Input? → SHORTCUT to Step 5
+    CONTINUE → Back to Step 2
+    EXIT → Step 5
 ```
 
-## Key Decision Points
+## Phase 3: Final Output Generation
+
+```
+        ↓
+┌─────────────────────────────────────┐
+│ 5. Generate Final Output            │
+│                                     │
+│ Output Strategy Execution:          │
+│                                     │
+│ User Question Mode (SHORTCUT):      │
+│ • Generate specific question:       │
+│   - Clear context explanation       │
+│   - Specific information needed     │
+│   - Why this is required            │
+│   - Options/examples if helpful     │
+│ • End workflow cleanly              │
+│ • User answer starts entirely      │
+│   new flow with answer in context   │
+│                                     │
+│ Low/Medium Risk Operations:         │
+│ • Execute confirmed actions         │
+│ • Show results with confidence      │
+│ • Include any limitations           │
+│ • Report what was accomplished      │
+│                                     │
+│ High Risk Operations:               │
+│ • Generate detailed preview:        │
+│   - Full action plan               │
+│   - Expected outcomes              │
+│   - Risk factors                   │
+│   - Required approvals             │
+│ • Present to user with explanation  │
+│ • End workflow cleanly              │
+│                                     │
+│ Error Recovery:                     │
+│ • Generate helpful error response:  │
+│   - Explain what failed            │
+│   - Why it failed                  │
+│   - What user can do instead       │
+│   - Alternative approaches         │
+│                                     │
+│ Context Preservation:               │
+│ • Save final state for future ref  │
+│ • Clean up temporary data           │
+│ • Prepare for next user interaction │
+│                                     │
+│ Final Context Box:                  │
+│ PROGRESS: [Final completion status] │
+│ DATA: [All gathered information]    │
+│ BLOCKERS: [Remaining limitations]   │
+│ Free-form Notes: [Complete context]│
+│ [Ready for next request]            │
+└─────────────────────────────────────┘
+        ↓
+┌─────────────────────────────────────┐
+│ END                                 │
+└─────────────────────────────────────┘
+```
+
+## Key Design Principles
 
 ### Enhanced Risk Assessment Matrix
 ```
@@ -307,6 +263,30 @@ Confirmation/Revision Flow Handling:
 - No workflow state carries over except context
 ```
 
+### User Input Shortcut Strategy
+```
+Question Generation Decision Points:
+1. Step 2: Environment & Readiness Check
+   → If critical information missing: SHORTCUT to Step 5
+
+2. Step 4: Assess Progress & Adapt Strategy
+   → If user input needed for continuation: SHORTCUT to Step 5
+
+Shortcut Process:
+1. Identify specific information needed
+2. Generate clear, contextual question
+3. Jump directly to Step 5 (Final Output)
+4. Present question with full context
+5. End workflow cleanly
+6. User answer triggers entirely new flow
+
+New Flow Context Includes:
+- Previous workflow context
+- Specific question that was asked
+- User's answer
+- Continuation instructions
+```
+
 ### Interruption Handling: New Flow Strategy
 ```
 Any User Message During Active Workflow:
@@ -320,77 +300,12 @@ Interruption Flow Process:
 3. Start completely new workflow for new message
 4. New flow context includes: "Previous task: [description] was in progress"
 
-No Message Classification Needed:
-- All interruptions treated equally
-- No complex merging logic
-- Clean separation of concerns
-- Simpler state management
-
-Example User Experience:
-User: "Schedule board meeting next month"
-Agent: [Working on scheduling...]
-
-User: "Actually, check my calendar first"
-Agent: [New flow] "I'll check your calendar now. I've paused the board meeting scheduling and can resume it later if needed."
-
-User: "Never mind the board meeting"
-Agent: [New flow] "Understood, I'll cancel the board meeting task. Your calendar check is complete."
-
 Benefits:
 - No workflow corruption
 - No complex state merging
 - Each flow is clean and focused
 - User can naturally change direction
 - Previous work is preserved but not blocking
-```
-
-### Enhanced Priority System
-```
-Master Agent handles internally:
-1. Safety/Risk Assessment (highest):
-   - "Is this action reversible?"
-   - "Could this cause harm or embarrassment?"
-   - "Does this involve sensitive data?"
-
-2. Intent Clarification:
-   - "What does 'vendor' refer to?"
-   - "What type of meeting is this?"
-   - "What's the user's goal?"
-
-3. Context Analysis & Planning:
-   - Analyze available information
-   - Identify missing pieces
-   - Plan delegation strategy
-   - Draft content and responses
-
-Delegate to Domain Agents:
-4. Email Operations:
-   - "Find emails from John about the project"
-   - "Send this draft email to the team"
-   - "Check if there are any replies to yesterday's message"
-
-5. Calendar Operations:
-   - "What times am I available next week?"
-   - "Schedule a meeting with these participants"
-   - "Find conflicts in my calendar for Thursday"
-
-6. Contact Operations:
-   - "Find David's email address"
-   - "Get contact info for all team members"
-   - "Update Sarah's phone number"
-```
-
-### Enhanced User Input Triggers
-```
-Ask User When:
-- Multiple valid interpretations exist
-- Critical information is missing
-- Risk level is high
-- User preference needed
-- Confirmation required
-- Sub-agent failures exceed retry limit
-- Confidence level below 70%
-- Ambiguous entity references (multiple "David"s)
 ```
 
 ### Domain Sub-Agents (Natural Language Interface)
@@ -453,7 +368,7 @@ The Master Agent adapts its plan dynamically based on the error type, context, a
 
 Decision Matrix for Error Handling:
 - Can adapt plan? → REVISE PLAN
-- Need user input? → ASK USER
+- Need user input? → SHORTCUT TO QUESTION
 - Temporary issue? → TRY DIFFERENT APPROACH
 - Permanent blocker? → EXIT WITH EXPLANATION
 ```
@@ -498,10 +413,19 @@ NEXT: Present alternative dates to user
 
 Free-form Notes: "CEO prefers morning meetings. CFO unavailable 22nd due to quarterly earnings. Conference room A preferred for board meetings."
 
+Question Shortcut Context:
+When shortcutting to ask questions, context includes:
+GOAL: [Original goal maintained]
+PROGRESS: [Stopped to ask question]
+BLOCKERS: [Specific information needed]
+NEXT: [Continue after answer received]
+Free-form Notes: "Asked user: 'Which David do you mean - David Smith (CEO) or David Johnson (CTO)?' Waiting for clarification to proceed with meeting invitation."
+
 Benefits:
 - Light structure for consistent tracking
 - Free-form section for nuanced context
 - Easy to scan and understand progress
 - Natural evolution throughout workflow
 - Preserves both facts and reasoning
+- Handles question shortcuts seamlessly
 ```
