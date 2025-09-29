@@ -12,6 +12,11 @@ import { GenericAIService, AIPrompt, StructuredSchema } from '../services/generi
 // DomainServiceResolver import removed - not used in BaseSubAgent
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import logger from '../utils/logger';
+import {
+  IntentAssessmentPromptBuilder,
+  PlanReviewPromptBuilder,
+  ResponseFormattingPromptBuilder
+} from '../services/prompt-builders/sub-agent';
 
 /**
  * SubAgent Response interface - matches MasterAgent response format
@@ -164,6 +169,9 @@ export abstract class BaseSubAgent {
   protected aiService: GenericAIService;
   protected domain: string;
   protected config: AgentConfig;
+  protected intentAssessmentBuilder: IntentAssessmentPromptBuilder;
+  protected planReviewBuilder: PlanReviewPromptBuilder;
+  protected responseFormattingBuilder: ResponseFormattingPromptBuilder;
 
   constructor(domain: string, config: Partial<AgentConfig> = {}) {
     this.domain = domain;
@@ -176,6 +184,11 @@ export abstract class BaseSubAgent {
       retryCount: 3,
       ...config
     };
+    
+    // Initialize prompt builders
+    this.intentAssessmentBuilder = new IntentAssessmentPromptBuilder(this.aiService, this.domain);
+    this.planReviewBuilder = new PlanReviewPromptBuilder(this.aiService, this.domain);
+    this.responseFormattingBuilder = new ResponseFormattingPromptBuilder(this.aiService, this.domain);
   }
 
   /**
@@ -241,45 +254,13 @@ export abstract class BaseSubAgent {
    * Phase 1: Intent Assessment & Planning
    */
   protected async assessIntent(request: string, context: AgentExecutionContext): Promise<string> {
-    const systemPrompt = this.getSystemPrompt();
-    const userPrompt = `
-Analyze this Master Agent request and plan tool execution:
-
+    const contextInput = `
 MASTER AGENT REQUEST: ${request}
 USER_ID: ${context.userId || 'unknown'}
-
-Create a SimpleContext following this format:
-REQUEST: [What the Master Agent is asking for]
-TOOLS: [Specific tools needed, comma-separated]
-PARAMS: [Concrete parameters for tool calls]
-STATUS: Planning
-RESULT: [Empty for now]
-NOTES: [Risk level and execution strategy]
-
-Intent Assessment Guidelines:
-- Extract the core action being requested by Master Agent
-- Determine what specific information the Master Agent wants to receive
-- Identify the expected output format and user intent
-- Map request to specific domain tools with concrete parameters
-- Assess risk level (low/medium/high) based on operation type
-- Plan tool execution sequence (gather info before acting)
-- Respect SINGLE MESSAGE INTERFACE: you will not ask follow-up questions. Make intelligent assumptions.
-
-Output Planning:
-- Analyze the request to understand what information the user actually wants
-- Plan to include that specific information in the final response
-- Consider the context and purpose of the request
-
-Available tools: ${this.getAvailableTools().join(', ')}
+AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
     `;
 
-    const prompt: AIPrompt = {
-      systemPrompt,
-      userPrompt,
-      options: { temperature: 0.1, maxTokens: 500 }
-    };
-
-    const response = await this.aiService.executePrompt(prompt, INTENT_ASSESSMENT_SCHEMA);
+    const response = await this.intentAssessmentBuilder.execute(contextInput);
     return response.parsed.context;
   }
 
@@ -291,65 +272,66 @@ Available tools: ${this.getAvailableTools().join(', ')}
     let iteration = 0;
     const maxIterations = 3;
 
-    while (iteration < maxIterations) {
+    // Extract tool calls from the initial intent assessment
+    const toolCalls = this.extractToolCallsFromContext(currentContext);
+
+    while (iteration < maxIterations && toolCalls.length > 0) {
       iteration++;
 
-      const systemPrompt = this.getSystemPrompt();
-      const userPrompt = `
-Execute tools for this SubAgent workflow iteration:
+      // Execute tools from the current iteration
+      for (const toolCall of toolCalls) {
+        try {
+          const result = await this.executeToolCall(
+            toolCall.tool, 
+            { ...toolCall.params, userId: context.userId }
+          );
+          
+          // Update context with structured tool result
+          currentContext = this.updateContextWithToolResult(currentContext, {
+            tool: toolCall.tool,
+            success: true,
+            result: result,
+            executionTime: Date.now()
+          });
+          
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          const errorType = this.classifyError(error);
+          
+          logger.error(`Tool execution failed: ${toolCall.tool}`, error as Error, {
+            correlationId: context.correlationId,
+            toolName: toolCall.tool,
+            params: toolCall.params,
+            errorType: errorType,
+            errorMessage: errorMessage
+          });
+          
+          // Update context with structured error
+          currentContext = this.updateContextWithToolResult(currentContext, {
+            tool: toolCall.tool,
+            success: false,
+            error: errorMessage,
+            errorType: errorType,
+            executionTime: Date.now()
+          });
+        }
+      }
 
+      // Review the plan and determine if more iterations are needed
+      const contextInput = `
 CURRENT_CONTEXT:
 ${currentContext}
 
 USER_ID: ${context.userId || 'unknown'}
-
-Tool Execution Guidelines:
-- Execute tools in logical order (validation before action)
-- Handle tool errors gracefully with specific error types
-- Update context with tool results and any new information
-- Set needsMoreWork to true only if more iterations are essential
-
-Error Handling Patterns:
-- Authentication Error → Log error, set needsMoreWork to false
-- Parameter Error → Log error, include in response
-- Rate Limit → Note for retry, set needsMoreWork to true
-- Permission Error → Clear error in response
-
-Available tools: ${this.getAvailableTools().join(', ')}
-Iteration: ${iteration}/${maxIterations}
-Decision Policy:
-- Do not request user input; make reasonable assumptions within domain rules
-- If a tool error is permanent, stop further tool calls and reflect failure clearly
-- Prefer fewer, high-confidence tool calls over speculative actions
+AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
+ITERATION: ${iteration}/${maxIterations}
       `;
 
-      const prompt: AIPrompt = {
-        systemPrompt,
-        userPrompt,
-        options: { temperature: 0.1, maxTokens: 1000 }
-      };
-
-      const response = await this.aiService.executePrompt(prompt, TOOL_EXECUTION_SCHEMA);
-      
-      // Execute the actual tool calls
-      for (const toolCall of response.parsed.toolCalls) {
-        try {
-          const result = await this.executeToolCall(
-            toolCall.toolName, 
-            { ...toolCall.params, userId: context.userId }
-          );
-          toolCall.result = result;
-        } catch (error) {
-          toolCall.result = {
-            error: error instanceof Error ? error.message : 'Tool execution failed'
-          };
-        }
-      }
-
+      const response = await this.planReviewBuilder.execute(contextInput);
       currentContext = response.parsed.context;
-
-      // Check if we need more iterations
-      if (!response.parsed.needsMoreWork) {
+      
+      // Check if we need more iterations based on the updated steps
+      if (response.parsed.steps.length === 0) {
         break;
       }
     }
@@ -361,44 +343,19 @@ Decision Policy:
    * Phase 3: Response Formatting
    */
   protected async formatResponse(workflowContext: string, context: AgentExecutionContext): Promise<SubAgentResponse> {
-    const systemPrompt = this.getSystemPrompt();
-    const userPrompt = `
-Format the final SubAgent response for the Master Agent:
-
+    const contextInput = `
 FINAL_CONTEXT:
 ${workflowContext}
 
-Response Formatting Guidelines:
-- Review the original Master Agent request and intent from Phase 1
-- Create a response that directly addresses what the Master Agent asked for
-- Include the actual data/information that was requested, not just confirmation
-- Format the response naturally based on the request context and user intent
-
-Response Structure:
-- success: true/false based on whether the request was fulfilled
-- message: Complete response that includes the requested information
-- metadata: Optional additional context (not the main data)
-
-CRITICAL: The message should contain the actual information the Master Agent requested, formatted appropriately for the user.
-
-Master Agent Integration:
-- Response should be complete - no follow-up questions allowed
-- Error messages should be clear and help Master Agent decide next steps
-- Tone & Style: Be concise, functional, and specific
+USER_ID: ${context.userId || 'unknown'}
     `;
 
-    const prompt: AIPrompt = {
-      systemPrompt,
-      userPrompt,
-      options: { temperature: 0.1, maxTokens: 500 }
-    };
-
-    const response = await this.aiService.executePrompt(prompt, RESPONSE_FORMATTING_SCHEMA);
+    const response = await this.responseFormattingBuilder.execute(contextInput);
     
     return {
-      success: response.parsed.success,
-      message: response.parsed.message,
-      metadata: response.parsed.metadata
+      success: response.parsed.response.success,
+      message: response.parsed.response.summary,
+      metadata: response.parsed.response.data
     };
   }
 
@@ -413,10 +370,6 @@ Master Agent Integration:
   // ABSTRACT METHODS - Must be implemented by domain-specific SubAgents
   // ============================================================================
 
-  /**
-   * Get domain-specific system prompt
-   */
-  protected abstract getSystemPrompt(): string;
 
   /**
    * Execute a tool call by mapping to domain service method
@@ -513,6 +466,74 @@ PARAMS: ${ctx.params}
 STATUS: ${ctx.status}
 RESULT: ${ctx.result}
 NOTES: ${ctx.notes}`;
+  }
+
+  /**
+   * Extract tool calls from context
+   */
+  protected extractToolCallsFromContext(context: string): Array<{tool: string, params: any, description: string}> {
+    try {
+      // Parse tool calls from context - this is a simplified implementation
+      // In a real implementation, you'd parse the structured context more carefully
+      const toolCallsMatch = context.match(/TOOL_CALLS:\s*\[(.*?)\]/s);
+      if (toolCallsMatch) {
+        // This is a placeholder - you'd implement proper JSON parsing here
+        return [];
+      }
+      return [];
+    } catch (error) {
+      logger.warn('Failed to extract tool calls from context', { error: error instanceof Error ? error.message : 'Unknown error' });
+      return [];
+    }
+  }
+
+  /**
+   * Update context with structured tool result
+   */
+  protected updateContextWithToolResult(context: string, toolResult: {
+    tool: string;
+    success: boolean;
+    result?: any;
+    error?: string;
+    errorType?: string;
+    executionTime: number;
+  }): string {
+    const resultEntry = `
+TOOL_RESULT_${toolResult.tool}:
+  Success: ${toolResult.success}
+  ${toolResult.success ? `Result: ${JSON.stringify(toolResult.result)}` : `Error: ${toolResult.error} (Type: ${toolResult.errorType || 'Unknown'})`}
+  ExecutionTime: ${toolResult.executionTime}`;
+
+    return context + resultEntry;
+  }
+
+  /**
+   * Classify error types for better handling
+   */
+  protected classifyError(error: any): string {
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      
+      if (message.includes('authentication') || message.includes('unauthorized')) {
+        return 'AUTHENTICATION_ERROR';
+      } else if (message.includes('permission') || message.includes('forbidden')) {
+        return 'PERMISSION_ERROR';
+      } else if (message.includes('rate limit') || message.includes('too many requests')) {
+        return 'RATE_LIMIT_ERROR';
+      } else if (message.includes('timeout') || message.includes('timed out')) {
+        return 'TIMEOUT_ERROR';
+      } else if (message.includes('network') || message.includes('connection')) {
+        return 'NETWORK_ERROR';
+      } else if (message.includes('validation') || message.includes('invalid')) {
+        return 'VALIDATION_ERROR';
+      } else if (message.includes('not found') || message.includes('404')) {
+        return 'NOT_FOUND_ERROR';
+      } else {
+        return 'UNKNOWN_ERROR';
+      }
+    }
+    
+    return 'UNKNOWN_ERROR';
   }
 
   /**

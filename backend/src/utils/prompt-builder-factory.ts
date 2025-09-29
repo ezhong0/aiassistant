@@ -7,6 +7,11 @@ import {
   ProgressAssessmentPromptBuilder,
   FinalResponsePromptBuilder
 } from '../services/prompt-builders/main-agent';
+import {
+  IntentAssessmentPromptBuilder,
+  PlanReviewPromptBuilder,
+  ResponseFormattingPromptBuilder
+} from '../services/prompt-builders/sub-agent';
 import { PromptBuilderMap } from './builder-guard';
 
 /**
@@ -61,5 +66,16 @@ export class PromptBuilderFactory {
     }
     
     return result;
+  }
+
+  /**
+   * Create sub-agent prompt builders for a specific domain
+   */
+  static createSubAgentBuilders(aiService: GenericAIService, domain: string) {
+    return {
+      intent: new IntentAssessmentPromptBuilder(aiService, domain),
+      planReview: new PlanReviewPromptBuilder(aiService, domain),
+      responseFormatting: new ResponseFormattingPromptBuilder(aiService, domain)
+    };
   }
 }

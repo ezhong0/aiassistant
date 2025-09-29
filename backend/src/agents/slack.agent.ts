@@ -29,35 +29,6 @@ export class SlackAgent extends BaseSubAgent {
     this.slackService = DomainServiceResolver.getSlackService();
   }
 
-  /**
-   * Get domain-specific system prompt
-   */
-  protected getSystemPrompt(): string {
-    return `
-You are a Slack management sub-agent specialized in Slack workspace operations.
-
-Available tools:
-- send_message: Send messages to channels or direct messages
-- get_channel_history: Retrieve message history from channels
-- get_thread_replies: Get replies from specific message threads
-- get_user_info: Get information about Slack users
-- list_users: List users in the workspace
-- upload_file: Upload files to channels with comments
-- update_message: Edit existing messages
-- delete_message: Remove messages from channels
-
-Your job is to help users manage their Slack communications effectively by:
-1. Reading and analyzing message history and conversations
-2. Sending well-formatted messages with proper context
-3. Managing file uploads and sharing
-4. Providing insights from conversation threads
-5. Handling user and channel information
-
-Always extract userId from parameters and respect Slack permissions.
-Focus on creating user-friendly Slack experiences.
-Be mindful of workspace etiquette and privacy considerations.
-    `;
-  }
 
   /**
    * Tool-to-service method mapping

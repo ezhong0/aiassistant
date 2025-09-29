@@ -75,8 +75,8 @@ export class AIResponseEvaluator {
       logger.info('AI evaluation completed', {
         operation: 'ai_response_evaluation_complete',
         scenarioId: scenario.id,
-        overallScore: evaluation.overallScore,
-        passed: evaluation.finalVerdict.passed
+        overallScore: evaluation.overallScore || 0,
+        passed: evaluation.finalVerdict?.passed || false
       });
 
       return evaluation;
@@ -101,7 +101,10 @@ export class AIResponseEvaluator {
   ): Promise<ResponseEvaluation> {
     const evaluationPrompt = this.buildEvaluationPrompt(scenario, trace);
 
-    const response = await this.aiService.executePrompt(evaluationPrompt, {
+    const response = await this.aiService.executePrompt({
+      systemPrompt: 'You are an expert AI system evaluator. Analyze AI assistant executions and provide comprehensive evaluations.',
+      userPrompt: evaluationPrompt
+    }, {
       type: 'object',
       properties: {
         overallScore: { type: 'number', minimum: 0, maximum: 100 },
@@ -132,13 +135,43 @@ export class AIResponseEvaluator {
       required: ['overallScore', 'responseAppropriate', 'expectedToolsUsed', 'detailedScores', 'findings']
     });
 
+    // Handle case where AI service returns undefined or invalid response
+    if (!response || !response.parsed) {
+      logger.warn('AI service returned invalid response for evaluation, using fallback', {
+        response: response ? JSON.stringify(response).substring(0, 200) : 'undefined'
+      });
+      return this.getFallbackEvaluation(scenario, trace);
+    }
+
+    // Safely extract parsed response with fallbacks
+    const parsed = response.parsed;
+    
+    // Additional validation for parsed response structure
+    if (!parsed || typeof parsed !== 'object') {
+      logger.warn('Parsed response is invalid, using fallback', {
+        parsed: parsed ? JSON.stringify(parsed).substring(0, 200) : 'undefined'
+      });
+      return this.getFallbackEvaluation(scenario, trace);
+    }
+    
     return {
       scenarioId: scenario.id,
-      overallScore: response.overallScore,
-      responseAppropriate: response.responseAppropriate,
-      expectedToolsUsed: response.expectedToolsUsed,
-      detailedScores: response.detailedScores,
-      findings: response.findings,
+      overallScore: parsed.overallScore || 0,
+      responseAppropriate: parsed.responseAppropriate || false,
+      expectedToolsUsed: parsed.expectedToolsUsed || false,
+      detailedScores: parsed.detailedScores || {
+        responseQuality: 0,
+        toolCompleteness: 0,
+        workflowEfficiency: 0,
+        errorHandling: 0
+      },
+      findings: parsed.findings || {
+        strengths: [],
+        weaknesses: [],
+        missingTools: [],
+        unexpectedTools: [],
+        recommendations: []
+      },
       intermediateResponseScores: [], // Will be filled separately
       finalVerdict: { // Will be determined separately
         passed: false,
@@ -156,8 +189,8 @@ export class AIResponseEvaluator {
       `${call.clientName}: ${call.endpoint} (${call.method})`
     ).join(', ');
 
-    const expectedApiCallsStr = scenario.expectedApiCalls.join(', ');
-    const expectedActionsStr = scenario.expectedActions.join(', ');
+    const expectedApiCallsStr = scenario.expectedApiCalls?.join(', ') || 'N/A';
+    const expectedActionsStr = scenario.expectedActions?.join(', ') || 'N/A';
 
     return `
 You are an expert AI system evaluator. Analyze this AI assistant execution and provide a comprehensive evaluation.
@@ -242,7 +275,7 @@ Be objective and thorough in your analysis.
     // For now, return a simplified version based on execution success
     const scores = [];
 
-    if (trace.stages.situationAnalysis) {
+    if (trace.stages?.situationAnalysis) {
       scores.push({
         stage: 'situationAnalysis',
         score: trace.success ? 85 : 50,
@@ -250,7 +283,7 @@ Be objective and thorough in your analysis.
       });
     }
 
-    if (trace.stages.workflowPlanning) {
+    if (trace.stages?.workflowPlanning) {
       scores.push({
         stage: 'workflowPlanning',
         score: trace.success ? 80 : 45,
@@ -258,7 +291,7 @@ Be objective and thorough in your analysis.
       });
     }
 
-    if (trace.stages.workflowExecution) {
+    if (trace.stages?.workflowExecution) {
       scores.push({
         stage: 'workflowExecution',
         score: trace.success ? 90 : 40,
@@ -301,24 +334,24 @@ Be objective and thorough in your analysis.
     }
 
     // Check tool completeness for non-edge cases
-    if (!scenario.description.includes('edge case') && !expectedToolsUsed) {
+    if (!scenario.description?.includes('edge case') && !expectedToolsUsed) {
       passed = false;
       reasons.push('Expected tools not used');
     }
 
     // Check detailed scores
-    if (detailedScores.responseQuality < minResponseScore) {
+    if (detailedScores?.responseQuality && detailedScores.responseQuality < minResponseScore) {
       passed = false;
       reasons.push(`Response quality ${detailedScores.responseQuality} below minimum ${minResponseScore}`);
     }
 
-    if (detailedScores.toolCompleteness < minToolScore) {
+    if (detailedScores?.toolCompleteness && detailedScores.toolCompleteness < minToolScore) {
       passed = false;
       reasons.push(`Tool completeness ${detailedScores.toolCompleteness} below minimum ${minToolScore}`);
     }
 
     // Adjust confidence based on various factors
-    if (trace.apiCalls.length === 0 && scenario.expectedApiCalls.length > 0) {
+    if (trace.apiCalls.length === 0 && (scenario.expectedApiCalls?.length || 0) > 0) {
       confidence -= 30;
     }
 
@@ -326,7 +359,7 @@ Be objective and thorough in your analysis.
       confidence -= 20;
     }
 
-    if (evaluation.findings.weaknesses.length > evaluation.findings.strengths.length) {
+    if ((evaluation.findings?.weaknesses?.length || 0) > (evaluation.findings?.strengths?.length || 0)) {
       confidence -= 15;
     }
 
@@ -350,7 +383,7 @@ Be objective and thorough in your analysis.
   ): ResponseEvaluation {
     const basicScore = trace.success ? 60 : 30;
     const hasApiCalls = trace.apiCalls.length > 0;
-    const hasExpectedApiCalls = scenario.expectedApiCalls.length > 0;
+    const hasExpectedApiCalls = (scenario.expectedApiCalls?.length || 0) > 0;
 
     return {
       scenarioId: scenario.id,
@@ -366,7 +399,7 @@ Be objective and thorough in your analysis.
       findings: {
         strengths: trace.success ? ['Execution completed'] : [],
         weaknesses: trace.error ? ['Execution failed'] : [],
-        missingTools: hasExpectedApiCalls && !hasApiCalls ? scenario.expectedApiCalls : [],
+        missingTools: hasExpectedApiCalls && !hasApiCalls ? (scenario.expectedApiCalls || []) : [],
         unexpectedTools: [],
         recommendations: ['AI evaluation failed, manual review recommended']
       },
@@ -388,14 +421,14 @@ Be objective and thorough in your analysis.
    */
   generateEvaluationReport(evaluations: ResponseEvaluation[]): string {
     const totalScenarios = evaluations.length;
-    const passedScenarios = evaluations.filter(e => e.finalVerdict.passed).length;
-    const averageScore = evaluations.reduce((sum, e) => sum + e.overallScore, 0) / totalScenarios;
+    const passedScenarios = evaluations.filter(e => e.finalVerdict?.passed).length;
+    const averageScore = evaluations.reduce((sum, e) => sum + (e.overallScore || 0), 0) / totalScenarios;
 
-    const categoryBreakdown = evaluations.reduce((acc, eval) => {
-      const category = eval.scenarioId.split('_')[0];
+    const categoryBreakdown = evaluations.reduce((acc, evaluation) => {
+      const category = evaluation.scenarioId.split('_')[0];
       if (!acc[category]) acc[category] = { total: 0, passed: 0 };
       acc[category].total++;
-      if (eval.finalVerdict.passed) acc[category].passed++;
+      if (evaluation.finalVerdict?.passed) acc[category].passed++;
       return acc;
     }, {} as Record<string, { total: number; passed: number }>);
 
@@ -412,7 +445,7 @@ Be objective and thorough in your analysis.
     });
 
     report += `\n## Top Issues Found\n`;
-    const allWeaknesses = evaluations.flatMap(e => e.findings.weaknesses);
+    const allWeaknesses = evaluations.flatMap(e => e.findings?.weaknesses || []);
     const weaknessCount = allWeaknesses.reduce((acc, weakness) => {
       acc[weakness] = (acc[weakness] || 0) + 1;
       return acc;

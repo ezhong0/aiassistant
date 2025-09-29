@@ -88,7 +88,10 @@ export class AITestScenarioGenerator {
     const prompt = this.buildScenarioGenerationPrompt(category, complexity, count);
 
     try {
-      const response = await this.aiService.executePrompt(prompt, {
+      const response = await this.aiService.executePrompt({
+        systemPrompt: 'You are an expert test scenario generator for AI assistant testing.',
+        userPrompt: prompt
+      }, {
         type: 'object',
         properties: {
           scenarios: {
@@ -114,7 +117,15 @@ export class AITestScenarioGenerator {
         required: ['scenarios']
       });
 
-      return response.scenarios.map((scenario: any, index: number) => ({
+      // Handle case where AI service returns undefined or invalid response
+      if (!response || !response.parsed || !response.parsed.scenarios) {
+        logger.warn('AI service returned invalid response, using fallback', {
+          response: response ? JSON.stringify(response).substring(0, 200) : 'undefined'
+        });
+        return this.getFallbackScenarios(category, complexity, count);
+      }
+
+      return response.parsed.scenarios.map((scenario: any, index: number) => ({
         id: `${category}_${complexity}_${Date.now()}_${index}`,
         userInput: scenario.userInput,
         expectedActions: scenario.expectedActions,
@@ -161,7 +172,10 @@ Return as JSON with a scenarios array.
     `;
 
     try {
-      const response = await this.aiService.executePrompt(edgeCasePrompt, {
+      const response = await this.aiService.executePrompt({
+        systemPrompt: 'You are an expert test scenario generator for AI assistant testing.',
+        userPrompt: edgeCasePrompt
+      }, {
         type: 'object',
         properties: {
           scenarios: {
@@ -185,7 +199,13 @@ Return as JSON with a scenarios array.
         }
       });
 
-      return response.scenarios.map((scenario: any, index: number) => ({
+      // Handle case where AI service returns undefined or invalid response
+      if (!response || !response.parsed || !response.parsed.scenarios) {
+        logger.warn('AI service returned invalid response for edge cases, using fallback');
+        return this.getFallbackEdgeCases();
+      }
+
+      return response.parsed.scenarios.map((scenario: any, index: number) => ({
         id: `edge_case_${Date.now()}_${index}`,
         userInput: scenario.userInput,
         expectedActions: scenario.expectedActions,
@@ -295,6 +315,122 @@ Return as JSON with a scenarios array.
           complexity: 'complex',
           category: 'email',
           description: 'Complex email analysis and reporting scenario'
+        }]
+      },
+      calendar: {
+        simple: [{
+          id: `fallback_calendar_simple_${Date.now()}`,
+          userInput: 'Schedule a meeting tomorrow at 2 PM',
+          expectedActions: ['create_event'],
+          expectedApiCalls: ['calendar_create'],
+          complexity: 'simple',
+          category: 'calendar',
+          description: 'Simple calendar event creation'
+        }],
+        medium: [{
+          id: `fallback_calendar_medium_${Date.now()}`,
+          userInput: 'Find a time slot for a 1-hour meeting with the team next week',
+          expectedActions: ['check_availability', 'find_timeslot', 'create_event'],
+          expectedApiCalls: ['calendar_list', 'calendar_create'],
+          complexity: 'medium',
+          category: 'calendar',
+          description: 'Calendar availability and scheduling'
+        }],
+        complex: [{
+          id: `fallback_calendar_complex_${Date.now()}`,
+          userInput: 'Reschedule all meetings this week to next week and notify all attendees',
+          expectedActions: ['list_events', 'reschedule_events', 'notify_attendees'],
+          expectedApiCalls: ['calendar_list', 'calendar_update', 'gmail_send'],
+          complexity: 'complex',
+          category: 'calendar',
+          description: 'Complex calendar rescheduling with notifications'
+        }]
+      },
+      slack: {
+        simple: [{
+          id: `fallback_slack_simple_${Date.now()}`,
+          userInput: 'Send a message to the team channel',
+          expectedActions: ['send_message'],
+          expectedApiCalls: ['slack_post'],
+          complexity: 'simple',
+          category: 'slack',
+          description: 'Simple Slack message sending'
+        }],
+        medium: [{
+          id: `fallback_slack_medium_${Date.now()}`,
+          userInput: 'Check recent messages in the project channel and summarize key points',
+          expectedActions: ['read_messages', 'summarize_content'],
+          expectedApiCalls: ['slack_conversations_history'],
+          complexity: 'medium',
+          category: 'slack',
+          description: 'Slack message reading and summarization'
+        }],
+        complex: [{
+          id: `fallback_slack_complex_${Date.now()}`,
+          userInput: 'Create a new channel for the project, invite team members, and post the project overview',
+          expectedActions: ['create_channel', 'invite_members', 'post_overview'],
+          expectedApiCalls: ['slack_conversations_create', 'slack_conversations_invite', 'slack_post'],
+          complexity: 'complex',
+          category: 'slack',
+          description: 'Complex Slack channel management'
+        }]
+      },
+      contacts: {
+        simple: [{
+          id: `fallback_contacts_simple_${Date.now()}`,
+          userInput: 'Find John Smith\'s contact information',
+          expectedActions: ['search_contact'],
+          expectedApiCalls: ['contacts_search'],
+          complexity: 'simple',
+          category: 'contacts',
+          description: 'Simple contact search'
+        }],
+        medium: [{
+          id: `fallback_contacts_medium_${Date.now()}`,
+          userInput: 'Add a new contact for Sarah Johnson with her email and phone number',
+          expectedActions: ['create_contact'],
+          expectedApiCalls: ['contacts_create'],
+          complexity: 'medium',
+          category: 'contacts',
+          description: 'Contact creation with multiple fields'
+        }],
+        complex: [{
+          id: `fallback_contacts_complex_${Date.now()}`,
+          userInput: 'Import contacts from the CSV file and organize them by company',
+          expectedActions: ['import_contacts', 'organize_by_company'],
+          expectedApiCalls: ['contacts_batch_create'],
+          complexity: 'complex',
+          category: 'contacts',
+          description: 'Complex contact import and organization'
+        }]
+      },
+      'multi-domain': {
+        simple: [{
+          id: `fallback_multi_simple_${Date.now()}`,
+          userInput: 'Send an email and schedule a follow-up meeting',
+          expectedActions: ['send_email', 'create_event'],
+          expectedApiCalls: ['gmail_send', 'calendar_create'],
+          complexity: 'simple',
+          category: 'multi-domain',
+          description: 'Simple multi-domain workflow'
+        }],
+        medium: [{
+          id: `fallback_multi_medium_${Date.now()}`,
+          userInput: 'Find the client\'s contact info, send them an email, and schedule a meeting',
+          expectedActions: ['search_contact', 'send_email', 'create_event'],
+          expectedApiCalls: ['contacts_search', 'gmail_send', 'calendar_create'],
+          complexity: 'medium',
+          category: 'multi-domain',
+          description: 'Medium multi-domain workflow'
+        }],
+        complex: [{
+          id: `fallback_multi_complex_${Date.now()}`,
+          userInput: 'Analyze team availability, schedule a meeting, send invites, and post updates to Slack',
+          expectedActions: ['check_availability', 'create_event', 'send_invites', 'post_update'],
+          expectedApiCalls: ['calendar_list', 'calendar_create', 'gmail_send', 'slack_post'],
+          complexity: 'complex',
+          category: 'multi-domain',
+          description: 'Complex multi-domain orchestration'
         }]
       }
     };

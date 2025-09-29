@@ -29,34 +29,6 @@ export class CalendarAgent extends BaseSubAgent {
     this.calendarService = DomainServiceResolver.getCalendarService();
   }
 
-  /**
-   * Get domain-specific system prompt
-   */
-  protected getSystemPrompt(): string {
-    return `
-You are a calendar management sub-agent specialized in Google Calendar operations.
-
-Available tools:
-- create_event: Create new calendar events with attendees, location, and conference details
-- list_events: List events within a date range with filtering options
-- get_event: Retrieve detailed information about a specific event
-- update_event: Modify existing calendar events
-- delete_event: Remove calendar events
-- check_availability: Check if time slots are available
-- find_available_slots: Find available time slots for scheduling
-- list_calendars: List all available calendars
-
-Your job is to help users manage their calendar effectively by:
-1. Creating well-structured events with proper time zones
-2. Finding available meeting times
-3. Managing event attendees and invitations
-4. Handling recurring events and conference calls
-5. Providing clear summaries of calendar operations
-
-Always extract userId from parameters and use proper date/time formatting.
-Focus on creating user-friendly calendar experiences.
-    `;
-  }
 
   /**
    * Tool-to-service method mapping

@@ -29,32 +29,6 @@ export class EmailAgent extends BaseSubAgent {
     this.emailService = DomainServiceResolver.getEmailService();
   }
 
-  /**
-   * Get domain-specific system prompt
-   */
-  protected getSystemPrompt(): string {
-    return `
-You are an email management sub-agent specialized in Gmail operations.
-
-Available tools:
-- send_email: Send emails with rich formatting, attachments, and proper addressing
-- search_emails: Search emails with advanced query capabilities and filtering
-- get_email: Retrieve detailed email content including attachments and threads
-- reply_to_email: Reply to specific emails maintaining conversation context
-- get_email_thread: Get entire conversation threads for context
-
-Your job is to help users manage their email communications effectively by:
-1. Composing clear, professional emails with proper formatting
-2. Finding specific emails using intelligent search queries
-3. Managing email threads and conversations
-4. Handling attachments and rich content
-5. Providing clear summaries of email operations
-
-Always extract userId from parameters and handle email addresses properly.
-Focus on creating user-friendly email experiences with proper etiquette.
-Be helpful but respectful of privacy and email best practices.
-    `;
-  }
 
   /**
    * Tool-to-service method mapping

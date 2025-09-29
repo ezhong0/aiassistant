@@ -18,9 +18,14 @@ import {
   ProgressAssessmentPromptBuilder,
   FinalResponsePromptBuilder
 } from '../services/prompt-builders/main-agent';
+import {
+  IntentAssessmentPromptBuilder,
+  PlanReviewPromptBuilder,
+  ResponseFormattingPromptBuilder
+} from '../services/prompt-builders/sub-agent';
 
 /**
- * Type map for prompt builders
+ * Type map for main agent prompt builders
  */
 export interface PromptBuilderMap {
   situation: SituationAnalysisPromptBuilder;
@@ -29,6 +34,15 @@ export interface PromptBuilderMap {
   action: ActionExecutionPromptBuilder;
   progress: ProgressAssessmentPromptBuilder;
   final: FinalResponsePromptBuilder;
+}
+
+/**
+ * Type map for sub-agent prompt builders
+ */
+export interface SubAgentPromptBuilderMap {
+  intent: IntentAssessmentPromptBuilder;
+  planReview: PlanReviewPromptBuilder;
+  responseFormatting: ResponseFormattingPromptBuilder;
 }
 
 /**
@@ -41,6 +55,15 @@ export const BUILDER_NAMES: Record<keyof PromptBuilderMap, string> = {
   action: 'ActionExecutionPromptBuilder',
   progress: 'ProgressAssessmentPromptBuilder',
   final: 'FinalResponsePromptBuilder'
+} as const;
+
+/**
+ * Sub-agent builder names for error messages
+ */
+export const SUB_AGENT_BUILDER_NAMES: Record<keyof SubAgentPromptBuilderMap, string> = {
+  intent: 'IntentAssessmentPromptBuilder',
+  planReview: 'PlanReviewPromptBuilder',
+  responseFormatting: 'ResponseFormattingPromptBuilder'
 } as const;
 
 /**
@@ -177,6 +200,65 @@ export class BuilderGuard {
         initializedCount++;
       } else {
         missingBuilders.push(BUILDER_NAMES[key]);
+      }
+    });
+
+    return {
+      allInitialized: initializedCount === totalCount,
+      initializedCount,
+      totalCount,
+      missingBuilders,
+      status
+    };
+  }
+
+  /**
+   * Validate sub-agent prompt builders
+   */
+  static validateSubAgentBuilders(builders: SubAgentPromptBuilderMap): void {
+    const missingBuilders: string[] = [];
+
+    (Object.keys(builders) as Array<keyof SubAgentPromptBuilderMap>).forEach(key => {
+      if (!builders[key]) {
+        missingBuilders.push(SUB_AGENT_BUILDER_NAMES[key]);
+      }
+    });
+
+    if (missingBuilders.length > 0) {
+      const errorContext = ErrorContextBuilder.create()
+        .component('builder-guard')
+        .operation('validate_sub_agent_builders')
+        .metadata('missingBuilders', missingBuilders)
+        .metadata('totalMissing', missingBuilders.length)
+        .build();
+
+      throw UnifiedErrorFactory.serviceUnavailable(`Sub-agent builders: ${missingBuilders.join(', ')}`, errorContext);
+    }
+  }
+
+  /**
+   * Get sub-agent builder initialization status
+   */
+  static getSubAgentBuilderStatus(builders: SubAgentPromptBuilderMap): {
+    allInitialized: boolean;
+    initializedCount: number;
+    totalCount: number;
+    missingBuilders: string[];
+    status: Record<string, boolean>;
+  } {
+    const status: Record<string, boolean> = {};
+    const missingBuilders: string[] = [];
+    let initializedCount = 0;
+    const totalCount = Object.keys(builders).length;
+
+    (Object.keys(builders) as Array<keyof SubAgentPromptBuilderMap>).forEach(key => {
+      const isInitialized = builders[key] !== null && builders[key] !== undefined;
+      status[SUB_AGENT_BUILDER_NAMES[key]] = isInitialized;
+
+      if (isInitialized) {
+        initializedCount++;
+      } else {
+        missingBuilders.push(SUB_AGENT_BUILDER_NAMES[key]);
       }
     });
 

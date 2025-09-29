@@ -161,7 +161,7 @@ export class MasterAgentExecutor {
     logger.info('Starting E2E test execution with tracing', {
       operation: 'e2e_execution_start',
       testScenarioId: traceId,
-      userInput: userInput.substring(0, 100),
+      userInput: userInput?.substring(0, 100) || 'N/A',
       sessionId,
       userId
     });

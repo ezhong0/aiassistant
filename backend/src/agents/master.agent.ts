@@ -125,7 +125,7 @@ export class MasterAgent {
     const processingStartTime = Date.now();
 
     logger.info('Processing user input with Master Agent', {
-      userInputLength: userInput.length,
+      userInputLength: userInput?.length || 0,
       sessionId,
       userId,
       hasSlackContext: !!slackContext,

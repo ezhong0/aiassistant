@@ -198,6 +198,9 @@ const registerCoreServices = async (): Promise<void> => {
     const contextManager = new ContextManager();
     serviceManager.registerService('contextManager', contextManager, ['cacheService']);
 
+    // 45. AgentFactory - Initialize all SubAgents for workflow execution
+    const { initializeAgentFactory } = await import('../framework/agent-factory');
+    await initializeAgentFactory();
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application
