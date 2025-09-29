@@ -2,7 +2,7 @@ import { createClient, RedisClientType } from 'redis';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from '../types/service.types';
-// Use environment variables directly for Redis configuration
+import { config } from '../config';
 
 export class CacheService extends BaseService {
   private client: RedisClientType | null = null;
@@ -15,9 +15,9 @@ export class CacheService extends BaseService {
   constructor() {
     super('cacheService');
     
-    // Railway Redis environment variables (Railway provides these when Redis is added)
-    // Check multiple possible environment variable names that Railway might use
-    this.REDIS_URL = process.env.REDIS_URL || 
+    // Use unified config system for Redis URL, fallback to Railway environment variables
+    this.REDIS_URL = config.redisUrl || 
+                     process.env.REDIS_URL || 
                      process.env.REDISCLOUD_URL || 
                      process.env.REDIS_PRIVATE_URL ||
                      process.env.REDIS_PUBLIC_URL ||

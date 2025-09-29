@@ -2,6 +2,7 @@ import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from '../types/service.types';
+import { config } from '../config';
 
 export interface DatabaseConfig {
   host: string;
@@ -99,7 +100,8 @@ export class DatabaseService extends BaseService {
   constructor() {
     super('databaseService');
     
-    // Initialize with optimized default config
+    // Initialize with unified config system
+    const dbServiceConfig = config.services.database;
     this.config = {
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
@@ -107,16 +109,16 @@ export class DatabaseService extends BaseService {
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || '',
       ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-      // Optimized connection pool settings
-      max: parseInt(process.env.DB_MAX_CONNECTIONS || '10'), // Reduced from 20
-      min: parseInt(process.env.DB_MIN_CONNECTIONS || '2'),  // New: minimum connections
-      idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'),
-      connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000'), // Increased
-      acquireTimeoutMillis: parseInt(process.env.DB_ACQUIRE_TIMEOUT || '10000'), // New
-      createTimeoutMillis: parseInt(process.env.DB_CREATE_TIMEOUT || '10000'), // New
-      destroyTimeoutMillis: parseInt(process.env.DB_DESTROY_TIMEOUT || '5000'), // New
-      reapIntervalMillis: parseInt(process.env.DB_REAP_INTERVAL || '1000'), // New
-      createRetryIntervalMillis: parseInt(process.env.DB_CREATE_RETRY_INTERVAL || '200') // New
+      // Use unified config for connection pool settings
+      max: dbServiceConfig?.poolSize || 10,
+      min: 2,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: dbServiceConfig?.timeout || 30000,
+      acquireTimeoutMillis: 10000,
+      createTimeoutMillis: 10000,
+      destroyTimeoutMillis: 5000,
+      reapIntervalMillis: 1000,
+      createRetryIntervalMillis: 200
     };
   }
 
@@ -125,8 +127,8 @@ export class DatabaseService extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     try {
-      // Parse DATABASE_URL if available
-      const databaseUrl = process.env.DATABASE_URL;
+      // Parse DATABASE_URL if available (use unified config)
+      const databaseUrl = config.databaseUrl;
       if (databaseUrl) {
         const url = new URL(databaseUrl);
         this.config = {
@@ -160,7 +162,7 @@ export class DatabaseService extends BaseService {
         this.startHealthMonitoring();
       } catch (error) {
         // In non-production environments, allow graceful degradation
-        if (process.env.NODE_ENV === 'production') {
+        if (config.isProduction) {
           throw error;
         } else {
           logger.warn('Database connection failed in development - continuing without database', {

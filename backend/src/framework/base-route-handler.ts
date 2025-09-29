@@ -52,7 +52,7 @@ export abstract class BaseRouteHandler {
   /**
    * Create standardized route handler with error handling
    */
-  protected createHandler<TQuery = any, TBody = any>(
+  public createHandler<TQuery = any, TBody = any>(
     handler: (req: Request<any, any, TBody, TQuery>, res: Response) => Promise<RouteResponse>
   ) {
     return async (req: Request<any, any, TBody, TQuery>, res: Response, next: NextFunction): Promise<void> => {

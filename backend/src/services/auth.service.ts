@@ -11,6 +11,7 @@ import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { serviceManager } from "./service-manager";
 import { config as unifiedConfig } from '../config/unified-config';
 import { BaseService } from './base-service';
+import { ScopeManager, OAUTH_SCOPES } from '../constants/oauth-scopes';
 
 export class AuthService extends BaseService {
   private oauth2Client!: OAuth2Client;
@@ -69,14 +70,7 @@ export class AuthService extends BaseService {
   /**
    * Generate Google OAuth authorization URL
    */
-  generateAuthUrl(scopes: string[] = [
-    'openid', 
-    'email', 
-    'profile',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/contacts.readonly'
-  ], state?: string): string {
+  generateAuthUrl(scopes: string[] = ScopeManager.getGoogleScopes('full'), state?: string): string {
     this.assertReady();
     
     if (!this.oauth2Client) {
@@ -103,6 +97,46 @@ export class AuthService extends BaseService {
     } catch (error) {
       this.handleError(error, 'generateAuthUrl');
     }
+  }
+
+  /**
+   * Generate Google OAuth URL for Slack integration
+   */
+  generateGoogleAuthURL(state: string, scopes?: string[]): string {
+    const slackScopes = scopes || ScopeManager.getGoogleScopes('slack');
+    return this.generateAuthUrl(slackScopes, state);
+  }
+
+  /**
+   * Generate Slack OAuth URL
+   */
+  generateSlackAuthURL(state: string): string {
+    const config = this.assertConfig();
+    const clientId = config.slackAuth?.clientId;
+    const redirectUri = config.slackAuth?.redirectUri;
+    
+    if (!clientId || !redirectUri) {
+      throw new Error('Slack OAuth not configured');
+    }
+
+    const userScopes = [...OAUTH_SCOPES.SLACK.USER].join(',');
+    const params = new URLSearchParams({
+      client_id: clientId,
+      scope: userScopes,
+      redirect_uri: redirectUri,
+      state: state,
+      user_scope: userScopes
+    });
+
+    return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
+  }
+
+  /**
+   * Generate Google OAuth URL for minimal permissions
+   */
+  generateMinimalGoogleAuthURL(state: string): string {
+    const minimalScopes = ScopeManager.getGoogleScopes('minimal');
+    return this.generateAuthUrl(minimalScopes, state);
   }
 
   /**

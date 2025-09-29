@@ -1,7 +1,7 @@
 import { ServiceManager } from '../../services/service-manager';
 import { ISlackDomainService } from '../../services/domain/interfaces/slack-domain.interface';
 import { SlackConfig } from './slack.types';
-import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
+import { config } from '../../config';
 
 export interface InterfaceManager {
   slackInterface?: ISlackDomainService;
@@ -29,14 +29,14 @@ export const initializeInterfaces = async (
 
   try {
     // Initialize Slack interface if configured
-    if (ENV_VALIDATION.isSlackConfigured()) {
+    if (config.slackAuth?.clientId && config.slackAuth?.clientSecret) {
       const slackConfig: SlackConfig = {
-        signingSecret: ENVIRONMENT.slack.signingSecret,
-        botToken: ENVIRONMENT.slack.botToken,
-        clientId: ENVIRONMENT.slack.clientId,
-        clientSecret: ENVIRONMENT.slack.clientSecret,
-        redirectUri: ENVIRONMENT.slack.redirectUri,
-        development: !ENV_VALIDATION.isProduction()
+        signingSecret: config.slackAuth.signingSecret || '',
+        botToken: config.slackAuth.botToken || '',
+        clientId: config.slackAuth.clientId,
+        clientSecret: config.slackAuth.clientSecret,
+        redirectUri: config.slackAuth.redirectUri || '',
+        development: !config.isProduction
       };
 
       // Get the already-initialized SlackDomainService from DomainServiceResolver

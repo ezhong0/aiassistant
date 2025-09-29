@@ -33,6 +33,15 @@ export {
   initializeDomainServicesForTesting
 } from './dependency-injection/domain-service-container';
 
+// Export service factory
+export {
+  DomainServiceFactory,
+  domainServiceFactory,
+  ServiceCreators,
+  type ServiceFactoryConfig,
+  type ServiceFactoryResult
+} from './factory/domain-service-factory';
+
 // Export error handling
 export {
   APIClientError,

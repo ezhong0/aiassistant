@@ -12,7 +12,7 @@ interface IntentAnalysis {
   newOperation?: string;
 }
 import { NaturalLanguageResponse } from '../types/agents/natural-language.types';
-import { ENVIRONMENT } from '../config/environment';
+import { config } from '../config';
 
 // Extend Winston's Logger interface to include custom levels
 interface INaturalLanguageLogger extends winston.Logger {
@@ -77,11 +77,11 @@ class NaturalLanguageLogger {
   private isEnabled: boolean;
 
   constructor() {
-    this.isEnabled = ENVIRONMENT.features.naturalLanguageLogging;
+    this.isEnabled = config.isFeatureEnabled('natural-language-logging');
     
     this.logger = winston.createLogger({
       levels: naturalLanguageLevels,
-      level: ENVIRONMENT.features.naturalLanguageLogLevel,
+      level: process.env.NATURAL_LANGUAGE_LOG_LEVEL || 'agent',
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.errors({ stack: true }),

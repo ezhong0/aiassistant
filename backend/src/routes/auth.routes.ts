@@ -10,6 +10,9 @@ import { DomainServiceResolver } from '../services/domain';
 import { AuthService } from '../services/auth.service';
 import { TokenStorageService } from '../services/token-storage.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
+// Route Handlers
+import { OAuthConfigHandler, CurrentConfigHandler, TestOAuthUrlHandler } from './handlers/oauth-debug.handler';
+import { GoogleOAuthHandler, GoogleSlackOAuthHandler } from './handlers/google-oauth.handler';
 import {
   GoogleTokens,
   GoogleUserInfo,
@@ -157,7 +160,7 @@ router.get('/debug/test-oauth-url',
   validateRequest({ query: debugQuerySchema }),
   async (req: Request, res: Response) => {
   try {
-    const { ENVIRONMENT } = await import('../config/environment');
+    const { config } = await import('../config');
     const { getService } = await import('../services/service-manager');
     
     const authService = getService('authService');
@@ -219,18 +222,18 @@ router.get('/debug/test-oauth-url',
       authUrl,
       slackOAuthUrl,
       config: {
-        baseUrl: ENVIRONMENT.baseUrl,
-        clientId: ENVIRONMENT.google.clientId ? '✅ Configured' : '❌ Not configured',
-        redirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`,
-        environmentRedirectUri: ENVIRONMENT.google.redirectUri,
-        computedRedirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`
+        baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+        clientId: config.googleAuth?.clientId ? '✅ Configured' : '❌ Not configured',
+        redirectUri: config.googleAuth?.redirectUri || `${process.env.BASE_URL || 'http://localhost:3000'}/auth/callback`,
+        environmentRedirectUri: config.googleAuth?.redirectUri,
+        computedRedirectUri: config.googleAuth?.redirectUri || `${process.env.BASE_URL || 'http://localhost:3000'}/auth/callback`
       },
       testState,
       scopes: testScopes,
       debug: {
-        baseUrlContainsAuth: ENVIRONMENT.baseUrl.includes('/auth/'),
-        baseUrlParts: ENVIRONMENT.baseUrl.split('/auth/'),
-        correctedBaseUrl: ENVIRONMENT.baseUrl.includes('/auth/') ? ENVIRONMENT.baseUrl.split('/auth/')[0] : ENVIRONMENT.baseUrl
+        baseUrlContainsAuth: process.env.BASE_URL || 'http://localhost:3000'.includes('/auth/'),
+        baseUrlParts: process.env.BASE_URL || 'http://localhost:3000'.split('/auth/'),
+        correctedBaseUrl: process.env.BASE_URL || 'http://localhost:3000'.includes('/auth/') ? process.env.BASE_URL || 'http://localhost:3000'.split('/auth/')[0] : process.env.BASE_URL || 'http://localhost:3000'
       }
     });
   } catch (error) {
@@ -249,35 +252,11 @@ router.get('/debug/test-oauth-url',
  */
 router.get('/debug/current-config', 
   validateRequest({ query: emptyQuerySchema }),
-  async (req: Request, res: Response) => {
-  try {
-    const { ENVIRONMENT } = await import('../config/environment');
-    
-    return res.json({
-      success: true,
-      message: 'Current OAuth configuration',
-      config: {
-        baseUrl: ENVIRONMENT.baseUrl,
-        baseUrlContainsAuth: ENVIRONMENT.baseUrl.includes('/auth/'),
-        correctedBaseUrl: ENVIRONMENT.baseUrl.includes('/auth/') ? ENVIRONMENT.baseUrl.split('/auth/')[0] : ENVIRONMENT.baseUrl,
-        google: {
-          clientId: ENVIRONMENT.google.clientId ? '✅ Configured' : '❌ Not configured',
-          clientSecret: ENVIRONMENT.google.clientSecret ? '✅ Configured' : '❌ Not configured',
-          redirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`
-        },
-        environment: ENVIRONMENT.nodeEnv,
-        timestamp: new Date().toISOString()
-      }
-    });
-  } catch (error) {
-    const logContext = createLogContext(req, { operation: 'current_config_debug' });
-    logger.error('Error in current config debug endpoint', error as Error, logContext);
-    return res.status(500).json({ 
-      error: 'Debug endpoint failed',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
+  (async (req: Request, res: Response) => {
+    const handler = new CurrentConfigHandler();
+    return handler.createHandler(handler.handle.bind(handler))(req, res, () => {});
+  })
+);
 
 /**
  * GET /auth/debug/oauth-config
@@ -285,35 +264,11 @@ router.get('/debug/current-config',
  */
 router.get('/debug/oauth-config', 
   validateRequest({ query: emptyQuerySchema }),
-  async (req: Request, res: Response) => {
-  try {
-    const { ENVIRONMENT } = await import('../config/environment');
-    
-    const config = {
-      baseUrl: ENVIRONMENT.baseUrl,
-      google: {
-        clientId: ENVIRONMENT.google.clientId ? '✅ Configured' : '❌ Not configured',
-        clientSecret: ENVIRONMENT.google.clientSecret ? '✅ Configured' : '❌ Not configured',
-        redirectUri: ENVIRONMENT.google.redirectUri || `${ENVIRONMENT.baseUrl}/auth/callback`
-      },
-      environment: ENVIRONMENT.nodeEnv,
-      timestamp: new Date().toISOString()
-    };
-    
-    return res.json({
-      success: true,
-      message: 'OAuth configuration debug info',
-      config
-    });
-  } catch (error) {
-    const logContext = createLogContext(req, { operation: 'oauth_config_debug' });
-    logger.error('Error in OAuth config debug endpoint', error as Error, logContext);
-    return res.status(500).json({ 
-      error: 'Debug endpoint failed',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
+  (async (req: Request, res: Response) => {
+    const handler = new OAuthConfigHandler();
+    return handler.createHandler(handler.handle.bind(handler))(req, res, () => {});
+  })
+);
 
 /**
  * GET /auth/debug/test-token-exchange
@@ -598,16 +553,16 @@ router.get('/debug/oauth-validation',
     const params = Object.fromEntries(url.searchParams.entries());
 
     // Get config details
-    const { ENVIRONMENT } = await import('../config/environment');
+    const { config } = await import('../config');
 
     return res.json({
       success: true,
       message: 'OAuth configuration validation',
       currentConfig: {
-        clientId: ENVIRONMENT.google.clientId ? ENVIRONMENT.google.clientId.substring(0, 20) + '...' : 'NOT SET',
-        redirectUri: ENVIRONMENT.google.redirectUri,
-        baseUrl: ENVIRONMENT.baseUrl,
-        environment: ENVIRONMENT.nodeEnv
+        clientId: config.googleAuth?.clientId ? config.googleAuth?.clientId.substring(0, 20) + '...' : 'NOT SET',
+        redirectUri: config.googleAuth?.redirectUri,
+        baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+        environment: config.nodeEnv
       },
       generatedAuthUrl: {
         fullUrl: authUrl,
@@ -623,8 +578,8 @@ router.get('/debug/oauth-validation',
         state: params.state ? 'Present' : 'Missing'
       },
       validation: {
-        clientIdMatch: ENVIRONMENT.google.clientId === params.client_id,
-        redirectUriMatch: ENVIRONMENT.google.redirectUri === params.redirect_uri,
+        clientIdMatch: config.googleAuth?.clientId === params.client_id,
+        redirectUriMatch: config.googleAuth?.redirectUri === params.redirect_uri,
         responseTypeCorrect: params.response_type === 'code',
         scopesIncludeOpenId: (params.scope || '').includes('openid'),
         scopesIncludeEmail: (params.scope || '').includes('email'),

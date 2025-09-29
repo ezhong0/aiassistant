@@ -10,6 +10,7 @@ import { ICalendarDomainService } from '../interfaces/calendar-domain.interface'
 import { IContactsDomainService } from '../interfaces/contacts-domain.interface';
 import { ISlackDomainService } from '../interfaces/slack-domain.interface';
 import { IAIDomainService } from '../interfaces/ai-domain.interface';
+import { domainServiceFactory, ServiceCreators } from '../factory/domain-service-factory';
 
 /**
  * Service registration interface
@@ -118,52 +119,78 @@ export const domainServiceContainer = DomainServiceContainer.getInstance();
  */
 export class DomainServiceRegistrations {
   /**
-   * Register all domain services
+   * Register all domain services using the enhanced factory pattern
    */
   static registerAll(): void {
-    // Register email service
+    // Register email service with factory
     domainServiceContainer.registerSingleton<IEmailDomainService>(
       'emailService',
-      () => {
-        const { EmailDomainService } = require('../email-domain.service');
-        return new EmailDomainService();
-      }
+      () => ServiceCreators.createEmailService()
     );
 
-    // Register calendar service
+    // Register calendar service with factory
     domainServiceContainer.registerSingleton<ICalendarDomainService>(
       'calendarService',
-      () => {
-        const { CalendarDomainService } = require('../calendar-domain.service');
-        return new CalendarDomainService();
-      }
+      () => ServiceCreators.createCalendarService()
     );
 
-    // Register contacts service
+    // Register contacts service with factory
     domainServiceContainer.registerSingleton<IContactsDomainService>(
       'contactsService',
-      () => {
-        const { ContactsDomainService } = require('../contacts-domain.service');
-        return new ContactsDomainService();
-      }
+      () => ServiceCreators.createContactsService()
     );
 
-    // Register Slack service
+    // Register Slack service with factory
     domainServiceContainer.registerSingleton<ISlackDomainService>(
       'slackService',
-      () => {
-        const { SlackDomainService } = require('../slack-domain.service');
-        return new SlackDomainService();
-      }
+      () => ServiceCreators.createSlackService()
     );
 
-    // Register AI service
+    // Register AI service with factory
     domainServiceContainer.registerSingleton<IAIDomainService>(
       'aiService',
-      () => {
-        const { AIDomainService } = require('../ai-domain.service');
-        return new AIDomainService();
-      }
+      () => ServiceCreators.createAIService()
+    );
+  }
+
+  /**
+   * Register all domain services with enhanced factory and custom configuration
+   */
+  static registerAllWithFactory(enableMetrics: boolean = false): void {
+    const factoryConfig = {
+      enableCaching: true,
+      enableHealthChecks: true,
+      enableMetrics
+    };
+
+    // Register email service with custom config
+    domainServiceContainer.registerSingleton<IEmailDomainService>(
+      'emailService',
+      () => domainServiceFactory.createEmailService(factoryConfig).service
+    );
+
+    // Register calendar service with custom config
+    domainServiceContainer.registerSingleton<ICalendarDomainService>(
+      'calendarService',
+      () => domainServiceFactory.createCalendarService(factoryConfig).service
+    );
+
+    // Register contacts service with custom config
+    domainServiceContainer.registerSingleton<IContactsDomainService>(
+      'contactsService',
+      () => domainServiceFactory.createContactsService(factoryConfig).service
+    );
+
+    // Register Slack service with custom config
+    domainServiceContainer.registerSingleton<ISlackDomainService>(
+      'slackService',
+      () => domainServiceFactory.createSlackService(factoryConfig).service
+    );
+
+    // Register AI service with custom config
+    domainServiceContainer.registerSingleton<IAIDomainService>(
+      'aiService',
+      () => domainServiceFactory.createAIService(factoryConfig).service
     );
   }
 

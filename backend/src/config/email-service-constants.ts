@@ -1,6 +1,9 @@
 /**
  * Constants for Email Services
  * Centralizes all hardcoded strings to avoid magic strings throughout the codebase
+ * 
+ * Note: For OAuth scopes, prefer using the centralized oauth-scopes.ts system
+ * These permissions are kept for backwards compatibility
  */
 
 export const EMAIL_SERVICE_CONSTANTS = {
@@ -83,10 +86,10 @@ export const EMAIL_SERVICE_CONSTANTS = {
     GET: 'get'
   },
 
-  // OAuth Permissions
+  // OAuth Permissions - Use centralized OAuth scopes
   OAUTH_PERMISSIONS: {
     GMAIL_READONLY: 'gmail.readonly',
-    GMAIL_SEND: 'gmail.send',
+    GMAIL_SEND: 'gmail.send', 
     GMAIL_COMPOSE: 'gmail.compose'
   },
 

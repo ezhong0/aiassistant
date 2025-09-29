@@ -8,6 +8,7 @@
 // Export the main configuration service and types
 export { 
   UnifiedConfigService, 
+  config,
   config as unifiedConfig,
   type UnifiedConfig,
   type EnvironmentConfig,

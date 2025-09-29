@@ -171,7 +171,11 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       }
 
       // Authenticate with bot token
-      // Authentication handled automatically by OAuth manager
+      const credentials = {
+        type: 'api_key' as const,
+        apiKey: botToken
+      };
+      await this.slackClient.authenticate(credentials);
       
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(SlackValidationSchemas.sendMessage, params);

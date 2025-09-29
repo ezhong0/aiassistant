@@ -11,7 +11,6 @@
 
 import { z } from 'zod';
 import { BaseService } from '../services/base-service';
-import logger from '../utils/logger';
 
 // Core environment schema
 const EnvironmentSchema = z.object({
@@ -302,10 +301,8 @@ export class UnifiedConfigService extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     // Configuration is validated in constructor
-    logger.info('Configuration validated successfully', {
-      correlationId: 'config-init',
-      operation: 'config_validation',
-      metadata: { environment: this.config.environment.NODE_ENV }
+    console.log('Configuration validated successfully', {
+      environment: this.config.environment.NODE_ENV
     });
   }
 
@@ -313,10 +310,7 @@ export class UnifiedConfigService extends BaseService {
    * Service cleanup
    */
   protected async onDestroy(): Promise<void> {
-    logger.info('Configuration service destroyed', {
-      correlationId: 'config-destroy',
-      operation: 'config_cleanup'
-    });
+    console.log('Configuration service destroyed');
   }
 
   /**
@@ -427,18 +421,13 @@ export class UnifiedConfigService extends BaseService {
       };
 
       const result = UnifiedConfigSchema.parse(envConfig);
-      logger.debug('Configuration loaded successfully', {
-        correlationId: 'config-load',
-        operation: 'config_load_success'
-      });
+      // Configuration loaded successfully - using console to avoid circular dependency
       return result;
 
     } catch (error) {
       const message = 'Configuration validation failed';
-      logger.error(message, error as Error, {
-        correlationId: 'config-error',
-        operation: 'config_validation_failed'
-      });
+      // Use console.error to avoid circular dependency with logger
+      console.error(message, error);
       throw error;
     }
   }
@@ -466,18 +455,11 @@ export class UnifiedConfigService extends BaseService {
 
     if (issues.length > 0) {
       const error = new Error(`Production configuration issues: ${issues.join(', ')}`);
-      logger.error('Production configuration validation failed', error, {
-        correlationId: 'prod-validation',
-        operation: 'production_config_validation',
-        metadata: { issues }
-      });
+      console.error('Production configuration validation failed', error, issues);
       throw error;
     }
 
-    logger.info('Production configuration validated', {
-      correlationId: 'prod-validation',
-      operation: 'production_config_validated'
-    });
+    console.log('Production configuration validated');
   }
 
   /**
@@ -497,11 +479,7 @@ export class UnifiedConfigService extends BaseService {
       corsEnabled: this.config.security.cors.origin !== '*',
     };
 
-    logger.info('Configuration loaded', {
-      correlationId: 'config-summary',
-      operation: 'config_summary',
-      metadata: summary
-    });
+    console.log('Configuration loaded', summary);
   }
 
   /**
@@ -646,30 +624,18 @@ export class UnifiedConfigService extends BaseService {
    */
   reload(): void {
     if (this.isProduction) {
-      logger.warn('Configuration reload prevented in production', {
-        correlationId: 'config-reload',
-        operation: 'config_reload_prevented'
-      });
+      console.warn('Configuration reload prevented in production');
       return;
     }
 
-    logger.info('Reloading configuration', {
-      correlationId: 'config-reload',
-      operation: 'config_reload_start'
-    });
+    console.log('Reloading configuration');
 
     try {
       this.config = this.loadAndValidateConfig();
       this.validateProductionRequirements();
-      logger.info('Configuration reloaded successfully', {
-        correlationId: 'config-reload',
-        operation: 'config_reload_success'
-      });
+      console.log('Configuration reloaded successfully');
     } catch (error) {
-      logger.error('Configuration reload failed', error as Error, {
-        correlationId: 'config-reload',
-        operation: 'config_reload_failed'
-      });
+      console.error('Configuration reload failed', error);
       throw error;
     }
   }
