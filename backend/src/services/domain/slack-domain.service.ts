@@ -836,6 +836,18 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         fullEvent: JSON.stringify(event).substring(0, 500)
       });
 
+      this.logInfo('🔧 CRITICAL: Bot filtering analysis', {
+        eventUser: event.user,
+        hardcodedBotId: 'U09C27B5W1Z',
+        isUserIdMatch: event.user === 'U09C27B5W1Z',
+        hasRealBotId: !!event.bot_id,
+        isRealBotSubtype: event.subtype === 'bot_message',
+        messageText: (event.text || '').substring(0, 50),
+        willBeFiltered: event.bot_id || event.subtype === 'bot_message' || event.user === 'U09C27B5W1Z' ||
+                       (event.text && event.text.includes('🤔 Processing your request')) ||
+                       (event.text && event.text.includes('I received your message and I\'m working on it!'))
+      });
+
       // Ignore bot messages to prevent infinite loops
       // Check multiple conditions for bot detection
       const isBotMessage = event.bot_id ||
@@ -884,8 +896,21 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
 
       // Process the message with MasterAgent (orchestrator only)
       try {
+        this.logInfo('🔧 CRITICAL: About to import MasterAgent', {
+          messageText: messageText.substring(0, 50)
+        });
+
         const { MasterAgent } = await import('../../agents/master.agent');
+
+        this.logInfo('🔧 CRITICAL: MasterAgent imported successfully, creating instance', {
+          MasterAgentExists: !!MasterAgent
+        });
+
         const masterAgent = new MasterAgent();
+
+        this.logInfo('🔧 CRITICAL: MasterAgent instance created successfully', {
+          instanceExists: !!masterAgent
+        });
 
         const slackContext = {
           userId: context.userId,
@@ -938,12 +963,18 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
           message: 'Message processed via MasterAgent orchestration'
         };
       } catch (processingError) {
-        this.logError('MasterAgent orchestration failed', processingError);
+        this.logError('🔧 CRITICAL: MasterAgent orchestration failed - DETAILED ERROR', processingError, {
+          errorMessage: processingError instanceof Error ? processingError.message : String(processingError),
+          errorStack: processingError instanceof Error ? processingError.stack : 'No stack trace',
+          errorName: processingError instanceof Error ? processingError.name : 'Unknown error type',
+          messageText: messageText.substring(0, 50),
+          userId: context.userId
+        });
 
         // Send error response to user
         await this.sendMessage(combinedUserId, {
           channel: context.channelId,
-          text: "Sorry, I encountered an error processing your request. Please try again.",
+          text: "I encountered an error while processing your request. Please try again.",
           threadTs: event.thread_ts
         });
 
