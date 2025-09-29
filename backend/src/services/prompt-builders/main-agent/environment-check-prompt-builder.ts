@@ -30,19 +30,27 @@ export class EnvironmentCheckPromptBuilder extends BasePromptBuilder<string, Env
         1. Check for interruptions or new user messages
         2. Evaluate if user input is needed for continuation
         3. Assess if the workflow can continue
-        4. Update the context with your assessment
+        4. Update the context with your assessment and recommended next action
         
-        User Input Decision Criteria:
+        User Input Decision Criteria (SHORTCUT to Final Output):
         - Multiple interpretations exist for the current step
         - Critical information is missing
         - Confidence level is below 70%
         - Ambiguous entity references need clarification
         - Risk level requires user confirmation
         
+        CRITICAL: If user input is needed, you must recommend jumping directly to Final Output
+        to ask a specific question. This ends the current workflow - the user's answer will 
+        start an entirely new workflow with fresh context.
+        
         Interruption Handling:
         - If new user messages exist, note them in context
         - If iteration count exceeds maximum, flag for graceful exit
         - If workflow is blocked, determine if user input can resolve it
+        
+        Output Requirements:
+        - Add a short "NEXT:" directive in the context indicating either the precise question to ask or the next internal action
+        - Keep language crisp and imperative
         
         ${this.CONTEXT_FORMAT}
       `,
@@ -51,7 +59,7 @@ export class EnvironmentCheckPromptBuilder extends BasePromptBuilder<string, Env
         
         ${context}
         
-        Determine if user input is needed and what information is required.
+        Determine if user input is needed and what information is required. If needed, include the exact question under NEXT.
       `,
       context
     };

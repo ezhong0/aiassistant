@@ -36,6 +36,7 @@ export class ProgressAssessmentPromptBuilder extends BasePromptBuilder<string, P
         - Check if new information changes the approach
         - Identify any blockers or issues that emerged
         - Determine if the remaining steps are still appropriate
+        - Classify any errors as temporary/permanent and adapt plan accordingly
         
         Step Update Criteria:
         - Agent execution revealed new requirements
@@ -43,12 +44,31 @@ export class ProgressAssessmentPromptBuilder extends BasePromptBuilder<string, P
         - New information changes the optimal path
         - User input or context changes the plan
         - Risk assessment indicates different steps needed
+        - Circuit-breaker conditions or rate limits suggest backoff or alternate route
         
-        Context Updates:
-        - Update PROGRESS with completed actions
-        - Update DATA with new information gathered
-        - Update BLOCKERS with any issues found
-        - Update NEXT with the immediate next action
+        Context Updates (use structured format):
+        - Update PROGRESS with completed actions and decisions made
+        - Update DATA with new information gathered from agents
+        - Update BLOCKERS with any issues or limitations found
+        - Update NEXT with the immediate next action step
+        - Update ENTITIES if new people/companies discovered
+        - Update CONSTRAINTS if new limitations found
+        
+        Confidence Calculation Guidelines:
+        - Data completeness (0-40%): How much required information is gathered
+        - Entity resolution (0-20%): How clearly entities are identified
+        - API reliability (0-20%): Whether tools are working properly
+        - User clarity (0-20%): How well user intent is understood
+        
+        Adaptation Decisions:
+        - CONTINUE: Proceed with next step
+        - REVISE PLAN: Replace NEXT with a revised action list
+        - EXIT: Stop and defer to Final Output (e.g., for high-risk preview or blocking errors)
+        
+        Completion Status:
+        - COMPLETE (90%+): Ready for final output
+        - PARTIAL (50-89%): Continue with limitations or ask for guidance
+        - BLOCKED (<50%): Need adaptation or user input
         
         ${this.CONTEXT_FORMAT}
       `,

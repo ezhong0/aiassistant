@@ -39,10 +39,25 @@ export class FinalResponsePromptBuilder extends BasePromptBuilder<string, FinalR
         - Include any limitations or partial results
         - Suggest next steps if applicable
         
-        Output Strategy Considerations:
-        - Direct: Show results and confirm completion
-        - Preview: Present results for user review before execution
-        - Confirmation: Show detailed plan and ask for approval
+        Output Strategy Execution (from initial risk assessment):
+        - Direct: Show results and confirm completion (Low Risk operations)
+        - Preview: Present results for user review before execution (Medium Risk)
+        - Confirmation: Show detailed plan and ask for approval (High Risk)
+        
+        High Risk Preview Process:
+        1. Generate detailed preview with full context and risk factors
+        2. Present to user with clear explanation of what will happen
+        3. End current workflow cleanly
+        4. User response options start entirely new workflows:
+           - "Please execute the proposed plan" (acceptance)
+           - "Change X to Y in the proposal" (revision)
+           - No response needed for cancellation
+           
+        User Question Mode (SHORTCUT from Environment Check):
+        - Generate specific question with clear context explanation
+        - Explain why this information is required
+        - Provide examples or options if helpful
+        - End workflow cleanly - user answer starts new flow
         
         Context Updates:
         - Mark workflow as complete

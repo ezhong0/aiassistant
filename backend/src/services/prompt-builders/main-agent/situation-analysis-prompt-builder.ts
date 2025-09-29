@@ -27,7 +27,7 @@ export class SituationAnalysisPromptBuilder extends BasePromptBuilder<string, Si
         Your task is to:
         1. Analyze the user's input to understand their primary intent
         2. Assess the risk level of the requested operation
-        3. Determine the appropriate output strategy based on risk and complexity
+        3. Determine the appropriate output strategy based on risk and complexity (direct, preview, confirmation)
         4. Initialize the context structure with your analysis
         
         Risk Assessment Guidelines:
@@ -45,13 +45,25 @@ export class SituationAnalysisPromptBuilder extends BasePromptBuilder<string, Si
         Additional Fields for Situation Analysis:
         RISK_LEVEL: [low/medium/high - risk assessment of the operation]
         OUTPUT_STRATEGY: [direct/preview/confirmation - how to present results]
+        CONFIDENCE: [0-100 - initial confidence that the user intent is correctly understood]
+        
+        Context Initialization Guidelines:
+        - GOAL: Extract the primary user intent from the request
+        - ENTITIES: Identify all people, companies, meetings, emails mentioned
+        - CONSTRAINTS: Note time limits, approval needs, risk factors
+        - DATA: Start empty - will be populated during execution
+        - PROGRESS: Mark as "Intent analyzed, strategy determined"
+        - BLOCKERS: Note any immediate issues or missing information
+        - NEXT: Specify the first action step to take
+        
+        Be concise, functional, and explicit. Prefer precise nouns and verbs. Avoid verbose narrative.
       `,
       userPrompt: `
         Analyze this user request and provide your analysis:
         
         ${context}
         
-        Provide your analysis and initialize the context structure.
+        Provide your analysis and initialize the context structure using the fields above, including RISK_LEVEL, OUTPUT_STRATEGY, and CONFIDENCE.
       `,
       context
     };

@@ -8,7 +8,7 @@ import { AIPrompt, StructuredSchema } from '../../generic-ai.service';
  */
 export interface ActionExecutionResponse {
   context: string; // Updated context with execution plan
-  agent: 'email' | 'calendar' | 'contact'; // Agent to send request to
+  agent: 'email' | 'calendar' | 'contact' | 'slack'; // Agent to send request to
   request: string; // Specific request string to send to the agent
 }
 
@@ -36,13 +36,18 @@ export class ActionExecutionPromptBuilder extends BasePromptBuilder<string, Acti
         - Email Agent: Email operations (send, search, read, reply, forward, draft)
         - Calendar Agent: Calendar operations (schedule, check availability, reschedule, cancel)
         - Contact Agent: Contact operations (search, create, update, delete, find)
+        - Slack Agent: Slack operations (channel messages, search, summarize, user info)
+        
+        CRITICAL: Use SINGLE MESSAGE INTERFACE - Send one complete natural language request
+        to the sub-agent. The sub-agent must extract ALL needed context from that single message. Do not include follow-up questions; the sub-agent will not ask back.
         
         Request Creation Guidelines:
         - Be specific and actionable
         - Include all necessary parameters
         - Use natural language that the agent can understand
         - Consider the current context and entities
-        - Include any constraints or requirements
+        - Include any constraints or requirements (time windows, risk constraints, approvals)
+        - Make the request self-contained and executable as-is
         
         Example Requests:
         - "Find available 2-hour slots next month for 8 board members"
@@ -74,7 +79,7 @@ export class ActionExecutionPromptBuilder extends BasePromptBuilder<string, Acti
         },
         agent: {
           type: 'string',
-          enum: ['email', 'calendar', 'contact'],
+          enum: ['email', 'calendar', 'contact', 'slack'],
           description: 'Agent to send request to'
         },
         request: {

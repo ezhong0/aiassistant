@@ -243,18 +243,25 @@ export abstract class BaseSubAgent {
   protected async assessIntent(request: string, context: AgentExecutionContext): Promise<string> {
     const systemPrompt = this.getSystemPrompt();
     const userPrompt = `
-Analyze this request and create an execution plan:
+Analyze this Master Agent request and plan tool execution:
 
-REQUEST: ${request}
+MASTER AGENT REQUEST: ${request}
 USER_ID: ${context.userId || 'unknown'}
 
-Create a SimpleContext with:
-- REQUEST: The original request
-- TOOLS: List of tools needed (comma-separated)
-- PARAMS: Basic parameters needed
-- STATUS: Planning
-- RESULT: (empty for now)
-- NOTES: Brief context about what needs to be done
+Create a SimpleContext following this format:
+REQUEST: [What the Master Agent is asking for]
+TOOLS: [Specific tools needed, comma-separated]
+PARAMS: [Concrete parameters for tool calls]
+STATUS: Planning
+RESULT: [Empty for now]
+NOTES: [Risk level and execution strategy]
+
+Intent Assessment Guidelines:
+- Extract the core action being requested by Master Agent
+- Map request to specific domain tools with concrete parameters
+- Assess risk level (low/medium/high) based on operation type
+- Plan tool execution sequence (gather info before acting)
+ - Respect SINGLE MESSAGE INTERFACE: you will not ask follow-up questions. Make intelligent assumptions.
 
 Available tools: ${this.getAvailableTools().join(', ')}
     `;
@@ -282,17 +289,31 @@ Available tools: ${this.getAvailableTools().join(', ')}
 
       const systemPrompt = this.getSystemPrompt();
       const userPrompt = `
-Execute tools based on the current context:
+Execute tools for this SubAgent workflow iteration:
 
 CURRENT_CONTEXT:
 ${currentContext}
 
 USER_ID: ${context.userId || 'unknown'}
 
-Execute the needed tools and update the context. Set needsMoreWork to true if you need another iteration.
-Available tools: ${this.getAvailableTools().join(', ')}
+Tool Execution Guidelines:
+- Execute tools in logical order (validation before action)
+- Handle tool errors gracefully with specific error types
+- Update context with tool results and any new information
+- Set needsMoreWork to true only if more iterations are essential
 
-Tool execution iteration: ${iteration}/${maxIterations}
+Error Handling Patterns:
+- Authentication Error → Log error, set needsMoreWork to false
+- Parameter Error → Log error, include in response
+- Rate Limit → Note for retry, set needsMoreWork to true
+- Permission Error → Clear error in response
+
+Available tools: ${this.getAvailableTools().join(', ')}
+Iteration: ${iteration}/${maxIterations}
+Decision Policy:
+- Do not request user input; make reasonable assumptions within domain rules
+- If a tool error is permanent, stop further tool calls and reflect failure clearly
+- Prefer fewer, high-confidence tool calls over speculative actions
       `;
 
       const prompt: AIPrompt = {
@@ -335,13 +356,26 @@ Tool execution iteration: ${iteration}/${maxIterations}
   protected async formatResponse(workflowContext: string, context: AgentExecutionContext): Promise<SubAgentResponse> {
     const systemPrompt = this.getSystemPrompt();
     const userPrompt = `
-Format the final response based on the completed workflow:
+Format the final SubAgent response for the Master Agent:
 
 FINAL_CONTEXT:
 ${workflowContext}
 
-Create a natural language summary and structured metadata.
-Focus on what was accomplished and any important results.
+Response Formatting Guidelines:
+- Create natural language summary of what was accomplished
+- Include structured data from tool execution results
+- Specify tools that were successfully used
+- Report any errors or limitations clearly
+- Set success flag appropriately
+
+Master Agent Integration:
+- Summary should be human-readable and actionable
+- Metadata should include all relevant tool execution data
+- Error messages should be clear and help Master Agent decide next steps
+- Response should be complete - no follow-up questions allowed
+Tone & Style:
+- Be concise, functional, and specific
+- Prefer declarative summaries over step-by-step narration
     `;
 
     const prompt: AIPrompt = {

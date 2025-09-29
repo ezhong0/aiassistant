@@ -6,9 +6,18 @@ import { GenericAIService, AIPrompt, AIResponse, StructuredSchema, BaseAIRespons
  * All responses must include an updated context
  */
 export abstract class BasePromptBuilder<TContext = string, TResult extends BaseAIResponse = BaseAIResponse> {
-  // Simple context format - just a text box
+  // Master Agent Context Format - aligned with design document
   protected readonly CONTEXT_FORMAT = `
-Context: [Free-form text describing the current state, progress, and any relevant information]`;
+Context Structure (update as workflow progresses):
+GOAL: [Primary user intent and desired outcome]
+ENTITIES: [People, companies, meetings, emails referenced]
+CONSTRAINTS: [Time limits, approval requirements, risk factors]
+DATA: [Information gathered from domain agents]
+PROGRESS: [Actions completed, decisions made]
+BLOCKERS: [Current issues preventing progress]
+NEXT: [Immediate next action in workflow]
+
+Free-form Notes: [Additional context, reasoning, edge cases]`;
 
   constructor(protected aiService: GenericAIService) {}
 
