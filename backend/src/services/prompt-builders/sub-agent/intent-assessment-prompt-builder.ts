@@ -2,13 +2,20 @@ import { BaseSubAgentPromptBuilder, SubAgentContext, BaseSubAgentResponse } from
 import { AIPrompt, StructuredSchema } from '../../generic-ai.service';
 
 /**
+ * Concrete tool call definition
+ */
+export interface ToolCall {
+  tool: string;
+  params: any;
+  description: string;
+}
+
+/**
  * Result of intent assessment phase
  */
 export interface IntentAssessmentResponse extends BaseSubAgentResponse {
   context: string; // JSON stringified SubAgentContext with intent analysis
-  riskLevel: 'low' | 'medium' | 'high';
-  expectedResponseFormat: string; // What format Master Agent expects
-  successCriteria: string; // How to determine if request is fulfilled
+  toolCalls: ToolCall[]; // List of concrete tool calls to execute
 }
 
 /**
@@ -28,27 +35,22 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
         
         Your task is to:
         1. Parse the specific request from Master Agent
-        2. Identify the expected response format
-        3. Determine success criteria for the operation
-        4. Assess risk level for the operation
-        5. Plan tool execution sequence
+        2. Create concrete tool calls with specific parameters
+        3. Plan tool execution sequence
+        4. Update context with intent analysis
         
         Intent Analysis Guidelines:
         - Extract the core action being requested
         - Identify all required parameters and entities
-        - Determine what constitutes successful completion
-        - Assess potential risks and constraints
+        - Map the request to specific domain tools
+        - Create concrete tool calls with all necessary parameters
         
-        Risk Assessment:
-        - Low Risk: Read-only operations, internal data access, simple retrievals
-        - Medium Risk: Single recipient communications, personal calendar events, controlled modifications
-        - High Risk: External communications, bulk operations, public events, data exports
-        
-        Tool Planning:
-        - Map request to specific domain tools
-        - Determine optimal tool call sequence
-        - Identify required parameters for each tool
-        - Plan error handling approach
+        Tool Call Creation Guidelines:
+        - Each tool call should be specific and actionable
+        - Include all required parameters for each tool
+        - Tool calls should be in logical order (gather info before acting)
+        - Provide clear descriptions for each tool call
+        - Consider validation and error handling tools
         
         ${this.SUB_AGENT_CONTEXT_FORMAT}
         
@@ -56,13 +58,13 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
         ${this.getDomainGuidelines()}
       `,
       userPrompt: `
-        Analyze this Master Agent request and plan the execution:
+        Analyze this Master Agent request and create concrete tool calls:
         
         REQUEST: ${context.request}
-        CURRENT TOOLS: ${context.tools.join(', ')}
+        AVAILABLE TOOLS: ${context.tools.join(', ')}
         CURRENT STATUS: ${context.status}
         
-        Provide intent assessment and execution plan.
+        Create specific tool calls with parameters to fulfill this request.
       `,
       context
     };
@@ -71,36 +73,27 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
   getSchema(): StructuredSchema {
     return {
       type: 'object',
-      description: 'Intent assessment result with execution plan',
+      description: 'Intent assessment result with concrete tool calls',
       properties: {
         context: {
-          type: 'object',
-          description: 'Updated context with intent analysis and execution plan',
-          properties: {
-            request: { type: 'string' },
-            tools: { type: 'array', items: { type: 'string' } },
-            params: { type: 'object' },
-            status: { type: 'string', enum: ['planning', 'executing', 'complete', 'failed'] },
-            result: { type: 'object' },
-            notes: { type: 'string' }
+          type: 'string',
+          description: 'JSON stringified SubAgentContext with intent analysis and execution plan'
+        },
+        toolCalls: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              tool: { type: 'string', description: 'Name of the tool to call' },
+              params: { type: 'object', description: 'Parameters for the tool call' },
+              description: { type: 'string', description: 'Description of what this tool call does' }
+            },
+            required: ['tool', 'params', 'description']
           },
-          required: ['request', 'tools', 'params', 'status', 'result', 'notes']
-        },
-        riskLevel: {
-          type: 'string',
-          enum: ['low', 'medium', 'high'],
-          description: 'Risk assessment of the operation'
-        },
-        expectedResponseFormat: {
-          type: 'string',
-          description: 'What response format Master Agent expects (data, confirmation, summary, etc.)'
-        },
-        successCriteria: {
-          type: 'string',
-          description: 'How to determine if the request is successfully fulfilled'
+          description: 'List of concrete tool calls with parameters to execute'
         }
       },
-      required: ['context', 'riskLevel', 'expectedResponseFormat', 'successCriteria']
+      required: ['context', 'toolCalls']
     };
   }
 
