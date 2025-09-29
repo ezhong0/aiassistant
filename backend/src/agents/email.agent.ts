@@ -1,43 +1,175 @@
 /**
- * Email Agent - Boilerplate implementation
+ * Email SubAgent - Email management using BaseSubAgent architecture
  * 
- * This is a placeholder agent that takes input and returns empty output.
- * It will be replaced with proper implementation later.
+ * Implements the Generic SubAgent design pattern for email operations:
+ * - 3-phase workflow (Intent Assessment, Tool Execution, Response Formatting)
+ * - Direct integration with EmailDomainService
+ * - Natural language interface
+ * - Tool-to-service mapping
  */
 
-export interface EmailResult {
-  success: boolean;
-  message?: string;
-  data?: any;
-}
+import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
+import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
+import { IEmailDomainService, IDomainService } from '../services/domain/interfaces/domain-service.interfaces';
 
-export class EmailAgent {
+export class EmailAgent extends BaseSubAgent {
+  private emailService: IEmailDomainService;
+
+  constructor() {
+    super('email', {
+      name: 'EmailSubAgent',
+      description: 'Email management sub-agent for sending, searching, and managing emails',
+      enabled: true,
+      timeout: 30000,
+      retryCount: 3
+    });
+
+    // Get existing domain service from container
+    this.emailService = DomainServiceResolver.getEmailService();
+  }
+
   /**
-   * Process email request
+   * Get domain-specific system prompt
    */
-  async processRequest(input: string, userId?: string): Promise<EmailResult> {
-    // Boilerplate implementation - returns empty result
+  protected getSystemPrompt(): string {
+    return `
+You are an email management sub-agent specialized in Gmail operations.
+
+Available tools:
+- send_email: Send emails with rich formatting, attachments, and proper addressing
+- search_emails: Search emails with advanced query capabilities and filtering
+- get_email: Retrieve detailed email content including attachments and threads
+- reply_to_email: Reply to specific emails maintaining conversation context
+- get_email_thread: Get entire conversation threads for context
+
+Your job is to help users manage their email communications effectively by:
+1. Composing clear, professional emails with proper formatting
+2. Finding specific emails using intelligent search queries
+3. Managing email threads and conversations
+4. Handling attachments and rich content
+5. Providing clear summaries of email operations
+
+Always extract userId from parameters and handle email addresses properly.
+Focus on creating user-friendly email experiences with proper etiquette.
+Be helpful but respectful of privacy and email best practices.
+    `;
+  }
+
+  /**
+   * Tool-to-service method mapping
+   */
+  protected getToolToServiceMap(): Record<string, string> {
     return {
-      success: true,
-      message: 'Email agent is not yet implemented',
-      data: {
-        input,
-        userId,
-        timestamp: new Date().toISOString()
-      }
+      'send_email': 'sendEmail',
+      'search_emails': 'searchEmails',
+      'get_email': 'getEmail',
+      'reply_to_email': 'replyToEmail',
+      'get_email_thread': 'getEmailThread'
     };
   }
 
   /**
-   * Get agent health status
+   * Get the email domain service
    */
-  getHealth(): { healthy: boolean; details?: any } {
-    return {
-      healthy: true,
-      details: {
-        status: 'boilerplate',
-        message: 'Email agent is a placeholder'
+  protected getService(): IDomainService {
+    return this.emailService;
+  }
+
+  /**
+   * Execute tool call by mapping to email service method
+   */
+  protected async executeToolCall(toolName: string, params: any): Promise<any> {
+    const serviceMethod = this.getToolToServiceMap()[toolName];
+    if (!serviceMethod) {
+      throw new Error(`Unknown email tool: ${toolName}`);
+    }
+
+    const { userId, ...serviceParams } = params;
+    if (!userId) {
+      throw new Error('userId is required for email operations');
+    }
+
+    // TypeScript will enforce that service[serviceMethod] exists
+    const service = this.getService() as IEmailDomainService;
+    
+    try {
+      // Handle different method signatures
+      switch (toolName) {
+        case 'get_email':
+          // getEmail only needs messageId, no userId required
+          return await service.getEmail(serviceParams.messageId);
+        case 'reply_to_email':
+          // replyToEmail has different signature
+          return await service.replyToEmail(serviceParams);
+        case 'get_email_thread':
+          // getEmailThread only needs threadId
+          return await service.getEmailThread(serviceParams.threadId);
+        default:
+          // Most methods follow the pattern: method(userId, params)
+          return await (service as any)[serviceMethod](userId, serviceParams);
       }
+    } catch (error) {
+      throw new Error(`Email ${toolName} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get agent capabilities for discovery
+   */
+  getCapabilityDescription(): AgentCapabilities {
+    return {
+      name: 'EmailSubAgent',
+      description: 'Comprehensive email management including sending, searching, and conversation handling',
+      operations: [
+        'send_email',
+        'search_emails',
+        'get_email',
+        'reply_to_email',
+        'get_email_thread'
+      ],
+      requiresAuth: true,
+      requiresConfirmation: true, // Email operations need confirmation
+      isCritical: true, // Email operations are critical
+      examples: [
+        'Send an email to John about the project meeting',
+        'Search for emails from Sarah about budget',
+        'Reply to the latest email in my inbox',
+        'Find all emails with attachments from last week',
+        'Get the full conversation thread about the proposal'
+      ]
     };
+  }
+
+  // Legacy compatibility methods for existing code
+  /**
+   * Process email request (legacy compatibility)
+   */
+  async processRequest(input: string, userId?: string): Promise<{
+    success: boolean;
+    message?: string;
+    data?: any;
+  }> {
+    try {
+      const context = {
+        sessionId: `legacy-${Date.now()}`,
+        userId,
+        correlationId: `email-legacy-${Date.now()}`,
+        timestamp: new Date()
+      };
+
+      const result = await this.processNaturalLanguageRequest(input, context);
+      
+      return {
+        success: result.success,
+        message: result.message,
+        data: result.metadata
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Email operation failed',
+        data: { error: error instanceof Error ? error.message : 'Unknown error' }
+      };
+    }
   }
 }
