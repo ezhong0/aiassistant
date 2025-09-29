@@ -38,7 +38,7 @@ export class AIDomainService extends BaseService implements IAIDomainService {
       // Get OpenAI API client
       this.openaiClient = await getAPIClient<OpenAIClient>('openai');
 
-      // Authenticate with OpenAI API key
+      // Authenticate with OpenAI API key (skip assertReady check during init)
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         throw new Error('OPENAI_API_KEY environment variable is required');
@@ -49,7 +49,18 @@ export class AIDomainService extends BaseService implements IAIDomainService {
         apiKeyLength: apiKey.length
       });
 
-      await this.authenticate(apiKey);
+      // Authenticate directly without assertReady check during initialization
+      if (!this.openaiClient) {
+        throw new Error('OpenAI client not available');
+      }
+
+      const credentials = {
+        type: 'api_key' as const,
+        apiKey
+      };
+
+      await this.openaiClient.authenticate(credentials);
+      this.logInfo('AI service authenticated successfully');
 
       this.logInfo('AI Domain Service initialized successfully');
     } catch (error) {
