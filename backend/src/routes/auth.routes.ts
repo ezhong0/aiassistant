@@ -32,7 +32,8 @@ import {
   validateMobileTokenExchange,
 } from '../middleware/validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
-// SlackOAuthService replaced by OAuth managers
+// Use centralized OAuth scopes and service factory
+import { OAUTH_SCOPES } from '../constants/oauth-scopes';
 
 const router = express.Router();
 
@@ -53,49 +54,41 @@ const debugQuerySchema = z.object({
 const emptyQuerySchema = z.object({});
 const emptyBodySchema = z.object({});
 
-
 /**
  * GET /auth/google/slack
  * Initiate Google OAuth flow specifically for Slack users
+ * Now using centralized OAuth scopes
  */
-router.get('/google/slack', 
-  authRateLimit, 
+router.get('/google/slack',
+  authRateLimit,
   validateRequest({ query: debugQuerySchema }),
   (req: Request, res: Response) => {
   try {
     const { user_id, team_id } = req.query;
 
-    const scopes = [
-      'openid',
-      'email',
-      'profile',
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/contacts.readonly',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
-    ];
-    
+    // Use centralized scope management
+    const scopes = [...OAUTH_SCOPES.GOOGLE.SLACK_INTEGRATION];
+
     const authService = getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
-    
+
     // Add slack context to state parameter
     const state = JSON.stringify({
       source: 'slack',
       user_id: user_id || 'unknown',
       team_id: team_id || 'unknown'
     });
-    
+
     const authUrl = authService.generateAuthUrl(scopes, state);
-    
+
     const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
     logger.info('Generated Google OAuth URL for Slack user authentication', {
       ...logContext,
-      metadata: { user_id, team_id }
+      metadata: { user_id, team_id, scopesUsed: 'SLACK_INTEGRATION' }
     });
-    
+
     return res.redirect(authUrl);
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
@@ -115,32 +108,29 @@ router.get('/google/slack',
 
 /**
  * GET /auth/google
- * Initiate Google OAuth flow
+ * Initiate Google OAuth flow - now using centralized scopes
  */
-router.get('/google', 
-  authRateLimit, 
+router.get('/google',
+  authRateLimit,
   validateRequest({ query: debugQuerySchema }),
   (req: Request, res: Response) => {
   try {
-    const scopes = [
-      'openid',
-      'email',
-      'profile',
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/contacts.readonly',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
-    ];
+    // Use centralized scope management
+    const scopes = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
+
     const authService = getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
+
     const authUrl = authService.generateAuthUrl(scopes);
-    
+
     const logContext = createLogContext(req, { operation: 'google_oauth_init' });
-    logger.info('Generated Google OAuth URL for user authentication', logContext);
-    
+    logger.info('Generated Google OAuth URL for user authentication', {
+      ...logContext,
+      metadata: { scopesUsed: 'FULL_ACCESS' }
+    });
+
     return res.redirect(authUrl);
   } catch (error) {
     const logContext = createLogContext(req, { operation: 'google_oauth_init' });

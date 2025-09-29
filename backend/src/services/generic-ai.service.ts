@@ -112,28 +112,10 @@ export class GenericAIService extends BaseService {
     const startTime = Date.now();
     const requestId = `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // CENTRALIZED AI PROMPT LOGGING - Input
-    this.logInfo('AI_PROMPT_INPUT', {
-      correlationId: requestId,
-      operation: 'ai_prompt_execution',
-      service: this.name,
-      timestamp: new Date().toISOString(),
-      prompt: {
-        systemPrompt: prompt.systemPrompt?.substring(0, 500) + (prompt.systemPrompt?.length > 500 ? '...[TRUNCATED]' : ''),
-        userPrompt: prompt.userPrompt.substring(0, 500) + (prompt.userPrompt.length > 500 ? '...[TRUNCATED]' : ''),
-        context: prompt.context ? JSON.stringify(prompt.context).substring(0, 1000) + (JSON.stringify(prompt.context).length > 1000 ? '...[TRUNCATED]' : '') : undefined,
-        options: {
-          temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
-          maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
-          model: prompt.options?.model ?? this.config.MODEL
-        }
-      },
-      schema: {
-        type: schema.type,
-        description: schema.description || 'custom schema',
-        required: schema.required,
-        propertiesCount: Object.keys(schema.properties).length
-      }
+    this.logInfo('Executing AI prompt', {
+      requestId,
+      schemaType: schema.type,
+      temperature: prompt.options?.temperature ?? this.config.TEMPERATURE
     });
 
     try {
@@ -187,25 +169,10 @@ export class GenericAIService extends BaseService {
         }
       };
 
-      // CENTRALIZED AI PROMPT LOGGING - Output on Success
-      this.logInfo('AI_PROMPT_OUTPUT_SUCCESS', {
-        correlationId: requestId,
-        operation: 'ai_prompt_execution_success',
-        service: this.name,
-        timestamp: new Date().toISOString(),
-        response: {
-          content: response.substring(0, 1000) + (response.length > 1000 ? '...[TRUNCATED]' : ''),
-          context: result.context?.substring(0, 500) + (result.context && result.context.length > 500 ? '...[TRUNCATED]' : ''),
-          parsedDataType: typeof parsed,
-          parsedKeys: parsed && typeof parsed === 'object' ? Object.keys(parsed as any) : []
-        },
-        metadata: {
-          model: result.metadata.model,
-          tokens: result.metadata.tokens,
-          processingTime: result.metadata.processingTime,
-          success: result.metadata.success
-        },
-        schema: schema.description || 'custom schema'
+      this.logInfo('AI prompt completed successfully', {
+        requestId,
+        processingTime: Date.now() - startTime,
+        model: result.metadata.model
       });
 
       return result;

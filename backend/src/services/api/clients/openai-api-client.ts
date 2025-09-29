@@ -92,10 +92,9 @@ export class OpenAIClient extends BaseAPIClient {
       // Parse OpenAI API method from endpoint
       const method = this.getOpenAIMethodFromEndpoint(request.endpoint);
       
-      this.logDebug('Making OpenAI API request', {
+      this.logInfo('Making OpenAI API request', {
         requestId,
-        endpoint: request.endpoint,
-        method: request.method
+        endpoint: request.endpoint
       });
 
       // Execute the request
