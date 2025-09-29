@@ -7,7 +7,6 @@ import { GenericAIService } from '../../generic-ai.service';
 import { IntentAssessmentPromptBuilder, ToolCall } from './intent-assessment-prompt-builder';
 import { PlanReviewPromptBuilder } from './plan-review-prompt-builder';
 import { ResponseFormattingPromptBuilder } from './response-formatting-prompt-builder';
-import { SubAgentContext } from '../sub-agent-base-prompt-builder';
 
 /**
  * Example: Email Sub-Agent using 3-phase prompt builders
@@ -29,14 +28,10 @@ export class EmailSubAgentExample {
    */
   async execute(request: string): Promise<any> {
     // Phase 1: Intent Assessment
-    const initialContext: SubAgentContext = {
-      request,
-      tools: ['gmail_send_email', 'gmail_get_delivery_status'], // Available tools
-      params: {},
-      status: 'planning',
-      result: {},
-      notes: 'Starting intent assessment'
-    };
+    const initialContext = `Request: ${request}
+Available tools: gmail_send_email, gmail_get_delivery_status
+Status: planning
+Notes: Starting intent assessment`;
 
     const intentResult = await this.intentAssessmentBuilder.execute(initialContext);
     console.log('Phase 1 - Intent Assessment:', intentResult.parsed);
@@ -51,24 +46,22 @@ export class EmailSubAgentExample {
       executionResults.push(result);
       
       // Phase 2: Plan Review after each tool execution
-      const reviewContext: SubAgentContext = JSON.parse(intentResult.parsed.context);
-      reviewContext.status = 'executing';
-      reviewContext.result = { ...reviewContext.result, [toolCall.tool]: result };
-      reviewContext.notes = `Executed ${toolCall.tool}: ${result.success ? 'success' : 'failed'}`;
+      const reviewContext = `${intentResult.parsed.context}
+Tool executed: ${toolCall.tool}
+Result: ${JSON.stringify(result)}
+Status: executing`;
       
       const reviewResult = await this.planReviewBuilder.execute(reviewContext);
       console.log('Phase 2 - Plan Review:', reviewResult.parsed);
       
-      // Check if we should continue or exit early
-      if (!reviewResult.parsed.shouldContinue) {
-        break;
-      }
+      // Update context with the new steps
+      // The sub-agent implementation would decide whether to continue based on the updated steps
     }
 
     // Phase 3: Response Formatting
-    const finalContext: SubAgentContext = JSON.parse(intentResult.parsed.context);
-    finalContext.status = 'complete';
-    finalContext.result = { toolResults: executionResults };
+    const finalContext = `${intentResult.parsed.context}
+Tool results: ${JSON.stringify(executionResults)}
+Status: complete`;
     
     const formattingResult = await this.responseFormattingBuilder.execute(finalContext);
     console.log('Phase 3 - Response Formatting:', formattingResult.parsed);
@@ -110,14 +103,10 @@ export class CalendarSubAgentExample {
    */
   async execute(request: string): Promise<any> {
     // Phase 1: Intent Assessment
-    const initialContext: SubAgentContext = {
-      request,
-      tools: ['calendar_create_event', 'calendar_check_availability'], // Available tools
-      params: {},
-      status: 'planning',
-      result: {},
-      notes: 'Starting intent assessment'
-    };
+    const initialContext = `Request: ${request}
+Available tools: calendar_create_event, calendar_check_availability
+Status: planning
+Notes: Starting intent assessment`;
 
     const intentResult = await this.intentAssessmentBuilder.execute(initialContext);
     
@@ -130,22 +119,21 @@ export class CalendarSubAgentExample {
       executionResults.push(result);
       
       // Phase 2: Plan Review after each tool execution
-      const reviewContext: SubAgentContext = JSON.parse(intentResult.parsed.context);
-      reviewContext.status = 'executing';
-      reviewContext.result = { ...reviewContext.result, [toolCall.tool]: result };
-      reviewContext.notes = `Executed ${toolCall.tool}: ${result.success ? 'success' : 'failed'}`;
+      const reviewContext = `${intentResult.parsed.context}
+Tool executed: ${toolCall.tool}
+Result: ${JSON.stringify(result)}
+Status: executing`;
       
       const reviewResult = await this.planReviewBuilder.execute(reviewContext);
       
-      if (!reviewResult.parsed.shouldContinue) {
-        break;
-      }
+      // Update context with the new steps
+      // The sub-agent implementation would decide whether to continue based on the updated steps
     }
 
     // Phase 3: Response Formatting
-    const finalContext: SubAgentContext = JSON.parse(intentResult.parsed.context);
-    finalContext.status = 'complete';
-    finalContext.result = { toolResults: executionResults };
+    const finalContext = `${intentResult.parsed.context}
+Tool results: ${JSON.stringify(executionResults)}
+Status: complete`;
     
     const formattingResult = await this.responseFormattingBuilder.execute(finalContext);
     

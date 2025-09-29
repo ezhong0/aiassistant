@@ -1,4 +1,4 @@
-import { BaseSubAgentPromptBuilder, SubAgentContext, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
+import { BaseSubAgentPromptBuilder, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
 import { AIPrompt, StructuredSchema } from '../../generic-ai.service';
 
 /**
@@ -14,8 +14,8 @@ export interface SubAgentResponse {
  * Result of response formatting phase
  */
 export interface ResponseFormattingResponse extends BaseSubAgentResponse {
-  context: string; // JSON stringified SubAgentContext (final updated context)
-  response: SubAgentResponse; // Formatted response for Master Agent
+  context: string; // Free-form text context (final updated context)
+  response: SubAgentResponse; // The actual response to return to Master Agent
 }
 
 /**
@@ -28,7 +28,7 @@ export class ResponseFormattingPromptBuilder extends BaseSubAgentPromptBuilder<R
     return 'Formats tool execution results into structured response for Master Agent';
   }
 
-  buildPrompt(context: SubAgentContext): AIPrompt<SubAgentContext> {
+  buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `
         You are a ${this.domain} sub-agent that formats execution results into a structured response for the Master Agent.
@@ -65,11 +65,7 @@ export class ResponseFormattingPromptBuilder extends BaseSubAgentPromptBuilder<R
       userPrompt: `
         Format the execution results into a simple response for Master Agent:
         
-        REQUEST: ${context.request}
-        EXECUTION STATUS: ${context.status}
-        TOOLS EXECUTED: ${context.tools.join(', ')}
-        RESULTS: ${JSON.stringify(context.result, null, 2)}
-        EXECUTION NOTES: ${context.notes}
+        ${context}
         
         Create a clear summary of what was accomplished and whether the request was successful.
       `,
@@ -84,11 +80,11 @@ export class ResponseFormattingPromptBuilder extends BaseSubAgentPromptBuilder<R
       properties: {
         context: {
           type: 'string',
-          description: 'JSON stringified SubAgentContext (final updated context)'
+          description: 'Free-form text context (final updated context)'
         },
         response: {
           type: 'object',
-          description: 'Simple response for Master Agent',
+          description: 'The actual response to return to Master Agent',
           properties: {
             success: { 
               type: 'boolean',

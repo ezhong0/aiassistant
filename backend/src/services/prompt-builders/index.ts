@@ -9,4 +9,4 @@ export * from './main-agent';
 export * from './sub-agent';
 
 // Base Types
-export type { SubAgentContext, BaseSubAgentResponse } from './sub-agent-base-prompt-builder';
+export type { BaseSubAgentResponse } from './sub-agent-base-prompt-builder';

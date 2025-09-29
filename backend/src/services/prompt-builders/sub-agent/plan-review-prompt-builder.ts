@@ -1,4 +1,4 @@
-import { BaseSubAgentPromptBuilder, SubAgentContext, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
+import { BaseSubAgentPromptBuilder, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
 import { AIPrompt, StructuredSchema } from '../../generic-ai.service';
 
 /**
@@ -16,10 +16,8 @@ export interface ToolExecutionResult {
  * Result of plan review phase
  */
 export interface PlanReviewResponse extends BaseSubAgentResponse {
-  context: string; // JSON stringified SubAgentContext with updated plan
+  context: string; // Free-form text context with updated plan
   steps: string[]; // Updated list of execution steps
-  shouldContinue: boolean; // Whether to continue execution or exit early
-  completedToolCalls: string[]; // Tools that have been successfully executed
 }
 
 /**
@@ -32,7 +30,7 @@ export class PlanReviewPromptBuilder extends BaseSubAgentPromptBuilder<PlanRevie
     return 'Reviews tool execution results and revises execution plan for sub-agent';
   }
 
-  buildPrompt(context: SubAgentContext): AIPrompt<SubAgentContext> {
+  buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `
         You are a ${this.domain} sub-agent that reviews tool execution results and revises the execution plan.
@@ -52,11 +50,10 @@ export class PlanReviewPromptBuilder extends BaseSubAgentPromptBuilder<PlanRevie
         - Assess if the remaining steps are still appropriate
         
         Decision Making:
-        - Continue: If more tools are needed to fulfill the request
-        - Exit Early: If the request is fully satisfied or cannot be completed
         - Revise Plan: If new information requires a different approach
         - Add Steps: If additional tools are needed based on results
         - Remove Steps: If some planned tools are no longer necessary
+        - Update Steps: Modify existing steps based on new information
         
         Context Updates:
         - Update RESULT with new information from tool execution
@@ -72,10 +69,7 @@ export class PlanReviewPromptBuilder extends BaseSubAgentPromptBuilder<PlanRevie
       userPrompt: `
         Review the tool execution results and revise the plan:
         
-        REQUEST: ${context.request}
-        CURRENT STATUS: ${context.status}
-        CURRENT RESULTS: ${JSON.stringify(context.result, null, 2)}
-        EXECUTION NOTES: ${context.notes}
+        ${context}
         
         Analyze the results and determine if the plan needs revision.
       `,
@@ -90,24 +84,15 @@ export class PlanReviewPromptBuilder extends BaseSubAgentPromptBuilder<PlanRevie
       properties: {
         context: {
           type: 'string',
-          description: 'JSON stringified SubAgentContext with updated plan and results'
+          description: 'Free-form text context with updated plan and results'
         },
         steps: {
           type: 'array',
           items: { type: 'string' },
           description: 'Updated list of execution steps (may be modified based on tool results)'
-        },
-        shouldContinue: {
-          type: 'boolean',
-          description: 'Whether to continue execution or exit early'
-        },
-        completedToolCalls: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'List of tools that have been successfully executed'
         }
       },
-      required: ['context', 'steps', 'shouldContinue', 'completedToolCalls']
+      required: ['context', 'steps']
     };
   }
 

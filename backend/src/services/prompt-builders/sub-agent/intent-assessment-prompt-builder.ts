@@ -1,4 +1,4 @@
-import { BaseSubAgentPromptBuilder, SubAgentContext, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
+import { BaseSubAgentPromptBuilder, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
 import { AIPrompt, StructuredSchema } from '../../generic-ai.service';
 
 /**
@@ -14,7 +14,7 @@ export interface ToolCall {
  * Result of intent assessment phase
  */
 export interface IntentAssessmentResponse extends BaseSubAgentResponse {
-  context: string; // JSON stringified SubAgentContext with intent analysis
+  context: string; // Free-form text context with intent analysis
   toolCalls: ToolCall[]; // List of concrete tool calls to execute
 }
 
@@ -28,7 +28,7 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
     return 'Assesses Master Agent intent and plans tool execution for sub-agent';
   }
 
-  buildPrompt(context: SubAgentContext): AIPrompt<SubAgentContext> {
+  buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `
         You are a ${this.domain} sub-agent that analyzes Master Agent requests to understand intent and plan execution.
@@ -60,9 +60,7 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
       userPrompt: `
         Analyze this Master Agent request and create concrete tool calls:
         
-        REQUEST: ${context.request}
-        AVAILABLE TOOLS: ${context.tools.join(', ')}
-        CURRENT STATUS: ${context.status}
+        ${context}
         
         Create specific tool calls with parameters to fulfill this request.
       `,
@@ -77,7 +75,7 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
       properties: {
         context: {
           type: 'string',
-          description: 'JSON stringified SubAgentContext with intent analysis and execution plan'
+          description: 'Free-form text context with intent analysis and execution plan'
         },
         toolCalls: {
           type: 'array',

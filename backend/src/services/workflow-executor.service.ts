@@ -15,7 +15,7 @@ import {
   EnvironmentCheckPromptBuilder,
   ActionExecutionPromptBuilder,
   ProgressAssessmentPromptBuilder
-} from './prompt-builders/prompts';
+} from './prompt-builders/main-agent';
 import { DomainServiceResolver } from './domain';
 
 /**

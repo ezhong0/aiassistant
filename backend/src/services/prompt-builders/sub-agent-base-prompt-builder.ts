@@ -2,51 +2,30 @@ import { BasePromptBuilder } from './base-prompt-builder';
 import { AIPrompt, StructuredSchema, BaseAIResponse } from '../../generic-ai.service';
 
 /**
- * Simple context structure for sub-agents (6 fields)
- */
-export interface SubAgentContext {
-  request: string;          // Original Master Agent request
-  tools: string[];          // Tools needed for execution
-  params: any;              // Parameters for tool calls
-  status: 'planning' | 'executing' | 'complete' | 'failed';
-  result: any;              // Collected tool results
-  notes: string;            // Brief execution notes
-}
-
-/**
  * Base response interface for sub-agents
  */
 export interface BaseSubAgentResponse extends BaseAIResponse {
-  context: string; // JSON stringified SubAgentContext
+  context: string; // Free-form text context
 }
 
 /**
  * Base class for sub-agent prompt builders
- * Uses simplified 6-field context structure instead of complex Master Agent context
+ * Uses simple string context like Master Agent
  */
 export abstract class BaseSubAgentPromptBuilder<TResult extends BaseSubAgentResponse = BaseSubAgentResponse> 
-  extends BasePromptBuilder<SubAgentContext, TResult> {
+  extends BasePromptBuilder<string, TResult> {
   
-  // Simplified context format for sub-agents
+  // Simple context format for sub-agents - just a text box
   protected readonly SUB_AGENT_CONTEXT_FORMAT = `
-Sub-Agent Context Format:
-REQUEST: [What Master Agent wants]
-TOOLS: [Tools needed for execution]
-PARAMS: [Parameters for tool calls]
-STATUS: [planning/executing/complete/failed]
-RESULT: [Data collected from tools]
-Notes: [Execution context and details]`;
+Context: [Free-form text describing the current state, progress, and any relevant information]`;
 
   constructor(protected aiService: any, protected domain: string) {
     super(aiService);
   }
 
-  protected validateContext(context: SubAgentContext): void {
-    if (!context.request || context.request.trim().length === 0) {
-      throw new Error('Request is required for sub-agent execution');
-    }
-    if (!context.tools || context.tools.length === 0) {
-      throw new Error('Tools array is required for sub-agent execution');
+  protected validateContext(context: string): void {
+    if (!context || context.trim().length === 0) {
+      throw new Error('Context is required for sub-agent execution');
     }
   }
 
@@ -54,6 +33,6 @@ Notes: [Execution context and details]`;
    * Get the updated context from the response
    */
   getContext(response: any): string {
-    return JSON.stringify(response.context);
+    return response.context;
   }
 }

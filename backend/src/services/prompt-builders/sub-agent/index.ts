@@ -9,4 +9,4 @@ export type { PlanReviewResponse, ToolExecutionResult } from './plan-review-prom
 export type { ResponseFormattingResponse, SubAgentResponse } from './response-formatting-prompt-builder';
 
 // Re-export base types from parent directory
-export type { SubAgentContext, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
+export type { BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
