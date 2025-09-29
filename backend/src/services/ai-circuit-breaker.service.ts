@@ -131,18 +131,14 @@ export class AIServiceCircuitBreaker implements IService {
       }
     }
 
-    if (!this.aiService || !this.aiService.isReady()) {
-      this.recordFailure();
-      throw new AIServiceUnavailableError(
-        '🤖 AI service is not available. Please check your configuration.',
-        'SERVICE_NOT_READY'
-      );
-    }
+    // For AI operations, check if AI service is available
+    // For other operations (like Slack API calls), allow execution without AI service
+    const hasAIService = this.aiService && this.aiService.isReady();
 
     try {
       // Execute with timeout
       const result = await this.withTimeout(
-        operation(this.aiService),
+        operation(hasAIService ? this.aiService : null),
         this.config.timeout
       );
 

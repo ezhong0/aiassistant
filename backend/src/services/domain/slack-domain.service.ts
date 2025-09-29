@@ -826,9 +826,47 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
    */
   private async handleMessageEvent(event: any, context: any): Promise<any> {
     try {
+      // Enhanced debugging for bot message detection
+      this.logInfo('Received message event - debugging', {
+        eventBotId: event.bot_id,
+        eventSubtype: event.subtype,
+        eventUserId: event.user,
+        contextUserId: context.userId,
+        messageText: (event.text || '').substring(0, 100),
+        fullEvent: JSON.stringify(event).substring(0, 500)
+      });
+
+      // Ignore bot messages to prevent infinite loops
+      // Check multiple conditions for bot detection
+      const isBotMessage = event.bot_id ||
+                          event.subtype === 'bot_message' ||
+                          event.user === 'U09C27B5W1Z' || // Bot user ID
+                          (event.text && event.text.includes('🤔 Processing your request')) ||
+                          (event.text && event.text.includes('I received your message and I\'m working on it!'));
+
+      if (isBotMessage) {
+        this.logInfo('🛑 IGNORING BOT MESSAGE to prevent infinite loop', {
+          reason: {
+            hasBotId: !!event.bot_id,
+            isBotSubtype: event.subtype === 'bot_message',
+            isBotUser: event.user === 'U09C27B5W1Z',
+            hasProcessingText: event.text && event.text.includes('🤔 Processing your request'),
+            hasWorkingText: event.text && event.text.includes('I received your message and I\'m working on it!')
+          },
+          eventBotId: event.bot_id,
+          eventSubtype: event.subtype,
+          eventUser: event.user,
+          channelId: context.channelId
+        });
+        return {
+          success: true,
+          message: 'Bot message ignored'
+        };
+      }
+
       const messageText = event.text || '';
-      
-      this.logInfo('Handling message event', {
+
+      this.logInfo('✅ PROCESSING USER MESSAGE', {
         messageText: messageText.substring(0, 100),
         userId: context.userId,
         channelId: context.channelId
@@ -844,18 +882,63 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         threadTs: event.thread_ts
       });
 
-      // TODO: Integrate with MasterAgent for actual processing
-      // For now, just send a placeholder response
-      await this.sendMessage(combinedUserId, {
-        channel: context.channelId,
-        text: "I received your message and I'm working on it!",
-        threadTs: event.thread_ts
-      });
+      // Process the message with MasterAgent (orchestrator only)
+      try {
+        const { MasterAgent } = await import('../../agents/master.agent');
+        const masterAgent = new MasterAgent();
 
-      return {
-        success: true,
-        message: 'Message processed successfully'
-      };
+        const slackContext = {
+          userId: context.userId,
+          channelId: context.channelId,
+          teamId: context.teamId,
+          isDirectMessage: true
+        };
+
+        this.logInfo('Starting MasterAgent orchestration', {
+          messageText: messageText.substring(0, 100),
+          userId: context.userId
+        });
+
+        // MasterAgent orchestrates subagents - doesn't do direct processing
+        const result = await masterAgent.processUserInput(
+          messageText,
+          context.channelId, // Use channel as session ID
+          combinedUserId,
+          slackContext
+        );
+
+        // Send the orchestrated response
+        await this.sendMessage(combinedUserId, {
+          channel: context.channelId,
+          text: result.message,
+          threadTs: event.thread_ts
+        });
+
+        this.logInfo('MasterAgent orchestration completed', {
+          success: result.success,
+          userId: context.userId,
+          processingTime: result.metadata?.processingTime
+        });
+
+        return {
+          success: true,
+          message: 'Message processed via MasterAgent orchestration'
+        };
+      } catch (processingError) {
+        this.logError('MasterAgent orchestration failed', processingError);
+
+        // Send error response to user
+        await this.sendMessage(combinedUserId, {
+          channel: context.channelId,
+          text: "Sorry, I encountered an error processing your request. Please try again.",
+          threadTs: event.thread_ts
+        });
+
+        return {
+          success: false,
+          message: 'MasterAgent orchestration failed'
+        };
+      }
     } catch (error) {
       this.logError('Failed to handle message event', error);
       throw error;

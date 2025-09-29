@@ -25,7 +25,7 @@ export class OpenAIClient extends BaseAPIClient {
   private openai: OpenAI | null = null;
 
   constructor(config: APIClientConfig) {
-    super('OpenAIClient', config);
+    super('OpenAIClient', config, true); // Enable circuit breaker for AI operations
   }
 
   /**

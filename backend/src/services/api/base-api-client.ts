@@ -53,22 +53,26 @@ import logger from '../../utils/logger';
 export abstract class BaseAPIClient extends BaseService {
   protected config: APIClientConfig;
   protected retryManager: typeof retryManager;
-  protected circuitBreaker: AIServiceCircuitBreaker;
+  protected circuitBreaker: AIServiceCircuitBreaker | null = null;
   protected authenticated: boolean = false;
   protected authCredentials: AuthCredentials | null = null;
+  protected requiresCircuitBreaker: boolean = false;
 
-  constructor(serviceName: string, config: APIClientConfig) {
+  constructor(serviceName: string, config: APIClientConfig, requiresCircuitBreaker: boolean = false) {
     super(serviceName);
     this.config = config;
     this.retryManager = retryManager;
-    
-    // Initialize circuit breaker for this API client
-    this.circuitBreaker = new AIServiceCircuitBreaker({
-      failureThreshold: config.circuitBreaker?.failureThreshold || 5,
-      recoveryTimeout: config.circuitBreaker?.recoveryTimeout || 60000,
-      successThreshold: config.circuitBreaker?.successThreshold || 3,
-      timeout: config.circuitBreaker?.timeout || 30000
-    });
+    this.requiresCircuitBreaker = requiresCircuitBreaker;
+
+    // Only initialize circuit breaker for AI operations
+    if (requiresCircuitBreaker) {
+      this.circuitBreaker = new AIServiceCircuitBreaker({
+        failureThreshold: config.circuitBreaker?.failureThreshold || 5,
+        recoveryTimeout: config.circuitBreaker?.recoveryTimeout || 60000,
+        successThreshold: config.circuitBreaker?.successThreshold || 3,
+        timeout: config.circuitBreaker?.timeout || 30000
+      });
+    }
   }
 
   /**
@@ -83,8 +87,10 @@ export abstract class BaseAPIClient extends BaseService {
         retryConfig: this.config.retry
       });
 
-      // Initialize circuit breaker
-      await this.circuitBreaker.initialize();
+      // Initialize circuit breaker if it exists
+      if (this.circuitBreaker) {
+        await this.circuitBreaker.initialize();
+      }
 
       this.logInfo('API client initialized successfully');
     } catch (error) {
@@ -98,13 +104,15 @@ export abstract class BaseAPIClient extends BaseService {
    */
   protected async onDestroy(): Promise<void> {
     try {
-      // Cleanup circuit breaker
-      await this.circuitBreaker.destroy();
-      
+      // Cleanup circuit breaker if it exists
+      if (this.circuitBreaker) {
+        await this.circuitBreaker.destroy();
+      }
+
       // Clear authentication
       this.authenticated = false;
       this.authCredentials = null;
-      
+
       this.logInfo('API client destroyed successfully');
     } catch (error) {
       this.logError('Error destroying API client', error);
@@ -188,10 +196,12 @@ export abstract class BaseAPIClient extends BaseService {
         serviceName: this.name
       });
 
-      // Execute request with circuit breaker protection
-      const response = await this.circuitBreaker.execute(async () => {
-        return this.executeRequestWithRetry<T>(request, requestId);
-      });
+      // Execute request with circuit breaker protection (only for AI operations)
+      const response = this.circuitBreaker
+        ? await this.circuitBreaker.execute(async () => {
+            return this.executeRequestWithRetry<T>(request, requestId);
+          })
+        : await this.executeRequestWithRetry<T>(request, requestId);
 
       const executionTime = Date.now() - startTime;
       
