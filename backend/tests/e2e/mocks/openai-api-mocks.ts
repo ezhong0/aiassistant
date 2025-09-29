@@ -48,7 +48,7 @@ export class OpenAiApiMocks {
             index: 0,
             message: {
               role: 'assistant',
-              content: null,
+              content: mockFunctionResponse ? JSON.stringify(mockFunctionResponse) : 'Mock response value for: ' + (messages[messages.length - 1]?.content || 'unknown request'),
               function_call: mockFunctionResponse
             },
             finish_reason: finishReason

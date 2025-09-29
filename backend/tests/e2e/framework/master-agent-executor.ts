@@ -312,10 +312,22 @@ export class MasterAgentExecutor {
       const mockManager = ApiMockManager.getInstance();
       const apiCallRecords = mockManager.getApiCallRecords();
 
+      logger.info('Capturing API calls for trace', {
+        operation: 'capture_api_calls',
+        totalRecords: apiCallRecords.length,
+        traceStartTime: this.currentTrace.startTime.toISOString()
+      });
+
       // Add new API calls to trace
       const newCalls = apiCallRecords.filter(call =>
         call.timestamp >= this.currentTrace!.startTime
       );
+
+      logger.info('Filtered API calls for trace', {
+        operation: 'filter_api_calls',
+        newCallsCount: newCalls.length,
+        totalRecords: apiCallRecords.length
+      });
 
       this.currentTrace.apiCalls.push(...newCalls.map(call => ({
         timestamp: call.timestamp,
@@ -345,6 +357,11 @@ export class MasterAgentExecutor {
           { duration: call.duration, success: call.response.success }
         );
       }
+
+      logger.info('API calls captured successfully', {
+        operation: 'api_calls_captured',
+        totalApiCalls: this.currentTrace.apiCalls.length
+      });
 
     } catch (error) {
       logger.warn('Failed to capture API calls', {
@@ -376,6 +393,15 @@ export class MasterAgentExecutor {
       totalIterations,
       averageIterationDuration
     };
+
+    logger.info('Performance metrics calculated', {
+      operation: 'calculate_performance_metrics',
+      totalApiCalls,
+      totalApiDuration,
+      averageApiCallDuration,
+      totalIterations,
+      averageIterationDuration
+    });
   }
 
   /**

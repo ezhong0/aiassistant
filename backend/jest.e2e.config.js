@@ -10,8 +10,7 @@ module.exports = {
   },
   
   testMatch: [
-    '**/tests/unit/**/*.(test|spec).(ts|tsx|js|jsx)',
-    '**/tests/**/*.test.(ts|tsx|js|jsx)'
+    '**/tests/e2e/**/*.(test|spec).(ts|tsx|js|jsx)'
   ],
   
   // Ignore problematic directories
@@ -23,8 +22,9 @@ module.exports = {
     '\\.broken\\.'
   ],
   
-  // setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'], // Removed
-  // globalSetup: '<rootDir>/tests/test-setup.ts', // Removed
+  // No setup files for component tests
+  setupFilesAfterEnv: [],
+  globalSetup: undefined,
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },

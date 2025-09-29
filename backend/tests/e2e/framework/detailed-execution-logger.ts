@@ -117,7 +117,10 @@ export class DetailedExecutionLogger {
    */
   logAPICall(clientName: string, endpoint: string, method: string, request: any, metadata?: any): void {
     const content = `${clientName} ${method.toUpperCase()} ${endpoint}`;
-    this.addEntry('api_call', content, { request, ...metadata });
+    this.addEntry('api_call', content, { 
+      request: this.sanitizeRequest(request), 
+      ...metadata 
+    });
   }
 
   /**
@@ -125,7 +128,10 @@ export class DetailedExecutionLogger {
    */
   logAPIResponse(clientName: string, endpoint: string, response: any, metadata?: any): void {
     const content = `${clientName} response for ${endpoint}`;
-    this.addEntry('api_response', content, { response, ...metadata });
+    this.addEntry('api_response', content, { 
+      response: this.sanitizeResponse(response), 
+      ...metadata 
+    });
   }
 
   /**
@@ -263,7 +269,15 @@ export class DetailedExecutionLogger {
         markdown += `**Metadata**:\n\`\`\`json\n${JSON.stringify(entry.metadata, null, 2)}\n\`\`\`\n\n`;
       }
 
-      markdown += `**Content**:\n\`\`\`\n${entry.content}\n\`\`\`\n\n`;
+      // Format content based on type
+      if (entry.type === 'api_call' || entry.type === 'api_response') {
+        markdown += `**Content**:\n\`\`\`\n${entry.content}\n\`\`\`\n\n`;
+      } else {
+        // For other types, format content more readably
+        const formattedContent = this.formatContentForDisplay(entry.content, entry.type);
+        markdown += `**Content**:\n${formattedContent}\n\n`;
+      }
+      
       markdown += `---\n\n`;
     }
 
@@ -284,6 +298,115 @@ export class DetailedExecutionLogger {
       'test_analysis': '📊'
     };
     return icons[type] || '📝';
+  }
+
+  /**
+   * Sanitize request data for human readability
+   */
+  private sanitizeRequest(request: any): any {
+    if (!request || typeof request !== 'object') {
+      return request;
+    }
+
+    const sanitized = { ...request };
+
+    // Remove or truncate large data fields
+    if (sanitized.data && typeof sanitized.data === 'object') {
+      sanitized.data = this.sanitizeData(sanitized.data);
+    }
+
+    // Truncate very long messages/content
+    if (sanitized.messages && Array.isArray(sanitized.messages)) {
+      sanitized.messages = sanitized.messages.map((msg: any) => {
+        if (msg.content && msg.content.length > 500) {
+          return { ...msg, content: msg.content.substring(0, 500) + '... [truncated]' };
+        }
+        return msg;
+      });
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Sanitize response data for human readability
+   */
+  private sanitizeResponse(response: any): any {
+    if (!response || typeof response !== 'object') {
+      return response;
+    }
+
+    const sanitized = { ...response };
+
+    // Remove or truncate large data fields
+    if (sanitized.data && typeof sanitized.data === 'object') {
+      sanitized.data = this.sanitizeData(sanitized.data);
+    }
+
+    // Truncate very long content
+    if (sanitized.choices && Array.isArray(sanitized.choices)) {
+      sanitized.choices = sanitized.choices.map((choice: any) => {
+        if (choice.message?.content && choice.message.content.length > 1000) {
+          return {
+            ...choice,
+            message: {
+              ...choice.message,
+              content: choice.message.content.substring(0, 1000) + '... [truncated]'
+            }
+          };
+        }
+        return choice;
+      });
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Sanitize nested data objects
+   */
+  private sanitizeData(data: any): any {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    const sanitized = { ...data };
+
+    // Truncate long strings
+    Object.keys(sanitized).forEach(key => {
+      if (typeof sanitized[key] === 'string' && sanitized[key].length > 1000) {
+        sanitized[key] = sanitized[key].substring(0, 1000) + '... [truncated]';
+      } else if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
+        sanitized[key] = this.sanitizeData(sanitized[key]);
+      }
+    });
+
+    return sanitized;
+  }
+
+  /**
+   * Format content for display based on type
+   */
+  private formatContentForDisplay(content: string, type: string): string {
+    if (!content) return '';
+
+    // For LLM outputs and final responses, format as text
+    if (type === 'llm_output' || type === 'final_response') {
+      return `\`\`\`\n${content}\n\`\`\``;
+    }
+
+    // For agent communication, format as a quote
+    if (type === 'agent_communication') {
+      return `> ${content}`;
+    }
+
+    // For test analysis, format as markdown
+    if (type === 'test_analysis') {
+      return content;
+    }
+
+    // Default formatting
+    return `\`\`\`\n${content}\n\`\`\``;
   }
 
   /**
