@@ -34,10 +34,23 @@ export class AIDomainService extends BaseService implements IAIDomainService {
   protected async onInitialize(): Promise<void> {
     try {
       this.logInfo('Initializing AI Domain Service');
-      
+
       // Get OpenAI API client
       this.openaiClient = await getAPIClient<OpenAIClient>('openai');
-      
+
+      // Authenticate with OpenAI API key
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        throw new Error('OPENAI_API_KEY environment variable is required');
+      }
+
+      this.logInfo('Authenticating with OpenAI API', {
+        hasApiKey: !!apiKey,
+        apiKeyLength: apiKey.length
+      });
+
+      await this.authenticate(apiKey);
+
       this.logInfo('AI Domain Service initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize AI Domain Service', error);
