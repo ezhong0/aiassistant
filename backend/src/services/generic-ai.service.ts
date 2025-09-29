@@ -110,6 +110,31 @@ export class GenericAIService extends BaseService {
     schema: StructuredSchema
   ): Promise<AIResponse<T>> {
     const startTime = Date.now();
+    const requestId = `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // CENTRALIZED AI PROMPT LOGGING - Input
+    logger.info('AI_PROMPT_INPUT', {
+      correlationId: requestId,
+      operation: 'ai_prompt_execution',
+      service: this.name,
+      timestamp: new Date().toISOString(),
+      prompt: {
+        systemPrompt: prompt.systemPrompt?.substring(0, 500) + (prompt.systemPrompt?.length > 500 ? '...[TRUNCATED]' : ''),
+        userPrompt: prompt.userPrompt.substring(0, 500) + (prompt.userPrompt.length > 500 ? '...[TRUNCATED]' : ''),
+        context: prompt.context ? JSON.stringify(prompt.context).substring(0, 1000) + (JSON.stringify(prompt.context).length > 1000 ? '...[TRUNCATED]' : '') : undefined,
+        options: {
+          temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
+          maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
+          model: prompt.options?.model ?? this.config.MODEL
+        }
+      },
+      schema: {
+        type: schema.type,
+        description: schema.description || 'custom schema',
+        required: schema.required,
+        propertiesCount: Object.keys(schema.properties).length
+      }
+    });
 
     try {
       if (!this.aiDomainService) {
@@ -117,6 +142,7 @@ export class GenericAIService extends BaseService {
       }
 
       this.logDebug('Executing structured AI prompt', {
+        requestId,
         schemaType: schema.type,
         propertiesCount: Object.keys(schema.properties).length,
         temperature: prompt.options?.temperature ?? this.config.TEMPERATURE
@@ -142,6 +168,7 @@ export class GenericAIService extends BaseService {
         parsed = structuredResponse as T;
       } catch (parseError) {
         this.logError('Failed to parse structured response', { 
+          requestId,
           error: parseError, 
           response: response.substring(0, 200) 
         });
@@ -160,16 +187,50 @@ export class GenericAIService extends BaseService {
         }
       };
 
-      this.logInfo('AI prompt executed successfully', {
-        processingTime: result.metadata.processingTime,
-        success: result.metadata.success,
+      // CENTRALIZED AI PROMPT LOGGING - Output on Success
+      logger.info('AI_PROMPT_OUTPUT_SUCCESS', {
+        correlationId: requestId,
+        operation: 'ai_prompt_execution_success',
+        service: this.name,
+        timestamp: new Date().toISOString(),
+        response: {
+          content: response.substring(0, 1000) + (response.length > 1000 ? '...[TRUNCATED]' : ''),
+          context: result.context?.substring(0, 500) + (result.context && result.context.length > 500 ? '...[TRUNCATED]' : ''),
+          parsedDataType: typeof parsed,
+          parsedKeys: parsed && typeof parsed === 'object' ? Object.keys(parsed as any) : []
+        },
+        metadata: {
+          model: result.metadata.model,
+          tokens: result.metadata.tokens,
+          processingTime: result.metadata.processingTime,
+          success: result.metadata.success
+        },
         schema: schema.description || 'custom schema'
       });
 
       return result;
 
     } catch (error) {
+      // CENTRALIZED AI PROMPT LOGGING - Output on Error
+      logger.error('AI_PROMPT_OUTPUT_ERROR', {
+        correlationId: requestId,
+        operation: 'ai_prompt_execution_error',
+        service: this.name,
+        timestamp: new Date().toISOString(),
+        error: {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          name: error instanceof Error ? error.name : 'Error',
+          stack: error instanceof Error ? error.stack : undefined
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          success: false
+        },
+        schema: schema.description || 'custom schema'
+      });
+
       this.logError('AI prompt execution failed', { 
+        requestId,
         error, 
         userPrompt: prompt.userPrompt.substring(0, 100),
         schema: schema.description || 'custom schema'

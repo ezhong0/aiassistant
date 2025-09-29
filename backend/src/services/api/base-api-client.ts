@@ -158,6 +158,28 @@ export abstract class BaseAPIClient extends BaseService {
     const startTime = Date.now();
     const requestId = this.generateRequestId();
     
+    // CENTRALIZED API CALL LOGGING - Input
+    logger.info('API_REQUEST_INPUT', {
+      correlationId: requestId,
+      operation: 'external_api_request',
+      service: this.name,
+      timestamp: new Date().toISOString(),
+      request: {
+        method: request.method,
+        endpoint: request.endpoint,
+        url: `${this.config.baseUrl}${request.endpoint}`,
+        query: request.query ? JSON.stringify(request.query) : undefined,
+        data: request.data ? JSON.stringify(request.data).substring(0, 2000) + (JSON.stringify(request.data).length > 2000 ? '...[TRUNCATED]' : '') : undefined,
+        headers: request.headers ? JSON.stringify(request.headers) : undefined,
+        requiresAuth: request.requiresAuth !== false
+      },
+      client: {
+        authenticated: this.authenticated,
+        baseUrl: this.config.baseUrl,
+        timeout: this.config.timeout
+      }
+    });
+    
     try {
       this.logDebug('Making API request', {
         requestId,
@@ -173,6 +195,30 @@ export abstract class BaseAPIClient extends BaseService {
 
       const executionTime = Date.now() - startTime;
       
+      // CENTRALIZED API CALL LOGGING - Output on Success
+      logger.info('API_REQUEST_OUTPUT_SUCCESS', {
+        correlationId: requestId,
+        operation: 'external_api_request_success',
+        service: this.name,
+        timestamp: new Date().toISOString(),
+        request: {
+          method: request.method,
+          endpoint: request.endpoint,
+          url: `${this.config.baseUrl}${request.endpoint}`
+        },
+        response: {
+          statusCode: response.statusCode,
+          headers: response.headers ? JSON.stringify(response.headers) : undefined,
+          data: response.data ? JSON.stringify(response.data).substring(0, 2000) + (JSON.stringify(response.data).length > 2000 ? '...[TRUNCATED]' : '') : undefined,
+          dataSize: response.data ? `${JSON.stringify(response.data).length} characters` : '0 characters'
+        },
+        metadata: {
+          executionTime,
+          requestId,
+          timestamp: response.metadata.timestamp
+        }
+      });
+      
       this.logInfo('API request completed successfully', {
         requestId,
         method: request.method,
@@ -185,6 +231,30 @@ export abstract class BaseAPIClient extends BaseService {
       return response;
     } catch (error) {
       const executionTime = Date.now() - startTime;
+      
+      // CENTRALIZED API CALL LOGGING - Output on Error
+      logger.error('API_REQUEST_OUTPUT_ERROR', {
+        correlationId: requestId,
+        operation: 'external_api_request_error',
+        service: this.name,
+        timestamp: new Date().toISOString(),
+        request: {
+          method: request.method,
+          endpoint: request.endpoint,
+          url: `${this.config.baseUrl}${request.endpoint}`
+        },
+        error: {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          name: error instanceof Error ? error.name : 'Error',
+          stack: error instanceof Error ? error.stack : undefined,
+          code: error instanceof Error && (error as any).code ? (error as any).code : undefined,
+          status: error instanceof Error && (error as any).status ? (error as any).status : undefined
+        },
+        metadata: {
+          executionTime,
+          authenticated: this.authenticated
+        }
+      });
       
       this.logError('API request failed', error, {
         requestId,
