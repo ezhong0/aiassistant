@@ -5,10 +5,12 @@
  * - 3-phase workflow (Intent Assessment, Tool Execution, Response Formatting)
  * - Direct integration with CalendarDomainService
  * - Natural language interface
- * - Tool-to-service mapping
+ * - Tool-to-service mapping using unified ToolRegistry
  */
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
+import { ToolRegistry } from '../framework/tool-registry';
+import { ToolExecutionContext } from '../framework/tool-execution';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import { ICalendarDomainService } from '../services/domain/interfaces/calendar-domain.interface';
@@ -29,21 +31,25 @@ export class CalendarAgent extends BaseSubAgent {
     this.calendarService = DomainServiceResolver.getCalendarService();
   }
 
+  /**
+   * Get available tools from the unified registry
+   */
+  protected getAvailableTools(): string[] {
+    return ToolRegistry.getToolNamesForDomain('calendar');
+  }
 
   /**
-   * Tool-to-service method mapping
+   * Tool-to-service method mapping using registry
    */
   protected getToolToServiceMap(): Record<string, string> {
-    return {
-      'create_event': 'createEvent',
-      'list_events': 'listEvents',
-      'get_event': 'getEvent',
-      'update_event': 'updateEvent',
-      'delete_event': 'deleteEvent',
-      'check_availability': 'checkAvailability',
-      'find_available_slots': 'findAvailableSlots',
-      'list_calendars': 'listCalendars'
-    };
+    const tools = ToolRegistry.getToolsForDomain('calendar');
+    const mapping: Record<string, string> = {};
+    
+    for (const tool of tools) {
+      mapping[tool.name] = tool.serviceMethod;
+    }
+    
+    return mapping;
   }
 
   /**
@@ -89,32 +95,20 @@ export class CalendarAgent extends BaseSubAgent {
   }
 
   /**
-   * Get agent capabilities for discovery
+   * Get agent capabilities for discovery using registry
    */
   getCapabilityDescription(): AgentCapabilities {
+    const tools = ToolRegistry.getToolsForDomain('calendar');
+    const examples = tools.flatMap(tool => tool.examples);
+    
     return {
       name: 'CalendarSubAgent',
       description: 'Comprehensive calendar management including event creation, scheduling, and availability checking',
-      operations: [
-        'create_event',
-        'list_events', 
-        'get_event',
-        'update_event',
-        'delete_event',
-        'check_availability',
-        'find_available_slots',
-        'list_calendars'
-      ],
+      operations: tools.map(tool => tool.name),
       requiresAuth: true,
-      requiresConfirmation: true, // Calendar operations often need confirmation
-      isCritical: false,
-      examples: [
-        'Create a meeting with John tomorrow at 2pm',
-        'Find available time slots for a 1-hour meeting this week',
-        'List all my events for next Monday',
-        'Check if I\'m available Friday afternoon',
-        'Update the project meeting to include Sarah'
-      ]
+      requiresConfirmation: tools.some(tool => tool.requiresConfirmation),
+      isCritical: tools.some(tool => tool.isCritical),
+      examples: examples.slice(0, 5) // Limit to 5 examples
     };
   }
 

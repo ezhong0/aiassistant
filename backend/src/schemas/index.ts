@@ -8,8 +8,6 @@ export * from './email.schemas';
 export * from './calendar.schemas';
 export * from './contact.schemas';
 export { 
-  ToolCallSchema,
-  ToolExecutionResultSchema,
   HealthCheckSchema,
   AuditEventSchema,
   CacheOperationSchema,
@@ -26,3 +24,10 @@ export {
   SlackWebhookEventSchema,
   SlackTokensSchema as SlackTokensValidationSchema
 } from './slack.schemas';
+
+// Tool execution schemas
+export { 
+  ToolCallSchema,
+  ToolResultSchema,
+  ToolExecutionContextSchema
+} from '../framework/tool-execution';

@@ -1,14 +1,9 @@
 import { BaseSubAgentPromptBuilder, BaseSubAgentResponse } from '../sub-agent-base-prompt-builder';
 import { AIPrompt, StructuredSchema } from '../../generic-ai.service';
+import { ToolRegistry } from '../../../framework/tool-registry';
+import { ToolCall } from '../../../framework/tool-execution';
 
-/**
- * Concrete tool call definition
- */
-export interface ToolCall {
-  tool: string;
-  params: any;
-  description: string;
-}
+// ToolCall interface moved to tool-execution.ts
 
 /**
  * Result of intent assessment phase
@@ -103,45 +98,7 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
   }
 
   private getToolDefinitions(): string {
-    switch (this.domain) {
-      case 'email':
-        return `
-          - send_email(to: string, subject: string, body: string, cc?: string[], bcc?: string[]): Send email to recipient
-          - search_emails(query: string, maxResults?: number): Search emails with query
-          - reply_to_email(messageId: string, reply: string): Reply to specific email
-          - get_email(messageId: string): Get specific email by ID
-          - get_email_thread(threadId: string): Get email thread by ID
-        `;
-      case 'calendar':
-        return `
-          - create_event(title: string, start: string, end: string, attendees?: string[]): Create calendar event
-          - get_events(start: string, end: string): Get events in date range
-          - update_event(eventId: string, updates: object): Update existing event
-          - delete_event(eventId: string): Delete calendar event
-          - check_availability(attendees: string[], start: string, end: string): Check availability
-          - get_calendar_list(): Get list of available calendars
-        `;
-      case 'contacts':
-        return `
-          - search_contacts(query: string): Search contacts by name or email
-          - get_contact(contactId: string): Get specific contact by ID
-          - create_contact(name: string, email: string, phone?: string): Create new contact
-          - update_contact(contactId: string, updates: object): Update existing contact
-          - delete_contact(contactId: string): Delete contact
-          - get_contact_groups(): Get list of contact groups
-        `;
-      case 'slack':
-        return `
-          - send_message(channel: string, text: string): Send message to channel
-          - get_channel_history(channel: string, limit?: number): Get recent messages from channel
-          - get_user_info(userId: string): Get user information
-          - get_channel_info(channelId: string): Get channel information
-          - search_messages(query: string): Search messages across workspace
-          - get_thread_replies(channel: string, threadTs: string): Get thread replies
-        `;
-      default:
-        return 'No tools defined for this domain.';
-    }
+    return ToolRegistry.generateToolDefinitionsForDomain(this.domain);
   }
 
   private getDomainGuidelines(): string {

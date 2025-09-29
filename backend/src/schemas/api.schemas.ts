@@ -15,13 +15,7 @@ export const ToolCallSchema = z.object({
   }),
 });
 
-export const ToolExecutionResultSchema = z.object({
-  toolName: z.string(),
-  result: z.any(),
-  success: z.boolean(),
-  error: z.string().optional(),
-  executionTime: z.number(),
-});
+// ToolExecutionResultSchema removed - use ToolResultSchema from tool-execution.ts
 
 // Agent parameter schemas
 export const AgentParameterSchema = z.object({

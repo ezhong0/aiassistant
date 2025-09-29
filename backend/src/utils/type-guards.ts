@@ -15,7 +15,7 @@ import {
   SlackSlashCommandPayload,
   SlackInteractiveComponentPayload
 } from '../types/slack/slack.types';
-import { ToolCall, ToolResult, ToolCallSchema, ToolResultSchema } from '../types/tools';
+import { ToolCall, ToolResult, ToolCallSchema, ToolResultSchema } from '../framework/tool-execution';
 // OpenAI function schema type
 interface OpenAIFunctionSchema {
   name: string;

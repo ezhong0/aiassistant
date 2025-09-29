@@ -5,10 +5,12 @@
  * - 3-phase workflow (Intent Assessment, Tool Execution, Response Formatting)
  * - Direct integration with SlackDomainService
  * - Natural language interface
- * - Tool-to-service mapping
+ * - Tool-to-service mapping using unified ToolRegistry
  */
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
+import { ToolRegistry } from '../framework/tool-registry';
+import { ToolExecutionContext } from '../framework/tool-execution';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
@@ -29,21 +31,25 @@ export class SlackAgent extends BaseSubAgent {
     this.slackService = DomainServiceResolver.getSlackService();
   }
 
+  /**
+   * Get available tools from the unified registry
+   */
+  protected getAvailableTools(): string[] {
+    return ToolRegistry.getToolNamesForDomain('slack');
+  }
 
   /**
-   * Tool-to-service method mapping
+   * Tool-to-service method mapping using registry
    */
   protected getToolToServiceMap(): Record<string, string> {
-    return {
-      'send_message': 'sendMessage',
-      'get_channel_history': 'getChannelHistory',
-      'get_thread_replies': 'getThreadReplies',
-      'get_user_info': 'getUserInfo',
-      'list_users': 'listUsers',
-      'upload_file': 'uploadFile',
-      'update_message': 'updateMessage',
-      'delete_message': 'deleteMessage'
-    };
+    const tools = ToolRegistry.getToolsForDomain('slack');
+    const mapping: Record<string, string> = {};
+    
+    for (const tool of tools) {
+      mapping[tool.name] = tool.serviceMethod;
+    }
+    
+    return mapping;
   }
 
   /**
@@ -101,33 +107,20 @@ export class SlackAgent extends BaseSubAgent {
   }
 
   /**
-   * Get agent capabilities for discovery
+   * Get agent capabilities for discovery using registry
    */
   getCapabilityDescription(): AgentCapabilities {
+    const tools = ToolRegistry.getToolsForDomain('slack');
+    const examples = tools.flatMap(tool => tool.examples);
+    
     return {
       name: 'SlackSubAgent',
       description: 'Comprehensive Slack management including messaging, file sharing, and conversation analysis',
-      operations: [
-        'send_message',
-        'get_channel_history',
-        'get_thread_replies',
-        'get_user_info',
-        'list_users',
-        'upload_file',
-        'update_message',
-        'delete_message'
-      ],
+      operations: tools.map(tool => tool.name),
       requiresAuth: true,
-      requiresConfirmation: false, // Most Slack operations are read-only
-      isCritical: false,
-      examples: [
-        'Read the latest messages from the #general channel',
-        'Send a message to the team about the project update',
-        'Get the conversation thread about yesterday\'s meeting',
-        'Find information about user John in Slack',
-        'Upload the project file to the #design channel',
-        'Check who is in the workspace'
-      ]
+      requiresConfirmation: tools.some(tool => tool.requiresConfirmation),
+      isCritical: tools.some(tool => tool.isCritical),
+      examples: examples.slice(0, 6) // Limit to 6 examples
     };
   }
 

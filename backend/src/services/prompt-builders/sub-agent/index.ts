@@ -4,7 +4,7 @@ export { PlanReviewPromptBuilder } from './plan-review-prompt-builder';
 export { ResponseFormattingPromptBuilder } from './response-formatting-prompt-builder';
 
 // Sub-Agent Type exports
-export type { IntentAssessmentResponse, ToolCall } from './intent-assessment-prompt-builder';
+export type { IntentAssessmentResponse } from './intent-assessment-prompt-builder';
 export type { PlanReviewResponse, ToolExecutionResult } from './plan-review-prompt-builder';
 export type { ResponseFormattingResponse, SubAgentResponse } from './response-formatting-prompt-builder';
 

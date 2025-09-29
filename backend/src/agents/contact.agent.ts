@@ -9,6 +9,8 @@
  */
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
+import { ToolRegistry } from '../framework/tool-registry';
+import { ToolExecutionContext } from '../framework/tool-execution';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import { IContactsDomainService } from '../services/domain/interfaces/contacts-domain.interface';
@@ -17,7 +19,7 @@ export class ContactAgent extends BaseSubAgent {
   private contactsService: IContactsDomainService;
 
   constructor() {
-    super('contact', {
+    super('contacts', {
       name: 'ContactSubAgent',
       description: 'Contact management sub-agent for searching, creating, and managing contacts',
       enabled: true,
@@ -29,19 +31,25 @@ export class ContactAgent extends BaseSubAgent {
     this.contactsService = DomainServiceResolver.getContactsService();
   }
 
+  /**
+   * Get available tools from the unified registry
+   */
+  protected getAvailableTools(): string[] {
+    return ToolRegistry.getToolNamesForDomain('contacts');
+  }
 
   /**
-   * Tool-to-service method mapping
+   * Tool-to-service method mapping using registry
    */
   protected getToolToServiceMap(): Record<string, string> {
-    return {
-      'search_contacts': 'searchContacts',
-      'get_contact': 'getContact',
-      'list_contacts': 'listContacts',
-      'create_contact': 'createContact',
-      'update_contact': 'updateContact',
-      'delete_contact': 'deleteContact'
-    };
+    const tools = ToolRegistry.getToolsForDomain('contacts');
+    const mapping: Record<string, string> = {};
+    
+    for (const tool of tools) {
+      mapping[tool.name] = tool.serviceMethod;
+    }
+    
+    return mapping;
   }
 
   /**
@@ -87,31 +95,20 @@ export class ContactAgent extends BaseSubAgent {
   }
 
   /**
-   * Get agent capabilities for discovery
+   * Get agent capabilities for discovery using registry
    */
   getCapabilityDescription(): AgentCapabilities {
+    const tools = ToolRegistry.getToolsForDomain('contacts');
+    const examples = tools.flatMap(tool => tool.examples);
+    
     return {
       name: 'ContactSubAgent',
       description: 'Comprehensive contact management including search, creation, and organization',
-      operations: [
-        'search_contacts',
-        'get_contact',
-        'list_contacts',
-        'create_contact',
-        'update_contact',
-        'delete_contact'
-      ],
+      operations: tools.map(tool => tool.name),
       requiresAuth: true,
-      requiresConfirmation: false, // Contact search is usually read-only
-      isCritical: false,
-      examples: [
-        'Find John Smith\'s contact information',
-        'Search for contacts at Acme Corporation',
-        'Create a new contact for Jane Doe',
-        'Update Sarah\'s phone number',
-        'List all contacts starting with A',
-        'Find contacts with gmail addresses'
-      ]
+      requiresConfirmation: tools.some(tool => tool.requiresConfirmation),
+      isCritical: tools.some(tool => tool.isCritical),
+      examples: examples.slice(0, 6) // Limit to 6 examples
     };
   }
 

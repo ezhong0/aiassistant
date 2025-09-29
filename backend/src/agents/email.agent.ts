@@ -5,10 +5,12 @@
  * - 3-phase workflow (Intent Assessment, Tool Execution, Response Formatting)
  * - Direct integration with EmailDomainService
  * - Natural language interface
- * - Tool-to-service mapping
+ * - Tool-to-service mapping using unified ToolRegistry
  */
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
+import { ToolRegistry } from '../framework/tool-registry';
+import { ToolExecutionContext } from '../framework/tool-execution';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import { IEmailDomainService } from '../services/domain/interfaces/email-domain.interface';
@@ -29,18 +31,25 @@ export class EmailAgent extends BaseSubAgent {
     this.emailService = DomainServiceResolver.getEmailService();
   }
 
+  /**
+   * Get available tools from the unified registry
+   */
+  protected getAvailableTools(): string[] {
+    return ToolRegistry.getToolNamesForDomain('email');
+  }
 
   /**
-   * Tool-to-service method mapping
+   * Tool-to-service method mapping using registry
    */
   protected getToolToServiceMap(): Record<string, string> {
-    return {
-      'send_email': 'sendEmail',
-      'search_emails': 'searchEmails',
-      'get_email': 'getEmail',
-      'reply_to_email': 'replyToEmail',
-      'get_email_thread': 'getEmailThread'
-    };
+    const tools = ToolRegistry.getToolsForDomain('email');
+    const mapping: Record<string, string> = {};
+    
+    for (const tool of tools) {
+      mapping[tool.name] = tool.serviceMethod;
+    }
+    
+    return mapping;
   }
 
   /**
@@ -89,29 +98,20 @@ export class EmailAgent extends BaseSubAgent {
   }
 
   /**
-   * Get agent capabilities for discovery
+   * Get agent capabilities for discovery using registry
    */
   getCapabilityDescription(): AgentCapabilities {
+    const tools = ToolRegistry.getToolsForDomain('email');
+    const examples = tools.flatMap(tool => tool.examples);
+    
     return {
       name: 'EmailSubAgent',
       description: 'Comprehensive email management including sending, searching, and conversation handling',
-      operations: [
-        'send_email',
-        'search_emails',
-        'get_email',
-        'reply_to_email',
-        'get_email_thread'
-      ],
+      operations: tools.map(tool => tool.name),
       requiresAuth: true,
-      requiresConfirmation: true, // Email operations need confirmation
-      isCritical: true, // Email operations are critical
-      examples: [
-        'Send an email to John about the project meeting',
-        'Search for emails from Sarah about budget',
-        'Reply to the latest email in my inbox',
-        'Find all emails with attachments from last week',
-        'Get the full conversation thread about the proposal'
-      ]
+      requiresConfirmation: tools.some(tool => tool.requiresConfirmation),
+      isCritical: tools.some(tool => tool.isCritical),
+      examples: examples.slice(0, 5) // Limit to 5 examples
     };
   }
 
