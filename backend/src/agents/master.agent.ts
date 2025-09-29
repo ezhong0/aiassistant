@@ -133,6 +133,11 @@ export class MasterAgent {
     });
 
     try {
+      // Update progress for stage 1
+      if (slackContext?.updateProgress) {
+        await slackContext.updateProgress('Building message history...');
+      }
+      
       logger.info('🔧 STAGE 1: Building message history', { sessionId });
       // Gather conversation history and build message history
       const messageHistory = await this.buildMessageHistory(userInput, sessionId, slackContext);
@@ -141,6 +146,11 @@ export class MasterAgent {
         historyLength: messageHistory.length
       });
 
+      // Update progress for stage 2
+      if (slackContext?.updateProgress) {
+        await slackContext.updateProgress('Analyzing and planning...');
+      }
+      
       logger.info('🔧 STAGE 2: Analyzing and planning', { sessionId });
       // Understanding & Planning
       const workflowContext = await this.analyzeAndPlan(messageHistory, sessionId, userId);
@@ -149,6 +159,11 @@ export class MasterAgent {
         contextLength: workflowContext.length
       });
 
+      // Update progress for stage 3
+      if (slackContext?.updateProgress) {
+        await slackContext.updateProgress('Executing workflow...');
+      }
+      
       logger.info('🔧 STAGE 3: Executing workflow', { sessionId });
       // Execution Loop (Max 10 Iterations)
       const executionResult = await this.executeWorkflow(workflowContext, sessionId, userId);
@@ -157,6 +172,11 @@ export class MasterAgent {
         resultLength: executionResult.length
       });
 
+      // Update progress for stage 4
+      if (slackContext?.updateProgress) {
+        await slackContext.updateProgress('Generating response...');
+      }
+      
       logger.info('🔧 STAGE 4: Generating final response', { sessionId });
       // Final Output Generation
       const finalResult = await this.generateFinalResponse(executionResult, processingStartTime);

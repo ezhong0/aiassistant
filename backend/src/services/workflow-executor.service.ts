@@ -393,7 +393,7 @@ export class WorkflowExecutor {
       }
 
       const result = await AgentFactory.executeAgentWithNaturalLanguage(
-        agentName,
+        this.mapAgentName(agentName),
         request,
         {
           sessionId: context.sessionId,
@@ -510,7 +510,10 @@ export class WorkflowExecutor {
    * Determine service type for agent
    */
   private getServiceTypeForAgent(agentName: string): TokenServiceType | null {
-    switch (agentName.toLowerCase()) {
+    // Map short names to full names first
+    const fullAgentName = this.mapAgentName(agentName);
+    
+    switch (fullAgentName.toLowerCase()) {
       case 'emailagent':
       case 'calendaragent':
       case 'contactagent':
@@ -520,5 +523,18 @@ export class WorkflowExecutor {
       default:
         return null;
     }
+  }
+
+  /**
+   * Map short agent names to full agent names
+   */
+  private mapAgentName(shortName: string): string {
+    const mapping: Record<string, string> = {
+      'calendar': 'calendarAgent',
+      'email': 'emailAgent', 
+      'contact': 'contactAgent',
+      'slack': 'slackAgent'
+    };
+    return mapping[shortName] || shortName;
   }
 }

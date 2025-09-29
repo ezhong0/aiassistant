@@ -55,6 +55,7 @@ export class SituationAnalysisPromptBuilder extends BasePromptBuilder<string, Si
         - PROGRESS: Mark as "Intent analyzed, strategy determined"
         - BLOCKERS: Note any immediate issues or missing information
         - NEXT: Specify the first action step to take
+        - CURRENT_TIME: Include current date/time with timezone: ${this.getCurrentDateTime()}
         
         Be concise, functional, and explicit. Prefer precise nouns and verbs. Avoid verbose narrative.
       `,

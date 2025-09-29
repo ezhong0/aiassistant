@@ -102,20 +102,24 @@ export class DatabaseService extends BaseService {
     
     // Initialize with unified config system
     const dbServiceConfig = config.services.database;
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    
     this.config = {
-      host: process.env.DB_HOST || 'localhost',
+      // Use localhost for development, Railway host for production
+      host: isDevelopment ? (process.env.DB_HOST || 'localhost') : (process.env.DB_HOST || 'postgres.railway.internal'),
       port: parseInt(process.env.DB_PORT || '5432'),
       database: process.env.DB_NAME || 'assistantapp',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || '',
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      // SSL only in production or when explicitly enabled
+      ssl: isDevelopment ? false : (process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false),
       // Use unified config for connection pool settings
-      max: dbServiceConfig?.poolSize || 10,
-      min: 2,
+      max: dbServiceConfig?.poolSize || (isDevelopment ? 5 : 10),
+      min: isDevelopment ? 1 : 2,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: dbServiceConfig?.timeout || 30000,
-      acquireTimeoutMillis: 10000,
-      createTimeoutMillis: 10000,
+      connectionTimeoutMillis: dbServiceConfig?.timeout || (isDevelopment ? 10000 : 30000),
+      acquireTimeoutMillis: isDevelopment ? 5000 : 10000,
+      createTimeoutMillis: isDevelopment ? 5000 : 10000,
       destroyTimeoutMillis: 5000,
       reapIntervalMillis: 1000,
       createRetryIntervalMillis: 200

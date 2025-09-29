@@ -489,8 +489,8 @@ export class AgentFactory {
 /**
  * Initialize the factory
  */
-export const initializeAgentFactory = (): void => {
-  AgentFactory.initialize();
+export const initializeAgentFactory = async (): Promise<void> => {
+  await AgentFactory.initialize();
 };
 
 /**

@@ -206,6 +206,7 @@ export class SlackAPIClient extends BaseAPIClient {
     const methodMap: Record<string, any> = {
       // Chat methods
       'chat.postMessage': this.webClient.chat.postMessage,
+      'chat.postEphemeral': this.webClient.chat.postEphemeral,
       'chat.update': this.webClient.chat.update,
       'chat.delete': this.webClient.chat.delete,
       'chat.scheduleMessage': this.webClient.chat.scheduleMessage,

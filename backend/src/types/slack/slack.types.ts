@@ -13,6 +13,7 @@ export interface SlackContext {
   isDirectMessage: boolean;
   userName?: string | undefined;
   userEmail?: string | undefined;
+  updateProgress?: (step: string) => Promise<void>;
 }
 
 // ✅ Zod schemas for Slack types

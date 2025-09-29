@@ -235,6 +235,79 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
   }
 
   /**
+   * Send an ephemeral message (visible only to specific user)
+   */
+  async sendEphemeralMessage(userId: string, params: {
+    channel: string;
+    user: string;
+    text?: string;
+    blocks?: any[];
+    attachments?: any[];
+    threadTs?: string;
+  }): Promise<{
+    ok: boolean;
+    messageTs: string;
+  }> {
+    this.assertReady();
+    
+    if (!this.slackClient) {
+      throw APIClientError.nonRetryable(
+        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
+        'Slack client not available',
+        { serviceName: 'SlackDomainService' }
+      );
+    }
+
+    try {
+      // Use bot token for sending ephemeral messages
+      const botToken = process.env.SLACK_BOT_TOKEN;
+      if (!botToken) {
+        throw new Error('Slack bot token not configured');
+      }
+
+      // Authenticate with bot token
+      const credentials = {
+        type: 'api_key' as const,
+        apiKey: botToken
+      };
+      await this.slackClient.authenticate(credentials);
+
+      this.logInfo('Sending ephemeral Slack message', {
+        channel: params.channel,
+        user: params.user,
+        hasText: !!params.text,
+        hasBlocks: !!(params.blocks?.length),
+        hasAttachments: !!(params.attachments?.length)
+      });
+
+      const response = await this.slackClient.makeRequest({
+        endpoint: 'chat.postEphemeral',
+        method: 'POST',
+        data: params
+      });
+
+      this.logInfo('Ephemeral Slack message sent successfully', {
+        channel: params.channel,
+        user: params.user,
+        messageTs: response.data?.message_ts
+      });
+
+      return {
+        ok: response.data?.ok || false,
+        messageTs: response.data?.message_ts || ''
+      };
+    } catch (error) {
+      this.logError('Failed to send ephemeral Slack message', error, {
+        channel: params.channel,
+        user: params.user,
+        endpoint: 'sendEphemeralMessage',
+        method: 'POST'
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Update a message
    */
   async updateMessage(params: {
@@ -960,8 +1033,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
         isRealBotSubtype: event.subtype === 'bot_message',
         messageText: (event.text || '').substring(0, 50),
         willBeFiltered: event.bot_id || event.subtype === 'bot_message' || event.user === 'U09C27B5W1Z' ||
-                       (event.text && event.text.includes('🤔 Processing your request')) ||
-                       (event.text && event.text.includes('I received your message and I\'m working on it!'))
+                       (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('🤔 Processing your request')) ||
+                       (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('I received your message and I\'m working on it!')) ||
+                       (event.user === 'U09C27B5W1Z' && event.text && event.text.startsWith('⏳'))
       });
 
       // Ignore bot messages to prevent infinite loops
@@ -969,8 +1043,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       const isBotMessage = event.bot_id ||
                           event.subtype === 'bot_message' ||
                           event.user === 'U09C27B5W1Z' || // Bot user ID
-                          (event.text && event.text.includes('🤔 Processing your request')) ||
-                          (event.text && event.text.includes('I received your message and I\'m working on it!'));
+                          (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('🤔 Processing your request')) ||
+                          (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('I received your message and I\'m working on it!')) ||
+                          (event.user === 'U09C27B5W1Z' && event.text && event.text.startsWith('⏳')); // Progress update messages from bot
 
       if (isBotMessage) {
         this.logInfo('🛑 IGNORING BOT MESSAGE to prevent infinite loop', {
@@ -979,7 +1054,8 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
             isBotSubtype: event.subtype === 'bot_message',
             isBotUser: event.user === 'U09C27B5W1Z',
             hasProcessingText: event.text && event.text.includes('🤔 Processing your request'),
-            hasWorkingText: event.text && event.text.includes('I received your message and I\'m working on it!')
+            hasWorkingText: event.text && event.text.includes('I received your message and I\'m working on it!'),
+            hasProgressText: event.text && event.text.startsWith('⏳')
           },
           eventBotId: event.bot_id,
           eventSubtype: event.subtype,
@@ -1003,12 +1079,14 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       // Construct the combined userId format expected by SlackOAuthManager
       const combinedUserId = `${context.teamId}:${context.userId}`;
 
-      // Send acknowledgment
-      await this.sendMessage(combinedUserId, {
+      // Send initial progress message and store timestamp for updates
+      const progressMessage = await this.sendMessage(combinedUserId, {
         channel: context.channelId,
         text: "🤔 Processing your request...",
         threadTs: event.thread_ts
       });
+
+      const progressMessageTs = progressMessage.ts;
 
       // Process the message with MasterAgent (orchestrator only)
       try {
@@ -1028,11 +1106,25 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           instanceExists: !!masterAgent
         });
 
+        // Create progress updater function
+        const updateProgress = async (step: string) => {
+          try {
+            await this.updateMessage({
+              channel: context.channelId,
+              ts: progressMessageTs,
+              text: `⏳ ${step}`
+            });
+          } catch (error) {
+            this.logWarn('Failed to update progress message', { step, error: error instanceof Error ? error.message : String(error) });
+          }
+        };
+
         const slackContext = {
           userId: context.userId,
           channelId: context.channelId,
           teamId: context.teamId,
-          isDirectMessage: true
+          isDirectMessage: true,
+          updateProgress // Add progress updater
         };
 
         this.logInfo('Starting MasterAgent orchestration', {
@@ -1061,11 +1153,11 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           hasMetadata: !!result.metadata
         });
 
-        // Send the orchestrated response
-        await this.sendMessage(combinedUserId, {
+        // Update the progress message with the final response
+        await this.updateMessage({
           channel: context.channelId,
-          text: result.message,
-          threadTs: event.thread_ts
+          ts: progressMessageTs,
+          text: result.message
         });
 
         this.logInfo('MasterAgent orchestration completed', {
@@ -1087,11 +1179,11 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           userId: context.userId
         });
 
-        // Send error response to user
-        await this.sendMessage(combinedUserId, {
+        // Update progress message with error response
+        await this.updateMessage({
           channel: context.channelId,
-          text: "I encountered an error while processing your request. Please try again.",
-          threadTs: event.thread_ts
+          ts: progressMessageTs,
+          text: "I encountered an error while processing your request. Please try again."
         });
 
         return {

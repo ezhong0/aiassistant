@@ -16,10 +16,30 @@ DATA: [Information gathered from domain agents]
 PROGRESS: [Actions completed, decisions made]
 BLOCKERS: [Current issues preventing progress]
 NEXT: [Immediate next action in workflow]
+CURRENT_TIME: [Current date/time with timezone information]
 
 Free-form Notes: [Additional context, reasoning, edge cases]`;
 
   constructor(protected aiService: GenericAIService) {}
+
+  /**
+   * Get current date/time with timezone information
+   */
+  protected getCurrentDateTime(): string {
+    const now = new Date();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const formatted = now.toLocaleString('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short'
+    });
+    return `${formatted} (${timezone})`;
+  }
 
   /**
    * Build the AI prompt from the given context

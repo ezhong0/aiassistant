@@ -74,7 +74,7 @@ const initializeApplication = async (): Promise<void> => {
     await initializeAllCoreServices();
 
     // Initialize AgentFactory after services
-    initializeAgentFactory();
+    await initializeAgentFactory();
     
   } catch (error) {
     logger.error('Application initialization failed', error as Error, {
