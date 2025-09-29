@@ -258,10 +258,17 @@ NOTES: [Risk level and execution strategy]
 
 Intent Assessment Guidelines:
 - Extract the core action being requested by Master Agent
+- Determine what specific information the Master Agent wants to receive
+- Identify the expected output format and user intent
 - Map request to specific domain tools with concrete parameters
 - Assess risk level (low/medium/high) based on operation type
 - Plan tool execution sequence (gather info before acting)
- - Respect SINGLE MESSAGE INTERFACE: you will not ask follow-up questions. Make intelligent assumptions.
+- Respect SINGLE MESSAGE INTERFACE: you will not ask follow-up questions. Make intelligent assumptions.
+
+Output Planning:
+- Analyze the request to understand what information the user actually wants
+- Plan to include that specific information in the final response
+- Consider the context and purpose of the request
 
 Available tools: ${this.getAvailableTools().join(', ')}
     `;
@@ -362,20 +369,22 @@ FINAL_CONTEXT:
 ${workflowContext}
 
 Response Formatting Guidelines:
-- Create natural language summary of what was accomplished
-- Include structured data from tool execution results
-- Specify tools that were successfully used
-- Report any errors or limitations clearly
-- Set success flag appropriately
+- Review the original Master Agent request and intent from Phase 1
+- Create a response that directly addresses what the Master Agent asked for
+- Include the actual data/information that was requested, not just confirmation
+- Format the response naturally based on the request context and user intent
+
+Response Structure:
+- success: true/false based on whether the request was fulfilled
+- message: Complete response that includes the requested information
+- metadata: Optional additional context (not the main data)
+
+CRITICAL: The message should contain the actual information the Master Agent requested, formatted appropriately for the user.
 
 Master Agent Integration:
-- Summary should be human-readable and actionable
-- Metadata should include all relevant tool execution data
-- Error messages should be clear and help Master Agent decide next steps
 - Response should be complete - no follow-up questions allowed
-Tone & Style:
-- Be concise, functional, and specific
-- Prefer declarative summaries over step-by-step narration
+- Error messages should be clear and help Master Agent decide next steps
+- Tone & Style: Be concise, functional, and specific
     `;
 
     const prompt: AIPrompt = {
