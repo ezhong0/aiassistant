@@ -189,88 +189,89 @@ export class OpenAIClient extends BaseAPIClient {
   /**
    * Get OpenAI API method from endpoint
    */
-  private getOpenAIMethodFromEndpoint(endpoint: string): any {
+  private getOpenAIMethodFromEndpoint(endpoint: string): (params: any) => Promise<any> {
     // Remove leading slash and convert to method path
     const methodPath = endpoint.replace(/^\//, '');
-    
+
     // Map endpoint to OpenAI API methods
     if (!this.openai) {
       throw new Error('OpenAI client not initialized');
     }
 
-    const methodMap: Record<string, any> = {
+    // Return bound methods to preserve context
+    const methodMap: Record<string, (params: any) => Promise<any>> = {
       // Chat completions
-      'chat/completions': this.openai.chat.completions.create,
-      
+      'chat/completions': (params) => this.openai!.chat.completions.create(params),
+
       // Text completions
-      'completions': this.openai.completions.create,
-      
+      'completions': (params) => this.openai!.completions.create(params),
+
       // Embeddings
-      'embeddings': this.openai.embeddings.create,
-      
+      'embeddings': (params) => this.openai!.embeddings.create(params),
+
       // Images
-      'images/generations': this.openai.images.generate,
-      'images/edits': this.openai.images.edit,
-      'images/variations': this.openai.images.createVariation,
-      
+      'images/generations': (params) => this.openai!.images.generate(params),
+      'images/edits': (params) => this.openai!.images.edit(params),
+      'images/variations': (params) => this.openai!.images.createVariation(params),
+
       // Audio
-      'audio/transcriptions': this.openai.audio.transcriptions.create,
-      'audio/translations': this.openai.audio.translations.create,
-      
+      'audio/transcriptions': (params) => this.openai!.audio.transcriptions.create(params),
+      'audio/translations': (params) => this.openai!.audio.translations.create(params),
+
       // Fine-tuning (updated APIs)
-      'fine-tuning/jobs': this.openai.fineTuning.jobs.create,
-      'fine-tuning/jobs/list': this.openai.fineTuning.jobs.list,
-      'fine-tuning/jobs/retrieve': this.openai.fineTuning.jobs.retrieve,
-      'fine-tuning/jobs/cancel': this.openai.fineTuning.jobs.cancel,
-      
+      'fine-tuning/jobs': (params) => this.openai!.fineTuning.jobs.create(params),
+      'fine-tuning/jobs/list': (params) => this.openai!.fineTuning.jobs.list(params),
+      'fine-tuning/jobs/retrieve': (params) => this.openai!.fineTuning.jobs.retrieve(params),
+      'fine-tuning/jobs/cancel': (params) => this.openai!.fineTuning.jobs.cancel(params),
+
       // Models
-      'models': this.openai.models.list,
-      'models/retrieve': this.openai.models.retrieve,
-      'models/delete': this.openai.models.delete,
-      
+      'models': (params) => this.openai!.models.list(params),
+      'models/retrieve': (params) => this.openai!.models.retrieve(params),
+      'models/delete': (params) => this.openai!.models.delete(params),
+
       // Files
-      'files': this.openai.files.create,
-      'files/list': this.openai.files.list,
-      'files/retrieve': this.openai.files.retrieve,
-      'files/delete': this.openai.files.delete,
-      'files/content': this.openai.files.content,
-      
+      'files': (params) => this.openai!.files.create(params),
+      'files/list': (params) => this.openai!.files.list(params),
+      'files/retrieve': (params) => this.openai!.files.retrieve(params),
+      'files/delete': (params) => this.openai!.files.delete(params),
+      'files/content': (params) => this.openai!.files.content(params),
+
       // Moderations
-      'moderations': this.openai.moderations.create,
-      
-      // Assistants (if available)
-      'assistants': this.openai.beta.assistants.create,
-      'assistants/list': this.openai.beta.assistants.list,
-      'assistants/retrieve': this.openai.beta.assistants.retrieve,
-      'assistants/update': this.openai.beta.assistants.update,
-      'assistants/delete': this.openai.beta.assistants.delete,
-      
-      // Threads (if available)
-      'threads': this.openai.beta.threads.create,
-      'threads/retrieve': this.openai.beta.threads.retrieve,
-      'threads/update': this.openai.beta.threads.update,
-      'threads/delete': this.openai.beta.threads.delete,
-      
-      // Messages (if available)
-      'threads/messages': this.openai.beta.threads.messages.create,
-      'threads/messages/list': this.openai.beta.threads.messages.list,
-      'threads/messages/retrieve': this.openai.beta.threads.messages.retrieve,
-      'threads/messages/update': this.openai.beta.threads.messages.update,
-      
-      // Runs (if available)
-      'threads/runs': this.openai.beta.threads.runs.create,
-      'threads/runs/list': this.openai.beta.threads.runs.list,
-      'threads/runs/retrieve': this.openai.beta.threads.runs.retrieve,
-      'threads/runs/update': this.openai.beta.threads.runs.update,
-      'threads/runs/submit-tool-outputs': this.openai.beta.threads.runs.submitToolOutputs,
-      'threads/runs/cancel': this.openai.beta.threads.runs.cancel
+      'moderations': (params) => this.openai!.moderations.create(params),
+
+      // Assistants (if available) - Note: some methods require specific IDs as first parameter
+      'assistants': (params) => this.openai!.beta.assistants.create(params),
+      'assistants/list': (params) => this.openai!.beta.assistants.list(params),
+      'assistants/retrieve': (params) => this.openai!.beta.assistants.retrieve(params.assistantId, params.options),
+      'assistants/update': (params) => this.openai!.beta.assistants.update(params.assistantId, params.body, params.options),
+      'assistants/delete': (params) => this.openai!.beta.assistants.delete(params.assistantId, params.options),
+
+      // Threads (if available) - Note: some methods require specific IDs as first parameter
+      'threads': (params) => this.openai!.beta.threads.create(params),
+      'threads/retrieve': (params) => this.openai!.beta.threads.retrieve(params.threadId, params.options),
+      'threads/update': (params) => this.openai!.beta.threads.update(params.threadId, params.body, params.options),
+      'threads/delete': (params) => this.openai!.beta.threads.delete(params.threadId, params.options),
+
+      // Messages (if available) - Note: some methods require specific IDs as first parameter
+      'threads/messages': (params) => this.openai!.beta.threads.messages.create(params.threadId, params.body, params.options),
+      'threads/messages/list': (params) => this.openai!.beta.threads.messages.list(params.threadId, params.query, params.options),
+      'threads/messages/retrieve': (params) => this.openai!.beta.threads.messages.retrieve(params.threadId, params.messageId, params.options),
+      'threads/messages/update': (params) => this.openai!.beta.threads.messages.update(params.threadId, params.messageId, params.body),
+
+      // Runs (if available) - Note: some methods require specific IDs as first parameter
+      'threads/runs': (params) => this.openai!.beta.threads.runs.create(params.threadId, params.body, params.options),
+      'threads/runs/list': (params) => this.openai!.beta.threads.runs.list(params.threadId, params.query, params.options),
+      'threads/runs/retrieve': (params) => this.openai!.beta.threads.runs.retrieve(params.threadId, params.runId, params.options),
+      'threads/runs/update': (params) => this.openai!.beta.threads.runs.update(params.threadId, params.runId, params.body),
+      'threads/runs/submit-tool-outputs': (params) => this.openai!.beta.threads.runs.submitToolOutputs(params.threadId, params.runId, params.body),
+      'threads/runs/cancel': (params) => this.openai!.beta.threads.runs.cancel(params.threadId, params.runId)
     };
-    
+
     const method = methodMap[methodPath];
     if (!method) {
       throw new Error(`Unsupported OpenAI API endpoint: ${endpoint}`);
     }
-    
+
     return method;
   }
 
