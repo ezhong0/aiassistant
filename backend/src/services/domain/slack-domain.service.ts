@@ -899,6 +899,13 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
           userId: context.userId
         });
 
+        this.logInfo('🔧 DEBUG: About to call masterAgent.processUserInput', {
+          messageText: messageText.substring(0, 50),
+          sessionId: context.channelId,
+          userId: combinedUserId,
+          hasSlackContext: !!slackContext
+        });
+
         // MasterAgent orchestrates subagents - doesn't do direct processing
         const result = await masterAgent.processUserInput(
           messageText,
@@ -906,6 +913,12 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
           combinedUserId,
           slackContext
         );
+
+        this.logInfo('🔧 DEBUG: masterAgent.processUserInput returned', {
+          success: result.success,
+          messageLength: result.message.length,
+          hasMetadata: !!result.metadata
+        });
 
         // Send the orchestrated response
         await this.sendMessage(combinedUserId, {
