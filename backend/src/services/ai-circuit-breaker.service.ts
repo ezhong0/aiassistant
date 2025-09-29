@@ -1,5 +1,5 @@
 import { IService, ServiceState } from "./service-manager";
-import { OpenAIService } from './openai.service';
+// Circuit breaker for AI services
 
 export enum CircuitState {
   CLOSED = 'closed',
@@ -47,7 +47,7 @@ export class AIServiceCircuitBreaker implements IService {
     timeout: 30000           // Timeout for individual requests
   };
 
-  private openaiService: OpenAIService | null = null;
+  private openaiService: any | null = null;
 
   constructor(config?: Partial<CircuitBreakerConfig>) {
     if (config) {
@@ -106,14 +106,14 @@ export class AIServiceCircuitBreaker implements IService {
   /**
    * Set OpenAI service reference (called after service initialization)
    */
-  setOpenAIService(openaiService: OpenAIService): void {
+  setOpenAIService(openaiService: any): void {
     this.openaiService = openaiService;
   }
 
   /**
    * Execute OpenAI operation with circuit breaker protection
    */
-  async execute<T>(operation: (openai: OpenAIService) => Promise<T>): Promise<T> {
+  async execute<T>(operation: (openai: any) => Promise<T>): Promise<T> {
     this.totalRequests++;
 
     // Check if circuit is open

@@ -29,7 +29,7 @@ import {
   validateMobileTokenExchange,
 } from '../middleware/validation.middleware';
 import { authRateLimit } from '../middleware/rate-limiting.middleware';
-import { SlackOAuthService } from '../services/slack/slack-oauth.service';
+// SlackOAuthService replaced by OAuth managers
 
 const router = express.Router();
 
@@ -961,7 +961,7 @@ router.get('/callback',
       try {
         const slackService = DomainServiceResolver.getSlackService();
         if (slackService && userId_slack) {
-          await slackService.sendMessage({
+          await slackService.sendMessage(userId_slack, {
             channel: userId_slack,
             text: wasAuthDashboard
               ? '✅ Successfully reconnected! Your Google connection has been refreshed.'

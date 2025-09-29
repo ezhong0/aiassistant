@@ -8,7 +8,7 @@ dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
 // ConfigService is now managed by the service manager
-import { initializeAgentFactory } from './config/agent-factory-init';
+import { initializeAgentFactory } from './framework/agent-factory';
 import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';

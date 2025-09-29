@@ -347,7 +347,7 @@ export class GoogleOAuthManager extends BaseService {
       }
 
       // Remove tokens locally
-      await this.tokenManager.removeTokens(teamId, slackUserId);
+      await this.tokenManager.removeTokens(slackUserId);
 
       this.logInfo('Google OAuth tokens revoked', { userId });
       return true;

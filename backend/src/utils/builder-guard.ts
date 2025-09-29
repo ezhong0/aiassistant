@@ -17,7 +17,7 @@ import {
   ActionExecutionPromptBuilder,
   ProgressAssessmentPromptBuilder,
   FinalResponsePromptBuilder
-} from '../services/prompt-builders/prompts';
+} from '../services/prompt-builders/main-agent';
 
 /**
  * Type map for prompt builders
@@ -87,7 +87,7 @@ export class BuilderGuard {
         throw new Error(`Invalid builder response structure from ${BUILDER_NAMES[builderType]}`);
       }
 
-      return result as BuilderResponseMap[T];
+      return result as unknown as BuilderResponseMap[T];
     } catch (error) {
       const errorContext = ErrorContextBuilder.create()
         .component('builder-guard')

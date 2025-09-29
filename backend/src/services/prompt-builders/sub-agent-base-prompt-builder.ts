@@ -1,5 +1,5 @@
 import { BasePromptBuilder } from './base-prompt-builder';
-import { AIPrompt, StructuredSchema, BaseAIResponse } from '../../generic-ai.service';
+import { AIPrompt, StructuredSchema, BaseAIResponse } from '../generic-ai.service';
 
 /**
  * Base response interface for sub-agents

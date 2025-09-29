@@ -352,7 +352,7 @@ export const AIValidationSchemas = {
   }),
   
   generateEmbeddings: z.object({
-    input: z.union([z.string(), z.array(z.string())]).min(1, 'Input is required'),
+    input: z.union([z.string().min(1, 'Input is required'), z.array(z.string()).min(1, 'Input is required')]),
     model: z.string().min(1, 'Model is required').optional()
   }),
   
@@ -365,7 +365,7 @@ export const AIValidationSchemas = {
   }),
   
   transcribeAudio: z.object({
-    file: z.instanceof(Buffer).min(1, 'Audio file is required'),
+    file: z.instanceof(Buffer).refine(data => data.length > 0, 'Audio file is required'),
     model: z.string().min(1, 'Model is required').optional(),
     language: z.string().min(2, 'Language code is required').optional(),
     prompt: z.string().max(1000, 'Prompt too long').optional(),
@@ -374,7 +374,7 @@ export const AIValidationSchemas = {
   }),
   
   translateAudio: z.object({
-    file: z.instanceof(Buffer).min(1, 'Audio file is required'),
+    file: z.instanceof(Buffer).refine(data => data.length > 0, 'Audio file is required'),
     model: z.string().min(1, 'Model is required').optional(),
     prompt: z.string().max(1000, 'Prompt too long').optional(),
     responseFormat: z.enum(['json', 'text', 'srt', 'verbose_json', 'vtt']).optional(),

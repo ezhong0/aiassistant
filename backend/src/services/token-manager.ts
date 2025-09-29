@@ -685,7 +685,7 @@ export class TokenManager extends BaseService {
   /**
    * Get user tokens (used by OAuth managers)
    */
-  async getUserTokens(userId: string): Promise<UserTokens | null> {
+  async getUserTokens(userId: string): Promise<import('./token-storage.service').UserTokens | null> {
     this.assertReady();
     
     if (!this.tokenStorageService) {

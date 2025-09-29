@@ -6,7 +6,7 @@ import {
   ActionExecutionPromptBuilder,
   ProgressAssessmentPromptBuilder,
   FinalResponsePromptBuilder
-} from '../services/prompt-builders/prompts';
+} from '../services/prompt-builders/main-agent';
 import { PromptBuilderMap } from './builder-guard';
 
 /**

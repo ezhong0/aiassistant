@@ -1,6 +1,16 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { IntentAnalysis } from '../services/intent-analysis.service';
+// Intent analysis type
+interface IntentAnalysis {
+  intent: string;
+  confidence: number;
+  entities?: any[];
+  intentType?: string;
+  reasoning?: string;
+  targetDraftId?: string;
+  modifications?: any;
+  newOperation?: string;
+}
 import { NaturalLanguageResponse } from '../types/agents/natural-language.types';
 import { ENVIRONMENT } from '../config/environment';
 

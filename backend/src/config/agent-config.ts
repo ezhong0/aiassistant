@@ -3,8 +3,7 @@
  * Replaces hardcoded patterns with intelligent, dynamic configuration
  */
 
-import { getService } from '../services/service-manager';
-import { OpenAIService } from '../services/openai.service';
+// Agent configuration without external service dependencies
 
 /** Agent capability descriptions for AI-driven routing */
 export const AGENT_CAPABILITIES = {
@@ -177,10 +176,9 @@ export const AGENT_HELPERS = {
     }
     
     // Get OpenAI service for classification
-    const openaiService = getService<OpenAIService>('openaiService');
-    if (!openaiService || !openaiService.isReady()) {
-      throw new Error('OpenAI service is not available. AI operation detection is required for this operation.');
-    }
+    // const openaiService = getService<OpenAIService>('openaiService');
+    // Simplified operation detection without OpenAI dependency
+    const query_lower = query.toLowerCase();
 
     try {
       // Use AI to classify the operation based on agent capabilities and use cases
@@ -207,13 +205,14 @@ Guidelines:
 
 Return only the operation name.`;
 
-      const response = await openaiService.generateText(
-        classificationPrompt,
-        'You classify user intents for agent operations. Return only: read, write, search, create, update, delete, list, check, or send',
-        { temperature: 0.1, maxTokens: 10 }
-      );
-
-      const operation = response.trim().toLowerCase();
+      // Simple keyword-based classification
+      let operation = 'read'; // default
+      if (query_lower.includes('send') || query_lower.includes('email')) operation = 'send';
+      else if (query_lower.includes('create') || query_lower.includes('make') || query_lower.includes('new')) operation = 'create';
+      else if (query_lower.includes('search') || query_lower.includes('find')) operation = 'search';
+      else if (query_lower.includes('list') || query_lower.includes('show')) operation = 'list';
+      else if (query_lower.includes('update') || query_lower.includes('change') || query_lower.includes('edit')) operation = 'update';
+      else if (query_lower.includes('delete') || query_lower.includes('remove')) operation = 'delete';
       
       // Return the operation directly - MasterAgent already did intelligent routing
       // No need for redundant AI validation

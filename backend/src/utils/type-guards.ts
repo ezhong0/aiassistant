@@ -16,7 +16,20 @@ import {
   SlackInteractiveComponentPayload
 } from '../types/slack/slack.types';
 import { ToolCall, ToolResult, ToolCallSchema, ToolResultSchema } from '../types/tools';
-import { OpenAIFunctionSchema } from '../framework/agent-factory';
+// OpenAI function schema type
+interface OpenAIFunctionSchema {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, {
+      type: string;
+      description?: string;
+      enum?: string[];
+    }>;
+    required?: string[];
+  };
+}
 
 /**
  * Check if value is a non-null object

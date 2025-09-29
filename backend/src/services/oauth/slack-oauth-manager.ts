@@ -176,16 +176,16 @@ export class SlackOAuthManager extends BaseService {
 
       const data = await response.json();
       
-      if (!data.ok) {
-        throw new Error(`Slack OAuth error: ${data.error}`);
+      if (!(data as any).ok) {
+        throw new Error(`Slack OAuth error: ${(data as any).error}`);
       }
 
       const tokens: SlackOAuthTokens = {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires_in: data.expires_in,
-        scope: data.scope,
-        token_type: data.token_type
+        access_token: (data as any).access_token,
+        refresh_token: (data as any).refresh_token,
+        expires_in: (data as any).expires_in,
+        scope: (data as any).scope,
+        token_type: (data as any).token_type
       };
 
       // Store tokens using TokenManager
@@ -292,7 +292,7 @@ export class SlackOAuthManager extends BaseService {
           }
         });
 
-        const data = await response.json();
+        const data = await response.json() as any;
         if (!data.ok) {
           return {
             isValid: false,

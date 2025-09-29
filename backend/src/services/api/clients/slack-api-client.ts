@@ -21,7 +21,7 @@ import {
  * It uses the official Slack Web API client library.
  */
 export class SlackAPIClient extends BaseAPIClient {
-  private webClient: WebClient;
+  private webClient: WebClient | null = null;
 
   constructor(config: APIClientConfig) {
     super('SlackAPIClient', config);
@@ -199,6 +199,10 @@ export class SlackAPIClient extends BaseAPIClient {
     const methodPath = endpoint.replace(/^\//, '');
     
     // Map endpoint to Slack Web API methods
+    if (!this.webClient) {
+      throw new Error('Slack WebClient not initialized');
+    }
+
     const methodMap: Record<string, any> = {
       // Chat methods
       'chat.postMessage': this.webClient.chat.postMessage,
@@ -231,10 +235,10 @@ export class SlackAPIClient extends BaseAPIClient {
       'users.lookupByEmail': this.webClient.users.lookupByEmail,
       'users.getPresence': this.webClient.users.getPresence,
       'users.setPresence': this.webClient.users.setPresence,
-      'users.setActive': this.webClient.users.setActive,
+      // 'users.setActive': deprecated method removed
       'users.setPhoto': this.webClient.users.setPhoto,
       'users.deletePhoto': this.webClient.users.deletePhoto,
-      'users.setRealName': this.webClient.users.setRealName,
+      // 'users.setRealName': deprecated method removed
       
       // Auth methods
       'auth.test': this.webClient.auth.test,
@@ -257,8 +261,8 @@ export class SlackAPIClient extends BaseAPIClient {
       'search.messages': this.webClient.search.messages,
       'search.files': this.webClient.search.files,
       
-      // Webhook response
-      'webhook.response': this.webClient.webhook.response
+      // Webhook response (using built-in respond functionality)
+      // 'webhook.response': deprecated method removed
     };
     
     const method = methodMap[methodPath];

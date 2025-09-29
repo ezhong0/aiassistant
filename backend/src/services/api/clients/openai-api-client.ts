@@ -22,7 +22,7 @@ import {
  * It uses the official OpenAI Node.js client library.
  */
 export class OpenAIClient extends BaseAPIClient {
-  private openai: OpenAI;
+  private openai: OpenAI | null = null;
 
   constructor(config: APIClientConfig) {
     super('OpenAIClient', config);
@@ -194,6 +194,10 @@ export class OpenAIClient extends BaseAPIClient {
     const methodPath = endpoint.replace(/^\//, '');
     
     // Map endpoint to OpenAI API methods
+    if (!this.openai) {
+      throw new Error('OpenAI client not initialized');
+    }
+
     const methodMap: Record<string, any> = {
       // Chat completions
       'chat/completions': this.openai.chat.completions.create,
@@ -213,13 +217,11 @@ export class OpenAIClient extends BaseAPIClient {
       'audio/transcriptions': this.openai.audio.transcriptions.create,
       'audio/translations': this.openai.audio.translations.create,
       
-      // Fine-tuning
-      'fine-tunes': this.openai.fineTunes.create,
-      'fine-tunes/list': this.openai.fineTunes.list,
-      'fine-tunes/retrieve': this.openai.fineTunes.retrieve,
-      'fine-tunes/cancel': this.openai.fineTunes.cancel,
-      'fine-tunes/list-events': this.openai.fineTunes.listEvents,
-      'fine-tunes/delete-model': this.openai.fineTunes.deleteModel,
+      // Fine-tuning (updated APIs)
+      'fine-tuning/jobs': this.openai.fineTuning.jobs.create,
+      'fine-tuning/jobs/list': this.openai.fineTuning.jobs.list,
+      'fine-tuning/jobs/retrieve': this.openai.fineTuning.jobs.retrieve,
+      'fine-tuning/jobs/cancel': this.openai.fineTuning.jobs.cancel,
       
       // Models
       'models': this.openai.models.list,
@@ -230,7 +232,7 @@ export class OpenAIClient extends BaseAPIClient {
       'files': this.openai.files.create,
       'files/list': this.openai.files.list,
       'files/retrieve': this.openai.files.retrieve,
-      'files/delete': this.openai.files.del,
+      'files/delete': this.openai.files.delete,
       'files/content': this.openai.files.content,
       
       // Moderations
@@ -241,13 +243,13 @@ export class OpenAIClient extends BaseAPIClient {
       'assistants/list': this.openai.beta.assistants.list,
       'assistants/retrieve': this.openai.beta.assistants.retrieve,
       'assistants/update': this.openai.beta.assistants.update,
-      'assistants/delete': this.openai.beta.assistants.del,
+      'assistants/delete': this.openai.beta.assistants.delete,
       
       // Threads (if available)
       'threads': this.openai.beta.threads.create,
       'threads/retrieve': this.openai.beta.threads.retrieve,
       'threads/update': this.openai.beta.threads.update,
-      'threads/delete': this.openai.beta.threads.del,
+      'threads/delete': this.openai.beta.threads.delete,
       
       // Messages (if available)
       'threads/messages': this.openai.beta.threads.messages.create,
