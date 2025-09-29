@@ -10,6 +10,8 @@ export enum ServiceState {
   INITIALIZING = 'initializing',
   /** Service is fully initialized and ready to handle requests */
   READY = 'ready',
+  /** Service is partially functional with reduced capabilities */
+  DEGRADED = 'degraded',
   /** Service failed to initialize or encountered a critical error */
   ERROR = 'error',
   /** Service is being gracefully shut down */

@@ -153,10 +153,25 @@ export class DatabaseService extends BaseService {
       this.setupPoolEventHandlers();
 
       // Test the connection
-      await this.testConnection();
+      try {
+        await this.testConnection();
 
-      // Start health monitoring
-      this.startHealthMonitoring();
+        // Start health monitoring only if connection is successful
+        this.startHealthMonitoring();
+      } catch (error) {
+        // In non-production environments, allow graceful degradation
+        if (process.env.NODE_ENV === 'production') {
+          throw error;
+        } else {
+          logger.warn('Database connection failed in development - continuing without database', {
+            correlationId: `db-connection-warn-${Date.now()}`,
+            operation: 'database_connection_warning',
+            error: error instanceof Error ? error.message : String(error)
+          });
+          // Set service state to degraded but functional
+          this._state = ServiceState.DEGRADED;
+        }
+      }
 
       logger.info('DatabaseService initialized successfully', {
         correlationId: `db-init-${Date.now()}`,

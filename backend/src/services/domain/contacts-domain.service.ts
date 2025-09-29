@@ -4,7 +4,7 @@ import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
-import { IContactsDomainService } from './interfaces/domain-service.interfaces';
+import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
 import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
@@ -23,7 +23,7 @@ import { SlackContext } from '../../types/slack/slack.types';
  * - Handle contact photos and metadata
  * - OAuth2 authentication management
  */
-export class ContactsDomainService extends BaseService implements IContactsDomainService {
+export class ContactsDomainService extends BaseService implements Partial<IContactsDomainService> {
   private googleClient: GoogleAPIClient | null = null;
   private googleOAuthManager: GoogleOAuthManager | null = null;
 
@@ -126,83 +126,93 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
     return await this.googleOAuthManager.requiresOAuth(userId);
   }
 
-  /**
-   * Legacy authentication method (to be removed)
-   */
-  async authenticate(accessToken: string, refreshToken?: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'ContactsDomainService' }
-      );
-    }
-
-    try {
-      const credentials: AuthCredentials = {
-        type: 'oauth2',
-        accessToken,
-        refreshToken
-      };
-
-      await this.googleClient.authenticate(credentials);
-      this.logInfo('Contacts service authenticated successfully');
-    } catch (error) {
-      throw APIClientError.fromError(error, {
-        serviceName: 'ContactsDomainService',
-        endpoint: 'authenticate'
-      });
-    }
-  }
 
   /**
    * List contacts (with automatic authentication)
    */
-  async listContacts(userId: string, params: {
+  async listContacts(userId: string, params?: {
     pageSize?: number;
     pageToken?: string;
-    personFields?: string[];
-    sortOrder?: 'LAST_NAME_ASCENDING' | 'LAST_NAME_DESCENDING' | 'FIRST_NAME_ASCENDING' | 'FIRST_NAME_DESCENDING';
+    readMask?: string;
+    sources?: string[];
+    syncToken?: string;
+    sortOrder?: 'LAST_MODIFIED_ASCENDING' | 'LAST_MODIFIED_DESCENDING' | 'FIRST_NAME_ASCENDING' | 'LAST_NAME_ASCENDING';
   }): Promise<{
-    contacts: Array<{
+    connections: Array<{
       resourceName: string;
+      etag: string;
+      metadata: {
+        sources: Array<{
+          type: string;
+          id: string;
+          etag?: string;
+          updateTime?: string;
+        }>;
+        objectType: 'PERSON';
+      };
       names?: Array<{
-        displayName?: string;
         givenName?: string;
         familyName?: string;
         middleName?: string;
-      }>;
-      emailAddresses?: Array<{
-        value: string;
-        type?: string;
+        honorificPrefix?: string;
+        honorificSuffix?: string;
+        phoneticGivenName?: string;
+        phoneticFamilyName?: string;
+        phoneticMiddleName?: string;
         displayName?: string;
+        displayNameLastFirst?: string;
+        unstructuredName?: string;
+        metadata: {
+          primary?: boolean;
+          source: {
+            type: string;
+            id: string;
+          };
+        };
       }>;
       phoneNumbers?: Array<{
         value: string;
-        type?: string;
+        type: 'home' | 'work' | 'mobile' | 'fax' | 'other';
+        primary?: boolean;
+      }>;
+      emailAddresses?: Array<{
+        value: string;
+        type: 'home' | 'work' | 'other';
+        primary?: boolean;
       }>;
       addresses?: Array<{
-        formattedValue?: string;
-        type?: string;
-        streetAddress?: string;
+        street?: string;
         city?: string;
         region?: string;
         postalCode?: string;
         country?: string;
+        type: 'home' | 'work' | 'other';
+        primary?: boolean;
       }>;
       organizations?: Array<{
         name?: string;
         title?: string;
+        department?: string;
+        symbol?: string;
+        domain?: string;
+        location?: string;
         type?: string;
+        primary?: boolean;
       }>;
       photos?: Array<{
         url: string;
-        default?: boolean;
+        metadata: {
+          primary?: boolean;
+          source: {
+            type: string;
+            id: string;
+          };
+        };
       }>;
     }>;
     nextPageToken?: string;
+    nextSyncToken?: string;
+    totalPeople?: number;
     totalItems?: number;
   }> {
     this.assertReady();
@@ -236,21 +246,15 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
       });
 
       const result = {
-        contacts: response.data.connections?.map((contact: any) => ({
-          resourceName: contact.resourceName,
-          names: contact.names,
-          emailAddresses: contact.emailAddresses,
-          phoneNumbers: contact.phoneNumbers,
-          addresses: contact.addresses,
-          organizations: contact.organizations,
-          photos: contact.photos
-        })) || [],
+        connections: response.data.connections || [],
         nextPageToken: response.data.nextPageToken,
+        nextSyncToken: response.data.nextSyncToken,
+        totalPeople: response.data.totalPeople,
         totalItems: response.data.totalItems
       };
 
       this.logInfo('Contacts listed successfully', {
-        count: result.contacts.length,
+        count: result.connections.length,
         totalItems: result.totalItems
       });
 
@@ -270,73 +274,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   /**
    * Create a contact
    */
-  async createContact(params: {
-    names?: Array<{
-      givenName?: string;
-      familyName?: string;
-      middleName?: string;
-    }>;
-    emailAddresses?: Array<{
-      value: string;
-      type?: string;
-      displayName?: string;
-    }>;
-    phoneNumbers?: Array<{
-      value: string;
-      type?: string;
-    }>;
-    addresses?: Array<{
-      streetAddress?: string;
-      city?: string;
-      region?: string;
-      postalCode?: string;
-      country?: string;
-      type?: string;
-    }>;
-    organizations?: Array<{
-      name?: string;
-      title?: string;
-      type?: string;
-    }>;
-    birthdays?: Array<{
-      date?: {
-        year?: number;
-        month?: number;
-        day?: number;
-      };
-    }>;
-  }): Promise<{
-    resourceName: string;
-    names?: Array<{
-      displayName?: string;
-      givenName?: string;
-      familyName?: string;
-      middleName?: string;
-    }>;
-    emailAddresses?: Array<{
-      value: string;
-      type?: string;
-      displayName?: string;
-    }>;
-    phoneNumbers?: Array<{
-      value: string;
-      type?: string;
-    }>;
-    addresses?: Array<{
-      formattedValue?: string;
-      type?: string;
-      streetAddress?: string;
-      city?: string;
-      region?: string;
-      postalCode?: string;
-      country?: string;
-    }>;
-    organizations?: Array<{
-      name?: string;
-      title?: string;
-      type?: string;
-    }>;
-  }> {
+  async createContact(userId: string, contact: ContactInput): Promise<Contact> {
     this.assertReady();
     
     if (!this.googleClient) {
@@ -345,18 +283,18 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
 
     try {
       this.logInfo('Creating contact', {
-        hasNames: !!(params.names?.length),
-        hasEmails: !!(params.emailAddresses?.length),
-        hasPhones: !!(params.phoneNumbers?.length)
+        hasNames: !!(contact.names?.length),
+        hasEmails: !!(contact.emailAddresses?.length),
+        hasPhones: !!(contact.phoneNumbers?.length)
       });
 
       const contactData = {
-        names: params.names,
-        emailAddresses: params.emailAddresses,
-        phoneNumbers: params.phoneNumbers,
-        addresses: params.addresses,
-        organizations: params.organizations,
-        birthdays: params.birthdays
+        names: contact.names,
+        emailAddresses: contact.emailAddresses,
+        phoneNumbers: contact.phoneNumbers,
+        addresses: contact.addresses,
+        organizations: contact.organizations,
+        birthdays: contact.birthdays
       };
 
       const response = await this.googleClient.makeRequest({
@@ -367,6 +305,11 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
 
       const result = {
         resourceName: response.data.resourceName,
+        etag: response.data.etag,
+        metadata: {
+          sources: response.data.metadata?.sources || [],
+          objectType: response.data.metadata?.objectType || 'PERSON'
+        },
         names: response.data.names,
         emailAddresses: response.data.emailAddresses,
         phoneNumbers: response.data.phoneNumbers,
@@ -388,42 +331,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   /**
    * Get a specific contact
    */
-  async getContact(userId: string, resourceName: string, personFields?: string[]): Promise<{
-    resourceName: string;
-    names?: Array<{
-      displayName?: string;
-      givenName?: string;
-      familyName?: string;
-      middleName?: string;
-    }>;
-    emailAddresses?: Array<{
-      value: string;
-      type?: string;
-      displayName?: string;
-    }>;
-    phoneNumbers?: Array<{
-      value: string;
-      type?: string;
-    }>;
-    addresses?: Array<{
-      formattedValue?: string;
-      type?: string;
-      streetAddress?: string;
-      city?: string;
-      region?: string;
-      postalCode?: string;
-      country?: string;
-    }>;
-    organizations?: Array<{
-      name?: string;
-      title?: string;
-      type?: string;
-    }>;
-    photos?: Array<{
-      url: string;
-      default?: boolean;
-    }>;
-  }> {
+  async getContact(contactId: string): Promise<Contact> {
     this.assertReady();
     
     if (!this.googleClient) {
@@ -431,28 +339,24 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
     }
 
     try {
-      // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
-      if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
-      }
-      
-      // Authenticate with valid token
-      await this.authenticate(token);
-      
-      this.logInfo('Getting contact', { resourceName });
+      this.logInfo('Getting contact', { contactId });
 
       const response = await this.googleClient.makeRequest({
         method: 'GET',
         endpoint: '/people/v1/people/get',
         query: {
-          resourceName,
-          personFields: (personFields || ['names', 'emailAddresses', 'phoneNumbers', 'addresses', 'organizations', 'photos']).join(',')
+          resourceName: contactId,
+          personFields: ['names', 'emailAddresses', 'phoneNumbers', 'addresses', 'organizations', 'photos'].join(',')
         }
       });
 
       const result = {
         resourceName: response.data.resourceName,
+        etag: response.data.etag,
+        metadata: {
+          sources: response.data.metadata?.sources || [],
+          objectType: response.data.metadata?.objectType || 'PERSON'
+        },
         names: response.data.names,
         emailAddresses: response.data.emailAddresses,
         phoneNumbers: response.data.phoneNumbers,
@@ -467,7 +371,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
 
       return result;
     } catch (error) {
-      this.logError('Failed to get contact', error, { resourceName });
+      this.logError('Failed to get contact', error, { contactId });
       throw error;
     }
   }
@@ -475,74 +379,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
   /**
    * Update a contact
    */
-  async updateContact(params: {
-    resourceName: string;
-    names?: Array<{
-      givenName?: string;
-      familyName?: string;
-      middleName?: string;
-    }>;
-    emailAddresses?: Array<{
-      value: string;
-      type?: string;
-      displayName?: string;
-    }>;
-    phoneNumbers?: Array<{
-      value: string;
-      type?: string;
-    }>;
-    addresses?: Array<{
-      streetAddress?: string;
-      city?: string;
-      region?: string;
-      postalCode?: string;
-      country?: string;
-      type?: string;
-    }>;
-    organizations?: Array<{
-      name?: string;
-      title?: string;
-      type?: string;
-    }>;
-    birthdays?: Array<{
-      date?: {
-        year?: number;
-        month?: number;
-        day?: number;
-      };
-    }>;
-  }): Promise<{
-    resourceName: string;
-    names?: Array<{
-      displayName?: string;
-      givenName?: string;
-      familyName?: string;
-      middleName?: string;
-    }>;
-    emailAddresses?: Array<{
-      value: string;
-      type?: string;
-      displayName?: string;
-    }>;
-    phoneNumbers?: Array<{
-      value: string;
-      type?: string;
-    }>;
-    addresses?: Array<{
-      formattedValue?: string;
-      type?: string;
-      streetAddress?: string;
-      city?: string;
-      region?: string;
-      postalCode?: string;
-      country?: string;
-    }>;
-    organizations?: Array<{
-      name?: string;
-      title?: string;
-      type?: string;
-    }>;
-  }> {
+  async updateContact(contactId: string, contact: ContactInput, updatePersonFields?: string): Promise<Contact> {
     this.assertReady();
     
     if (!this.googleClient) {
@@ -550,22 +387,22 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
     }
 
     try {
-      this.logInfo('Updating contact', { resourceName: params.resourceName });
+      this.logInfo('Updating contact', { contactId });
 
       const contactData = {
-        names: params.names,
-        emailAddresses: params.emailAddresses,
-        phoneNumbers: params.phoneNumbers,
-        addresses: params.addresses,
-        organizations: params.organizations,
-        birthdays: params.birthdays
+        names: contact.names,
+        emailAddresses: contact.emailAddresses,
+        phoneNumbers: contact.phoneNumbers,
+        addresses: contact.addresses,
+        organizations: contact.organizations,
+        birthdays: contact.birthdays
       };
 
       const response = await this.googleClient.makeRequest({
         method: 'PATCH',
         endpoint: '/people/v1/people/updateContact',
         query: {
-          resourceName: params.resourceName,
+          resourceName: contactId,
           updatePersonFields: 'names,emailAddresses,phoneNumbers,addresses,organizations,birthdays'
         },
         data: contactData
@@ -573,6 +410,11 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
 
       const result = {
         resourceName: response.data.resourceName,
+        etag: response.data.etag,
+        metadata: {
+          sources: response.data.metadata?.sources || [],
+          objectType: response.data.metadata?.objectType || 'PERSON'
+        },
         names: response.data.names,
         emailAddresses: response.data.emailAddresses,
         phoneNumbers: response.data.phoneNumbers,
@@ -586,7 +428,7 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
 
       return result;
     } catch (error) {
-      this.logError('Failed to update contact', error, { resourceName: params.resourceName });
+      this.logError('Failed to update contact', error, { contactId });
       throw error;
     }
   }
@@ -621,45 +463,88 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
    * Search contacts
    */
   async searchContacts(userId: string, params: {
-    query: string;
+    query?: string;
     pageSize?: number;
     pageToken?: string;
-    personFields?: string[];
+    readMask?: string;
+    sources?: string[];
   }): Promise<{
-    contacts: Array<{
-      resourceName: string;
-      names?: Array<{
-        displayName?: string;
-        givenName?: string;
-        familyName?: string;
-        middleName?: string;
-      }>;
-      emailAddresses?: Array<{
-        value: string;
-        type?: string;
-        displayName?: string;
-      }>;
-      phoneNumbers?: Array<{
-        value: string;
-        type?: string;
-      }>;
-      addresses?: Array<{
-        formattedValue?: string;
-        type?: string;
-        streetAddress?: string;
-        city?: string;
-        region?: string;
-        postalCode?: string;
-        country?: string;
-      }>;
-      organizations?: Array<{
-        name?: string;
-        title?: string;
-        type?: string;
-      }>;
+    results: Array<{
+      person: {
+        resourceName: string;
+        etag: string;
+        metadata: {
+          sources: Array<{
+            type: string;
+            id: string;
+            etag?: string;
+            updateTime?: string;
+          }>;
+          objectType: 'PERSON';
+        };
+        names?: Array<{
+          givenName?: string;
+          familyName?: string;
+          middleName?: string;
+          honorificPrefix?: string;
+          honorificSuffix?: string;
+          phoneticGivenName?: string;
+          phoneticFamilyName?: string;
+          phoneticMiddleName?: string;
+          displayName?: string;
+          displayNameLastFirst?: string;
+          unstructuredName?: string;
+          metadata: {
+            primary?: boolean;
+            source: {
+              type: string;
+              id: string;
+            };
+          };
+        }>;
+        phoneNumbers?: Array<{
+          value: string;
+          type: 'home' | 'work' | 'mobile' | 'fax' | 'other';
+          primary?: boolean;
+        }>;
+        emailAddresses?: Array<{
+          value: string;
+          type: 'home' | 'work' | 'other';
+          primary?: boolean;
+        }>;
+        addresses?: Array<{
+          street?: string;
+          city?: string;
+          region?: string;
+          postalCode?: string;
+          country?: string;
+          type: 'home' | 'work' | 'other';
+          primary?: boolean;
+        }>;
+        organizations?: Array<{
+          name?: string;
+          title?: string;
+          department?: string;
+          symbol?: string;
+          domain?: string;
+          location?: string;
+          type?: string;
+          primary?: boolean;
+        }>;
+        photos?: Array<{
+          url: string;
+          metadata: {
+            primary?: boolean;
+            source: {
+              type: string;
+              id: string;
+            };
+          };
+        }>;
+      };
     }>;
     nextPageToken?: string;
-    totalItems?: number;
+    totalSize?: number;
   }> {
     this.assertReady();
     
@@ -668,15 +553,6 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
     }
 
     try {
-      // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
-      if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
-      }
-      
-      // Authenticate with valid token
-      await this.authenticate(token);
-      
       this.logInfo('Searching contacts', {
         query: params.query,
         pageSize: params.pageSize || 100
@@ -688,28 +564,23 @@ export class ContactsDomainService extends BaseService implements IContactsDomai
         query: {
           pageSize: params.pageSize || 100,
           pageToken: params.pageToken,
-          personFields: (params.personFields || ['names', 'emailAddresses', 'phoneNumbers']).join(','),
+          personFields: ['names', 'emailAddresses', 'phoneNumbers'].join(','),
           query: params.query
         }
       });
 
       const result = {
-        contacts: response.data.connections?.map((contact: any) => ({
-          resourceName: contact.resourceName,
-          names: contact.names,
-          emailAddresses: contact.emailAddresses,
-          phoneNumbers: contact.phoneNumbers,
-          addresses: contact.addresses,
-          organizations: contact.organizations
+        results: response.data.connections?.map((contact: any) => ({
+          person: contact
         })) || [],
         nextPageToken: response.data.nextPageToken,
-        totalItems: response.data.totalItems
+        totalSize: response.data.totalItems
       };
 
       this.logInfo('Contacts search completed', {
         query: params.query,
-        count: result.contacts.length,
-        totalItems: result.totalItems
+        count: result.results.length,
+        totalSize: result.totalSize
       });
 
       return result;

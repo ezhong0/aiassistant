@@ -7,7 +7,6 @@ import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
-// import { SlackOAuthService } from './slack/slack-oauth.service'; // REMOVED: Replaced by OAuth managers
 import { AuthStatusService } from './auth-status.service';
 import { unifiedConfig } from '../config/unified-config';
 import { initializeDomainServices } from './domain';
@@ -87,7 +86,6 @@ const registerCoreServices = async (): Promise<void> => {
     // Note: We don't register the config service as it's a singleton used directly
     // All services import and use the unified config singleton
 
-    // 1. AIConfigService - REMOVED: Consolidated into ConfigService
 
     // 2. DatabaseService - No dependencies, high priority
     // In development, we'll handle database failures gracefully in TokenStorageService
@@ -118,7 +116,6 @@ const registerCoreServices = async (): Promise<void> => {
     const tokenManager = new TokenManager();
     serviceManager.registerService('tokenManager', tokenManager, ['tokenStorageService', 'authService']);
 
-    // 7. ToolExecutorService - REMOVED: Not used by any components
 
     // 8. GenericAIService - Centralized AI operations with structured output
     const genericAIService = new GenericAIService();
@@ -140,7 +137,6 @@ const registerCoreServices = async (): Promise<void> => {
 
 
 
-    // 11. SlackService - REMOVED: Replaced by SlackDomainService in domain services
 
     // 12. GoogleOAuthManager - Shared OAuth manager for all Google services
     const googleAuth = unifiedConfig.googleAuth;
@@ -174,19 +170,10 @@ const registerCoreServices = async (): Promise<void> => {
       serviceManager.registerService('slackOAuthManager', slackOAuthManager, ['tokenManager', 'oauthStateService']);
     }
 
-    // 14. SlackOAuthService - REMOVED: Replaced by GoogleOAuthManager and SlackOAuthManager
-
-
-    // 17. SlackEventValidator - REMOVED: Consolidated into SlackAgent
 
 
 
 
-    // EmailValidator and EmailFormatter removed - LLM handles validation and formatting directly
-
-    // 19-20. Calendar auxiliary services - REMOVED: Consolidated into CalendarAgent
-
-    // SlackInterfaceService - REMOVED: Functionality consolidated into SlackService
 
 
 
@@ -204,26 +191,13 @@ const registerCoreServices = async (): Promise<void> => {
     // Note: SlackAgent is not a service but an agent, so we'll register it differently
     // It will be instantiated by AgentFactory instead
 
-    // 37. WorkflowCacheService - REMOVED: Replaced with simple in-memory state in MasterAgent
 
-    // 38. DraftManager - Draft creation, storage, and execution for confirmation system
-    // Removed DraftManager - no longer needed
-
-    // 39. MasterAgentService - REMOVED: MasterAgent created directly in SlackService
-    // 42. LEGACY: NextStepPlanningService - REMOVED: Replaced by StringPlanningService
-
-    // Removed StringPlanningService and IntentAnalysisService - no longer needed
 
     // 44. ContextManager - Extracted from MasterAgent for SRP compliance
     const { ContextManager } = await import('./context-manager.service');
     const contextManager = new ContextManager();
     serviceManager.registerService('contextManager', contextManager, ['cacheService']);
 
-    // 45. ToolCallGenerator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
-
-    // Removed ResponseFormatter, PlanReevaluationService, and StepExecutionService - no longer needed
-
-    // 47. ServiceCoordinator - REMOVED: No longer used by MasterAgent (replaced by natural language flow)
 
     // Note: Slack is now an interface layer, not a service
     // It will be initialized separately in the main application

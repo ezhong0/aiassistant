@@ -153,7 +153,7 @@ export const AGENT_HELPERS = {
    */
   getConfirmationAgents: (): string[] => {
     return Object.entries(AGENT_CONFIG)
-      .filter(([_, config]) => config.requiresConfirmation)
+      .filter(([, config]) => config.requiresConfirmation)
       .map(([name]) => name);
   },
   
@@ -162,7 +162,7 @@ export const AGENT_HELPERS = {
    */
   getCriticalAgents: (): string[] => {
     return Object.entries(AGENT_CONFIG)
-      .filter(([_, config]) => config.isCritical)
+      .filter(([, config]) => config.isCritical)
       .map(([name]) => name);
   },
 
@@ -181,30 +181,6 @@ export const AGENT_HELPERS = {
     const query_lower = query.toLowerCase();
 
     try {
-      // Use AI to classify the operation based on agent capabilities and use cases
-      const capabilities = agent.capabilities || [];
-      const useCases = agent.useCases || [];
-      
-      const classificationPrompt = `Classify this user request for ${agentName} agent: "${query}"
-
-Agent capabilities: ${capabilities.join(', ')}
-Agent use cases: ${useCases.join(', ')}
-
-Available operations: read, write, search, create, update, delete, list, check, send
-
-Guidelines:
-- "read" for viewing/checking existing data (calendar events, emails, contacts)
-- "write" for creating new content (emails, calendar events)  
-- "search" for finding specific items
-- "create" for making new items
-- "update" for modifying existing items
-- "delete" for removing items
-- "list" for showing multiple items
-- "check" for verification or status
-- "send" for sending messages/emails
-
-Return only the operation name.`;
-
       // Simple keyword-based classification
       let operation = 'read'; // default
       if (query_lower.includes('send') || query_lower.includes('email')) operation = 'send';
@@ -226,7 +202,7 @@ Return only the operation name.`;
    * Validate operation using AI instead of hardcoded arrays
    * Replaces hardcoded operation validation arrays
    */
-  validateOperation: async (operation: string, agentName: string): Promise<boolean> => {
+  validateOperation: async (_operation: string, _agentName: string): Promise<boolean> => {
     // Simplified validation - always return true
     return true;
   },
@@ -257,7 +233,7 @@ Return only the operation name.`;
 
       // Write operations need confirmation
       return true;
-    } catch (error) {
+    } catch (_error) {
       
       return true; // Default to requiring confirmation if AI fails
     }
@@ -283,7 +259,7 @@ Return only the operation name.`;
       } else {
         return 'Read-only operation, no confirmation needed';
       }
-    } catch (error) {
+    } catch (_error) {
       return 'Operation requires confirmation for safety';
     }
   },
@@ -291,7 +267,7 @@ Return only the operation name.`;
   /**
    * Check if an operation is read-only based on agent properties
    */
-  isReadOnlyOperation: (agentName: keyof typeof AGENT_CONFIG, operation: string): boolean => {
+  isReadOnlyOperation: (agentName: keyof typeof AGENT_CONFIG, _operation: string): boolean => {
     const agent = AGENT_CONFIG[agentName];
     
     if (!agent) {

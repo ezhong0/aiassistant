@@ -24,8 +24,6 @@ export interface IEmailDomainService extends IDomainService {
   revokeTokens(userId: string): Promise<void>;
   requiresOAuth(userId: string): Promise<boolean>;
   
-  // Legacy authentication (to be removed)
-  authenticate(accessToken: string, refreshToken?: string): Promise<void>;
   // Domain operations (with automatic authentication)
   sendEmail(userId: string, params: {
     to: string;
@@ -117,8 +115,6 @@ export interface ICalendarDomainService extends IDomainService {
   revokeTokens(userId: string): Promise<void>;
   requiresOAuth(userId: string): Promise<boolean>;
   
-  // Legacy authentication (to be removed)
-  authenticate(accessToken: string, refreshToken?: string): Promise<void>;
   // Domain operations (with automatic authentication)
   createEvent(userId: string, params: {
     summary: string;
@@ -254,8 +250,6 @@ export interface IContactsDomainService extends IDomainService {
   revokeTokens(userId: string): Promise<void>;
   requiresOAuth(userId: string): Promise<boolean>;
   
-  // Legacy authentication (to be removed)
-  authenticate(accessToken: string, refreshToken?: string): Promise<void>;
   // Domain operations (with automatic authentication)
   listContacts(userId: string, params: {
     pageSize?: number;
@@ -526,8 +520,6 @@ export interface ISlackDomainService extends IDomainService {
   revokeTokens(userId: string): Promise<void>;
   requiresOAuth(userId: string): Promise<boolean>;
   
-  // Legacy authentication (to be removed)
-  authenticate(botToken: string): Promise<void>;
   // Domain operations (with automatic authentication)
   sendMessage(userId: string, params: {
     channel: string;

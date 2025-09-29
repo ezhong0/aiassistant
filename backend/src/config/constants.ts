@@ -424,5 +424,5 @@ export const REGEX_CONSTANTS = {
   SESSION_ID: /^session-[a-zA-Z0-9-]+$/,
   
   /** Safe string pattern (alphanumeric, spaces, basic punctuation) */
-  SAFE_STRING: /^[a-zA-Z0-9\s.,!?;:()\-_@#$%&*+=\[\]{}'"<>\/\\|~`]+$/
+  SAFE_STRING: /^[a-zA-Z0-9\s.,!?;:()\-_@#$%&*+=[\]{}'"<>/\\|~`]+$/
 } as const;

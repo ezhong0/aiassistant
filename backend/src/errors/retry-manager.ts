@@ -5,7 +5,7 @@
  * circuit breaker integration, and comprehensive error handling.
  */
 
-import { AppError, ERROR_SEVERITY } from '../utils/app-error';
+import { AppError } from '../utils/app-error';
 
 /**
  * Error recovery strategies
@@ -459,7 +459,7 @@ export class RetryManager {
    */
   private determineRecoveryStrategy(
     error: Error,
-    context?: { service?: string; operation?: string }
+    _context?: { service?: string; operation?: string }
   ): ErrorRecoveryStrategy {
     if (error instanceof AppError) {
       // Return a default recovery strategy since recoveryStrategy property doesn't exist
@@ -496,7 +496,7 @@ export class RetryManager {
    * Sleep utility
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => globalThis.setTimeout(resolve, ms));
   }
 }
 

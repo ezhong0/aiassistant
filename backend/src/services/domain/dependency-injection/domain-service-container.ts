@@ -5,11 +5,11 @@
  * enabling loose coupling and easier testing.
  */
 
-import { IEmailDomainService } from '../interfaces/domain-service.interfaces';
-import { ICalendarDomainService } from '../interfaces/domain-service.interfaces';
-import { IContactsDomainService } from '../interfaces/domain-service.interfaces';
-import { ISlackDomainService } from '../interfaces/domain-service.interfaces';
-import { IAIDomainService } from '../interfaces/domain-service.interfaces';
+import { IEmailDomainService } from '../interfaces/email-domain.interface';
+import { ICalendarDomainService } from '../interfaces/calendar-domain.interface';
+import { IContactsDomainService } from '../interfaces/contacts-domain.interface';
+import { ISlackDomainService } from '../interfaces/slack-domain.interface';
+import { IAIDomainService } from '../interfaces/ai-domain.interface';
 
 /**
  * Service registration interface

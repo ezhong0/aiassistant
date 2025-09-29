@@ -10,7 +10,8 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
-import { IContactsDomainService, IDomainService } from '../services/domain/interfaces/domain-service.interfaces';
+import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
+import { IContactsDomainService } from '../services/domain/interfaces/contacts-domain.interface';
 
 export class ContactAgent extends BaseSubAgent {
   private contactsService: IContactsDomainService;
@@ -98,11 +99,11 @@ Be respectful of privacy and ensure data accuracy.
       // Handle different method signatures
       switch (toolName) {
         case 'create_contact':
-          // createContact doesn't need userId as first parameter
-          return await service.createContact(serviceParams);
+          // createContact needs userId as first parameter
+          return await service.createContact(userId, serviceParams);
         case 'update_contact':
-          // updateContact doesn't need userId as first parameter
-          return await service.updateContact(serviceParams);
+          // updateContact needs contactId as first parameter
+          return await service.updateContact(serviceParams.contactId || serviceParams.resourceName, serviceParams);
         default:
           // Most methods follow the pattern: method(userId, params)
           return await (service as any)[serviceMethod](userId, serviceParams);

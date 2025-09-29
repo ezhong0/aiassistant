@@ -15,7 +15,7 @@ import { NaturalLanguageResponse } from '../types/agents/natural-language.types'
 import { ENVIRONMENT } from '../config/environment';
 
 // Extend Winston's Logger interface to include custom levels
-interface NaturalLanguageLogger extends winston.Logger {
+interface INaturalLanguageLogger extends winston.Logger {
   intent: winston.LeveledLogMethod;
   plan: winston.LeveledLogMethod;
   agent: winston.LeveledLogMethod;

@@ -1,5 +1,5 @@
 import { ServiceManager } from '../../services/service-manager';
-import { ISlackDomainService } from '../../services/domain/interfaces/domain-service.interfaces';
+import { ISlackDomainService } from '../../services/domain/interfaces/slack-domain.interface';
 import { SlackConfig } from './slack.types';
 import { ENVIRONMENT, ENV_VALIDATION } from '../../config/environment';
 

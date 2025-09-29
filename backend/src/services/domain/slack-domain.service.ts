@@ -4,7 +4,7 @@ import { SlackAPIClient } from '../api/clients/slack-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, SlackValidationSchemas } from '../../validation/api-client.validation';
-import { ISlackDomainService } from './interfaces/domain-service.interfaces';
+import { ISlackDomainService } from './interfaces/slack-domain.interface';
 import { SlackOAuthManager } from '../oauth/slack-oauth-manager';
 import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
@@ -23,7 +23,7 @@ import { SlackContext } from '../../types/slack/slack.types';
  * - File uploads and management
  * - Bot token authentication
  */
-export class SlackDomainService extends BaseService implements ISlackDomainService {
+export class SlackDomainService extends BaseService implements Partial<ISlackDomainService> {
   private slackClient: SlackAPIClient | null = null;
   private slackOAuthManager: SlackOAuthManager | null = null;
 
@@ -127,35 +127,6 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
     return await this.slackOAuthManager.requiresOAuth(userId);
   }
 
-  /**
-   * Legacy authentication method (to be removed)
-   */
-  async authenticate(botToken: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.slackClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Slack client not available',
-        { serviceName: 'SlackDomainService' }
-      );
-    }
-
-    try {
-      const credentials: AuthCredentials = {
-        type: 'bearer',
-        accessToken: botToken
-      };
-
-      await this.slackClient.authenticate(credentials);
-      this.logInfo('Slack service authenticated successfully');
-    } catch (error) {
-      throw APIClientError.fromError(error, {
-        serviceName: 'SlackDomainService',
-        endpoint: 'authenticate'
-      });
-    }
-  }
 
   /**
    * Send a message to a channel (with automatic authentication)
@@ -174,11 +145,12 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
     channel: string;
     ts: string;
     message: {
-      text: string;
-      user: string;
-      botId?: string;
-      attachments?: any[];
+      type: string;
+      user?: string;
+      text?: string;
+      ts: string;
       blocks?: any[];
+      attachments?: any[];
     };
   }> {
     this.assertReady();
@@ -199,7 +171,7 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
       }
 
       // Authenticate with bot token
-      await this.authenticate(botToken);
+      // Authentication handled automatically by OAuth manager
       
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(SlackValidationSchemas.sendMessage, params);
@@ -230,7 +202,14 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         ok: response.data.ok,
         channel: response.data.channel,
         ts: response.data.ts,
-        message: response.data.message
+        message: {
+          type: response.data.message?.type || 'message',
+          user: response.data.message?.user,
+          text: response.data.message?.text,
+          ts: response.data.ts,
+          blocks: response.data.message?.blocks,
+          attachments: response.data.message?.attachments
+        }
       };
 
       this.logInfo('Slack message sent successfully', {
@@ -260,11 +239,19 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
     text?: string;
     blocks?: any[];
     attachments?: any[];
+    asUser?: boolean;
   }): Promise<{
     ok: boolean;
     channel: string;
     ts: string;
-    text: string;
+    message: {
+      type: string;
+      user?: string;
+      text?: string;
+      ts: string;
+      blocks?: any[];
+      attachments?: any[];
+    };
   }> {
     this.assertReady();
     
@@ -294,7 +281,14 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         ok: response.data.ok,
         channel: response.data.channel,
         ts: response.data.ts,
-        text: response.data.text
+        message: {
+          type: response.data.message?.type || 'message',
+          user: response.data.message?.user,
+          text: response.data.text,
+          ts: response.data.ts,
+          blocks: response.data.message?.blocks,
+          attachments: response.data.message?.attachments
+        }
       };
 
       this.logInfo('Slack message updated successfully', {
@@ -510,25 +504,31 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
   /**
    * Get user information
    */
-  async getUserInfo(userId: string): Promise<{
+  async getUserInfo(user: string): Promise<{
     ok: boolean;
     user: {
       id: string;
+      teamId: string;
       name: string;
-      realName: string;
-      displayName?: string;
-      email?: string;
-      isBot: boolean;
-      isAdmin: boolean;
-      isOwner: boolean;
+      deleted: boolean;
+      color: string;
+      realName?: string;
+      tz?: string;
+      tzLabel?: string;
+      tzOffset?: number;
       profile: {
         title?: string;
         phone?: string;
         skype?: string;
-        realName: string;
-        realNameNormalized: string;
+        realName?: string;
+        realNameNormalized?: string;
         displayName?: string;
         displayNameNormalized?: string;
+        fields?: any;
+        statusText?: string;
+        statusEmoji?: string;
+        statusExpiration?: number;
+        avatarHash?: string;
         email?: string;
         image24?: string;
         image32?: string;
@@ -536,7 +536,19 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         image72?: string;
         image192?: string;
         image512?: string;
+        statusTextCanonical?: string;
+        team?: string;
       };
+      isAdmin?: boolean;
+      isOwner?: boolean;
+      isPrimaryOwner?: boolean;
+      isRestricted?: boolean;
+      isUltraRestricted?: boolean;
+      isBot?: boolean;
+      isAppUser?: boolean;
+      updated?: number;
+      isEmailConfirmed?: boolean;
+      whoCanShareContactCard?: string;
     };
   }> {
     this.assertReady();
@@ -546,17 +558,38 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
     }
 
     try {
-      this.logInfo('Getting user info', { userId });
+      this.logInfo('Getting user info', { user });
 
       const response = await this.slackClient.makeRequest({
         method: 'GET',
         endpoint: '/users.info',
-        query: { user: userId }
+        query: { user }
       });
 
       const result = {
         ok: response.data.ok,
-        user: response.data.user
+        user: {
+          id: response.data.user.id,
+          teamId: response.data.user.team_id || '',
+          name: response.data.user.name,
+          deleted: response.data.user.deleted || false,
+          color: response.data.user.color || '',
+          realName: response.data.user.real_name,
+          tz: response.data.user.tz,
+          tzLabel: response.data.user.tz_label,
+          tzOffset: response.data.user.tz_offset,
+          profile: response.data.user.profile,
+          isAdmin: response.data.user.is_admin,
+          isOwner: response.data.user.is_owner,
+          isPrimaryOwner: response.data.user.is_primary_owner,
+          isRestricted: response.data.user.is_restricted,
+          isUltraRestricted: response.data.user.is_ultra_restricted,
+          isBot: response.data.user.is_bot,
+          isAppUser: response.data.user.is_app_user,
+          updated: response.data.user.updated,
+          isEmailConfirmed: response.data.user.is_email_confirmed,
+          whoCanShareContactCard: response.data.user.who_can_share_contact_card
+        }
       };
 
       this.logInfo('User info retrieved successfully', {
@@ -574,29 +607,35 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
   /**
    * List users
    */
-  async listUsers(params: {
-    limit?: number;
+  async listUsers(params?: {
     cursor?: string;
     includeLocale?: boolean;
+    limit?: number;
   }): Promise<{
     ok: boolean;
     members: Array<{
       id: string;
+      teamId: string;
       name: string;
-      realName: string;
-      displayName?: string;
-      email?: string;
-      isBot: boolean;
-      isAdmin: boolean;
-      isOwner: boolean;
+      deleted: boolean;
+      color: string;
+      realName?: string;
+      tz?: string;
+      tzLabel?: string;
+      tzOffset?: number;
       profile: {
         title?: string;
         phone?: string;
         skype?: string;
-        realName: string;
-        realNameNormalized: string;
+        realName?: string;
+        realNameNormalized?: string;
         displayName?: string;
         displayNameNormalized?: string;
+        fields?: any;
+        statusText?: string;
+        statusEmoji?: string;
+        statusExpiration?: number;
+        avatarHash?: string;
         email?: string;
         image24?: string;
         image32?: string;
@@ -604,11 +643,23 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         image72?: string;
         image192?: string;
         image512?: string;
+        statusTextCanonical?: string;
+        team?: string;
       };
+      isAdmin?: boolean;
+      isOwner?: boolean;
+      isPrimaryOwner?: boolean;
+      isRestricted?: boolean;
+      isUltraRestricted?: boolean;
+      isBot?: boolean;
+      isAppUser?: boolean;
+      updated?: number;
+      isEmailConfirmed?: boolean;
+      whoCanShareContactCard?: string;
     }>;
     cacheTs: number;
     responseMetadata?: {
-      nextCursor?: string;
+      nextCursor: string;
     };
   }> {
     this.assertReady();
@@ -619,22 +670,43 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
 
     try {
       this.logInfo('Listing users', {
-        limit: params.limit || 1000
+        limit: params?.limit || 1000
       });
 
       const response = await this.slackClient.makeRequest({
         method: 'GET',
         endpoint: '/users.list',
         query: {
-          limit: params.limit || 1000,
-          cursor: params.cursor,
-          include_locale: params.includeLocale
+          limit: params?.limit || 1000,
+          cursor: params?.cursor,
+          include_locale: params?.includeLocale
         }
       });
 
       const result = {
         ok: response.data.ok,
-        members: response.data.members || [],
+        members: (response.data.members || []).map((member: any) => ({
+          id: member.id,
+          teamId: member.team_id || '',
+          name: member.name,
+          deleted: member.deleted || false,
+          color: member.color || '',
+          realName: member.real_name,
+          tz: member.tz,
+          tzLabel: member.tz_label,
+          tzOffset: member.tz_offset,
+          profile: member.profile,
+          isAdmin: member.is_admin,
+          isOwner: member.is_owner,
+          isPrimaryOwner: member.is_primary_owner,
+          isRestricted: member.is_restricted,
+          isUltraRestricted: member.is_ultra_restricted,
+          isBot: member.is_bot,
+          isAppUser: member.is_app_user,
+          updated: member.updated,
+          isEmailConfirmed: member.is_email_confirmed,
+          whoCanShareContactCard: member.who_can_share_contact_card
+        })),
         cacheTs: response.data.cache_ts,
         responseMetadata: response.data.response_metadata
       };
@@ -653,39 +725,47 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
   /**
    * Upload a file
    */
-  async uploadFile(params: {
-    channels?: string;
+  async uploadFile(userId: string, params: {
+    channels?: string[];
     content?: string;
     file?: Buffer;
     filename?: string;
-    title?: string;
+    filetype?: string;
     initialComment?: string;
     threadTs?: string;
+    title?: string;
   }): Promise<{
     ok: boolean;
     file: {
       id: string;
+      created: number;
+      timestamp: number;
       name: string;
       title: string;
       mimetype: string;
       filetype: string;
       prettyType: string;
       user: string;
+      userTeam: string;
+      editable: boolean;
       size: number;
-      urlPrivate: string;
-      urlPrivateDownload: string;
-      permalink: string;
-      permalinkPublic: string;
+      mode: string;
       isExternal: boolean;
+      externalType: string;
       isPublic: boolean;
       publicUrlShared: boolean;
       displayAsBot: boolean;
       username: string;
-      created: number;
-      updated: number;
-      mode: string;
-      editable: boolean;
+      urlPrivate: string;
+      urlPrivateDownload: string;
+      permalink: string;
+      permalinkPublic: string;
+      commentsCount: number;
       isStarred: boolean;
+      shares: any;
+      channels: string[];
+      groups: string[];
+      ims: string[];
       hasRichPreview: boolean;
     };
   }> {
@@ -707,10 +787,11 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         method: 'POST',
         endpoint: '/files.upload',
         data: {
-          channels: params.channels,
+          channels: params.channels?.join(','),
           content: params.content,
           file: params.file,
           filename: params.filename,
+          filetype: params.filetype,
           title: params.title,
           initial_comment: params.initialComment,
           thread_ts: params.threadTs
@@ -719,7 +800,38 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
 
       const result = {
         ok: response.data.ok,
-        file: response.data.file
+        file: {
+          id: response.data.file.id,
+          created: response.data.file.created,
+          timestamp: response.data.file.timestamp,
+          name: response.data.file.name,
+          title: response.data.file.title,
+          mimetype: response.data.file.mimetype,
+          filetype: response.data.file.filetype,
+          prettyType: response.data.file.pretty_type,
+          user: response.data.file.user,
+          userTeam: response.data.file.user_team || '',
+          editable: response.data.file.editable,
+          size: response.data.file.size,
+          mode: response.data.file.mode,
+          isExternal: response.data.file.is_external,
+          externalType: response.data.file.external_type || '',
+          isPublic: response.data.file.is_public,
+          publicUrlShared: response.data.file.public_url_shared,
+          displayAsBot: response.data.file.display_as_bot,
+          username: response.data.file.username,
+          urlPrivate: response.data.file.url_private,
+          urlPrivateDownload: response.data.file.url_private_download,
+          permalink: response.data.file.permalink,
+          permalinkPublic: response.data.file.permalink_public,
+          commentsCount: response.data.file.comments_count || 0,
+          isStarred: response.data.file.is_starred || false,
+          shares: response.data.file.shares || {},
+          channels: response.data.file.channels || [],
+          groups: response.data.file.groups || [],
+          ims: response.data.file.ims || [],
+          hasRichPreview: response.data.file.has_rich_preview || false
+        }
       };
 
       this.logInfo('File uploaded successfully', {

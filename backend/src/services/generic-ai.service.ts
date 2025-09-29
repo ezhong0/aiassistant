@@ -1,6 +1,6 @@
 import { BaseService } from './base-service';
 import { DomainServiceResolver } from './domain';
-import { IAIDomainService } from './domain/interfaces/domain-service.interfaces';
+import { IAIDomainService } from './domain/interfaces/ai-domain.interface';
 import logger from '../utils/logger';
 
 /**
@@ -162,16 +162,14 @@ export class GenericAIService extends BaseService {
       });
 
       // Always use structured output with function calling
-      const structuredResponse = await this.aiDomainService.generateStructuredData(
-        prompt.userPrompt,
-        prompt.systemPrompt,
-        schema,
-        {
-          temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
-          maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
-          model: prompt.options?.model ?? this.config.MODEL
-        }
-      );
+      const structuredResponse = await this.aiDomainService.generateStructuredData({
+        prompt: prompt.userPrompt,
+        schema: schema,
+        systemPrompt: prompt.systemPrompt,
+        temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
+        maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
+        model: prompt.options?.model ?? this.config.MODEL
+      });
 
       this.logInfo('🔧 CRITICAL: aiDomainService.generateStructuredData returned', {
         requestId,

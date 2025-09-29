@@ -7,10 +7,7 @@
  * excessive memory pressure.
  */
 
-// Removed WorkflowOrchestrator import - no longer needed
 import logger from '../src/utils/logger';
-
-// Removed WorkflowOrchestrator test - no longer needed
 
 async function testMemoryUsage() {
   logger.info('Testing memory usage...');

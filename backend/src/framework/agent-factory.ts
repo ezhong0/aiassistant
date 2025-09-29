@@ -269,7 +269,7 @@ export class AgentFactory {
   /**
    * Initialize all core agents
    */
-  static initialize(): void {
+  static async initialize(): Promise<void> {
     if (this.initialized) {
       logger.debug('AgentFactory already initialized', {
         correlationId: 'factory-init-skip',
@@ -280,10 +280,17 @@ export class AgentFactory {
 
     try {
       // Import and register all SubAgents
-      const { CalendarAgent } = require('../agents/calendar.agent');
-      const { EmailAgent } = require('../agents/email.agent');
-      const { ContactAgent } = require('../agents/contact.agent');
-      const { SlackAgent } = require('../agents/slack.agent');
+      const [
+        { CalendarAgent },
+        { EmailAgent },
+        { ContactAgent },
+        { SlackAgent }
+      ] = await Promise.all([
+        import('../agents/calendar.agent'),
+        import('../agents/email.agent'),
+        import('../agents/contact.agent'),
+        import('../agents/slack.agent')
+      ]);
 
       // Register all core SubAgents
       this.registerAgentClass('calendarAgent', CalendarAgent);

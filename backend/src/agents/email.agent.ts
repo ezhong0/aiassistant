@@ -10,7 +10,8 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
-import { IEmailDomainService, IDomainService } from '../services/domain/interfaces/domain-service.interfaces';
+import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
+import { IEmailDomainService } from '../services/domain/interfaces/email-domain.interface';
 
 export class EmailAgent extends BaseSubAgent {
   private emailService: IEmailDomainService;

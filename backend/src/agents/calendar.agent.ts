@@ -10,7 +10,8 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
-import { ICalendarDomainService, IDomainService } from '../services/domain/interfaces/domain-service.interfaces';
+import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
+import { ICalendarDomainService } from '../services/domain/interfaces/calendar-domain.interface';
 
 export class CalendarAgent extends BaseSubAgent {
   private calendarService: ICalendarDomainService;

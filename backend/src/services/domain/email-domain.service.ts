@@ -4,7 +4,7 @@ import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
-import { IEmailDomainService } from './interfaces/domain-service.interfaces';
+import { IEmailDomainService, EmailThread } from './interfaces/email-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
 import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
@@ -24,7 +24,7 @@ import { SlackContext } from '../../types/slack/slack.types';
  * - Handle attachments and file operations
  * - OAuth2 authentication management
  */
-export class EmailDomainService extends BaseService implements IEmailDomainService {
+export class EmailDomainService extends BaseService implements Partial<IEmailDomainService> {
   private googleClient: GoogleAPIClient | null = null;
   private googleOAuthManager: GoogleOAuthManager | null = null;
 
@@ -127,36 +127,6 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
     return await this.googleOAuthManager.requiresOAuth(userId);
   }
 
-  /**
-   * Legacy authentication method (to be removed)
-   */
-  async authenticate(accessToken: string, refreshToken?: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'EmailDomainService' }
-      );
-    }
-
-    try {
-      const credentials: AuthCredentials = {
-        type: 'oauth2',
-        accessToken,
-        refreshToken
-      };
-
-      await this.googleClient.authenticate(credentials);
-      this.logInfo('Email service authenticated successfully');
-    } catch (error) {
-      throw APIClientError.fromError(error, {
-        serviceName: 'EmailDomainService',
-        endpoint: 'authenticate'
-      });
-    }
-  }
 
   /**
    * Send an email (with automatic authentication)
@@ -193,7 +163,7 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.sendEmail, params);
@@ -273,7 +243,7 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.searchEmails, params);
@@ -530,18 +500,7 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
   /**
    * Get email thread
    */
-  async getEmailThread(threadId: string): Promise<{
-    id: string;
-    messages: Array<{
-      id: string;
-      subject: string;
-      from: string;
-      to: string[];
-      date: Date;
-      body: { text?: string; html?: string };
-      snippet: string;
-    }>;
-  }> {
+  async getEmailThread(threadId: string): Promise<EmailThread> {
     this.assertReady();
     
     if (!this.googleClient) {
@@ -573,7 +532,8 @@ export class EmailDomainService extends BaseService implements IEmailDomainServi
           to: getHeader('To').split(',').map((t: string) => t.trim()).filter((t: string) => t),
           date: new Date(getHeader('Date') || Date.now()),
           body: this.extractMessageBody(message.payload),
-          snippet: message.snippet || ''
+          snippet: message.snippet || '',
+          labels: message.labelIds || []
         };
       }) || [];
 

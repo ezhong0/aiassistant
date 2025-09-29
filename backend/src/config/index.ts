@@ -22,6 +22,3 @@ export { config as default } from './unified-config';
 
 // Example of clean usage:
 // import { config } from './config';
-// console.log(config.nodeEnv); // 'production' | 'development' | 'test'
-// console.log(config.openaiApiKey); // string | undefined
-// console.log(config.getAIModelConfig('general')); // AI model config

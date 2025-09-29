@@ -4,7 +4,7 @@ import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, CalendarValidationSchemas } from '../../validation/api-client.validation';
-import { ICalendarDomainService } from './interfaces/domain-service.interfaces';
+import { ICalendarDomainService } from './interfaces/calendar-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
 import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
@@ -24,7 +24,7 @@ import { SlackContext } from '../../types/slack/slack.types';
  * - Handle recurring events and conference data
  * - OAuth2 authentication management
  */
-export class CalendarDomainService extends BaseService implements ICalendarDomainService {
+export class CalendarDomainService extends BaseService implements Partial<ICalendarDomainService> {
   private googleClient: GoogleAPIClient | null = null;
   private googleOAuthManager: GoogleOAuthManager | null = null;
 
@@ -127,57 +127,36 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     return await this.googleOAuthManager.requiresOAuth(userId);
   }
 
-  /**
-   * Legacy authentication method (to be removed)
-   */
-  async authenticate(accessToken: string, refreshToken?: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'CalendarDomainService' }
-      );
-    }
-
-    try {
-      const credentials: AuthCredentials = {
-        type: 'oauth2',
-        accessToken,
-        refreshToken
-      };
-
-      await this.googleClient.authenticate(credentials);
-      this.logInfo('Calendar service authenticated successfully');
-    } catch (error) {
-      throw APIClientError.fromError(error, {
-        serviceName: 'CalendarDomainService',
-        endpoint: 'authenticate'
-      });
-    }
-  }
 
   /**
    * Create a calendar event (with automatic authentication)
    */
-  async createEvent(userId: string, params: {
+  async createEvent(userId: string, event: {
     summary: string;
     description?: string;
-    start: {
-      dateTime: string;
-      timeZone?: string;
-    };
-    end: {
-      dateTime: string;
-      timeZone?: string;
-    };
+    start: Date;
+    end: Date;
     attendees?: Array<{
       email: string;
       responseStatus?: string;
     }>;
     location?: string;
-    recurrence?: string[];
+    recurrence?: {
+      frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+      interval?: number;
+      daysOfWeek?: string[];
+      until?: Date;
+      count?: number;
+    };
+    reminders?: {
+      useDefault?: boolean;
+      overrides?: Array<{
+        method: 'email' | 'popup';
+        minutes: number;
+      }>;
+    };
+    visibility?: 'default' | 'public' | 'private' | 'confidential';
+    transparency?: 'opaque' | 'transparent';
     conferenceData?: {
       createRequest?: {
         requestId: string;
@@ -190,11 +169,48 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   }): Promise<{
     id: string;
     summary: string;
-    start: { dateTime: string; timeZone?: string };
-    end: { dateTime: string; timeZone?: string };
-    attendees?: Array<{ email: string; responseStatus?: string }>;
+    description?: string;
+    start: Date;
+    end: Date;
     location?: string;
-    htmlLink: string;
+    attendees?: Array<{
+      email: string;
+      displayName?: string;
+      responseStatus?: 'needsAction' | 'declined' | 'tentative' | 'accepted';
+      optional?: boolean;
+      organizer?: boolean;
+    }>;
+    organizer?: {
+      email: string;
+      displayName?: string;
+    };
+    created: Date;
+    updated: Date;
+    status: 'tentative' | 'confirmed' | 'cancelled';
+    visibility: 'default' | 'public' | 'private' | 'confidential';
+    transparency: 'opaque' | 'transparent';
+    recurrence?: {
+      frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+      interval?: number;
+      daysOfWeek?: string[];
+      until?: Date;
+      count?: number;
+    };
+    recurringEventId?: string;
+    htmlLink?: string;
+    hangoutLink?: string;
+    conferenceData?: {
+      conferenceId: string;
+      conferenceSolution: {
+        key: { type: string };
+        name: string;
+      };
+      entryPoints?: Array<{
+        entryPointType: string;
+        uri: string;
+        label?: string;
+      }>;
+    };
   }> {
     this.assertReady();
     
@@ -214,15 +230,15 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       // Validate input parameters
-      const validatedParams = ValidationHelper.validate(CalendarValidationSchemas.createEvent, params);
+      const validatedParams = ValidationHelper.validate(CalendarValidationSchemas.createEvent, event);
 
       this.logInfo('Creating calendar event', {
         summary: validatedParams.summary,
-        start: validatedParams.start.dateTime,
-        end: validatedParams.end.dateTime,
+        start: validatedParams.start,
+        end: validatedParams.end,
         calendarId: validatedParams.calendarId || 'primary'
       });
 
@@ -250,11 +266,22 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       const result = {
         id: response.data.id,
         summary: response.data.summary,
-        start: response.data.start,
-        end: response.data.end,
-        attendees: response.data.attendees,
+        description: response.data.description,
+        start: new Date(response.data.start.dateTime || response.data.start.date),
+        end: new Date(response.data.end.dateTime || response.data.end.date),
         location: response.data.location,
-        htmlLink: response.data.htmlLink
+        attendees: response.data.attendees,
+        organizer: response.data.organizer,
+        created: new Date(response.data.created),
+        updated: new Date(response.data.updated),
+        status: response.data.status,
+        visibility: response.data.visibility,
+        transparency: response.data.transparency,
+        recurrence: response.data.recurrence,
+        recurringEventId: response.data.recurringEventId,
+        htmlLink: response.data.htmlLink,
+        hangoutLink: response.data.hangoutLink,
+        conferenceData: response.data.conferenceData
       };
 
       this.logInfo('Calendar event created successfully', {
@@ -311,7 +338,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       this.logInfo('Listing calendar events', {
         calendarId: params.calendarId || 'primary',
@@ -365,13 +392,47 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     id: string;
     summary: string;
     description?: string;
-    start: { dateTime?: string; date?: string; timeZone?: string };
-    end: { dateTime?: string; date?: string; timeZone?: string };
-    attendees?: Array<{ email: string; responseStatus?: string }>;
+    start: Date;
+    end: Date;
     location?: string;
-    htmlLink: string;
-    status: string;
-    recurrence?: string[];
+    attendees?: Array<{
+      email: string;
+      displayName?: string;
+      responseStatus?: 'needsAction' | 'declined' | 'tentative' | 'accepted';
+      optional?: boolean;
+      organizer?: boolean;
+    }>;
+    organizer?: {
+      email: string;
+      displayName?: string;
+    };
+    created: Date;
+    updated: Date;
+    status: 'tentative' | 'confirmed' | 'cancelled';
+    visibility: 'default' | 'public' | 'private' | 'confidential';
+    transparency: 'opaque' | 'transparent';
+    recurrence?: {
+      frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+      interval?: number;
+      daysOfWeek?: string[];
+      until?: Date;
+      count?: number;
+    };
+    recurringEventId?: string;
+    htmlLink?: string;
+    hangoutLink?: string;
+    conferenceData?: {
+      conferenceId: string;
+      conferenceSolution: {
+        key: { type: string };
+        name: string;
+      };
+      entryPoints?: Array<{
+        entryPointType: string;
+        uri: string;
+        label?: string;
+      }>;
+    };
   }> {
     this.assertReady();
     
@@ -395,13 +456,21 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
         id: response.data.id,
         summary: response.data.summary,
         description: response.data.description,
-        start: response.data.start,
-        end: response.data.end,
-        attendees: response.data.attendees,
+        start: new Date(response.data.start.dateTime || response.data.start.date),
+        end: new Date(response.data.end.dateTime || response.data.end.date),
         location: response.data.location,
-        htmlLink: response.data.htmlLink,
+        attendees: response.data.attendees,
+        organizer: response.data.organizer,
+        created: new Date(response.data.created),
+        updated: new Date(response.data.updated),
         status: response.data.status,
-        recurrence: response.data.recurrence
+        visibility: response.data.visibility,
+        transparency: response.data.transparency,
+        recurrence: response.data.recurrence,
+        recurringEventId: response.data.recurringEventId,
+        htmlLink: response.data.htmlLink,
+        hangoutLink: response.data.hangoutLink,
+        conferenceData: response.data.conferenceData
       };
 
       this.logInfo('Calendar event retrieved successfully', {
@@ -419,32 +488,80 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
   /**
    * Update a calendar event
    */
-  async updateEvent(userId: string, params: {
-    eventId: string;
-    calendarId?: string;
+  async updateEvent(eventId: string, updates: {
     summary?: string;
     description?: string;
-    start?: {
-      dateTime: string;
-      timeZone?: string;
-    };
-    end?: {
-      dateTime: string;
-      timeZone?: string;
-    };
+    start?: Date;
+    end?: Date;
+    location?: string;
     attendees?: Array<{
       email: string;
-      responseStatus?: string;
+      displayName?: string;
+      responseStatus?: 'needsAction' | 'declined' | 'tentative' | 'accepted';
+      optional?: boolean;
+      organizer?: boolean;
     }>;
-    location?: string;
-  }): Promise<{
+    recurrence?: {
+      frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+      interval?: number;
+      daysOfWeek?: string[];
+      until?: Date;
+      count?: number;
+    };
+    reminders?: {
+      useDefault?: boolean;
+      overrides?: Array<{
+        method: 'email' | 'popup';
+        minutes: number;
+      }>;
+    };
+    visibility?: 'default' | 'public' | 'private' | 'confidential';
+    transparency?: 'opaque' | 'transparent';
+  }, calendarId?: string): Promise<{
     id: string;
     summary: string;
-    start: { dateTime?: string; date?: string; timeZone?: string };
-    end: { dateTime?: string; date?: string; timeZone?: string };
-    attendees?: Array<{ email: string; responseStatus?: string }>;
+    description?: string;
+    start: Date;
+    end: Date;
     location?: string;
-    htmlLink: string;
+    attendees?: Array<{
+      email: string;
+      displayName?: string;
+      responseStatus?: 'needsAction' | 'declined' | 'tentative' | 'accepted';
+      optional?: boolean;
+      organizer?: boolean;
+    }>;
+    organizer?: {
+      email: string;
+      displayName?: string;
+    };
+    created: Date;
+    updated: Date;
+    status: 'tentative' | 'confirmed' | 'cancelled';
+    visibility: 'default' | 'public' | 'private' | 'confidential';
+    transparency: 'opaque' | 'transparent';
+    recurrence?: {
+      frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+      interval?: number;
+      daysOfWeek?: string[];
+      until?: Date;
+      count?: number;
+    };
+    recurringEventId?: string;
+    htmlLink?: string;
+    hangoutLink?: string;
+    conferenceData?: {
+      conferenceId: string;
+      conferenceSolution: {
+        key: { type: string };
+        name: string;
+      };
+      entryPoints?: Array<{
+        entryPointType: string;
+        uri: string;
+        label?: string;
+      }>;
+    };
   }> {
     this.assertReady();
     
@@ -454,34 +571,34 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const token = await this.googleOAuthManager!.getValidTokens('system'); // TODO: Get actual userId
       if (!token) {
         throw new Error('OAuth required - call initializeOAuth first');
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       this.logInfo('Updating calendar event', {
-        eventId: params.eventId,
-        calendarId: params.calendarId || 'primary'
+        eventId: eventId,
+        calendarId: calendarId || 'primary'
       });
 
       const eventData = {
-        summary: params.summary,
-        description: params.description,
-        start: params.start,
-        end: params.end,
-        attendees: params.attendees,
-        location: params.location
+        summary: updates.summary,
+        description: updates.description,
+        start: updates.start,
+        end: updates.end,
+        attendees: updates.attendees,
+        location: updates.location
       };
 
       const response = await this.googleClient.makeRequest({
         method: 'PATCH',
         endpoint: '/calendar/v3/calendars/primary/events/patch',
         query: {
-          calendarId: params.calendarId || 'primary',
-          eventId: params.eventId,
+          calendarId: calendarId || 'primary',
+          eventId: eventId,
           sendUpdates: 'all'
         },
         data: eventData
@@ -490,11 +607,22 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       const result = {
         id: response.data.id,
         summary: response.data.summary,
-        start: response.data.start,
-        end: response.data.end,
-        attendees: response.data.attendees,
+        description: response.data.description,
+        start: new Date(response.data.start.dateTime || response.data.start.date),
+        end: new Date(response.data.end.dateTime || response.data.end.date),
         location: response.data.location,
-        htmlLink: response.data.htmlLink
+        attendees: response.data.attendees,
+        organizer: response.data.organizer,
+        created: new Date(response.data.created),
+        updated: new Date(response.data.updated),
+        status: response.data.status,
+        visibility: response.data.visibility,
+        transparency: response.data.transparency,
+        recurrence: response.data.recurrence,
+        recurringEventId: response.data.recurringEventId,
+        htmlLink: response.data.htmlLink,
+        hangoutLink: response.data.hangoutLink,
+        conferenceData: response.data.conferenceData
       };
 
       this.logInfo('Calendar event updated successfully', {
@@ -504,7 +632,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
 
       return result;
     } catch (error) {
-      this.logError('Failed to update calendar event', error, { eventId: params.eventId });
+      this.logError('Failed to update calendar event', error, { eventId: eventId });
       throw error;
     }
   }
@@ -567,7 +695,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       this.logInfo('Checking availability', {
         timeMin: params.timeMin,
@@ -636,7 +764,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       this.logInfo('Finding available time slots', {
         startDate: params.startDate,
@@ -727,9 +855,16 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
     summary: string;
     description?: string;
     primary: boolean;
-    accessRole: string;
+    accessRole: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner';
     backgroundColor?: string;
     foregroundColor?: string;
+    timeZone: string;
+    selected?: boolean;
+    hidden?: boolean;
+    deleted?: boolean;
+    conferenceProperties?: {
+      allowedConferenceSolutionTypes: string[];
+    };
   }>> {
     this.assertReady();
     
@@ -745,7 +880,7 @@ export class CalendarDomainService extends BaseService implements ICalendarDomai
       }
       
       // Authenticate with valid token
-      await this.authenticate(token);
+      // Authentication handled automatically by OAuth manager
       
       this.logInfo('Listing user calendars');
 

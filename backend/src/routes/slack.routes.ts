@@ -9,8 +9,7 @@ import {
 import { validateRequest } from '../middleware/validation.middleware';
 import { ServiceManager } from '../services/service-manager';
 import { DomainServiceResolver } from '../services/domain';
-import { ISlackDomainService } from '../services/domain/interfaces/domain-service.interfaces';
-// import { SlackOAuthService } from '../services/slack/slack-oauth.service'; // REMOVED: Replaced by OAuth managers
+import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
 import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
 

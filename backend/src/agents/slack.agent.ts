@@ -10,7 +10,8 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
-import { ISlackDomainService, IDomainService } from '../services/domain/interfaces/domain-service.interfaces';
+import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
+import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
 
 export class SlackAgent extends BaseSubAgent {
   private slackService: ISlackDomainService;
@@ -117,8 +118,8 @@ Be mindful of workspace etiquette and privacy considerations.
           // deleteMessage doesn't need userId
           return await service.deleteMessage(serviceParams.channel, serviceParams.ts);
         case 'upload_file':
-          // uploadFile doesn't need userId
-          return await service.uploadFile(serviceParams);
+          // uploadFile needs userId as first parameter
+          return await service.uploadFile(userId, serviceParams);
         default:
           // Most methods follow the pattern: method(params)
           return await (service as any)[serviceMethod](serviceParams);

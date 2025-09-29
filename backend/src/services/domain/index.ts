@@ -21,7 +21,7 @@ export type {
   IContactsDomainService,
   ISlackDomainService,
   IAIDomainService
-} from './interfaces/domain-service.interfaces';
+} from './interfaces';
 
 // Export dependency injection
 export {

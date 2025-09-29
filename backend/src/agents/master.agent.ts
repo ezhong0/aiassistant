@@ -298,7 +298,6 @@ export class MasterAgent {
       workflowContext,
       context
     );
-    const finalContext = finalResult.parsed.context;
     const response = finalResult.parsed.response;
 
     return {
