@@ -9,12 +9,12 @@ import {
 } from '../types/auth.types';
 import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { serviceManager } from "./service-manager";
-import { ConfigService } from './config.service';
+import { config as unifiedConfig } from '../config/unified-config';
 import { BaseService } from './base-service';
 
 export class AuthService extends BaseService {
   private oauth2Client!: OAuth2Client;
-  private config: ConfigService | null = null;
+  private config: typeof unifiedConfig | null = null;
 
   constructor() {
     super('AuthService');
@@ -25,18 +25,18 @@ export class AuthService extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     // Get config service from ServiceManager
-    this.config = serviceManager.getService<ConfigService>('configService') || null;
+    this.config = unifiedConfig;
     
     if (!this.config) {
       throw new Error('ConfigService not available from service registry');
     }
     
     // Initialize OAuth2Client only if Google OAuth is configured
-    if (this.config.googleClientId && this.config.googleClientSecret && this.config.googleRedirectUri) {
+    if (this.config.googleAuth?.clientId && this.config.googleAuth?.clientSecret && this.config.googleAuth?.redirectUri) {
       this.oauth2Client = new OAuth2Client(
-        this.config.googleClientId,
-        this.config.googleClientSecret,
-        this.config.googleRedirectUri
+        this.config.googleAuth.clientId,
+        this.config.googleAuth.clientSecret,
+        this.config.googleAuth.redirectUri
       );
     } else {
       this.logWarn('Google OAuth not configured - OAuth functionality will be disabled');
@@ -44,8 +44,8 @@ export class AuthService extends BaseService {
 
     this.logInfo('Auth service initialized successfully', {
       environment: this.config.nodeEnv,
-      jwtIssuer: this.config.jwtIssuer,
-      jwtExpiresIn: this.config.jwtExpiresIn
+      jwtIssuer: this.config.auth.jwt.issuer,
+      jwtExpiresIn: this.config.auth.jwt.expiresIn
     });
   }
 
@@ -59,7 +59,7 @@ export class AuthService extends BaseService {
   /**
    * Check if service is ready and config is available
    */
-  private assertConfig(): ConfigService {
+  private assertConfig(): typeof unifiedConfig {
     if (!this.config) {
       throw new Error('AuthService config not initialized');
     }
@@ -121,9 +121,9 @@ export class AuthService extends BaseService {
         codeLength: code.length,
         codePrefix: code.substring(0, 20) + '...',
         clientConfig: {
-          clientId: config.googleClientId ? config.googleClientId.substring(0, 20) + '...' : 'not_set',
-          redirectUri: config.googleRedirectUri || 'not_set',
-          hasClientSecret: !!config.googleClientSecret
+          clientId: config.googleAuth?.clientId ? config.googleAuth.clientId.substring(0, 20) + '...' : 'not_set',
+          redirectUri: config.googleAuth?.redirectUri || ' not_set',
+          hasClientSecret: !!config.googleAuth?.clientSecret
         }
       });
       
@@ -157,8 +157,8 @@ export class AuthService extends BaseService {
         errorDetails: error.response?.data,
         status: error.response?.status,
         clientConfig: {
-          clientId: this.config?.googleClientId?.substring(0, 20) + '...' || 'unknown',
-          redirectUri: this.config?.googleRedirectUri || 'unknown'
+          clientId: this.config?.googleAuth?.clientId?.substring(0, 20) + '...' || 'unknown',
+          redirectUri: this.config?.googleAuth?.redirectUri || 'unknown'
         }
       });
       this.handleError(error, 'exchangeCodeForTokens');
@@ -209,10 +209,10 @@ export class AuthService extends BaseService {
       const payload: JWTPayload = {
         sub: userId,
         email,
-        iss: config.jwtIssuer,
-        aud: config.jwtAudience,
+        iss: config.auth.jwt.issuer,
+        aud: config.auth.jwt.audience,
         iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(config.jwtExpiresIn),
+        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(config.auth.jwt.expiresIn),
         ...additionalClaims
       };
 
@@ -225,7 +225,7 @@ export class AuthService extends BaseService {
       this.logDebug('Generated JWT token', { 
         userId, 
         email, 
-        expiresIn: config.jwtExpiresIn 
+        expiresIn: config.auth.jwt.expiresIn 
       });
       
       return token;
@@ -248,8 +248,8 @@ export class AuthService extends BaseService {
       }
 
       const decoded = jwt.verify(token, config.jwtSecret, {
-        issuer: config.jwtIssuer,
-        audience: config.jwtAudience
+        issuer: config.auth.jwt.issuer,
+        audience: config.auth.jwt.audience
       }) as JWTPayload;
 
       this.logDebug('JWT token verified successfully', { 
@@ -441,9 +441,9 @@ export class AuthService extends BaseService {
       const details = {
         oauth2Client: !!this.oauth2Client,
         config: config ? {
-          hasGoogleClientId: !!config.googleClientId,
-          hasGoogleClientSecret: !!config.googleClientSecret,
-          hasGoogleRedirectUri: !!config.googleRedirectUri,
+          hasGoogleClientId: !!config.googleAuth?.clientId,
+          hasGoogleClientSecret: !!config.googleAuth?.clientSecret,
+          hasGoogleRedirectUri: !!config.googleAuth?.redirectUri,
           hasJWTSecret: !!config.jwtSecret
         } : null
       };

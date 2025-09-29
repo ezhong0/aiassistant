@@ -204,7 +204,7 @@ const UnifiedConfigSchema = z.object({
 }).default({
   environment: {
     NODE_ENV: 'development',
-    PORT: 3000,
+    PORT: '3000',
     LOG_LEVEL: 'info',
   },
   auth: {
@@ -288,16 +288,10 @@ export type SecurityConfig = z.infer<typeof SecuritySchema>;
  */
 export class UnifiedConfigService extends BaseService {
   private config: UnifiedConfig;
-  private isProduction: boolean;
-  private isDevelopment: boolean;
-  private isTest: boolean;
 
   constructor() {
     super('UnifiedConfigService');
     this.config = this.loadAndValidateConfig();
-    this.isProduction = this.config.environment.NODE_ENV === 'production';
-    this.isDevelopment = this.config.environment.NODE_ENV === 'developmental';
-    this.isTest = this.config.environment.NODE_ENV === 'test';
     
     this.logConfigurationSummary();
     this.validateProductionRequirements();
@@ -312,6 +306,16 @@ export class UnifiedConfigService extends BaseService {
       correlationId: 'config-init',
       operation: 'config_validation',
       metadata: { environment: this.config.environment.NODE_ENV }
+    });
+  }
+
+  /**
+   * Service cleanup
+   */
+  protected async onDestroy(): Promise<void> {
+    logger.info('Configuration service destroyed', {
+      correlationId: 'config-destroy',
+      operation: 'config_cleanup'
     });
   }
 
@@ -493,15 +497,15 @@ export class UnifiedConfigService extends BaseService {
    * Convenience getters for common configs
    */
   get isProduction(): boolean {
-    return this.isProduction;
+    return this.config.environment.NODE_ENV === 'production';
   }
 
   get isDevelopment(): boolean {
-    return this.isDevelopment;
+    return this.config.environment.NODE_ENV === 'development';
   }
 
   get isTest(): boolean {
-    return this.isTest;
+    return this.config.environment.NODE_ENV === 'test';
   }
 
   get port(): number {
@@ -621,6 +625,3 @@ export class UnifiedConfigService extends BaseService {
 // Export singleton instances for easy access
 export const config = new UnifiedConfigService();
 export const unifiedConfig = config;
-
-// Export types for use in other modules
-export type { UnifiedConfig, EnvironmentConfig, AuthConfig, ServicesConfig, AIConfig, SecurityConfig };
