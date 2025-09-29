@@ -28,7 +28,7 @@ import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
 import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
-import { ENV_VALIDATION, ENVIRONMENT } from './config/environment';
+import { unifiedConfig } from './config/unified-config';
 
 // Global interfaces store
 let globalInterfaces: InterfaceManager | null = null;
@@ -59,17 +59,15 @@ process.on('uncaughtException', (error: Error) => {
 // Initialize services and AgentFactory
 const initializeApplication = async (): Promise<void> => {
   try {
-    // Enforce production env guardrails for secrets
-    if (ENV_VALIDATION.isProduction()) {
-      const missing = ENV_VALIDATION.validateRequired();
-      if (missing.length > 0) {
-        logger.error('Missing required environment variables in production', new Error('Environment validation failed'), {
-          correlationId: 'startup',
-          operation: 'environment_validation',
-          metadata: { missingVariables: missing }
-        });
-        throw new Error('Missing required environment variables');
-      }
+    // Validate configuration (includes production env guardrails)
+    const configHealth = unifiedConfig.getHealth();
+    if (!configHealth.healthy) {
+      logger.error('Configuration validation failed', new Error('Configuration validation failed'), {
+        correlationId: 'startup',
+        operation: 'environment_validation',
+        metadata: { configIssues: configHealth.details.issues }
+      });
+      throw new Error('Configuration validation failed');
     }
 
     // Initialize all core services with enhanced dependency management
@@ -88,8 +86,8 @@ const initializeApplication = async (): Promise<void> => {
 }
 
 const app = express();
-// Railway provides PORT environment variable, use it or fallback to default
-const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// Get port from unified configuration
+const port = unifiedConfig.port;
 
 // CRITICAL: Health endpoints MUST be registered first before any middleware
 // This ensures Railway health checks work immediately when container starts
@@ -188,7 +186,7 @@ app.get('/', (req: Request, res: Response) => {
   res.json({ 
     message: 'Assistant App API',
     version: '1.0.0',
-    environment: process.env.NODE_ENV || 'development',
+    environment: unifiedConfig.nodeEnv,
     timestamp: new Date().toISOString()
   });
 });
@@ -207,7 +205,7 @@ const startServer = async (): Promise<void> => {
         operation: 'server_start',
         metadata: {
           port,
-          environment: process.env.NODE_ENV,
+          environment: unifiedConfig.nodeEnv,
           healthCheck: `http://localhost:${port}/healthz`
         }
       });

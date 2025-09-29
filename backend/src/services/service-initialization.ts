@@ -9,8 +9,7 @@ import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 // import { SlackOAuthService } from './slack/slack-oauth.service'; // REMOVED: Replaced by OAuth managers
 import { AuthStatusService } from './auth-status.service';
-import { ConfigService } from './config.service';
-import { ENVIRONMENT, ENV_VALIDATION } from '../config/environment';
+import { unifiedConfig } from '../config/unified-config';
 import { initializeDomainServices } from './domain';
 import { GenericAIService } from './generic-ai.service';
 import { GoogleOAuthManager } from './oauth/google-oauth-manager';
@@ -26,6 +25,17 @@ export const initializeAllCoreServices = async (): Promise<void> => {
   }
 
   try {
+    // Validate configuration first (includes production env guardrails)
+    const configHealth = unifiedConfig.getHealth();
+    if (!configHealth.healthy) {
+      logger.error('Configuration validation failed', new Error('Configuration validation failed'), {
+        correlationId: 'startup',
+        operation: 'environment_validation',
+        metadata: { configIssues: configHealth.details.issues }
+      });
+      throw new Error('Configuration validation failed');
+    }
+
     // Initialize domain services first
     initializeDomainServices();
 
@@ -46,7 +56,7 @@ export const initializeAllCoreServices = async (): Promise<void> => {
         operation: 'service_initialization',
         metadata: {
           serviceCount: 20, // Updated count after cleanup
-          environment: process.env.NODE_ENV
+          environment: unifiedConfig.nodeEnv
         }
       });
 
@@ -73,9 +83,9 @@ export const initializeAllCoreServices = async (): Promise<void> => {
  */
 const registerCoreServices = async (): Promise<void> => {
   try {
-    // 0. ConfigService - No dependencies, highest priority (configuration)
-    const configService = new ConfigService();
-    serviceManager.registerService('configService', configService, []);
+    // 0. UnifiedConfigService - No dependencies, highest priority (configuration)
+    // Note: We don't register the config service as it's a singleton used directly
+    // All services import and use the unified config singleton
 
     // 1. AIConfigService - REMOVED: Consolidated into ConfigService
 
@@ -133,11 +143,12 @@ const registerCoreServices = async (): Promise<void> => {
     // 11. SlackService - REMOVED: Replaced by SlackDomainService in domain services
 
     // 12. GoogleOAuthManager - Shared OAuth manager for all Google services
-    if (ENV_VALIDATION.isGoogleConfigured()) {
+    const googleAuth = unifiedConfig.googleAuth;
+    if (googleAuth?.clientId && googleAuth?.clientSecret) {
       const googleOAuthManager = new GoogleOAuthManager({
-        clientId: ENVIRONMENT.google.clientId,
-        clientSecret: ENVIRONMENT.google.clientSecret,
-        redirectUri: ENVIRONMENT.google.redirectUri,
+        clientId: googleAuth.clientId,
+        clientSecret: googleAuth.clientSecret,
+        redirectUri: googleAuth.redirectUri || '',
         scopes: [
           'openid',
           'email', 
@@ -152,11 +163,12 @@ const registerCoreServices = async (): Promise<void> => {
     }
 
     // 13. SlackOAuthManager - Shared OAuth manager for Slack services
-    if (ENV_VALIDATION.isSlackConfigured()) {
+    const slackAuth = unifiedConfig.slackAuth;
+    if (slackAuth?.clientId && slackAuth?.clientSecret) {
       const slackOAuthManager = new SlackOAuthManager({
-        clientId: ENVIRONMENT.slack.clientId,
-        clientSecret: ENVIRONMENT.slack.clientSecret,
-        redirectUri: ENVIRONMENT.slack.redirectUri,
+        clientId: slackAuth.clientId,
+        clientSecret: slackAuth.clientSecret,
+        redirectUri: slackAuth.redirectUri || '',
         scopes: ['chat:write', 'channels:read', 'users:read']
       });
       serviceManager.registerService('slackOAuthManager', slackOAuthManager, ['tokenManager', 'oauthStateService']);
