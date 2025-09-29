@@ -246,10 +246,23 @@ const registerCoreServices = async (): Promise<void> => {
  */
 const setupCircuitBreakerConnections = async (): Promise<void> => {
   try {
-    logger.debug('Circuit breaker setup completed - now integrated into API client layer', {
+    // Connect AI circuit breaker to GenericAIService
+    const aiCircuitBreaker = serviceManager.getService('aiCircuitBreakerService');
+    const genericAIService = serviceManager.getService('genericAIService');
+
+    if (aiCircuitBreaker && genericAIService) {
+      (aiCircuitBreaker as any).setAIService(genericAIService);
+      logger.debug('AI circuit breaker connected to GenericAIService', {
+        correlationId: `service-init-${Date.now()}`,
+        operation: 'circuit_breaker_setup',
+        metadata: { status: 'connected' }
+      });
+    }
+
+    logger.debug('Circuit breaker setup completed', {
       correlationId: `service-init-${Date.now()}`,
       operation: 'circuit_breaker_setup',
-      metadata: { status: 'integrated' }
+      metadata: { status: 'completed' }
     });
   } catch (error) {
     logger.error('Failed to setup circuit breaker connections', error as Error, {

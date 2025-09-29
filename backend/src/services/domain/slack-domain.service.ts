@@ -192,6 +192,15 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
     }
 
     try {
+      // Use bot token for sending messages (not user OAuth tokens)
+      const botToken = process.env.SLACK_BOT_TOKEN;
+      if (!botToken) {
+        throw new Error('Slack bot token not configured');
+      }
+
+      // Authenticate with bot token
+      await this.authenticate(botToken);
+      
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(SlackValidationSchemas.sendMessage, params);
 
@@ -825,8 +834,11 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
         channelId: context.channelId
       });
 
+      // Construct the combined userId format expected by SlackOAuthManager
+      const combinedUserId = `${context.teamId}:${context.userId}`;
+
       // Send acknowledgment
-      await this.sendMessage(context.userId, {
+      await this.sendMessage(combinedUserId, {
         channel: context.channelId,
         text: "🤔 Processing your request...",
         threadTs: event.thread_ts
@@ -834,7 +846,7 @@ export class SlackDomainService extends BaseService implements ISlackDomainServi
 
       // TODO: Integrate with MasterAgent for actual processing
       // For now, just send a placeholder response
-      await this.sendMessage(context.userId, {
+      await this.sendMessage(combinedUserId, {
         channel: context.channelId,
         text: "I received your message and I'm working on it!",
         threadTs: event.thread_ts

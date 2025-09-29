@@ -371,6 +371,59 @@ export class UnifiedConfigService extends BaseService {
             maxRetries: process.env.OPENAI_MAX_RETRIES ? parseInt(process.env.OPENAI_MAX_RETRIES) : undefined,
           },
         },
+        ai: {
+          models: {
+            general: {
+              model: process.env.AI_GENERAL_MODEL,
+              temperature: process.env.AI_GENERAL_TEMPERATURE ? parseFloat(process.env.AI_GENERAL_TEMPERATURE) : undefined,
+              maxTokens: process.env.AI_GENERAL_MAX_TOKENS ? parseInt(process.env.AI_GENERAL_MAX_TOKENS) : undefined,
+              timeout: process.env.AI_GENERAL_TIMEOUT ? parseInt(process.env.AI_GENERAL_TIMEOUT) : undefined,
+            },
+            routing: {
+              model: process.env.AI_ROUTING_MODEL,
+              temperature: process.env.AI_ROUTING_TEMPERATURE ? parseFloat(process.env.AI_ROUTING_TEMPERATURE) : undefined,
+              maxTokens: process.env.AI_ROUTING_MAX_TOKENS ? parseInt(process.env.AI_ROUTING_MAX_TOKENS) : undefined,
+              timeout: process.env.AI_ROUTING_TIMEOUT ? parseInt(process.env.AI_ROUTING_TIMEOUT) : undefined,
+            },
+            content: {
+              model: process.env.AI_CONTENT_MODEL,
+              temperature: process.env.AI_CONTENT_TEMPERATURE ? parseFloat(process.env.AI_CONTENT_TEMPERATURE) : undefined,
+              maxTokens: process.env.AI_CONTENT_MAX_TOKENS ? parseInt(process.env.AI_CONTENT_MAX_TOKENS) : undefined,
+              timeout: process.env.AI_CONTENT_TIMEOUT ? parseInt(process.env.AI_CONTENT_TIMEOUT) : undefined,
+            },
+            analysis: {
+              model: process.env.AI_ANALYSIS_MODEL,
+              temperature: process.env.AI_ANALYSIS_TEMPERATURE ? parseFloat(process.env.AI_ANALYSIS_TEMPERATURE) : undefined,
+              maxTokens: process.env.AI_ANALYSIS_MAX_TOKENS ? parseInt(process.env.AI_ANALYSIS_MAX_TOKENS) : undefined,
+              timeout: process.env.AI_ANALYSIS_TIMEOUT ? parseInt(process.env.AI_ANALYSIS_TIMEOUT) : undefined,
+            },
+          },
+          timeouts: {
+            toolExecution: process.env.AI_TOOL_EXECUTION_TIMEOUT ? parseInt(process.env.AI_TOOL_EXECUTION_TIMEOUT) : undefined,
+            sessionTimeout: process.env.AI_SESSION_TIMEOUT ? parseInt(process.env.AI_SESSION_TIMEOUT) : undefined,
+            gracefulShutdown: process.env.AI_GRACEFUL_SHUTDOWN_TIMEOUT ? parseInt(process.env.AI_GRACEFUL_SHUTDOWN_TIMEOUT) : undefined,
+          },
+        },
+        security: {
+          cors: {
+            origin: process.env.SECURITY_CORS_ORIGIN,
+            credentials: process.env.SECURITY_CORS_CREDENTIALS === 'true',
+          },
+          rateLimiting: {
+            enabled: process.env.SECURITY_RATE_LIMITING_ENABLED !== 'false',
+            windowMs: process.env.SECURITY_RATE_LIMITING_WINDOW_MS ? parseInt(process.env.SECURITY_RATE_LIMITING_WINDOW_MS) : undefined,
+            maxRequests: process.env.SECURITY_RATE_LIMITING_MAX_REQUESTS ? parseInt(process.env.SECURITY_RATE_LIMITING_MAX_REQUESTS) : undefined,
+            authWindowMs: process.env.SECURITY_RATE_LIMITING_AUTH_WINDOW_MS ? parseInt(process.env.SECURITY_RATE_LIMITING_AUTH_WINDOW_MS) : undefined,
+            authMaxRequests: process.env.SECURITY_RATE_LIMITING_AUTH_MAX_REQUESTS ? parseInt(process.env.SECURITY_RATE_LIMITING_AUTH_MAX_REQUESTS) : undefined,
+          },
+          requestLimits: {
+            jsonBodySize: process.env.SECURITY_REQUEST_LIMITS_JSON_BODY_SIZE,
+            maxCommandLength: process.env.SECURITY_REQUEST_LIMITS_MAX_COMMAND_LENGTH ? parseInt(process.env.SECURITY_REQUEST_LIMITS_MAX_COMMAND_LENGTH) : undefined,
+            urlEncodedBodySize: process.env.SECURITY_REQUEST_LIMITS_URL_ENCODED_BODY_SIZE,
+          },
+          securityHeaders: process.env.SECURITY_SECURITY_HEADERS !== 'false',
+          bcryptRounds: process.env.SECURITY_BCRYPT_ROUNDS ? parseInt(process.env.SECURITY_BCRYPT_ROUNDS) : undefined,
+        },
       };
 
       const result = UnifiedConfigSchema.parse(envConfig);

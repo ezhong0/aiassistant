@@ -47,7 +47,7 @@ export class AIServiceCircuitBreaker implements IService {
     timeout: 30000           // Timeout for individual requests
   };
 
-  private openaiService: any | null = null;
+  private aiService: any | null = null;
 
   constructor(config?: Partial<CircuitBreakerConfig>) {
     if (config) {
@@ -86,7 +86,7 @@ export class AIServiceCircuitBreaker implements IService {
     this.circuitState = CircuitState.CLOSED;
     this.failureCount = 0;
     this.successCount = 0;
-    this.openaiService = null;
+    this.aiService = null;
     
     this._state = ServiceState.DESTROYED;
     
@@ -106,8 +106,8 @@ export class AIServiceCircuitBreaker implements IService {
   /**
    * Set OpenAI service reference (called after service initialization)
    */
-  setOpenAIService(openaiService: any): void {
-    this.openaiService = openaiService;
+  setAIService(aiService: any): void {
+    this.aiService = aiService;
   }
 
   /**
@@ -131,7 +131,7 @@ export class AIServiceCircuitBreaker implements IService {
       }
     }
 
-    if (!this.openaiService || !this.openaiService.isReady()) {
+    if (!this.aiService || !this.aiService.isReady()) {
       this.recordFailure();
       throw new AIServiceUnavailableError(
         '🤖 AI service is not available. Please check your configuration.',
@@ -142,7 +142,7 @@ export class AIServiceCircuitBreaker implements IService {
     try {
       // Execute with timeout
       const result = await this.withTimeout(
-        operation(this.openaiService),
+        operation(this.aiService),
         this.config.timeout
       );
 
