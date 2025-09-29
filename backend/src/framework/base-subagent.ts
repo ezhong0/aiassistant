@@ -9,7 +9,7 @@
  */
 
 import { GenericAIService, AIPrompt, StructuredSchema } from '../services/generic-ai.service';
-import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
+// DomainServiceResolver import removed - not used in BaseSubAgent
 import { IDomainService } from '../services/domain/interfaces/domain-service.interfaces';
 import logger from '../utils/logger';
 

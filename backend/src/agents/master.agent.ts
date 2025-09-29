@@ -2,13 +2,13 @@ import logger from '../utils/logger';
 import { serviceManager } from '../services/service-manager';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
-import { AgentFactory } from '../framework/agent-factory';
+// AgentFactory import removed - using new BaseSubAgent architecture
 // Prompt builders are now created via factory - no direct imports needed
 
 // Utilities and error handling
 import { BuilderGuard, createBuilderContext, PromptBuilderMap } from '../utils/builder-guard';
 import { PromptBuilderFactory } from '../utils/prompt-builder-factory';
-import { UnifiedErrorFactory, ErrorContextBuilder, UNIFIED_ERROR_CODES } from '../types/workflow/unified-errors';
+import { UnifiedErrorFactory, ErrorContextBuilder } from '../types/workflow/unified-errors';
 
 import { TokenManager } from '../services/token-manager';
 import { WorkflowExecutor } from '../services/workflow-executor.service';

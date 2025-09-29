@@ -113,7 +113,7 @@ export class GenericAIService extends BaseService {
     const requestId = `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // CENTRALIZED AI PROMPT LOGGING - Input
-    logger.info('AI_PROMPT_INPUT', {
+    this.logInfo('AI_PROMPT_INPUT', {
       correlationId: requestId,
       operation: 'ai_prompt_execution',
       service: this.name,
@@ -188,7 +188,7 @@ export class GenericAIService extends BaseService {
       };
 
       // CENTRALIZED AI PROMPT LOGGING - Output on Success
-      logger.info('AI_PROMPT_OUTPUT_SUCCESS', {
+      this.logInfo('AI_PROMPT_OUTPUT_SUCCESS', {
         correlationId: requestId,
         operation: 'ai_prompt_execution_success',
         service: this.name,
@@ -212,7 +212,7 @@ export class GenericAIService extends BaseService {
 
     } catch (error) {
       // CENTRALIZED AI PROMPT LOGGING - Output on Error
-      logger.error('AI_PROMPT_OUTPUT_ERROR', {
+      this.logError('AI_PROMPT_OUTPUT_ERROR', {
         correlationId: requestId,
         operation: 'ai_prompt_execution_error',
         service: this.name,

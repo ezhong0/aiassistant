@@ -140,36 +140,4 @@ Be helpful but respectful of privacy and email best practices.
     };
   }
 
-  // Legacy compatibility methods for existing code
-  /**
-   * Process email request (legacy compatibility)
-   */
-  async processRequest(input: string, userId?: string): Promise<{
-    success: boolean;
-    message?: string;
-    data?: any;
-  }> {
-    try {
-      const context = {
-        sessionId: `legacy-${Date.now()}`,
-        userId,
-        correlationId: `email-legacy-${Date.now()}`,
-        timestamp: new Date()
-      };
-
-      const result = await this.processNaturalLanguageRequest(input, context);
-      
-      return {
-        success: result.success,
-        message: result.message,
-        data: result.metadata
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Email operation failed',
-        data: { error: error instanceof Error ? error.message : 'Unknown error' }
-      };
-    }
-  }
 }

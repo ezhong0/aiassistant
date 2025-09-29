@@ -145,36 +145,4 @@ Focus on creating user-friendly calendar experiences.
     };
   }
 
-  // Legacy compatibility methods for existing code
-  /**
-   * Process calendar request (legacy compatibility)
-   */
-  async processRequest(input: string, userId?: string): Promise<{
-    success: boolean;
-    message?: string;
-    data?: any;
-  }> {
-    try {
-      const context = {
-        sessionId: `legacy-${Date.now()}`,
-        userId,
-        correlationId: `calendar-legacy-${Date.now()}`,
-        timestamp: new Date()
-      };
-
-      const result = await this.processNaturalLanguageRequest(input, context);
-      
-      return {
-        success: result.success,
-        message: result.message,
-        data: result.metadata
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Calendar operation failed',
-        data: { error: error instanceof Error ? error.message : 'Unknown error' }
-      };
-    }
-  }
 }

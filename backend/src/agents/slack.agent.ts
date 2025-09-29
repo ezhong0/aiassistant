@@ -159,36 +159,4 @@ Be mindful of workspace etiquette and privacy considerations.
     };
   }
 
-  // Legacy compatibility methods for existing code
-  /**
-   * Process Slack request (legacy compatibility)
-   */
-  async processRequest(input: string, userId?: string): Promise<{
-    success: boolean;
-    message?: string;
-    data?: any;
-  }> {
-    try {
-      const context = {
-        sessionId: `legacy-${Date.now()}`,
-        userId,
-        correlationId: `slack-legacy-${Date.now()}`,
-        timestamp: new Date()
-      };
-
-      const result = await this.processNaturalLanguageRequest(input, context);
-      
-      return {
-        success: result.success,
-        message: result.message,
-        data: result.metadata
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Slack operation failed',
-        data: { error: error instanceof Error ? error.message : 'Unknown error' }
-      };
-    }
-  }
 }
