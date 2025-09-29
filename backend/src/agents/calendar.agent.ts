@@ -10,7 +10,6 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
-import { ToolExecutionContext } from '../framework/tool-execution';
 import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import { ICalendarDomainService } from '../services/domain/interfaces/calendar-domain.interface';

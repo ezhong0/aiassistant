@@ -28,6 +28,5 @@ export {
 // Tool execution schemas
 export { 
   ToolCallSchema,
-  ToolResultSchema,
-  ToolExecutionContextSchema
+  ToolResultSchema
 } from '../framework/tool-execution';

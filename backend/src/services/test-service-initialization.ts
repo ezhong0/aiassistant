@@ -1,0 +1,125 @@
+/**
+ * Test Service Initialization
+ * Initializes services with mocks for E2E testing
+ */
+
+import { serviceManager } from './service-manager';
+import { MockCacheService } from './mocks/mock-cache.service';
+import { MockDatabaseService } from './mocks/mock-database.service';
+import { MockContextManagerService } from './mocks/mock-context-manager.service';
+import { OAuthStateService } from './oauth-state.service';
+import { TokenStorageService } from './token-storage.service';
+import { AuthStatusService } from './auth-status.service';
+import { AuthService } from './auth.service';
+import { TokenManager } from './token-manager';
+import { GenericAIService } from './generic-ai.service';
+// Use real domain services, not mocks
+import logger from '../utils/logger';
+
+/**
+ * Initialize all core services for E2E testing
+ * Uses real AI services with mocked external dependencies
+ */
+export const initializeTestServices = async (): Promise<void> => {
+  try {
+    logger.info('Initializing E2E test services with real AI and mocked external APIs', {
+      operation: 'test_service_initialization',
+      metadata: { phase: 'initialization' }
+    });
+
+    // Initialize real domain services for E2E testing
+    const { DomainServiceRegistrations } = await import('./domain/dependency-injection/domain-service-container');
+    DomainServiceRegistrations.registerForTesting();
+
+    // Register core services with mocks
+    await registerTestServices();
+
+    // Initialize all services
+    await serviceManager.initializeAllServices();
+
+    logger.info('E2E test services initialized successfully with real AI', {
+      operation: 'test_service_initialization',
+      metadata: { phase: 'complete' }
+    });
+  } catch (error) {
+    logger.error('Failed to initialize test services', error as Error, {
+      operation: 'test_service_initialization',
+      metadata: { phase: 'initialization' }
+    });
+    throw error;
+  }
+};
+
+/**
+ * Register core services with their dependencies for testing
+ */
+const registerTestServices = async (): Promise<void> => {
+  try {
+    // 1. Mock Database Service - No dependencies, high priority
+    const mockDatabaseService = new MockDatabaseService();
+    serviceManager.registerService('databaseService', mockDatabaseService, []);
+
+    // 2. Mock Cache Service - No dependencies, high priority
+    const mockCacheService = new MockCacheService();
+    serviceManager.registerService('cacheService', mockCacheService, []);
+
+    // 3. OAuthStateService - depends on cacheService
+    const oauthStateService = new OAuthStateService();
+    serviceManager.registerService('oauthStateService', oauthStateService, ['cacheService']);
+
+    // 4. TokenStorageService - Depends on databaseService
+    const tokenStorageService = new TokenStorageService();
+    serviceManager.registerService('tokenStorageService', tokenStorageService, ['databaseService']);
+
+    // 5. AuthStatusService - Depends on tokenStorageService
+    const authStatusService = new AuthStatusService();
+    serviceManager.registerService('authStatusService', authStatusService, ['tokenStorageService']);
+
+    // 6. AuthService - No external dependencies
+    const authService = new AuthService();
+    serviceManager.registerService('authService', authService, []);
+
+    // 7. TokenManager - Depends on tokenStorageService and authService
+    const tokenManager = new TokenManager();
+    serviceManager.registerService('tokenManager', tokenManager, ['tokenStorageService', 'authService']);
+
+    // 8. Mock Context Manager Service - No dependencies
+    const mockContextManagerService = new MockContextManagerService();
+    serviceManager.registerService('contextManager', mockContextManagerService, []);
+
+    // 9. GenericAIService - Centralized AI operations with structured output (REAL AI)
+    const genericAIService = new GenericAIService();
+    serviceManager.registerService('genericAIService', genericAIService, []);
+
+    logger.info('Test services registered successfully', {
+      operation: 'test_service_registration'
+    });
+  } catch (error) {
+    logger.error('Failed to register test services', error as Error, {
+      operation: 'test_service_registration'
+    });
+    throw error;
+  }
+};
+
+/**
+ * Cleanup test services
+ */
+export const cleanupTestServices = async (): Promise<void> => {
+  try {
+    logger.info('Cleaning up test services', {
+      operation: 'test_service_cleanup'
+    });
+
+    await serviceManager.forceCleanup();
+    
+    logger.info('Test services cleaned up successfully', {
+      operation: 'test_service_cleanup'
+    });
+  } catch (error) {
+    logger.error('Failed to cleanup test services', error as Error, {
+      operation: 'test_service_cleanup'
+    });
+    throw error;
+  }
+};

@@ -6,6 +6,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import logger from '../../../src/utils/logger';
+import { ReportCleanup } from './report-cleanup';
 
 export interface ExecutionLogEntry {
   timestamp: string;
@@ -214,6 +215,9 @@ export class DetailedExecutionLogger {
       testId: this.currentLog.testId,
       scenarioId: this.currentLog.scenarioId
     });
+
+    // Clean up old reports after saving new one
+    await ReportCleanup.cleanupReports();
 
     return filepath;
   }

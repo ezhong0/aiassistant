@@ -157,9 +157,9 @@ export abstract class BaseAPIClient extends BaseService {
    * @throws {APIError} When request fails
    */
   async makeRequest<T = any>(request: APIRequest): Promise<APIResponse<T>> {
-    // E2E Testing: Intercept API calls for testing
-    if (process.env.E2E_TESTING === 'true') {
-      logger.debug('E2E_TESTING enabled, attempting to intercept API call', {
+    // E2E Testing: Intercept external API calls for testing (NOT OpenAI)
+    if (process.env.E2E_TESTING === 'true' && this.name !== 'OpenAIClient') {
+      logger.debug('E2E_TESTING enabled, attempting to intercept external API call', {
         clientName: this.name,
         endpoint: request.endpoint
       });

@@ -14,6 +14,10 @@ describe('AI-Powered E2E Testing System', () => {
     // Verify E2E testing environment
     expect(process.env.E2E_TESTING).toBe('true');
 
+    // Initialize test services with mocks
+    const { initializeTestServices } = await import('../../src/services/test-service-initialization');
+    await initializeTestServices();
+
     // Initialize components
     executor = new MasterAgentExecutor();
     mockManager = ApiMockManager.getInstance();

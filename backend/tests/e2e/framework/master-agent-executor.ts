@@ -114,8 +114,9 @@ export class MasterAgentExecutor {
         operation: 'e2e_service_initialization'
       });
 
-      // Initialize all core services (GenericAIService, ContextManager, TokenManager, etc.)
-      await initializeAllCoreServices();
+      // Use test service initialization with mocks
+      const { initializeTestServices } = await import('../../../src/services/test-service-initialization');
+      await initializeTestServices();
 
       this.servicesInitialized = true;
 

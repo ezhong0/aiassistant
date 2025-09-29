@@ -1,4 +1,4 @@
-import { ToolCall, ToolResult, ToolExecutionContext } from '../../framework/tool-execution';
+import { ToolCall, ToolResult } from '../../framework/tool-execution';
 import { z } from 'zod';
 
 /**

@@ -9,7 +9,6 @@
  */
 
 import { GenericAIService, AIPrompt, StructuredSchema } from '../services/generic-ai.service';
-import { ToolExecutionContext } from './tool-execution';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import logger from '../utils/logger';
 import {

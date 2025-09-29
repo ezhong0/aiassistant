@@ -22,9 +22,9 @@ describe('AI-Powered End-to-End Testing System', () => {
     // Verify E2E testing environment
     expect(process.env.E2E_TESTING).toBe('true');
 
-    // Initialize all core services first
-    const { initializeAllCoreServices } = await import('../../src/services/service-initialization');
-    await initializeAllCoreServices();
+    // Initialize test services with mocks
+    const { initializeTestServices } = await import('../../src/services/test-service-initialization');
+    await initializeTestServices();
 
     // Initialize components
     executor = new MasterAgentExecutor();

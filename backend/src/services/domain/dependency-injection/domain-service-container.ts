@@ -195,52 +195,15 @@ export class DomainServiceRegistrations {
   }
 
   /**
-   * Register services for testing
+   * Register services for E2E testing (real AI services)
    */
   static registerForTesting(): void {
     // Clear existing registrations
     domainServiceContainer.clear();
 
-    // Register mock services for testing
-    domainServiceContainer.registerSingleton<IEmailDomainService>(
-      'emailService',
-      () => {
-        const { MockEmailDomainService } = require('../mocks/mock-email-domain.service');
-        return new MockEmailDomainService();
-      }
-    );
-
-    domainServiceContainer.registerSingleton<ICalendarDomainService>(
-      'calendarService',
-      () => {
-        const { MockCalendarDomainService } = require('../mocks/mock-calendar-domain.service');
-        return new MockCalendarDomainService();
-      }
-    );
-
-    domainServiceContainer.registerSingleton<IContactsDomainService>(
-      'contactsService',
-      () => {
-        const { MockContactsDomainService } = require('../mocks/mock-contacts-domain.service');
-        return new MockContactsDomainService();
-      }
-    );
-
-    domainServiceContainer.registerSingleton<ISlackDomainService>(
-      'slackService',
-      () => {
-        const { MockSlackDomainService } = require('../mocks/mock-slack-domain.service');
-        return new MockSlackDomainService();
-      }
-    );
-
-    domainServiceContainer.registerSingleton<IAIDomainService>(
-      'aiService',
-      () => {
-        const { MockAIDomainService } = require('../mocks/mock-ai-domain.service');
-        return new MockAIDomainService();
-      }
-    );
+    // Register real domain services for E2E testing
+    // This ensures we test the real AI capabilities
+    DomainServiceRegistrations.registerAll();
   }
 }
 

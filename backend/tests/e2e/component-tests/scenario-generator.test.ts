@@ -12,9 +12,13 @@ describe('AI Test Scenario Generator Component Tests', () => {
   let aiService: GenericAIService;
 
   beforeAll(async () => {
-    // Initialize services
-    const { initializeAllCoreServices } = await import('../../../src/services/service-initialization');
-    await initializeAllCoreServices();
+    // Set up test environment
+    process.env.NODE_ENV = 'test';
+    process.env.E2E_TESTING = 'true';
+    
+    // Initialize test services with mocks
+    const { initializeTestServices } = await import('../../../src/services/test-service-initialization');
+    await initializeTestServices();
     
     aiService = serviceManager.getService<GenericAIService>('genericAIService')!;
     expect(aiService).toBeDefined();

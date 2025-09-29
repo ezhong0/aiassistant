@@ -7,7 +7,6 @@ import { APIRequest, APIResponse } from '../../../src/types/api/api-client.types
 import logger from '../../../src/utils/logger';
 import { GoogleApiMocks } from '../mocks/google-api-mocks';
 import { SlackApiMocks } from '../mocks/slack-api-mocks';
-import { OpenAiApiMocks } from '../mocks/openai-api-mocks';
 
 interface ApiCallRecord {
   timestamp: Date;
@@ -35,10 +34,10 @@ export class ApiMockManager {
   private mockResponders: Map<string, any> = new Map();
 
   constructor() {
-    // Initialize mock responders
+    // Initialize mock responders for external APIs only (NOT OpenAI)
     this.mockResponders.set('GoogleAPIClient', new GoogleApiMocks());
     this.mockResponders.set('SlackAPIClient', new SlackApiMocks());
-    this.mockResponders.set('OpenAIClient', new OpenAiApiMocks());
+    // OpenAI calls go to real API - no mocking
   }
 
   static getInstance(): ApiMockManager {

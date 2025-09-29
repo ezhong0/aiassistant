@@ -6,18 +6,7 @@
  */
 
 import { z } from 'zod';
-import { SlackContext, SlackContextSchema } from '../types/slack/slack.types';
 
-/**
- * Tool execution context
- */
-export interface ToolExecutionContext {
-  sessionId: string;
-  userId: string;
-  timestamp: Date;
-  correlationId?: string;
-  slackContext?: SlackContext;
-}
 
 /**
  * Tool call interface
@@ -41,13 +30,6 @@ export interface ToolResult {
 /**
  * Zod schemas for validation
  */
-export const ToolExecutionContextSchema = z.object({
-  sessionId: z.string(),
-  userId: z.string(),
-  timestamp: z.date(),
-  correlationId: z.string().optional(),
-  slackContext: SlackContextSchema.optional(),
-});
 
 export const ToolCallSchema = z.object({
   name: z.string(),
@@ -65,9 +47,6 @@ export const ToolResultSchema = z.object({
 /**
  * Validation functions
  */
-export function validateToolExecutionContext(data: unknown): ToolExecutionContext {
-  return ToolExecutionContextSchema.parse(data);
-}
 
 export function validateToolCall(data: unknown): ToolCall {
   return ToolCallSchema.parse(data);
@@ -80,13 +59,6 @@ export function validateToolResult(data: unknown): ToolResult {
 /**
  * Safe parsing functions
  */
-export function safeParseToolExecutionContext(data: unknown): { success: true; data: ToolExecutionContext } | { success: false; error: z.ZodError } {
-  const result = ToolExecutionContextSchema.safeParse(data);
-  if (result.success) {
-    return { success: true, data: result.data };
-  }
-  return { success: false, error: result.error };
-}
 
 export function safeParseToolCall(data: unknown): { success: true; data: ToolCall } | { success: false; error: z.ZodError } {
   const result = ToolCallSchema.safeParse(data);
