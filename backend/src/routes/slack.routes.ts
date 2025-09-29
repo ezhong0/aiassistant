@@ -431,7 +431,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             });
 
             await slackService.sendToResponseUrl(response_url, {
-              response_type: 'ephemeral',
+              response_type: 'in_channel',
               blocks
             });
 
@@ -484,7 +484,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           const slackService = DomainServiceResolver.getSlackService();
           if (slackService && response_url) {
             await slackService.sendToResponseUrl(response_url, {
-              response_type: 'ephemeral',
+              response_type: 'in_channel',
               text: '❌ Failed to load connections. Please try again.'
             });
           }
@@ -708,7 +708,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             res.status(200).json({
               replace_original: false,
               text: result.message,
-              response_type: 'ephemeral'
+              response_type: 'in_channel'
             });
             return;
           }
@@ -791,7 +791,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
         
         res.status(200).json({
           text: `Button clicked: ${actionId}`,
-          response_type: 'ephemeral'
+          response_type: 'in_channel'
         });
       } else {
         // Acknowledge receipt for other interaction types

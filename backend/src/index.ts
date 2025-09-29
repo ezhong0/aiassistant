@@ -175,10 +175,6 @@ const setupSlackInterface = async () => {
   }
 };
 
-// Simple test endpoint for debugging
-app.get('/test', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 
 // Root endpoint

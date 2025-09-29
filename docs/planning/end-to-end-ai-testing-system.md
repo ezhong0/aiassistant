@@ -232,6 +232,7 @@ interface FinalResponseEvaluation {
 - Failure pattern analysis
 - Regression detection
 - Coverage analysis
+- Performance benchmarks and thresholds
 
 ## Test Execution Flow
 
@@ -292,341 +293,27 @@ backend/tests/
 
 ### Required Changes to Main System
 
-#### 1. API Client Modifications
+#### 1. API Client Modification
 **File**: `backend/src/services/api/base-api-client.ts`
 
-**Changes Needed**:
-- Add testing mode detection
-- Implement mock interception layer
-- Add execution tracking hooks
+**Single Change**: Add test mode detection to `makeRequest` method:
 
 ```typescript
-// Add to BaseAPIClient class
-private isTestMode(): boolean {
-  return process.env.NODE_ENV === 'test' && process.env.E2E_TESTING === 'true';
-}
-
-// Modify makeRequest method
 async makeRequest<T = any>(request: APIRequest): Promise<APIResponse<T>> {
-  // Check if we're in E2E testing mode
-  if (this.isTestMode()) {
-    const mockManager = require('../../tests/e2e/framework/api-mock-manager').default;
+  // E2E Testing: Intercept API calls
+  if (process.env.E2E_TESTING === 'true') {
+    const mockManager = require('../../tests/e2e/api-mock-manager');
     return mockManager.interceptRequest(this.name, request);
   }
   
-  // Existing implementation...
+  // Existing implementation continues...
 }
 ```
 
-#### 2. Master Agent Instrumentation
-**File**: `backend/src/agents/master.agent.ts`
-
-**Changes Needed**:
-- Add execution tracking hooks
-- Implement test mode detection
-- Add performance metrics collection
-
-```typescript
-// Add to MasterAgent class
-private isTestMode(): boolean {
-  return process.env.NODE_ENV === 'test' && process.env.E2E_TESTING === 'true';
-}
-
-// Modify processUserInput method
-async processUserInput(
-  userInput: string,
-  sessionId: string,
-  userId?: string,
-  slackContext?: SlackContext
-): Promise<ProcessingResult> {
-  const startTime = Date.now();
-  
-  // Initialize execution tracking if in test mode
-  let executionTrace: ExecutionTrace | null = null;
-  if (this.isTestMode()) {
-    const { ExecutionTracker } = require('../../tests/e2e/framework/execution-tracker');
-    executionTrace = new ExecutionTracker(sessionId, userInput);
-  }
-  
-  try {
-    // Existing implementation with tracking hooks...
-    
-    if (executionTrace) {
-      executionTrace.recordStage('messageHistory', messageHistory, Date.now() - startTime);
-    }
-    
-    // Continue with existing workflow...
-    
-  } catch (error) {
-    if (executionTrace) {
-      executionTrace.recordError(error);
-    }
-    throw error;
-  }
-}
-```
-
-#### 3. Prompt Builder Instrumentation
-**File**: `backend/src/services/prompt-builders/base-prompt-builder.ts`
-
-**Changes Needed**:
-- Add execution tracking
-- Implement response capture
-- Add performance metrics
-
-```typescript
-// Add to BasePromptBuilder class
-protected async executeWithTracking(context: TContext): Promise<AIResponse<TResult>> {
-  const startTime = Date.now();
-  
-  if (this.isTestMode()) {
-    const { PromptTracker } = require('../../../tests/e2e/framework/prompt-tracker');
-    const tracker = new PromptTracker(this.constructor.name, context);
-    
-    try {
-      const result = await this.execute(context);
-      tracker.recordSuccess(result, Date.now() - startTime);
-      return result;
-    } catch (error) {
-      tracker.recordError(error, Date.now() - startTime);
-      throw error;
-    }
-  }
-  
-  return this.execute(context);
-}
-
-private isTestMode(): boolean {
-  return process.env.NODE_ENV === 'test' && process.env.E2E_TESTING === 'true';
-}
-```
-
-#### 4. Workflow Executor Instrumentation
-**File**: `backend/src/services/workflow-executor.service.ts`
-
-**Changes Needed**:
-- Add iteration tracking
-- Implement agent execution monitoring
-- Add context change tracking
-
-```typescript
-// Add to WorkflowExecutor class
-private async executeIterationWithTracking(context: WorkflowExecutionContext): Promise<WorkflowIterationResult> {
-  if (this.isTestMode()) {
-    const { WorkflowTracker } = require('../../tests/e2e/framework/workflow-tracker');
-    const tracker = new WorkflowTracker(context.sessionId, context.iteration);
-    
-    try {
-      const result = await this.executeIteration(context);
-      tracker.recordIteration(result);
-      return result;
-    } catch (error) {
-      tracker.recordIterationError(error);
-      throw error;
-    }
-  }
-  
-  return this.executeIteration(context);
-}
-
-private isTestMode(): boolean {
-  return process.env.NODE_ENV === 'test' && process.env.E2E_TESTING === 'true';
-}
-```
-
-#### 5. Environment Configuration
-**File**: `backend/.env.test`
-
-**New Environment Variables**:
-```bash
-# E2E Testing Configuration
-E2E_TESTING=true
-E2E_MOCK_APIS=true
-E2E_TRACK_EXECUTION=true
-E2E_EVALUATION_MODE=ai
-E2E_SCENARIO_GENERATION=ai
-```
-
-#### 6. Package.json Updates
+#### 2. Package.json Update
 **File**: `backend/package.json`
 
-**New Scripts**:
-```json
-{
-  "scripts": {
-    "test:e2e": "NODE_ENV=test E2E_TESTING=true jest --testPathPattern=e2e",
-    "test:e2e:generate": "NODE_ENV=test E2E_TESTING=true jest --testPathPattern=e2e --testNamePattern=scenario-generation",
-    "test:e2e:evaluate": "NODE_ENV=test E2E_TESTING=true jest --testPathPattern=e2e --testNamePattern=evaluation"
-  }
-}
-```
-
-#### 7. Jest Configuration Updates
-**File**: `backend/jest.config.js`
-
-**New Configuration**:
-```javascript
-module.exports = {
-  // Existing configuration...
-  
-  // E2E Testing specific configuration
-  testEnvironment: 'node',
-  testMatch: [
-    '<rootDir>/tests/**/*.test.ts',
-    '<rootDir>/tests/e2e/**/*.test.ts'
-  ],
-  
-  // E2E test timeout (longer for AI operations)
-  testTimeout: 120000,
-  
-  // Setup files for E2E testing
-  setupFilesAfterEnv: [
-    '<rootDir>/tests/setup.ts',
-    '<rootDir>/tests/e2e/setup.ts'
-  ],
-  
-  // Module name mapping for test imports
-  moduleNameMapping: {
-    '^@/tests/e2e/(.*)$': '<rootDir>/tests/e2e/$1'
-  }
-};
-```
-
-### Integration Points
-
-#### 1. Service Manager Integration
-The testing framework will integrate with the existing service manager to:
-- Replace real services with mocked versions during testing
-- Maintain service dependency chains
-- Ensure proper cleanup between tests
-
-#### 2. Logger Integration
-The testing framework will:
-- Capture all log output during test execution
-- Correlate logs with test scenarios
-- Provide detailed execution traces
-
-#### 3. Database Integration
-For tests that require database state:
-- Use the existing test database setup
-- Create isolated test data
-- Clean up after each test
-
-## Implementation Strategy
-
-### Phase 1: Foundation (Weeks 1-2)
-- Implement API Mock Manager
-- Create basic test scenario generator
-- Set up execution tracking infrastructure
-- **Add instrumentation hooks to main system**
-
-### Phase 2: Core Testing (Weeks 3-4)
-- Implement Master Agent Executor
-- Create response evaluator
-- Build test result aggregator
-- **Integrate with existing test infrastructure**
-
-### Phase 3: Advanced Features (Weeks 5-6)
-- Enhance scenario generation with more complex cases
-- Implement regression detection
-- Add performance benchmarking
-- **Optimize main system performance impact**
-
-### Phase 4: Integration & Optimization (Weeks 7-8)
-- Integrate with CI/CD pipeline
-- Optimize evaluation accuracy
-- Add comprehensive reporting
-- **Production readiness and monitoring**
-
-## Key Benefits
-
-### 1. Comprehensive Coverage
-- Tests the entire system end-to-end
-- Covers all domain agents and their interactions
-- Validates both functional and qualitative aspects
-
-### 2. AI-Driven Quality Assessment
-- Uses AI to evaluate AI responses
-- Provides nuanced quality scoring
-- Identifies subtle issues that rule-based tests miss
-
-### 3. Realistic Testing
-- Uses AI-generated scenarios that mirror real user requests
-- Tests with realistic mock data
-- Covers edge cases and ambiguous inputs
-
-### 4. Continuous Improvement
-- Identifies patterns in failures and quality issues
-- Provides actionable improvement suggestions
-- Enables data-driven optimization
-
-### 5. Regression Prevention
-- Detects performance degradation over time
-- Validates that changes don't break existing functionality
-- Maintains quality standards across releases
-
-## Technical Considerations
-
-### 1. Mock Response Realism
-- Mock responses must be contextually appropriate
-- Should reflect real API response patterns
-- Need to handle various edge cases and error conditions
-
-### 2. Evaluation Accuracy
-- AI evaluators need to be calibrated for consistency
-- Should use multiple evaluation criteria
-- Need human validation of evaluation quality
-
-### 3. Performance Impact
-- Testing system should not significantly slow down development
-- Need efficient mock response generation
-- Should support parallel test execution
-
-### 4. Maintenance Overhead
-- Mock responses need to be updated as APIs change
-- Test scenarios should be regularly refreshed
-- Evaluation criteria may need refinement over time
-
-## Success Metrics
-
-### 1. Test Coverage
-- Percentage of code paths tested
-- Number of unique user scenarios covered
-- API endpoint coverage
-
-### 2. Quality Metrics
-- Average response quality scores
-- Percentage of tests passing quality thresholds
-- Reduction in production issues
-
-### 3. Development Efficiency
-- Time to detect regressions
-- Reduction in manual testing effort
-- Faster release cycles
-
-### 4. System Reliability
-- Consistency of AI responses
-- Stability of the master agent workflow
-- Error handling effectiveness
-
-## Simplified Testing Strategy
-
-Focus on the core E2E testing system with minimal changes to the main application:
-
-### 1. Minimal Main System Changes
-
-**API Mocking**: Add simple test mode detection to `BaseAPIClient`:
-
-```typescript
-// Add to BaseAPIClient.makeRequest()
-if (process.env.E2E_TESTING === 'true') {
-  const mockManager = require('../../tests/e2e/api-mock-manager');
-  return mockManager.interceptRequest(this.name, request);
-}
-```
-
-**Test Environment**: Add E2E test script to package.json:
-
+**Add E2E test script**:
 ```json
 {
   "scripts": {
@@ -635,28 +322,272 @@ if (process.env.E2E_TESTING === 'true') {
 }
 ```
 
-### 2. Core E2E Testing Components
+### Integration Points
 
-**Test Structure**:
-```
-backend/tests/e2e/
-├── api-mock-manager.ts      # Mock external API calls
-├── scenario-generator.ts    # AI-generated test scenarios  
-├── response-evaluator.ts    # AI evaluation of responses
-├── e2e.test.ts             # Main test runner
-└── setup.ts                # Test setup
-```
+The E2E testing system will:
+- Mock external API calls (Google, Slack, OpenAI)
+- Use existing test database setup
+- Leverage existing Jest configuration
 
-**Key Features**:
+## Implementation Strategy
+
+### Phase 1: Basic E2E Testing (Week 1)
+- Add API mocking to `BaseAPIClient`
+- Create `api-mock-manager.ts`
+- Build basic test scenarios
+- Run master agent with mocked APIs
+
+### Phase 2: AI Scenario Generation (Week 2)
+- Create `scenario-generator.ts` using AI
+- Generate diverse test cases
+- Validate scenario quality
+
+### Phase 3: AI Response Evaluation (Week 3)
+- Create `response-evaluator.ts` using AI
+- Evaluate response quality and correctness
+- Track expected vs actual API calls
+
+## Key Benefits
+
+### 1. End-to-End Validation
+- Tests complete master agent workflow
+- Validates API call patterns
+- Ensures response quality
+
+### 2. AI-Powered Testing
 - AI generates realistic test scenarios
-- Mock all external API calls (Google, Slack, OpenAI)
-- AI evaluates response quality and correctness
-- Track which API calls were made vs expected
+- AI evaluates response quality
+- Identifies issues rule-based tests miss
 
-### 3. Implementation Focus
+### 3. Minimal System Impact
+- Only 2 small changes to main codebase
+- Uses existing test infrastructure
+- No complex instrumentation
 
-**Phase 1**: Basic E2E testing with mocked APIs
-**Phase 2**: Add AI scenario generation
-**Phase 3**: Add AI response evaluation
+## Technical Considerations
 
-This keeps the scope focused on the core E2E testing system without over-engineering.
+### 1. Mock Response Quality
+- Mock responses should be realistic and contextually appropriate
+- Handle various API response patterns and error conditions
+
+### 2. AI Evaluation Consistency
+- AI evaluators need consistent scoring criteria
+- Human validation of evaluation quality
+
+### 3. Test Performance
+- Efficient mock response generation
+- Support parallel test execution
+
+## Performance Benchmarks
+
+### 1. Response Time Benchmarks
+
+**Master Agent Workflow Performance**:
+```typescript
+interface PerformanceBenchmarks {
+  masterAgent: {
+    totalProcessingTime: {
+      excellent: 5000,    // < 5 seconds
+      good: 10000,        // < 10 seconds
+      acceptable: 15000,  // < 15 seconds
+      poor: 20000         // > 20 seconds
+    };
+    stageBreakdown: {
+      messageHistory: { excellent: 500, good: 1000, acceptable: 2000 };
+      situationAnalysis: { excellent: 2000, good: 4000, acceptable: 6000 };
+      workflowPlanning: { excellent: 1500, good: 3000, acceptable: 5000 };
+      workflowExecution: { excellent: 3000, good: 6000, acceptable: 10000 };
+      finalResponse: { excellent: 1000, good: 2000, acceptable: 3000 };
+    };
+  };
+}
+```
+
+**Individual Prompt Builder Performance**:
+```typescript
+interface PromptPerformanceBenchmarks {
+  situationAnalysis: { excellent: 2000, good: 4000, acceptable: 6000 };
+  workflowPlanning: { excellent: 1500, good: 3000, acceptable: 5000 };
+  environmentCheck: { excellent: 1000, good: 2000, acceptable: 3000 };
+  actionExecution: { excellent: 1500, good: 3000, acceptable: 5000 };
+  progressAssessment: { excellent: 1000, good: 2000, acceptable: 3000 };
+  finalResponse: { excellent: 1000, good: 2000, acceptable: 3000 };
+}
+```
+
+### 2. Workflow Iteration Benchmarks
+
+**Iteration Efficiency**:
+```typescript
+interface IterationBenchmarks {
+  optimalIterations: {
+    simple: 2,      // Simple requests should complete in 2 iterations
+    medium: 4,      // Medium complexity in 4 iterations
+    complex: 6,     // Complex requests in 6 iterations
+    maximum: 10     // Never exceed 10 iterations (system limit)
+  };
+  iterationTime: {
+    excellent: 2000,    // < 2 seconds per iteration
+    good: 4000,         // < 4 seconds per iteration
+    acceptable: 6000,   // < 6 seconds per iteration
+    poor: 8000          // > 8 seconds per iteration
+  };
+}
+```
+
+### 3. API Call Performance Benchmarks
+
+**API Response Time Expectations**:
+```typescript
+interface APIPerformanceBenchmarks {
+  google: {
+    gmail: { excellent: 1000, good: 2000, acceptable: 3000 };
+    calendar: { excellent: 800, good: 1500, acceptable: 2500 };
+    contacts: { excellent: 600, good: 1200, acceptable: 2000 };
+  };
+  slack: {
+    chat: { excellent: 500, good: 1000, acceptable: 1500 };
+    conversations: { excellent: 800, good: 1500, acceptable: 2500 };
+  };
+  openai: {
+    chat: { excellent: 2000, good: 4000, acceptable: 6000 };
+    completion: { excellent: 1500, good: 3000, acceptable: 5000 };
+  };
+}
+```
+
+### 4. Memory and Resource Benchmarks
+
+**Memory Usage Limits**:
+```typescript
+interface ResourceBenchmarks {
+  memory: {
+    peakUsage: {
+      excellent: 100 * 1024 * 1024,    // < 100MB
+      good: 200 * 1024 * 1024,         // < 200MB
+      acceptable: 300 * 1024 * 1024,   // < 300MB
+      poor: 500 * 1024 * 1024          // > 500MB
+    };
+    memoryLeak: {
+      threshold: 50 * 1024 * 1024,     // 50MB increase between tests
+      maxIncrease: 100 * 1024 * 1024   // 100MB max increase
+    };
+  };
+  cpu: {
+    averageUsage: {
+      excellent: 30,    // < 30% CPU
+      good: 50,         // < 50% CPU
+      acceptable: 70,   // < 70% CPU
+      poor: 90          // > 90% CPU
+    };
+  };
+}
+```
+
+### 5. Quality Score Benchmarks
+
+**AI Response Quality Thresholds**:
+```typescript
+interface QualityBenchmarks {
+  promptEvaluation: {
+    relevance: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+    completeness: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+    accuracy: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+  };
+  finalResponse: {
+    responseRelevance: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+    actionCompleteness: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+    userSatisfaction: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+    clarity: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+    overallScore: { excellent: 9, good: 7, acceptable: 5, poor: 3 };
+  };
+}
+```
+
+### 6. Performance Monitoring and Alerting
+
+**Real-time Performance Tracking**:
+```typescript
+interface PerformanceMonitoring {
+  realTimeMetrics: {
+    currentResponseTime: number;
+    currentMemoryUsage: number;
+    currentIterationCount: number;
+    currentQualityScore: number;
+  };
+  alerts: {
+    performanceDegradation: {
+      threshold: 0.2,  // 20% slower than baseline
+      action: 'investigate'
+    };
+    memoryLeak: {
+      threshold: 100 * 1024 * 1024,  // 100MB increase
+      action: 'restart'
+    };
+    qualityDrop: {
+      threshold: 2,  // 2 point drop in quality score
+      action: 'review'
+    };
+  };
+}
+```
+
+### 7. Regression Detection Benchmarks
+
+**Performance Regression Thresholds**:
+```typescript
+interface RegressionBenchmarks {
+  responseTime: {
+    warning: 0.1,    // 10% slower than baseline
+    critical: 0.25,  // 25% slower than baseline
+    action: 'rollback'
+  };
+  qualityScore: {
+    warning: 1,      // 1 point drop
+    critical: 2,     // 2 point drop
+    action: 'investigate'
+  };
+  memoryUsage: {
+    warning: 0.15,   // 15% increase
+    critical: 0.3,   // 30% increase
+    action: 'optimize'
+  };
+  iterationCount: {
+    warning: 1,      // 1 extra iteration
+    critical: 2,     // 2 extra iterations
+    action: 'review'
+  };
+}
+```
+
+## Success Metrics
+
+### 1. Test Coverage
+- Number of unique user scenarios tested
+- API endpoint coverage
+- Response quality scores
+
+### 2. System Reliability
+- Consistency of AI responses
+- Stability of the master agent workflow
+- Error handling effectiveness
+
+### 3. Performance Metrics
+- Response time compliance with benchmarks
+- Memory usage within acceptable limits
+- Iteration efficiency (optimal vs actual)
+- Quality score consistency
+- Regression detection accuracy
+
+## Conclusion
+
+This end-to-end AI testing system provides a focused approach to validating the master agent system. By combining AI-generated test scenarios with AI-powered evaluation, it offers both broad coverage and nuanced quality assessment.
+
+The system requires minimal changes to the main application (just 2 small modifications) while providing comprehensive testing of the complete workflow. The modular design allows for incremental implementation over 3 weeks, making it a practical and sustainable solution for testing complex AI systems.
+
+Key benefits:
+- **Minimal Impact**: Only 2 small changes to main codebase
+- **AI-Powered**: Uses AI for both test generation and evaluation
+- **Comprehensive**: Tests complete master agent workflow
+- **Performance-Focused**: Includes detailed benchmarks and regression detection
+- **Practical**: 3-week implementation timeline

@@ -26,6 +26,7 @@ import { SlackContext } from '../../types/slack/slack.types';
 export class SlackDomainService extends BaseService implements Partial<ISlackDomainService> {
   private slackClient: SlackAPIClient | null = null;
   private slackOAuthManager: SlackOAuthManager | null = null;
+  private botUserId: string | null = null;
 
   constructor() {
     super('SlackDomainService');
@@ -44,6 +45,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       // Get OAuth manager
       this.slackOAuthManager = serviceManager.getService<SlackOAuthManager>('slackOAuthManager') || null;
       
+      // Get bot user ID dynamically
+      await this.initializeBotUserId();
+      
       this.logInfo('Slack Domain Service initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize Slack Domain Service', error);
@@ -57,9 +61,50 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
   protected async onDestroy(): Promise<void> {
     try {
       this.slackClient = null;
+      this.botUserId = null;
       this.logInfo('Slack Domain Service destroyed');
     } catch (error) {
       this.logError('Error destroying Slack Domain Service', error);
+    }
+  }
+
+  /**
+   * Initialize bot user ID by calling auth.test
+   */
+  private async initializeBotUserId(): Promise<void> {
+    try {
+      if (!this.slackClient) {
+        throw new Error('Slack client not available');
+      }
+
+      // Use bot token for authentication
+      const botToken = process.env.SLACK_BOT_TOKEN;
+      if (!botToken) {
+        throw new Error('Slack bot token not configured');
+      }
+
+      const credentials = {
+        type: 'api_key' as const,
+        apiKey: botToken
+      };
+      await this.slackClient.authenticate(credentials);
+
+      // Call auth.test directly without using testAuth() to avoid circular dependency
+      const response = await this.slackClient.makeRequest({
+        method: 'GET',
+        endpoint: '/auth.test'
+      });
+
+      this.botUserId = response.data.user_id;
+      
+      this.logInfo('Bot user ID initialized', {
+        botUserId: this.botUserId,
+        botId: response.data.bot_id
+      });
+    } catch (error) {
+      this.logError('Failed to initialize bot user ID', error);
+      // Don't throw - continue without bot user ID filtering
+      this.botUserId = null;
     }
   }
 
@@ -74,7 +119,7 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     }
     
     const authUrl = await this.slackOAuthManager.generateAuthUrl(context);
-    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+    return { authUrl, state: 'generated' };
   }
 
   async completeOAuth(userId: string, code: string, state: string): Promise<void> {
@@ -337,6 +382,19 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     }
 
     try {
+      // Use bot token for updating messages (same as sendMessage)
+      const botToken = process.env.SLACK_BOT_TOKEN;
+      if (!botToken) {
+        throw new Error('Slack bot token not configured');
+      }
+
+      // Authenticate with bot token
+      const credentials = {
+        type: 'api_key' as const,
+        apiKey: botToken
+      };
+      await this.slackClient.authenticate(credentials);
+
       this.logInfo('Updating Slack message', {
         channel: params.channel,
         ts: params.ts
@@ -1015,53 +1073,18 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
    */
   private async handleMessageEvent(event: any, context: any): Promise<any> {
     try {
-      // Enhanced debugging for bot message detection
-      this.logInfo('Received message event - debugging', {
-        eventBotId: event.bot_id,
-        eventSubtype: event.subtype,
-        eventUserId: event.user,
-        contextUserId: context.userId,
-        messageText: (event.text || '').substring(0, 100),
-        fullEvent: JSON.stringify(event).substring(0, 500)
-      });
-
-      this.logInfo('🔧 CRITICAL: Bot filtering analysis', {
+      // Log message event for monitoring
+      this.logInfo('Processing message event', {
         eventUser: event.user,
-        hardcodedBotId: 'U09C27B5W1Z',
-        isUserIdMatch: event.user === 'U09C27B5W1Z',
-        hasRealBotId: !!event.bot_id,
-        isRealBotSubtype: event.subtype === 'bot_message',
-        messageText: (event.text || '').substring(0, 50),
-        willBeFiltered: event.bot_id || event.subtype === 'bot_message' || event.user === 'U09C27B5W1Z' ||
-                       (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('🤔 Processing your request')) ||
-                       (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('I received your message and I\'m working on it!')) ||
-                       (event.user === 'U09C27B5W1Z' && event.text && event.text.startsWith('⏳'))
+        eventSubtype: event.subtype,
+        messageText: (event.text || '').substring(0, 50)
       });
 
-      // Ignore bot messages to prevent infinite loops
-      // Check multiple conditions for bot detection
-      const isBotMessage = event.bot_id ||
-                          event.subtype === 'bot_message' ||
-                          event.user === 'U09C27B5W1Z' || // Bot user ID
-                          (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('🤔 Processing your request')) ||
-                          (event.user === 'U09C27B5W1Z' && event.text && event.text.includes('I received your message and I\'m working on it!')) ||
-                          (event.user === 'U09C27B5W1Z' && event.text && event.text.startsWith('⏳')); // Progress update messages from bot
-
-      if (isBotMessage) {
-        this.logInfo('🛑 IGNORING BOT MESSAGE to prevent infinite loop', {
-          reason: {
-            hasBotId: !!event.bot_id,
-            isBotSubtype: event.subtype === 'bot_message',
-            isBotUser: event.user === 'U09C27B5W1Z',
-            hasProcessingText: event.text && event.text.includes('🤔 Processing your request'),
-            hasWorkingText: event.text && event.text.includes('I received your message and I\'m working on it!'),
-            hasProgressText: event.text && event.text.startsWith('⏳')
-          },
-          eventBotId: event.bot_id,
-          eventSubtype: event.subtype,
-          eventUser: event.user,
-          channelId: context.channelId
-        });
+      // Ignore bot messages and message updates to prevent infinite loops
+      if (event.bot_id || 
+          event.subtype === 'message_changed' || 
+          event.subtype === 'message_deleted' ||
+          (this.botUserId && event.user === this.botUserId)) {
         return {
           success: true,
           message: 'Bot message ignored'
@@ -1069,12 +1092,6 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       }
 
       const messageText = event.text || '';
-
-      this.logInfo('✅ PROCESSING USER MESSAGE', {
-        messageText: messageText.substring(0, 100),
-        userId: context.userId,
-        channelId: context.channelId
-      });
 
       // Construct the combined userId format expected by SlackOAuthManager
       const combinedUserId = `${context.teamId}:${context.userId}`;
@@ -1090,21 +1107,8 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
 
       // Process the message with MasterAgent (orchestrator only)
       try {
-        this.logInfo('🔧 CRITICAL: About to import MasterAgent', {
-          messageText: messageText.substring(0, 50)
-        });
-
         const { MasterAgent } = await import('../../agents/master.agent');
-
-        this.logInfo('🔧 CRITICAL: MasterAgent imported successfully, creating instance', {
-          MasterAgentExists: !!MasterAgent
-        });
-
         const masterAgent = new MasterAgent();
-
-        this.logInfo('🔧 CRITICAL: MasterAgent instance created successfully', {
-          instanceExists: !!masterAgent
-        });
 
         // Create progress updater function
         const updateProgress = async (step: string) => {
@@ -1132,12 +1136,6 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           userId: context.userId
         });
 
-        this.logInfo('🔧 DEBUG: About to call masterAgent.processUserInput', {
-          messageText: messageText.substring(0, 50),
-          sessionId: context.channelId,
-          userId: combinedUserId,
-          hasSlackContext: !!slackContext
-        });
 
         // MasterAgent orchestrates subagents - doesn't do direct processing
         const result = await masterAgent.processUserInput(
@@ -1147,11 +1145,6 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           slackContext
         );
 
-        this.logInfo('🔧 DEBUG: masterAgent.processUserInput returned', {
-          success: result.success,
-          messageLength: result.message.length,
-          hasMetadata: !!result.metadata
-        });
 
         // Update the progress message with the final response
         await this.updateMessage({
@@ -1171,10 +1164,7 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           message: 'Message processed via MasterAgent orchestration'
         };
       } catch (processingError) {
-        this.logError('🔧 CRITICAL: MasterAgent orchestration failed - DETAILED ERROR', processingError, {
-          errorMessage: processingError instanceof Error ? processingError.message : String(processingError),
-          errorStack: processingError instanceof Error ? processingError.stack : 'No stack trace',
-          errorName: processingError instanceof Error ? processingError.name : 'Unknown error type',
+        this.logError('MasterAgent orchestration failed', processingError, {
           messageText: messageText.substring(0, 50),
           userId: context.userId
         });

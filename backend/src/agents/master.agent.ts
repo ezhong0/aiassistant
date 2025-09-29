@@ -138,53 +138,32 @@ export class MasterAgent {
         await slackContext.updateProgress('Building message history...');
       }
       
-      logger.info('🔧 STAGE 1: Building message history', { sessionId });
       // Gather conversation history and build message history
       const messageHistory = await this.buildMessageHistory(userInput, sessionId, slackContext);
-      logger.info('🔧 STAGE 1 COMPLETE: Message history built', {
-        sessionId,
-        historyLength: messageHistory.length
-      });
 
       // Update progress for stage 2
       if (slackContext?.updateProgress) {
         await slackContext.updateProgress('Analyzing and planning...');
       }
       
-      logger.info('🔧 STAGE 2: Analyzing and planning', { sessionId });
       // Understanding & Planning
       const workflowContext = await this.analyzeAndPlan(messageHistory, sessionId, userId);
-      logger.info('🔧 STAGE 2 COMPLETE: Workflow context created', {
-        sessionId,
-        contextLength: workflowContext.length
-      });
 
       // Update progress for stage 3
       if (slackContext?.updateProgress) {
         await slackContext.updateProgress('Executing workflow...');
       }
       
-      logger.info('🔧 STAGE 3: Executing workflow', { sessionId });
       // Execution Loop (Max 10 Iterations)
       const executionResult = await this.executeWorkflow(workflowContext, sessionId, userId);
-      logger.info('🔧 STAGE 3 COMPLETE: Workflow executed', {
-        sessionId,
-        resultLength: executionResult.length
-      });
 
       // Update progress for stage 4
       if (slackContext?.updateProgress) {
         await slackContext.updateProgress('Generating response...');
       }
       
-      logger.info('🔧 STAGE 4: Generating final response', { sessionId });
       // Final Output Generation
       const finalResult = await this.generateFinalResponse(executionResult, processingStartTime);
-      logger.info('🔧 STAGE 4 COMPLETE: Final result generated', {
-        sessionId,
-        success: finalResult.success,
-        messageLength: finalResult.message.length
-      });
 
       return finalResult;
 
@@ -341,18 +320,8 @@ export class MasterAgent {
    * Private helper methods
    */
   private async ensureInitialized(): Promise<void> {
-    logger.info('🔧 DEBUG: ensureInitialized called', {
-      isInitialized: this.isInitialized
-    });
-
     if (!this.isInitialized) {
-      logger.info('🔧 DEBUG: Starting MasterAgent initialization');
       await this.initialize();
-      logger.info('🔧 DEBUG: MasterAgent initialization completed', {
-        isInitialized: this.isInitialized
-      });
-    } else {
-      logger.info('🔧 DEBUG: MasterAgent already initialized');
     }
   }
 

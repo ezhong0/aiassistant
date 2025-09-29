@@ -148,18 +148,6 @@ export class GenericAIService extends BaseService {
         temperature: prompt.options?.temperature ?? this.config.TEMPERATURE
       });
 
-      this.logInfo('🔧 CRITICAL: About to call aiDomainService.generateStructuredData', {
-        requestId,
-        hasAIService: !!this.aiDomainService,
-        userPromptLength: prompt.userPrompt.length,
-        systemPromptLength: prompt.systemPrompt.length,
-        schemaPropertiesCount: Object.keys(schema.properties).length,
-        options: {
-          temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
-          maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
-          model: prompt.options?.model ?? this.config.MODEL
-        }
-      });
 
       // Always use structured output with function calling
       const structuredResponse = await this.aiDomainService.generateStructuredData({
@@ -171,13 +159,6 @@ export class GenericAIService extends BaseService {
         model: prompt.options?.model ?? this.config.MODEL
       });
 
-      this.logInfo('🔧 CRITICAL: aiDomainService.generateStructuredData returned', {
-        requestId,
-        responseType: typeof structuredResponse,
-        responseConstructor: structuredResponse?.constructor?.name,
-        responseString: String(structuredResponse).substring(0, 200),
-        responseKeys: structuredResponse && typeof structuredResponse === 'object' ? Object.keys(structuredResponse) : 'N/A'
-      });
 
       // Always parse as JSON
       const response = JSON.stringify(structuredResponse);
@@ -231,16 +212,9 @@ export class GenericAIService extends BaseService {
 
     } catch (error) {
       // CENTRALIZED AI PROMPT LOGGING - Output on Error
-      this.logError('🔧 CRITICAL: AI_PROMPT_OUTPUT_ERROR - DETAILED', error, {
+      this.logError('AI prompt execution failed', error, {
         correlationId: requestId,
         operation: 'ai_prompt_execution_error',
-        service: this.name,
-        timestamp: new Date().toISOString(),
-        errorType: typeof error,
-        errorConstructor: error?.constructor?.name,
-        errorString: String(error),
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorName: error instanceof Error ? error.name : 'Error',
         errorStack: error instanceof Error ? error.stack : undefined,
         hasAIService: !!this.aiDomainService,
         prompt: {

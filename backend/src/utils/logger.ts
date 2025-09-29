@@ -13,13 +13,6 @@ const logger = winston.createLogger({
     winston.format.json()
   ),
   transports: [
-    // Disable file logging temporarily
-    // new DailyRotateFile({
-    //   filename: 'logs/application-%DATE%.log',
-    //   datePattern: 'YYYY-MM-DD',
-    //   maxSize: '10m',
-    //   maxFiles: '5d'
-    // }),
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
