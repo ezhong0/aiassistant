@@ -157,6 +157,34 @@ export abstract class BaseAPIClient extends BaseService {
    * @throws {APIError} When request fails
    */
   async makeRequest<T = any>(request: APIRequest): Promise<APIResponse<T>> {
+    // E2E Testing: Intercept API calls for testing
+    if (process.env.E2E_TESTING === 'true') {
+      logger.debug('E2E_TESTING enabled, attempting to intercept API call', {
+        clientName: this.name,
+        endpoint: request.endpoint
+      });
+
+      try {
+        // Dynamic import to avoid build issues when tests directory doesn't exist
+        const path = await import('path');
+        const mockManagerPath = path.resolve(process.cwd(), 'tests/e2e/framework/api-mock-manager');
+        logger.debug('Importing mock manager', { path: mockManagerPath });
+        const mockManagerModule = await import(mockManagerPath);
+        logger.debug('Mock manager imported successfully', { hasClass: !!mockManagerModule.ApiMockManager });
+        const result = await mockManagerModule.ApiMockManager.interceptRequest(this.name, request);
+        logger.debug('Mock API call successful', { clientName: this.name, endpoint: request.endpoint });
+        return result;
+      } catch (error) {
+        // Fallback to real API if mock manager not available (expected in production builds)
+        logger.error('E2E mock manager failed, falling back to real API', {
+          error: (error as Error).message,
+          stack: (error as Error).stack,
+          clientName: this.name,
+          endpoint: request.endpoint
+        });
+      }
+    }
+
     this.assertReady();
     
     if (!this.authenticated && request.requiresAuth !== false) {

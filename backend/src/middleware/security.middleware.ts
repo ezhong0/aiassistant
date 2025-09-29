@@ -10,14 +10,27 @@ import compression from 'compression';
  */
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map((o: string) => o.trim());
+    // Use SECURITY_CORS_ORIGIN for consistency with unified config
+    const corsOrigin = process.env.SECURITY_CORS_ORIGIN || process.env.CORS_ORIGIN;
+    const allowedOrigins = corsOrigin ? corsOrigin.split(',').map((o: string) => o.trim()) : [];
     
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
-    // Allow all origins in development
-    if (process.env.NODE_ENV === 'development') {
+    // In development, allow all origins if no explicit config
+    if (process.env.NODE_ENV === 'development' && allowedOrigins.length === 0) {
       return callback(null, true);
+    }
+    
+    // In production, require explicit allowlist
+    if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+      logger.error('CORS configuration missing in production', {
+        correlationId: `cors-config-missing-${Date.now()}`,
+        operation: 'cors_config_error',
+        metadata: { origin, nodeEnv: process.env.NODE_ENV }
+      });
+      callback(new Error('CORS configuration required in production'), false);
+      return;
     }
     
     // Check if origin is allowed
@@ -28,7 +41,7 @@ export const corsMiddleware = cors({
     logger.warn('CORS origin blocked', {
       correlationId: `cors-blocked-${Date.now()}`,
       operation: 'cors_blocked',
-      metadata: { origin, allowedOrigins }
+      metadata: { origin, allowedOrigins, nodeEnv: process.env.NODE_ENV }
     });
     callback(new Error('Not allowed by CORS'), false);
   },

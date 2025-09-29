@@ -131,6 +131,14 @@ export class DatabaseService extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     try {
+      // Check if database is disabled for testing
+      if (process.env.DISABLE_DATABASE === 'true') {
+        logger.debug('Database disabled via DISABLE_DATABASE environment variable', {
+          operation: 'database_disabled'
+        });
+        return;
+      }
+
       // Parse DATABASE_URL if available (use unified config)
       const databaseUrl = config.databaseUrl;
       if (databaseUrl) {

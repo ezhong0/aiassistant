@@ -162,6 +162,7 @@ export function validateRequest(options: ValidationOptions) {
 
 /**
  * Sanitize input data to prevent XSS and other attacks
+ * Note: Main sanitization is handled by security.middleware.ts
  */
 export function sanitizeInput(data: unknown): unknown {
   if (typeof data === 'string') {
@@ -183,31 +184,6 @@ export function sanitizeInput(data: unknown): unknown {
   }
   
   return data;
-}
-
-/**
- * Sanitization middleware
- */
-export function sanitizeRequest(req: Request, res: Response, next: NextFunction): void {
-  try {
-    req.body = sanitizeInput(req.body);
-    req.query = sanitizeInput(req.query) as any;
-    req.params = sanitizeInput(req.params) as any;
-    next();
-  } catch (error) {
-    const logContext = createLogContext(req, { operation: 'sanitization_error' });
-    logger.error('Sanitization middleware error', error as Error, {
-      correlationId: logContext.correlationId,
-      operation: 'sanitization_middleware',
-      metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Internal sanitization error',
-      code: 'INTERNAL_ERROR',
-    });
-    return;
-  }
 }
 
 /**

@@ -19,6 +19,8 @@
     "test:coverage": "node --max-old-space-size=1536 --expose-gc node_modules/.bin/jest --coverage --runInBand",
     "test:unit": "node --max-old-space-size=512 --expose-gc node_modules/.bin/jest tests/unit --runInBand",
     "test:integration": "node --max-old-space-size=1024 --expose-gc node_modules/.bin/jest tests/integration --runInBand",
+    "test:e2e": "E2E_TESTING=true node --max-old-space-size=1536 --expose-gc node_modules/.bin/jest tests/e2e/e2e-basic.test.ts --runInBand --testTimeout=30000",
+    "test:ai-e2e": "E2E_TESTING=true node --max-old-space-size=2048 --expose-gc node_modules/.bin/jest tests/e2e/ai-powered-e2e.test.ts --runInBand --testTimeout=180000",
     "test:fast": "node --max-old-space-size=256 --expose-gc node_modules/.bin/jest tests/unit/simple.test.ts --runInBand",
     "railway:deploy": "railway up",
     "prepare": "node -e \"if (!process.env.RAILWAY_ENVIRONMENT) require('husky')\"",
@@ -27,6 +29,9 @@
     "db:setup": "npx ts-node scripts/setup-database.ts",
     "db:test": "npx ts-node scripts/setup-database.ts",
     "db:optimize": "npx ts-node scripts/optimize-database.ts",
+    "audit": "npm audit",
+    "audit:fix": "npm audit --fix",
+    "secrets:scan": "gitleaks detect --source . --verbose",
     "test:cache": "npm run test -- tests/unit/services/cache.service.test.ts",
     "test:token-manager": "npm run test -- tests/unit/services/token-manager.test.ts",
     "test:cache-simple": "npx ts-node scripts/simple-cache-test.ts",
@@ -44,6 +49,7 @@
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.15.5",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
     "axios": "^1.11.0",
     "compression": "^1.8.1",
@@ -58,6 +64,7 @@
     "openai": "^5.13.1",
     "pg": "^8.16.3",
     "redis": "^4.7.1",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
@@ -67,6 +74,9 @@
     "*.ts": [
       "eslint --fix",
       "prettier --write"
+    ],
+    "*": [
+      "gitleaks protect --staged"
     ]
   },
   "devDependencies": {
@@ -81,6 +91,7 @@
     "eslint": "^9.33.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "gitleaks": "^1.0.0",
     "husky": "^9.1.7",
     "jest": "^30.0.5",
     "lint-staged": "^16.1.5",

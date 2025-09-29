@@ -153,10 +153,9 @@ export class AuthService extends BaseService {
       const config = this.assertConfig();
       this.logDebug('Exchanging authorization code for tokens', {
         codeLength: code.length,
-        codePrefix: code.substring(0, 20) + '...',
         clientConfig: {
-          clientId: config.googleAuth?.clientId ? config.googleAuth.clientId.substring(0, 20) + '...' : 'not_set',
-          redirectUri: config.googleAuth?.redirectUri || ' not_set',
+          hasClientId: !!config.googleAuth?.clientId,
+          redirectUri: config.googleAuth?.redirectUri || 'not_set',
           hasClientSecret: !!config.googleAuth?.clientSecret
         }
       });
@@ -179,8 +178,7 @@ export class AuthService extends BaseService {
       this.logInfo('Successfully exchanged code for tokens', {
         hasRefreshToken: !!googleTokens.refresh_token,
         expiresIn: googleTokens.expires_in,
-        tokenLength: googleTokens.access_token.length,
-        scope: googleTokens.scope
+        hasScope: !!googleTokens.scope
       });
 
       return googleTokens;
@@ -258,7 +256,6 @@ export class AuthService extends BaseService {
       
       this.logDebug('Generated JWT token', { 
         userId, 
-        email, 
         expiresIn: config.auth.jwt.expiresIn 
       });
       
@@ -287,8 +284,7 @@ export class AuthService extends BaseService {
       }) as JWTPayload;
 
       this.logDebug('JWT token verified successfully', { 
-        userId: decoded.sub, 
-        email: decoded.email 
+        userId: decoded.sub
       });
       
       return decoded;

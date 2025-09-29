@@ -8,7 +8,7 @@ dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
 // ConfigService is now managed by the service manager
-import { initializeAgentFactory } from './framework/agent-factory';
+import { initializeAgentFactory, AgentFactory } from './framework/agent-factory';
 import { initializeAllCoreServices } from './services/service-initialization';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -28,6 +28,7 @@ import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
 import { serviceManager } from './services/service-manager';
 import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
+import { setupSwagger } from './docs/swagger';
 import { unifiedConfig } from './config/unified-config';
 
 // Global interfaces store
@@ -100,12 +101,41 @@ const getHealthStatus = () => ({
   ready: true
 });
 
+const getDetailedHealthStatus = async () => {
+  const basicHealth = getHealthStatus();
+  
+  // Only include detailed service health in development or when explicitly requested
+  if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DETAILED_HEALTH === 'true') {
+    try {
+      const serviceHealth = await serviceManager.getAllServicesHealth();
+      const agentHealth = AgentFactory.getAllAgentHealth();
+      
+      return {
+        ...basicHealth,
+        services: serviceHealth,
+        agents: agentHealth,
+        detailed: true
+      };
+    } catch (error) {
+      return {
+        ...basicHealth,
+        services: { error: 'Failed to get service health' },
+        agents: { error: 'Failed to get agent health' },
+        detailed: false
+      };
+    }
+  }
+  
+  return basicHealth;
+};
+
 app.get('/healthz', (req: Request, res: Response) => {
   res.status(200).json(getHealthStatus());
 });
 
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json(getHealthStatus());
+app.get('/health', async (req: Request, res: Response) => {
+  const healthStatus = await getDetailedHealthStatus();
+  res.status(200).json(healthStatus);
 });
 
 // Trust proxy (for proper IP detection behind reverse proxy)
@@ -135,6 +165,9 @@ app.use((req, res, next) => {
 // Rate limiting (apply to all routes)
 app.use(apiRateLimit);
 
+
+// API Documentation
+setupSwagger(app);
 
 // API Routes
 app.use('/auth', authRoutes);
