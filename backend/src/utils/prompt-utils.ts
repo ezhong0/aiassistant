@@ -4,14 +4,14 @@
  * Helper functions for building consistent, context-aware prompts across the system
  */
 
-import { AgentExecutionContext, UserPreferences } from '../types/agents/natural-language.types';
+import { UserPreferences } from '../types/agents/natural-language.types';
 
 export class PromptUtils {
   /**
    * Get temporal context string for prompts
    * Includes current date/time in user's timezone
    */
-  static getTemporalContext(context: AgentExecutionContext): string {
+  static getTemporalContext(context: { timezone?: string; locale?: string }): string {
     const timezone = context.timezone || 'America/Los_Angeles'; // Default to PST
     const locale = context.locale || 'en-US';
 
@@ -34,7 +34,7 @@ export class PromptUtils {
    * Get conversation history context string
    * Shows recent turns for multi-turn understanding
    */
-  static getConversationContext(context: AgentExecutionContext, maxTurns: number = 3): string {
+  static getConversationContext(context: { conversationHistory?: any[] }, maxTurns: number = 3): string {
     if (!context.conversationHistory || context.conversationHistory.length === 0) {
       return '';
     }
@@ -89,7 +89,7 @@ export class PromptUtils {
    * Build complete context block for prompts
    * Combines temporal, conversation, and preference context
    */
-  static buildContextBlock(context: AgentExecutionContext, options?: {
+  static buildContextBlock(context: { timezone?: string; locale?: string; conversationHistory?: any[]; userPreferences?: UserPreferences }, options?: {
     includeTemporal?: boolean;
     includeConversation?: boolean;
     includePreferences?: boolean;

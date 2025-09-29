@@ -15,9 +15,13 @@ export interface BaseSubAgentResponse extends BaseAIResponse {
 export abstract class BaseSubAgentPromptBuilder<TResult extends BaseSubAgentResponse = BaseSubAgentResponse> 
   extends BasePromptBuilder<string, TResult> {
   
-  // Simple context format for sub-agents - just a text box
+  // Structured context format for sub-agents with tool calls
   protected readonly SUB_AGENT_CONTEXT_FORMAT = `
-Context: [Free-form text describing the current state, progress, and any relevant information]`;
+REQUEST: [What master agent asked for]
+TOOL_CALLS: [JSON array of tool calls with parameters]
+STATUS: [Current execution status]
+RESULTS: [Data collected so far]
+NOTES: [Brief execution context]`;
 
   constructor(protected aiService: any, protected domain: string) {
     super(aiService);

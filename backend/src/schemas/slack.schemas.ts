@@ -206,36 +206,8 @@ export const SlackChannelSchema = z.object({
   purpose: OptionalStringSchema,
 });
 
-// Slack agent request schema
-export const SlackAgentRequestSchema = z.object({
-  operation: z.enum(['read_messages', 'read_thread', 'detect_drafts', 'confirmation_handling']),
-  context: SlackContextSchema,
-  metadata: z.object({
-    timestamp: z.string(),
-    eventId: OptionalStringSchema,
-    triggerId: OptionalStringSchema,
-    responseUrl: OptionalStringSchema,
-  }),
-  parameters: z.object({
-    searchTerm: OptionalStringSchema,
-    channelId: OptionalStringSchema,
-    threadTs: OptionalStringSchema,
-    limit: OptionalNumberSchema,
-  }),
-});
-
-// Slack agent result schema
-export const SlackAgentResultSchema = z.object({
-  messages: z.array(SlackMessageSchema),
-  threads: z.array(SlackThreadSchema),
-  drafts: z.array(SlackDraftSchema),
-  operation: z.enum(['read_messages', 'read_thread', 'detect_drafts', 'confirmation_handling']),
-  totalCount: z.number(),
-  channelId: OptionalStringSchema,
-  threadTs: OptionalStringSchema,
-  searchTerm: OptionalStringSchema,
-  confirmationStatus: z.enum(['pending', 'confirmed', 'rejected', 'expired']).optional(),
-});
+// Removed unused SlackAgentRequestSchema and SlackAgentResultSchema
+// These were replaced by the simplified SubAgentResponse interface
 
 // Slack webhook event schema
 export const SlackWebhookEventSchema = z.object({

@@ -26,6 +26,10 @@ logs/
 backend/logs/
 *.log
 
+# E2E Test Reports
+tests/e2e/reports/
+backend/tests/e2e/reports/
+
 # Runtime data
 pids/
 *.pid

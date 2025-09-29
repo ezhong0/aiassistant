@@ -105,7 +105,8 @@ describe('AI-Powered End-to-End Testing System', () => {
           scenarioId: scenario.id,
           overallScore: evaluation.overallScore || 0,
           passed: evaluation.finalVerdict?.passed || false,
-          confidence: evaluation.finalVerdict?.confidence || 0
+          confidence: evaluation.finalVerdict?.confidence || 0,
+          detailedLogFile: trace.detailedLogFile || 'N/A'
         });
       }
 
@@ -153,7 +154,8 @@ describe('AI-Powered End-to-End Testing System', () => {
         passRate: (passedScenarios / totalScenarios * 100).toFixed(1) + '%',
         averageScore: averageScore.toFixed(1),
         categories: [...new Set(scenarios.map(s => s.category))],
-        complexityLevels: [...new Set(scenarios.map(s => s.complexity))]
+        complexityLevels: [...new Set(scenarios.map(s => s.complexity))],
+        detailedLogFiles: scenarios.map(s => s.id)
       });
     }, 120000); // 2 minute timeout for complete AI workflow
 
@@ -181,6 +183,11 @@ describe('AI-Powered End-to-End Testing System', () => {
         // Key assertions for email scenarios
         expect(evaluation.responseAppropriate).toBeDefined();
         expect(evaluation.expectedToolsUsed).toBeDefined();
+        
+        // Log the detailed log file location
+        if (trace.detailedLogFile) {
+          console.log(`📄 Detailed log saved to: ${trace.detailedLogFile}`);
+        }
 
         // If execution was successful, response should be appropriate
         if (trace.success) {
@@ -235,6 +242,11 @@ describe('AI-Powered End-to-End Testing System', () => {
         console.log(`  Expected APIs: ${scenario.expectedApiCalls?.join(', ') || 'N/A'}`);
         console.log(`  Actual API Calls: ${trace.apiCalls.length}`);
         console.log(`  Tool Completeness: ${evaluation.detailedScores?.toolCompleteness || 'N/A'}/100`);
+        
+        // Log the detailed log file location
+        if (trace.detailedLogFile) {
+          console.log(`📄 Detailed log saved to: ${trace.detailedLogFile}`);
+        }
 
         if (evaluation.findings?.missingTools?.length > 0) {
           console.log(`  Missing Tools: ${evaluation.findings.missingTools.join(', ')}`);
@@ -286,6 +298,11 @@ describe('AI-Powered End-to-End Testing System', () => {
         console.log(`  Description: ${scenario.description || 'N/A'}`);
         console.log(`  Error Handling: ${evaluation.detailedScores?.errorHandling || 'N/A'}/100`);
         console.log(`  Final Verdict: ${evaluation.finalVerdict?.reason || 'N/A'}`);
+        
+        // Log the detailed log file location
+        if (trace.detailedLogFile) {
+          console.log(`📄 Detailed log saved to: ${trace.detailedLogFile}`);
+        }
 
         // Edge cases may fail execution but should handle errors gracefully
         if (!trace.success) {

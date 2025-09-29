@@ -19,24 +19,22 @@ import {
 } from '../services/prompt-builders/sub-agent';
 
 /**
- * SubAgent Response interface - matches MasterAgent response format
+ * SubAgent Response interface - simplified single string + metadata
  */
 export interface SubAgentResponse {
+  message: string;              // Single string response for Master Agent
   success: boolean;
-  message: string;        // Human-readable summary
-  metadata: any;          // Tool execution results (not "data")
-}
-
-/**
- * Agent Execution Context for SubAgents
- */
-export interface AgentExecutionContext {
-  sessionId: string;
-  userId?: string;
-  accessToken?: string;
-  slackContext?: any;
-  correlationId?: string;
-  timestamp: Date;
+  metadata?: {
+    tools_used: string[];       // Tools that were executed
+    execution_time: number;     // Time taken in seconds
+    data?: any;                 // Optional structured data
+  };
+  error?: {
+    type: 'auth' | 'params' | 'network' | 'rate_limit' | 'permission' | 'tool_error';
+    message: string;            // Clear error description for Master Agent
+    tool: string;               // Which tool failed
+    recoverable: boolean;       // Whether Master Agent can retry
+  };
 }
 
 /**
@@ -61,19 +59,6 @@ export interface AgentConfig {
   enabled: boolean;
   timeout: number;
   retryCount: number;
-}
-
-/**
- * Simple Context Format (like MasterAgent)
- * Single textbox with structured fields
- */
-export interface SimpleContext {
-  request: string;    // What master agent asked for
-  tools: string;      // Tools needed to fulfill request
-  params: string;     // Parameters for tool calls
-  status: 'Planning' | 'Executing' | 'Complete' | 'Failed';
-  result: string;     // Data collected from tool calls
-  notes: string;      // Brief execution context
 }
 
 /**
@@ -192,20 +177,22 @@ export abstract class BaseSubAgent {
   }
 
   /**
-   * Main entry point - mirrors MasterAgent.processUserInput
+   * Main entry point - simplified interface matching design document
    */
   async processNaturalLanguageRequest(
     request: string, 
-    context: AgentExecutionContext
+    userId: string
   ): Promise<SubAgentResponse> {
-    const correlationId = context.correlationId || `${this.domain}-${Date.now()}`;
+    const startTime = Date.now();
+    const correlationId = `${this.domain}-${Date.now()}`;
     
     try {
       logger.info(`${this.domain} SubAgent processing request`, {
         correlationId,
         operation: 'process_natural_language_request',
         domain: this.domain,
-        requestLength: request.length
+        requestLength: request.length,
+        userId
       });
 
       // Initialize AI service if needed
@@ -214,37 +201,46 @@ export abstract class BaseSubAgent {
       }
 
       // Phase 1: Intent Assessment & Planning
-      let workflowContext = await this.assessIntent(request, context);
+      let context = await this.assessIntent(request, userId);
       
       // Phase 2: Direct Tool Execution (Max 3 iterations)
-      workflowContext = await this.executeTools(workflowContext, context);
+      context = await this.executeTools(context, userId);
       
       // Phase 3: Response Formatting
-      const response = await this.formatResponse(workflowContext, context);
+      const response = await this.formatResponse(context, request, startTime);
 
       logger.info(`${this.domain} SubAgent completed successfully`, {
         correlationId,
         operation: 'process_natural_language_request_success',
         domain: this.domain,
-        success: response.success
+        success: response.success,
+        executionTime: response.metadata?.execution_time
       });
 
       return response;
 
     } catch (error) {
+      const executionTime = (Date.now() - startTime) / 1000;
       logger.error(`${this.domain} SubAgent processing failed`, error as Error, {
         correlationId,
         operation: 'process_natural_language_request_error',
-        domain: this.domain
+        domain: this.domain,
+        executionTime
       });
 
       return {
-        success: false,
         message: `${this.domain} operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        success: false,
         metadata: {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          domain: this.domain,
-          timestamp: new Date().toISOString()
+          tools_used: [],
+          execution_time: executionTime,
+          data: null
+        },
+        error: {
+          type: 'tool_error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          tool: 'unknown',
+          recoverable: false
         }
       };
     }
@@ -253,10 +249,10 @@ export abstract class BaseSubAgent {
   /**
    * Phase 1: Intent Assessment & Planning
    */
-  protected async assessIntent(request: string, context: AgentExecutionContext): Promise<string> {
+  protected async assessIntent(request: string, userId: string): Promise<string> {
     const contextInput = `
 MASTER AGENT REQUEST: ${request}
-USER_ID: ${context.userId || 'unknown'}
+USER_ID: ${userId}
 AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
     `;
 
@@ -265,25 +261,32 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
   }
 
   /**
-   * Phase 2: Direct Tool Execution (Max 3 iterations)
+   * Phase 2: Sequential Tool Execution with Plan Review (Max 3 iterations)
    */
-  protected async executeTools(workflowContext: string, context: AgentExecutionContext): Promise<string> {
-    let currentContext = workflowContext;
+  protected async executeTools(context: string, userId: string): Promise<string> {
+    let currentContext = context;
     let iteration = 0;
     const maxIterations = 3;
 
     // Extract tool calls from the initial intent assessment
-    const toolCalls = this.extractToolCallsFromContext(currentContext);
+    let toolCalls = this.extractToolCallsFromContext(currentContext);
 
     while (iteration < maxIterations && toolCalls.length > 0) {
       iteration++;
 
-      // Execute tools from the current iteration
-      for (const toolCall of toolCalls) {
+      // Execute tools sequentially with plan review after each tool
+      for (let i = 0; i < toolCalls.length; i++) {
+        const toolCall = toolCalls[i];
+        
+        if (!toolCall) {
+          logger.warn('Skipping undefined tool call', { iteration, index: i });
+          continue;
+        }
+        
         try {
-          const result = await this.executeToolCall(
+          const result = await this.executeToolCallWithRetry(
             toolCall.tool, 
-            { ...toolCall.params, userId: context.userId }
+            { ...toolCall.params, userId }
           );
           
           // Update context with structured tool result
@@ -296,14 +299,14 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
           
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          const errorType = this.classifyError(error);
+          const errorInfo = this.classifyError(error);
           
           logger.error(`Tool execution failed: ${toolCall.tool}`, error as Error, {
-            correlationId: context.correlationId,
             toolName: toolCall.tool,
             params: toolCall.params,
-            errorType: errorType,
-            errorMessage: errorMessage
+            errorType: errorInfo.type,
+            errorMessage: errorMessage,
+            userId
           });
           
           // Update context with structured error
@@ -311,27 +314,58 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
             tool: toolCall.tool,
             success: false,
             error: errorMessage,
-            errorType: errorType,
+            errorType: errorInfo.type,
             executionTime: Date.now()
           });
         }
+
+        // Plan review after each tool execution (except the last tool in the iteration)
+        if (i < toolCalls.length - 1) {
+          const contextInput = `
+CURRENT_CONTEXT:
+${currentContext}
+
+USER_ID: ${userId}
+AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
+ITERATION: ${iteration}/${maxIterations}
+TOOL_EXECUTED: ${toolCall.tool}
+          `;
+
+          const response = await this.planReviewBuilder.execute(contextInput);
+          currentContext = response.parsed.context;
+          
+          // Extract updated tool calls for remaining tools in this iteration
+          const updatedToolCalls = this.extractToolCallsFromContext(currentContext);
+          
+          // If plan review suggests different tools, update the remaining tools
+          if (updatedToolCalls.length > 0) {
+            toolCalls = updatedToolCalls;
+            // Continue with the updated tool list
+            i = -1; // Reset loop counter to start from beginning of updated list
+            continue;
+          }
+        }
       }
 
-      // Review the plan and determine if more iterations are needed
+      // Final plan review after all tools in this iteration
       const contextInput = `
 CURRENT_CONTEXT:
 ${currentContext}
 
-USER_ID: ${context.userId || 'unknown'}
+USER_ID: ${userId}
 AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
 ITERATION: ${iteration}/${maxIterations}
+ITERATION_COMPLETE: true
       `;
 
       const response = await this.planReviewBuilder.execute(contextInput);
       currentContext = response.parsed.context;
       
-      // Check if we need more iterations based on the updated steps
-      if (response.parsed.steps.length === 0) {
+      // Extract new tool calls for next iteration
+      toolCalls = this.extractToolCallsFromContext(currentContext);
+      
+      // Break if no more tool calls
+      if (toolCalls.length === 0) {
         break;
       }
     }
@@ -342,20 +376,25 @@ ITERATION: ${iteration}/${maxIterations}
   /**
    * Phase 3: Response Formatting
    */
-  protected async formatResponse(workflowContext: string, context: AgentExecutionContext): Promise<SubAgentResponse> {
+  protected async formatResponse(context: string, request: string, startTime: number): Promise<SubAgentResponse> {
     const contextInput = `
 FINAL_CONTEXT:
-${workflowContext}
+${context}
 
-USER_ID: ${context.userId || 'unknown'}
+ORIGINAL_REQUEST: ${request}
     `;
 
     const response = await this.responseFormattingBuilder.execute(contextInput);
+    const executionTime = (Date.now() - startTime) / 1000;
     
     return {
-      success: response.parsed.response.success,
       message: response.parsed.response.summary,
-      metadata: response.parsed.response.data
+      success: response.parsed.response.success,
+      metadata: {
+        tools_used: this.extractToolsUsedFromContext(context),
+        execution_time: executionTime,
+        data: response.parsed.response.data
+      }
     };
   }
 
@@ -448,38 +487,45 @@ USER_ID: ${context.userId || 'unknown'}
   }
 
   /**
-   * Helper method to format SimpleContext
+   * Extract tools used from context string
    */
-  protected formatSimpleContext(context: Partial<SimpleContext>): string {
-    const ctx: SimpleContext = {
-      request: context.request || '',
-      tools: context.tools || '',
-      params: context.params || '',
-      status: context.status || 'Planning',
-      result: context.result || '',
-      notes: context.notes || ''
-    };
-
-    return `REQUEST: ${ctx.request}
-TOOLS: ${ctx.tools}
-PARAMS: ${ctx.params}
-STATUS: ${ctx.status}
-RESULT: ${ctx.result}
-NOTES: ${ctx.notes}`;
+  protected extractToolsUsedFromContext(context: string): string[] {
+    const tools: string[] = [];
+    const toolResultMatches = context.match(/TOOL_RESULT_(\w+):/g);
+    if (toolResultMatches) {
+      for (const match of toolResultMatches) {
+        const toolName = match.replace('TOOL_RESULT_', '').replace(':', '');
+        tools.push(toolName);
+      }
+    }
+    return tools;
   }
 
   /**
-   * Extract tool calls from context
+   * Extract tool calls from structured AI response
    */
   protected extractToolCallsFromContext(context: string): Array<{tool: string, params: any, description: string}> {
     try {
-      // Parse tool calls from context - this is a simplified implementation
-      // In a real implementation, you'd parse the structured context more carefully
-      const toolCallsMatch = context.match(/TOOL_CALLS:\s*\[(.*?)\]/s);
-      if (toolCallsMatch) {
-        // This is a placeholder - you'd implement proper JSON parsing here
-        return [];
+      // Try to parse as JSON first (structured response)
+      const jsonMatch = context.match(/\{.*\}/s);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.toolCalls && Array.isArray(parsed.toolCalls)) {
+            return parsed.toolCalls;
+          }
+        } catch (e) {
+          // Not valid JSON, continue
+        }
       }
+      
+      // Fallback: Look for TOOL_CALLS pattern
+      const toolCallsMatch = context.match(/TOOL_CALLS:\s*(\[.*?\])/s);
+      if (toolCallsMatch && toolCallsMatch[1]) {
+        const toolCallsJson = toolCallsMatch[1];
+        return JSON.parse(toolCallsJson);
+      }
+      
       return [];
     } catch (error) {
       logger.warn('Failed to extract tool calls from context', { error: error instanceof Error ? error.message : 'Unknown error' });
@@ -508,76 +554,73 @@ TOOL_RESULT_${toolResult.tool}:
   }
 
   /**
-   * Classify error types for better handling
+   * Classify error types for better handling and retry logic
    */
-  protected classifyError(error: any): string {
+  protected classifyError(error: any): { type: string; retryable: boolean; retryDelay?: number } {
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
       
       if (message.includes('authentication') || message.includes('unauthorized')) {
-        return 'AUTHENTICATION_ERROR';
+        return { type: 'AUTHENTICATION_ERROR', retryable: false };
       } else if (message.includes('permission') || message.includes('forbidden')) {
-        return 'PERMISSION_ERROR';
+        return { type: 'PERMISSION_ERROR', retryable: false };
       } else if (message.includes('rate limit') || message.includes('too many requests')) {
-        return 'RATE_LIMIT_ERROR';
+        return { type: 'RATE_LIMIT_ERROR', retryable: true, retryDelay: 2000 };
       } else if (message.includes('timeout') || message.includes('timed out')) {
-        return 'TIMEOUT_ERROR';
+        return { type: 'TIMEOUT_ERROR', retryable: true, retryDelay: 1000 };
       } else if (message.includes('network') || message.includes('connection')) {
-        return 'NETWORK_ERROR';
+        return { type: 'NETWORK_ERROR', retryable: true, retryDelay: 1500 };
       } else if (message.includes('validation') || message.includes('invalid')) {
-        return 'VALIDATION_ERROR';
+        return { type: 'VALIDATION_ERROR', retryable: false };
       } else if (message.includes('not found') || message.includes('404')) {
-        return 'NOT_FOUND_ERROR';
+        return { type: 'NOT_FOUND_ERROR', retryable: false };
+      } else if (message.includes('server error') || message.includes('5')) {
+        return { type: 'SERVER_ERROR', retryable: true, retryDelay: 3000 };
       } else {
-        return 'UNKNOWN_ERROR';
+        return { type: 'UNKNOWN_ERROR', retryable: false };
       }
     }
     
-    return 'UNKNOWN_ERROR';
+    return { type: 'UNKNOWN_ERROR', retryable: false };
   }
 
   /**
-   * Helper method to parse SimpleContext
+   * Execute tool call with retry logic
    */
-  protected parseSimpleContext(contextString: string): SimpleContext {
-    const lines = contextString.split('\n');
-    const context: Partial<SimpleContext> = {};
-
-    for (const line of lines) {
-      const [key, ...valueParts] = line.split(': ');
-      const value = valueParts.join(': ').trim();
-      
-      if (!key) continue;
-      
-      switch (key.trim()) {
-        case 'REQUEST':
-          context.request = value;
-          break;
-        case 'TOOLS':
-          context.tools = value;
-          break;
-        case 'PARAMS':
-          context.params = value;
-          break;
-        case 'STATUS':
-          context.status = value as SimpleContext['status'];
-          break;
-        case 'RESULT':
-          context.result = value;
-          break;
-        case 'NOTES':
-          context.notes = value;
-          break;
+  protected async executeToolCallWithRetry(toolName: string, params: any, maxRetries: number = 3): Promise<any> {
+    let lastError: any;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.executeToolCall(toolName, params);
+      } catch (error) {
+        lastError = error;
+        const errorInfo = this.classifyError(error);
+        
+        // Don't retry non-retryable errors
+        if (!errorInfo.retryable) {
+          throw error;
+        }
+        
+        // Don't retry on last attempt
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        
+        // Wait before retry
+        if (errorInfo.retryDelay) {
+          await new Promise(resolve => setTimeout(resolve, errorInfo.retryDelay));
+        }
+        
+        logger.warn(`Tool call failed, retrying (attempt ${attempt}/${maxRetries})`, {
+          toolName,
+          errorType: errorInfo.type,
+          retryDelay: errorInfo.retryDelay
+        });
       }
     }
-
-    return {
-      request: context.request || '',
-      tools: context.tools || '',
-      params: context.params || '',
-      status: context.status || 'Planning',
-      result: context.result || '',
-      notes: context.notes || ''
-    };
+    
+    throw lastError;
   }
+
 }

@@ -7,6 +7,7 @@ import { GenericAIService } from '../../../src/services/generic-ai.service';
 import { ExecutionTrace } from '../framework/master-agent-executor';
 import { TestScenario } from './scenario-generator';
 import logger from '../../../src/utils/logger';
+import { DetailedExecutionLogger } from '../framework/detailed-execution-logger';
 
 export interface ResponseEvaluation {
   scenarioId: string;
@@ -43,9 +44,11 @@ export interface ResponseEvaluation {
  */
 export class AIResponseEvaluator {
   private aiService: GenericAIService;
+  private detailedLogger: DetailedExecutionLogger;
 
   constructor(aiService: GenericAIService) {
     this.aiService = aiService;
+    this.detailedLogger = new DetailedExecutionLogger();
   }
 
   /**
@@ -71,6 +74,14 @@ export class AIResponseEvaluator {
 
       // Final verdict determination
       evaluation.finalVerdict = this.determineFinalVerdict(evaluation, scenario, trace);
+
+      // Log test analysis
+      const analysisContent = this.generateAnalysisContent(evaluation, scenario, trace);
+      this.detailedLogger.logTestAnalysis(analysisContent, {
+        overallScore: evaluation.overallScore,
+        passed: evaluation.finalVerdict?.passed,
+        confidence: evaluation.finalVerdict?.confidence
+      });
 
       logger.info('AI evaluation completed', {
         operation: 'ai_response_evaluation_complete',
@@ -459,5 +470,79 @@ Be objective and thorough in your analysis.
       });
 
     return report;
+  }
+
+  /**
+   * Generate analysis content for detailed logging
+   */
+  private generateAnalysisContent(
+    evaluation: ResponseEvaluation,
+    scenario: TestScenario,
+    trace: ExecutionTrace
+  ): string {
+    let content = `# Test Analysis Report\n\n`;
+    
+    content += `## Scenario Overview\n`;
+    content += `- **ID**: ${scenario.id}\n`;
+    content += `- **Category**: ${scenario.category}\n`;
+    content += `- **Complexity**: ${scenario.complexity}\n`;
+    content += `- **Description**: ${scenario.description}\n\n`;
+
+    content += `## User Input\n`;
+    content += `\`\`\`\n${scenario.userInput}\n\`\`\`\n\n`;
+
+    content += `## Expected Behavior\n`;
+    content += `- **Actions**: ${scenario.expectedActions?.join(', ') || 'N/A'}\n`;
+    content += `- **API Calls**: ${scenario.expectedApiCalls?.join(', ') || 'N/A'}\n\n`;
+
+    content += `## Execution Results\n`;
+    content += `- **Success**: ${trace.success ? 'Yes' : 'No'}\n`;
+    content += `- **Duration**: ${trace.totalDuration || 0}ms\n`;
+    content += `- **API Calls Made**: ${trace.apiCalls.length}\n`;
+    content += `- **Final Response**: ${trace.finalResult?.message || 'N/A'}\n\n`;
+
+    content += `## AI Evaluation\n`;
+    content += `- **Overall Score**: ${evaluation.overallScore || 0}/100\n`;
+    content += `- **Response Appropriate**: ${evaluation.responseAppropriate ? 'Yes' : 'No'}\n`;
+    content += `- **Expected Tools Used**: ${evaluation.expectedToolsUsed ? 'Yes' : 'No'}\n`;
+    content += `- **Final Verdict**: ${evaluation.finalVerdict?.passed ? 'PASS' : 'FAIL'}\n`;
+    content += `- **Confidence**: ${evaluation.finalVerdict?.confidence || 0}%\n\n`;
+
+    if (evaluation.detailedScores) {
+      content += `## Detailed Scores\n`;
+      content += `- **Response Quality**: ${evaluation.detailedScores.responseQuality || 0}/100\n`;
+      content += `- **Tool Completeness**: ${evaluation.detailedScores.toolCompleteness || 0}/100\n`;
+      content += `- **Workflow Efficiency**: ${evaluation.detailedScores.workflowEfficiency || 0}/100\n`;
+      content += `- **Error Handling**: ${evaluation.detailedScores.errorHandling || 0}/100\n\n`;
+    }
+
+    if (evaluation.findings) {
+      content += `## Findings\n`;
+      if (evaluation.findings.strengths?.length > 0) {
+        content += `### Strengths\n`;
+        evaluation.findings.strengths.forEach(strength => {
+          content += `- ${strength}\n`;
+        });
+        content += `\n`;
+      }
+
+      if (evaluation.findings.weaknesses?.length > 0) {
+        content += `### Weaknesses\n`;
+        evaluation.findings.weaknesses.forEach(weakness => {
+          content += `- ${weakness}\n`;
+        });
+        content += `\n`;
+      }
+
+      if (evaluation.findings.recommendations?.length > 0) {
+        content += `### Recommendations\n`;
+        evaluation.findings.recommendations.forEach(rec => {
+          content += `- ${rec}\n`;
+        });
+        content += `\n`;
+      }
+    }
+
+    return content;
   }
 }

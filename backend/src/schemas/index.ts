@@ -23,8 +23,6 @@ export {
   SlackThreadSchema,
   SlackDraftSchema,
   SlackChannelSchema,
-  SlackAgentRequestSchema,
-  SlackAgentResultSchema,
   SlackWebhookEventSchema,
   SlackTokensSchema as SlackTokensValidationSchema
 } from './slack.schemas';

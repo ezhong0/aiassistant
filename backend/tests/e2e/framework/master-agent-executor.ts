@@ -7,6 +7,7 @@ import { MasterAgent, ProcessingResult } from '../../../src/agents/master.agent'
 import { SlackContext } from '../../../src/types/slack/slack.types';
 import logger from '../../../src/utils/logger';
 import { initializeAllCoreServices } from '../../../src/services/service-initialization';
+import { DetailedExecutionLogger } from './detailed-execution-logger';
 
 interface ExecutionStage {
   stage: string;
@@ -59,6 +60,7 @@ export interface ExecutionTrace {
   success: boolean;
   finalResult?: ProcessingResult;
   error?: string;
+  detailedLogFile?: string;
 
   stages: {
     messageHistory?: ExecutionStage;
@@ -92,9 +94,11 @@ export class MasterAgentExecutor {
   private masterAgent: MasterAgent;
   private currentTrace: ExecutionTrace | null = null;
   private servicesInitialized: boolean = false;
+  private detailedLogger: DetailedExecutionLogger;
 
   constructor() {
     this.masterAgent = new MasterAgent();
+    this.detailedLogger = new DetailedExecutionLogger();
   }
 
   /**
@@ -137,6 +141,9 @@ export class MasterAgentExecutor {
     testScenarioId?: string
   ): Promise<ExecutionTrace> {
     const traceId = testScenarioId || `trace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Start detailed logging
+    this.detailedLogger.startExecution(traceId, testScenarioId || 'unknown', userInput);
 
     // Initialize execution trace
     this.currentTrace = {
@@ -197,11 +204,21 @@ export class MasterAgentExecutor {
       this.currentTrace.success = result.success;
       this.currentTrace.finalResult = result;
 
+      // Log final response
+      this.detailedLogger.logFinalResponse(result.message, {
+        success: result.success,
+        metadata: result.metadata
+      });
+
       // Capture API calls from mock manager
       await this.captureApiCalls();
 
       // Calculate performance metrics
       this.calculatePerformanceMetrics();
+
+      // Complete detailed logging
+      const logFile = await this.detailedLogger.completeExecution(result.success);
+      this.currentTrace.detailedLogFile = logFile;
 
       logger.info('E2E test execution completed', {
         operation: 'e2e_execution_complete',
@@ -310,6 +327,24 @@ export class MasterAgentExecutor {
         duration: call.duration,
         success: call.response.success
       })));
+
+      // Log each API call to detailed logger
+      for (const call of newCalls) {
+        this.detailedLogger.logAPICall(
+          call.clientName,
+          call.request.endpoint,
+          call.request.method,
+          call.request,
+          { duration: call.duration, success: call.response.success }
+        );
+        
+        this.detailedLogger.logAPIResponse(
+          call.clientName,
+          call.request.endpoint,
+          call.response,
+          { duration: call.duration, success: call.response.success }
+        );
+      }
 
     } catch (error) {
       logger.warn('Failed to capture API calls', {

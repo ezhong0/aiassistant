@@ -253,7 +253,6 @@ const setupCircuitBreakerConnections = async (): Promise<void> => {
 
 /**
  * Get service health report with enhanced monitoring
- * TEMPORARILY DISABLED - ServiceDependencyManager removed
  */
 export async function getServiceHealthReport(): Promise<{
   timestamp: string;
@@ -263,14 +262,87 @@ export async function getServiceHealthReport(): Promise<{
   capabilities: Record<string, string[]>;
   recommendations: string[];
 }> {
-  // Simplified version without ServiceDependencyManager
+  const timestamp = new Date().toISOString();
+  const environment = process.env.NODE_ENV || 'development';
+  
+  // Get service manager stats
+  const serviceStats = serviceManager.getServiceStats();
+  const services: Record<string, any> = {};
+  const capabilities: Record<string, string[]> = {};
+  const recommendations: string[] = [];
+  
+  // Check each service
+  const serviceNames = [
+    'genericAIService',
+    'contextManager', 
+    'tokenManager',
+    'databaseService',
+    'cacheService',
+    'authService',
+    'workflowExecutor'
+  ];
+  
+  let healthyServices = 0;
+  let totalServices = serviceNames.length;
+  
+  for (const serviceName of serviceNames) {
+    try {
+      const service = serviceManager.getService(serviceName);
+      const isHealthy = service !== null;
+      
+      services[serviceName] = {
+        status: isHealthy ? 'healthy' : 'unavailable',
+        initialized: isHealthy,
+        lastChecked: timestamp
+      };
+      
+      if (isHealthy) {
+        healthyServices++;
+      } else {
+        recommendations.push(`Service ${serviceName} is not available`);
+      }
+    } catch (error) {
+      services[serviceName] = {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        lastChecked: timestamp
+      };
+      recommendations.push(`Service ${serviceName} has errors: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+  
+  // Add agent capabilities
+  try {
+    const agentFactory = await import('../framework/agent-factory');
+    const agentCapabilities = agentFactory.AgentFactory.getAgentCapabilities();
+    
+    for (const [agentName, agentCap] of Object.entries(agentCapabilities)) {
+      capabilities[agentName] = agentCap.operations;
+    }
+  } catch (error) {
+    recommendations.push('Failed to get agent capabilities');
+  }
+  
+  // Determine overall health
+  const overall = healthyServices === totalServices ? 'healthy' : 
+                  healthyServices > totalServices / 2 ? 'degraded' : 'unhealthy';
+  
+  // Add general recommendations
+  if (serviceStats.errorServices > 0) {
+    recommendations.push(`${serviceStats.errorServices} services have errors`);
+  }
+  
+  if (serviceStats.initializingServices > 0) {
+    recommendations.push(`${serviceStats.initializingServices} services are still initializing`);
+  }
+  
   return {
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    overall: 'healthy',
-    services: {},
-    capabilities: {},
-    recommendations: []
+    timestamp,
+    environment,
+    overall,
+    services,
+    capabilities,
+    recommendations
   };
 }
 

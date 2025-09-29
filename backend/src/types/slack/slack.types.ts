@@ -284,50 +284,8 @@ export interface SlackConversationState {
   updatedAt: Date;
 }
 
-/**
- * Slack agent request payload
- */
-export interface SlackAgentRequest {
-  message: string;
-  context: SlackContext;
-  eventType: SlackEventType;
-  metadata: {
-    timestamp: string;
-    eventId?: string;
-    triggerId?: string;
-    responseUrl?: string;
-  };
-}
-
-/**
- * Slack agent response
- */
-export interface SlackAgentResponse {
-  success: boolean;
-  response: SlackResponse;
-  error?: string;
-  shouldRespond?: boolean;
-  followUpActions?: Array<{
-    type: 'schedule_message' | 'update_message' | 'send_dm';
-    payload: any;
-    delayMs?: number;
-  }>;
-  executionMetadata?: {
-    processingTime: number;
-    toolResults: Array<{
-      toolName: string;
-      success: boolean;
-      executionTime: number;
-      error?: string;
-      result?: any;
-    }>;
-    confirmationFlows?: Array<any>;
-    masterAgentResponse?: string;
-    error?: string;
-    errorType?: string;
-    errorContext?: any;
-  };
-}
+// Removed unused SlackAgentRequest and SlackAgentResponse interfaces
+// These were replaced by the simplified SubAgentResponse interface
 
 /**
  * Slack service configuration

@@ -9,7 +9,7 @@
  */
 
 import logger from '../utils/logger';
-import { BaseSubAgent, AgentExecutionContext, SubAgentResponse, AgentCapabilities } from './base-subagent';
+import { BaseSubAgent, SubAgentResponse, AgentCapabilities } from './base-subagent';
 
 /**
  * Agent Registry Entry
@@ -167,19 +167,10 @@ export class AgentFactory {
     }
 
     try {
-      const executionContext: AgentExecutionContext = {
-        sessionId: context.sessionId,
-        userId: context.userId,
-        accessToken: context.accessToken,
-        slackContext: context.slackContext,
-        correlationId: context.correlationId || `agent-${agentName}-${Date.now()}`,
-        timestamp: new Date()
-      };
-
-      const result: SubAgentResponse = await agent.processNaturalLanguageRequest(request, executionContext);
+      const result: SubAgentResponse = await agent.processNaturalLanguageRequest(request, context.userId || 'unknown');
 
       logger.info(`Agent ${agentName} executed successfully`, {
-        correlationId: executionContext.correlationId,
+        correlationId: context.correlationId || `agent-${agentName}-${Date.now()}`,
         operation: 'natural_language_execution_success',
         agentName,
         success: result.success,
@@ -189,13 +180,13 @@ export class AgentFactory {
       return {
         success: result.success,
         response: result.message,
-        metadata: result.metadata,
+        metadata: result.metadata?.data,
         executionTime: Date.now() - startTime
       };
 
     } catch (error) {
       logger.error(`Natural language execution failed for agent ${agentName}`, error as Error, {
-        correlationId: context.correlationId,
+        correlationId: context.correlationId || `agent-${agentName}-${Date.now()}`,
         operation: 'natural_language_execution_error',
         agentName,
         executionTime: Date.now() - startTime

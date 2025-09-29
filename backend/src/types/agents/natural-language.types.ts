@@ -33,37 +33,8 @@ export interface ConversationTurn {
   agentName?: string;
 }
 
-/**
- * Context for agent execution with natural language processing
- */
-export interface AgentExecutionContext {
-  /** Unique session identifier */
-  sessionId: string;
-  /** Optional user identifier */
-  userId?: string;
-  /** Access token for authenticated operations */
-  accessToken?: string;
-  /** Refresh token for OAuth token renewal (from working calendar agent pattern) */
-  refreshToken?: string;
-  /** Token expiry timestamp for proactive refresh (from working calendar agent pattern) */
-  tokenExpiry?: number;
-  /** Slack context for Slack-originated requests */
-  slackContext?: any;
-  /** Correlation ID for request tracing */
-  correlationId: string;
-  /** Timestamp of the request */
-  timestamp: Date;
-  /** User's timezone (IANA format: "America/New_York") */
-  timezone?: string;
-  /** User's locale (e.g., "en-US") */
-  locale?: string;
-  /** Recent conversation history for multi-turn context */
-  conversationHistory?: ConversationTurn[];
-  /** User preferences for personalized responses */
-  userPreferences?: UserPreferences;
-  /** Additional metadata */
-  metadata?: Record<string, any>;
-}
+// Removed unused AgentExecutionContext interface
+// This was replaced by simplified context passing in sub-agents
 
 /**
  * Chain-of-Thought reasoning for intent analysis
@@ -224,7 +195,7 @@ export interface INaturalLanguageAgent {
    */
   processNaturalLanguageRequest(
     request: string,
-    context: AgentExecutionContext
+    context: { sessionId: string; userId?: string; accessToken?: string; slackContext?: any; correlationId?: string }
   ): Promise<NaturalLanguageResponse>;
 
   /**
