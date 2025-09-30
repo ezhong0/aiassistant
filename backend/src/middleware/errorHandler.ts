@@ -1,22 +1,30 @@
 import { Request, Response, NextFunction } from 'express';
-import { errorHandlingService } from '../services/error-handling.service';
+import { ErrorHandlingService } from '../services/error-handling.service';
 
 /**
- * Centralized error handler middleware using ErrorHandlingService
+ * Create error handler middleware using dependency injection
  */
-export const errorHandler = (
-  err: Error,
-  req: Request,
-  res: Response,
-  _next: NextFunction // eslint-disable-line @typescript-eslint/no-unused-vars
-) => {
-  // Use the centralized error handling service
-  errorHandlingService.handleError(err, req, res);
-};
+export function createErrorHandler(errorHandlingService: ErrorHandlingService) {
+  return (
+    err: Error,
+    req: Request,
+    res: Response,
+    _next: NextFunction // eslint-disable-line @typescript-eslint/no-unused-vars
+  ) => {
+    // Use the centralized error handling service
+    errorHandlingService.handleError(err, req, res);
+  };
+}
 
 /**
- * 404 handler for unmatched routes using ErrorHandlingService
+ * Create 404 handler middleware using dependency injection
  */
-export const notFoundHandler = (req: Request, res: Response) => {
-  errorHandlingService.handleNotFound(req, res);
-};
+export function createNotFoundHandler(errorHandlingService: ErrorHandlingService) {
+  return (req: Request, res: Response) => {
+    errorHandlingService.handleNotFound(req, res);
+  };
+}
+
+// Type exports for DI container
+export type ErrorHandlerMiddleware = ReturnType<typeof createErrorHandler>;
+export type NotFoundHandlerMiddleware = ReturnType<typeof createNotFoundHandler>;

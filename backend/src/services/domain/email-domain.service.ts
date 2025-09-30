@@ -69,8 +69,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       throw new Error('GoogleOAuthManager not available');
     }
     
-    const authUrl = await this.googleOAuthManager.generateAuthUrl(context);
-    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+    const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
+    return { authUrl, state };
   }
 
   async completeOAuth(userId: string, code: string, state: string): Promise<void> {

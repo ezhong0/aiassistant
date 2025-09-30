@@ -512,7 +512,3 @@ export const executeAgent = async (
   return AgentFactory.executeAgentWithNaturalLanguage(name, request, context);
 };
 
-/**
- * Export the factory class as default
- */
-export default AgentFactory;

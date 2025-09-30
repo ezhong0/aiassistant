@@ -105,5 +105,3 @@ export class OAuthStateService extends BaseService {
   }
 }
 
-export default OAuthStateService;
-

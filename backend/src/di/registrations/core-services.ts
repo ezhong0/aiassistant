@@ -4,6 +4,7 @@ import { DatabaseService } from '../../services/database.service';
 import { CacheService } from '../../services/cache.service';
 import { EncryptionService } from '../../services/encryption.service';
 import { SentryService } from '../../services/sentry.service';
+import { ErrorHandlingService } from '../../services/error-handling.service';
 
 /**
  * Register core infrastructure services
@@ -23,10 +24,19 @@ export function registerCoreServices(container: AppContainer): void {
       .singleton()
       .inject(() => ({ appConfig: container.resolve('config') })),
 
-    // Encryption service - cryptographic operations
-    encryptionService: asClass(EncryptionService).singleton(),
-
     // Sentry service - error tracking
-    sentryService: asClass(SentryService).singleton(),
+    sentryService: asClass(SentryService)
+      .singleton()
+      .inject(() => ({ appConfig: container.resolve('config') })),
+      
+    
+    // Error handling service - centralized error handling
+    errorHandlingService: asClass(ErrorHandlingService)
+      .singleton()
+      .inject(() => ({
+        logger: container.resolve('logger'),
+        sentryService: container.resolve('sentryService'),
+        config: container.resolve('config')
+      })),
   });
 }

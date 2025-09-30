@@ -297,7 +297,3 @@ export function createSensitiveOperationRateLimit(rateLimitStore: RateLimitStore
     keyGenerator: (req: Request) => req.ip || 'unknown'
   });
 }
-
-// Temporary backward compatibility - to be removed
-// @deprecated - Will fail until RateLimitStore is added to DI container
-export const apiRateLimit: any = undefined as any;

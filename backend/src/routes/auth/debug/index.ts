@@ -7,7 +7,7 @@
 
 import express from 'express';
 import { createDebugOAuthRoutes } from './test-oauth.routes';
-import configRoutes from './config.routes';
+import { createDebugConfigRoutes } from './config.routes';
 import type { AppContainer } from '../../../di';
 
 /**
@@ -18,7 +18,7 @@ export function createDebugRoutes(container: AppContainer) {
 
   // Mount debug route modules with container
   router.use('/', createDebugOAuthRoutes(container));
-  router.use('/', configRoutes);
+  router.use('/', createDebugConfigRoutes(container));
 
   return router;
 }

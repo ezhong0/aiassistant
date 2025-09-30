@@ -10,7 +10,6 @@ import express, { Request, Response } from 'express';
 import { initializeAgentFactory, AgentFactory } from './framework/agent-factory';
 import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, validateContainer, type AppContainer } from './di';
 import { requestLogger } from './middleware/requestLogger';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
 import { 
   corsMiddleware, 
@@ -90,10 +89,7 @@ const initializeApplication = async (): Promise<void> => {
     
     // Initialize utility factories with container
     const { initializeSentryMiddleware } = await import('./middleware/sentry.middleware');
-    const { CryptoUtil } = await import('./utils/crypto.util');
-    
     initializeSentryMiddleware(appContainer);
-    CryptoUtil.initializeFromContainer(appContainer);
 
     // Initialize all services via DI container
     logger.info('Initializing all services', {
@@ -290,10 +286,6 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// Error handling middleware (must be last)
-app.use(notFoundHandler);
-app.use(errorHandler);
-
 // Start server and initialize services
 const startServer = async (): Promise<void> => {
   try {
@@ -310,31 +302,43 @@ const startServer = async (): Promise<void> => {
       });
 
       // Initialize services AFTER server is listening (background, non-blocking)
-      initializeApplication().then(() => {
-        logger.info('Application services initialized successfully', {
-          correlationId: 'startup',
-          operation: 'services_initialized'
-        });
-        
-        // Setup routes after DI container is ready
-        if (appContainer) {
-          setupRoutes(app, appContainer);
-        }
-
-        // Set up Slack interface after services are ready
-        setupSlackInterface().catch(error => {
-          logger.error('Background Slack setup failed', error as Error, {
+      initializeApplication()
+        .then(() => {
+          if (!appContainer) {
+            throw new Error('DI container not initialized');
+          }
+          
+          logger.info('Application services initialized successfully', {
             correlationId: 'startup',
-            operation: 'background_slack_setup_error'
+            operation: 'services_initialized'
           });
+          
+          // Setup routes with the container
+          setupRoutes(app, appContainer);
+
+          // Get error handlers from container and set them up last
+          const notFoundHandler = appContainer.resolve('notFoundHandler');
+          const errorHandler = appContainer.resolve('errorHandler');
+          
+          // Error handling middleware (must be last)
+          app.use(notFoundHandler);
+          app.use(errorHandler);
+
+          // Set up Slack interface after services are ready
+          setupSlackInterface().catch(error => {
+            logger.error('Background Slack setup failed', error as Error, {
+              correlationId: 'startup',
+              operation: 'background_slack_setup_error'
+            });
+          });
+        })
+        .catch(error => {
+          logger.error('Service initialization failed', error as Error, {
+            correlationId: 'startup',
+            operation: 'service_init_error'
+          });
+          // Don't exit - server can still handle health checks
         });
-      }).catch(error => {
-        logger.error('Service initialization failed', error as Error, {
-          correlationId: 'startup',
-          operation: 'service_init_error'
-        });
-        // Don't exit - server can still handle health checks
-      });
     });
 
     // Enhanced error handling

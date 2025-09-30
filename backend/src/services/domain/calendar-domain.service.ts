@@ -69,8 +69,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
       throw new Error('GoogleOAuthManager not available');
     }
     
-    const authUrl = await this.googleOAuthManager.generateAuthUrl(context);
-    return { authUrl, state: 'generated' }; // TODO: Return actual state from OAuth manager
+    const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
+    return { authUrl, state };
   }
 
   async completeOAuth(userId: string, code: string, state: string): Promise<void> {
@@ -483,7 +483,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   /**
    * Update a calendar event
    */
-  async updateEvent(eventId: string, updates: {
+  async updateEvent(userId: string, eventId: string, updates: {
     summary?: string;
     description?: string;
     start?: Date;
@@ -566,7 +566,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens('system'); // TODO: Get actual userId
+      const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
         throw new Error('OAuth required - call initializeOAuth first');
       }

@@ -23,14 +23,16 @@ import logger from '../utils/logger';
  */
 
 export interface Cradle {
-  // Configuration
+  // Configuration and logging
   config: typeof unifiedConfig;
+  logger: typeof logger;
 
   // Core Infrastructure Services
   databaseService: import('../services/database.service').DatabaseService;
   cacheService: import('../services/cache.service').CacheService;
   encryptionService: import('../services/encryption.service').EncryptionService;
   sentryService: import('../services/sentry.service').SentryService;
+  errorHandlingService: import('../services/error-handling.service').ErrorHandlingService;
 
   // Auth Services
   authService: import('../services/auth.service').AuthService;
@@ -42,6 +44,10 @@ export interface Cradle {
   // OAuth Managers
   googleOAuthManager: import('../services/oauth/google-oauth-manager').GoogleOAuthManager;
   slackOAuthManager: import('../services/oauth/slack-oauth-manager').SlackOAuthManager;
+
+  // Middleware
+  errorHandler: import('../middleware/errorHandler').ErrorHandlerMiddleware;
+  notFoundHandler: import('../middleware/errorHandler').NotFoundHandlerMiddleware;
 
   // Domain Services (using concrete classes - interfaces not fully implemented yet)
   emailDomainService: import('../services/domain/email-domain.service').EmailDomainService;
@@ -78,9 +84,10 @@ export function createAppContainer(): AppContainer {
     strict: true // Fail fast on missing dependencies
   });
 
-  // Register configuration as singleton value
+  // Register configuration and logger as singleton values
   container.register({
-    config: asValue(unifiedConfig)
+    config: asValue(unifiedConfig),
+    logger: asValue(logger)
   });
 
   logger.info('DI Container created', {

@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
 import { CorrelatedRequest } from '../middleware/error-correlation.middleware';
-import logger from '../utils/logger';
+import { Logger } from 'winston';
+import { SentryService } from './sentry.service';
+import { UnifiedConfig } from '../config/unified-config';
 
 /**
  * Centralized Error Handling Service
@@ -9,25 +11,29 @@ import logger from '../utils/logger';
  * This service provides standardized error handling across the application,
  * ensuring consistent error responses, proper logging, and error correlation.
  */
+interface ErrorHandlingServiceDependencies {
+  logger: Logger;
+  sentryService: SentryService;
+  config: UnifiedConfig;
+}
+
 export class ErrorHandlingService {
-  private static instance: ErrorHandlingService;
   private errorCounts: Map<string, number> = new Map();
   private errorThresholds: Map<string, number> = new Map();
+  private logger: Logger;
+  private sentryService: SentryService;
+  private config: UnifiedConfig;
 
-  private constructor() {
+  constructor(dependencies: ErrorHandlingServiceDependencies) {
+    this.logger = dependencies.logger;
+    this.sentryService = dependencies.sentryService;
+    this.config = dependencies.config;
     // Set default error thresholds
     this.errorThresholds.set('RATE_LIMIT_EXCEEDED', 100);
     this.errorThresholds.set('VALIDATION_ERROR', 50);
     this.errorThresholds.set('AUTHENTICATION_ERROR', 20);
     this.errorThresholds.set('DATABASE_ERROR', 10);
     this.errorThresholds.set('EXTERNAL_API_ERROR', 30);
-  }
-
-  static getInstance(): ErrorHandlingService {
-    if (!ErrorHandlingService.instance) {
-      ErrorHandlingService.instance = new ErrorHandlingService();
-    }
-    return ErrorHandlingService.instance;
   }
 
   /**
@@ -38,106 +44,28 @@ export class ErrorHandlingService {
     req: Request,
     res: Response,
     context?: Record<string, unknown>
-  ): void {
     const correlatedReq = req as CorrelatedRequest;
     let appError: AppError;
 
     // Convert to AppError if needed
     if (err instanceof AppError) {
-      appError = err.addContext({
+      this.logger.error('Error in error handler', err, {
         correlationId: correlatedReq.correlationId,
-        userId: correlatedReq.userId,
+        originalError: err instanceof Error ? err.message : String(err),
         service: 'error_handling_service',
         ...context
       });
     } else {
       // Wrap regular Error as AppError
       appError = ErrorFactory.wrapError(err, ERROR_CATEGORIES.SERVICE, {
-        correlationId: correlatedReq.correlationId,
-        userId: correlatedReq.userId,
-        service: 'error_handling_service',
-        metadata: {
-          method: req.method,
-          url: req.url,
-          ip: req.ip,
-          userAgent: req.get('User-Agent'),
-          ...context
-        }
-      });
-    }
-
-    // Track error counts for monitoring
-    this.trackError(appError);
-
-    // Log with appropriate level based on severity
-    this.logError(appError);
-
-    // Send standardized response
-    this.sendErrorResponse(res, appError);
-  }
-
-  /**
-   * Handle 404 errors with standardized format
-   */
-  handleNotFound(req: Request, res: Response): void {
-    const appError = ErrorFactory.notFound(`Route ${req.method} ${req.path}`);
-    
-    logger.warn('Route not found', {
-      error: appError.code,
-      statusCode: appError.statusCode,
-      method: req.method,
-      path: req.path,
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      correlationId: (req as CorrelatedRequest).correlationId
-    });
-
-    this.sendErrorResponse(res, appError);
-  }
-
-  /**
-   * Handle validation errors with detailed field information
-   */
-  handleValidationError(
-    errors: Array<{ field: string; message: string; value?: unknown }>,
-    req: Request,
-    res: Response
-  ): void {
-    const appError = ErrorFactory.validationFailed('Validation failed', 'Validation failed');
-
-    this.trackError(appError);
-    this.logError(appError);
-    this.sendErrorResponse(res, appError);
-  }
-
-  /**
-   * Handle rate limiting errors
-   */
-  handleRateLimitError(req: Request, res: Response, retryAfter?: number): void {
-    const appError = ErrorFactory.rateLimited('Rate limit exceeded');
-
-    this.trackError(appError);
-    this.logError(appError);
-    this.sendErrorResponse(res, appError, retryAfter);
-  }
-
-  /**
-   * Track error counts for monitoring and alerting
-   */
-  private trackError(appError: AppError): void {
-    const errorKey = `${appError.category}:${appError.code}`;
-    const currentCount = this.errorCounts.get(errorKey) || 0;
-    this.errorCounts.set(errorKey, currentCount + 1);
-
+{{ ... }}
     // Check if error threshold is exceeded
     const threshold = this.errorThresholds.get(appError.code) || 0;
     if (currentCount + 1 >= threshold) {
-      logger.error('Error threshold exceeded', {
-        error: appError.code,
-        category: appError.category,
-        count: currentCount + 1,
+      this.logger.warn(`Rate limit exceeded for error type: ${errorType}`, {
+        count,
         threshold,
-        correlationId: appError.correlationId,
+        correlationId: appError.context?.correlationId,
         operation: 'error_threshold_exceeded'
       });
     }
@@ -152,15 +80,17 @@ export class ErrorHandlingService {
       statusCode: appError.statusCode,
       severity: appError.severity,
       category: appError.category,
-      correlationId: appError.correlationId,
-      userId: appError.userId,
+      correlationId: appError.context?.correlationId,
+      userId: appError.context?.userId,
       service: appError.service,
       operation: appError.operation,
       metadata: appError.metadata,
       stack: appError.stack
     };
 
-    switch (appError.severity) {
+    // Log the error
+    this.logger.error(appError.message, logData);
+{{ ... }}
       case 'critical':
         logger.error(appError.message, logData);
         break;
@@ -250,6 +180,3 @@ export class ErrorHandlingService {
     });
   }
 }
-
-// Export singleton instance
-export const errorHandlingService = ErrorHandlingService.getInstance();

@@ -1,5 +1,4 @@
 import logger from './logger';
-import { CryptoUtil } from './crypto.util';
 
 export interface AuditEvent {
   event: string;
@@ -165,7 +164,7 @@ export class AuditLogger {
     for (const field of sensitiveFields) {
       if (sanitized[field]) {
         if (typeof sanitized[field] === 'string') {
-          sanitized[field] = CryptoUtil.sanitizeTokenForLogging(sanitized[field]);
+          sanitized[field] = this.sanitizeTokenForLogging(sanitized[field]);
         } else {
           sanitized[field] = '[REDACTED]';
         }
@@ -180,6 +179,17 @@ export class AuditLogger {
     }
     
     return sanitized;
+  }
+
+  /**
+   * Sanitize token for logging (show only first and last few characters)
+   */
+  private static sanitizeTokenForLogging(token: string): string {
+    if (!token || token.length < 10) {
+      return '[REDACTED]';
+    }
+    
+    return `${token.substring(0, 6)}...${token.substring(token.length - 4)}`;
   }
 
   /**

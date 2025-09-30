@@ -1,354 +1,586 @@
-# Core Use Cases: Education & Enrichment Coordinator Commands
+# Core Use Cases: Independent Consultant Commands
 
-This document contains example natural language commands that coordinators at education and enrichment programs should be able to execute through the AI assistant. All examples focus exclusively on tutoring centers, music studios, dance schools, art programs, sports instruction, and language schools.
+This document contains example natural language commands that independent consultants and freelancers should be able to execute through the AI assistant. All examples focus on client acquisition, project delivery, relationship management, and business operations.
 
 **Key principle:** The AI understands natural language. You don't need formal templates or CSV files (though you can use them if you prefer). Just describe what you want in plain English.
 
 ---
 
-## Weekly Progress Updates
+## Lead Response & Follow-Up ⚡ (HIGHEST PRIORITY)
 
-### Basic Progress Updates
-- "Send progress updates to all my Tuesday students saying they're doing great this week"
-- "Draft progress emails to Emma, Lucas, and Sophia highlighting their improvements on scales"
-- "Send monthly progress reports to all beginner piano students mentioning their practice consistency"
-- "Email all my math tutoring students' parents saying they've shown strong improvement this month"
-- "Send updates to the advanced dance class saying I'm impressed with their dedication"
+### Immediate Inquiry Response
+- "New inquiry from Sarah about marketing strategy - respond within 5 minutes and offer discovery call times"
+- "Respond to this LinkedIn lead asking about my consulting services"
+- "Reply to contact form submission about growth strategy, I'm available Wednesday and Thursday"
+- "New referral from John - follow up and see if they want to schedule a call"
+- "Respond to cold outreach asking about fractional CMO services"
 
-### Selective Progress Updates
-- "Send progress updates to students who struggled this week with encouragement and improvement tips"
-- "Draft emails to the 5 students who missed sessions saying I'd like to schedule makeup times"
-- "Send celebration emails to Emma, Lucas, and the other students who hit their practice goals"
-- "Email parents of students who need extra attention to schedule check-in calls"
+### Proposal Follow-Up
+- "Follow up with all proposals sent in the last 2 weeks that haven't gotten responses"
+- "Send gentle reminder to leads who received proposals 5+ days ago"
+- "Check in with clients who have open proposals asking if they have questions"
+- "Follow up on the $50K strategy proposal I sent last week"
+- "Re-engage with proposal recipients from last month who went quiet"
 
-### Multi-Group Progress Updates
-- "Send different updates to each level: tell beginners they're building good foundations, tell intermediate students they're progressing well, tell advanced students I'm proud of their dedication"
-- "Update morning students on their morning class achievements and evening students on their evening class achievements"
-- "Send progress updates to all dance classes with class-specific feedback"
+### Discovery Call Follow-Up
+- "Follow up with everyone I had discovery calls with this week asking about next steps"
+- "Send recap email to Tuesday's discovery call with project scope and pricing"
+- "Thank everyone from last week's discovery calls and see if they're ready to move forward"
+- "Follow up on discovery call with TechCo asking if they received my proposal"
 
-### Template-Based (If Preferred)
-- "Draft a progress update template" → "Send that to all 50 students personalizing for each one"
-- "Use this template format [paste] and send to Emma, Lucas, Sophia, and the Tuesday group"
-- "Here's my progress template [paste] and here's data for each student [attach spreadsheet] - send personalized emails to everyone"
+### Lead Nurturing
+- "Send valuable content to warm leads who aren't ready to hire yet"
+- "Check in with prospects I talked to 60 days ago to see if timing is better"
+- "Share relevant case study with leads in the e-commerce space"
+- "Send industry insights to prospects showing I understand their challenges"
+- "Re-engage cold leads with new offer: free consultation"
 
----
-
-## Session Scheduling & Rescheduling
-
-### Makeup Session Coordination
-- "Schedule makeup sessions for the students who cancelled this week"
-- "Coordinate makeup lessons for everyone affected by yesterday's snow day"
-- "Schedule makeups for Emma, Lucas, Sophia, and the other students who missed, avoiding conflicts"
-- "Find makeup times for the students who were sick last week, checking instructor availability"
-- "Schedule makeup sessions for the Tuesday group that got cancelled, spread them across next week"
-
-### Regular Session Scheduling
-- "Schedule orientation sessions for the new students starting next week"
-- "Book assessment sessions with Emma, Lucas, Sophia, and the other new students before end of month"
-- "Schedule weekly parent check-ins for students who are struggling for the next month"
-- "Set up recurring Saturday morning sessions for my advanced students"
-
-### Schedule Change Management
-- "Tell all Tuesday evening students about the schedule change and offer them alternative times"
-- "Notify affected families about the schedule change and find new times that work"
-- "Email parents about the instructor change and reschedule all their sessions"
-- "Tell all families about the holiday closure and coordinate makeup sessions"
+### Multi-Lead Segmentation
+- "Send different follow-ups: tell hot leads about availability, ask warm leads about timeline, share content with cold leads"
+- "Update all SaaS leads about my new pricing strategy workshop"
+- "Tell all marketing leads about the growth framework case study"
+- "Segment leads: immediate responders get proposal, slow responders get value content"
 
 ---
 
-## Event Coordination
+## Client Meeting Coordination 📅
 
-### Recital/Performance Planning
-- "Send recital invitations to all my piano students saying it's May 15th at 6pm and ask them to RSVP"
-- "Coordinate the spring recital: invite all families, schedule prep sessions with performers, send logistics email a week before"
-- "Schedule rehearsal times for all the performance participants and send them confirmation emails"
-- "Tell all dance recital families the performance is Saturday at 3pm, they should arrive at 2:30pm, and bring costumes"
-- "Handle year-end showcase: invitations, RSVP tracking, rehearsal scheduling, day-of logistics"
+### Discovery Call Scheduling
+- "Schedule discovery call with Sarah Johnson tomorrow afternoon"
+- "Book 30-minute intro call with new lead, send confirmation and Zoom link"
+- "Coordinate discovery call with prospect - find time this week that works for both of us"
+- "Schedule discovery calls with these 5 leads this week"
 
-### Parent Conference Scheduling
-- "Schedule parent conferences with all my students' families and include a summary of their progress"
-- "Book 30-minute parent meetings for students who need extra support"
-- "Schedule fall semester parent-teacher conferences avoiding conflicts"
-- "Set up check-in calls with all new student families within their first month"
+### Client Meeting Management
+- "Schedule weekly check-in with Acme Corp for every Monday at 2pm"
+- "Book project kickoff meeting with new client next week"
+- "Coordinate quarterly business review with top 3 clients this month"
+- "Reschedule Tuesday's client meeting - conflict came up, find new time"
+- "Set up monthly strategy session with all active retainer clients"
 
-### Workshop/Event Invitations
-- "Invite my intermediate and advanced students to the special workshop next Saturday"
-- "Send invites to all families for the parent information session, track RSVPs, send logistics"
-- "Tell all current students about summer camp registration with pricing and schedule"
-- "Invite all families to the open house, track responses, send reminder emails"
+### Multi-Stakeholder Meetings
+- "Schedule workshop with client team - need CEO, CMO, and Product Lead all there"
+- "Coordinate project review meeting with client and their dev team"
+- "Book presentation meeting with decision-maker panel at enterprise client"
 
----
+### Meeting Follow-Up
+- "Send meeting recap from today's strategy session to client"
+- "Follow up on yesterday's kickoff meeting with action items and timeline"
+- "Send notes from this week's check-ins to all clients"
+- "Thank clients for quarterly review meetings and confirm next steps"
 
-## Student Onboarding
-
-### New Student Welcome Sequences
-- "Send welcome emails to Emma, Lucas, and Sophia saying I'm excited to work with them and schedule their first sessions"
-- "Handle onboarding for the 3 new students starting Monday: welcome email, orientation, prep materials"
-- "Welcome the new students, schedule their orientations, send them what to expect"
-- "Tell the new families welcome, give them the program overview, and schedule their first sessions"
-
-### Orientation Coordination
-- "Schedule orientations for all new students starting this month and send them prep materials"
-- "Book 30-minute intro sessions with all the new families avoiding conflicts"
-- "Send orientation details to Emma, Lucas, and Sophia and schedule their first week"
-
-### Initial Parent Communication
-- "Draft welcome emails to new parents explaining how I'll communicate progress"
-- "Tell new families about the program, the schedule, and what to expect"
-- "Welcome all new families and tell them about their instructor, schedule, and first month expectations"
+### Meeting Preparation
+- "Send agenda for tomorrow's strategy session to Acme Corp"
+- "Remind client about Monday's workshop and what to prepare"
+- "Send pre-meeting questionnaire to new client before kickoff"
 
 ---
 
-## Routine Communications
+## Proposal & Deal Management 💼
 
-### Payment Reminders
-- "Send payment reminders to the families with outstanding balances"
-- "Tell families their tuition is due this week in a friendly way"
-- "Draft friendly reminders for families who are a week past due"
-- "Remind monthly subscribers their payment will process in 3 days"
+### Proposal Delivery
+- "Send proposal to Sarah at TechCo with 2-week timeline and $30K budget"
+- "Email proposal to lead from discovery call, highlight ROI and timeline"
+- "Send custom proposal to enterprise lead with tiered pricing options"
+- "Deliver SOW to client for Phase 2 of our engagement"
 
-### Schedule Change Notifications
-- "Tell all affected families the instructor is out next week and offer makeup options"
-- "Notify the Tuesday evening group we're adjusting the class time"
-- "Email all students about spring break schedule changes"
-- "Tell families about the new class time options and ask which they prefer"
+### Proposal Status Tracking
+- "Show me all outstanding proposals waiting for decision"
+- "Which proposals are most likely to close based on follow-up conversations?"
+- "List all proposals sent in Q1 and their current status"
+- "Identify proposals that need immediate follow-up"
 
-### Holiday/Closure Announcements
-- "Tell all active families we're closed for the holidays and explain the makeup policy"
-- "Announce the summer schedule changes to all current students"
-- "Notify everyone we're closing for renovations and coordinate makeup sessions"
-- "Send holiday schedule with closure dates and session adjustments to all families"
+### Deal Closing
+- "Client accepted proposal - send contract and onboarding steps"
+- "Send thank you and next steps to client who just signed"
+- "Client wants to move forward - send contract, schedule kickoff, request deposit"
+- "Negotiate proposal terms with client who wants monthly payment plan"
 
-### Practice/Assignment Reminders
-- "Remind all music students about their weekly practice goals"
-- "Tell tutoring students their assignments are due soon"
-- "Send practice log reminders to all piano students and parents"
-- "Remind students to complete their prep materials before class"
-
-### Monthly Check-ins
-- "Send monthly check-ins to all parents asking for feedback"
-- "Update all families on this month's achievements and upcoming events"
-- "Survey parents about their feedback on student progress"
-- "Check in with all parents about satisfaction and scheduling needs"
+### Pricing & Scoping Discussions
+- "Client asking about pricing - explain value and ROI"
+- "Prospect wants to reduce scope - suggest alternatives that fit budget"
+- "Send pricing breakdown showing deliverables for each tier"
+- "Client wants to extend engagement - send proposal for additional 3 months"
 
 ---
 
-## Multi-Step Workflows
+## Project Communication & Status Updates 📊
 
-### Complete Onboarding Sequence
-- "Handle complete onboarding for Emma, Lucas, and Sophia: welcome email, orientation scheduling, materials, first session, week 1 check-in"
-- "Process new family intake: welcome them, schedule parent meeting, book student assessment, send materials, set up first month"
-- "Do full onboarding: welcome, orientation, introduce instructor, confirm first session, check in after week 1"
+### Regular Project Updates
+- "Send weekly status update to all active project clients"
+- "Update Acme Corp on project progress, milestones hit, next steps"
+- "Tell all clients in delivery phase what we accomplished this week"
+- "Send bi-weekly progress report to retainer clients"
 
-### Cancellation to Makeup Flow
-- "Handle today's cancellations: notify students, find makeup times, send options, confirm bookings"
-- "We had an emergency closure: notify everyone, coordinate makeups over next 2 weeks, send confirmations"
-- "Instructor is out: notify affected students, find substitute or reschedule, confirm arrangements"
+### Milestone Communications
+- "Tell client we completed Phase 1, ready to start Phase 2"
+- "Update client that discovery phase is done, share insights"
+- "Notify client we hit the Q1 goal ahead of schedule"
+- "Tell client about roadblock in implementation, propose solution"
 
-### Event Planning Complete Flow
-- "Coordinate spring recital: send save-the-date now, formal invitations in 4 weeks, schedule rehearsals, send logistics a week before, day-of reminders"
-- "Manage parent workshop: invite everyone, track RSVPs, send confirmations, send prep materials, reminder day before"
-- "Handle showcase: invitations, schedule performance slots, coordinate rehearsals, send logistics, post-event follow-up"
+### Deliverable Sharing
+- "Send final report to client with executive summary"
+- "Deliver strategy document to client, schedule presentation meeting"
+- "Share workshop materials and recordings with client team"
+- "Send completed analysis to client with recommendations"
 
-### Monthly Routine Workflow
-- "Do monthly routine: progress updates to all students, schedule next month, payment reminders, gather feedback"
-- "Month-end process: send progress reports, confirm upcoming schedules, remind about payments, announce next month's events"
+### Project Check-Ins
+- "Check in with all active projects to see if clients need anything"
+- "Ask clients if they're happy with progress so far"
+- "See if clients have questions about last week's deliverables"
+- "Check if any active projects are at risk of delays"
+
+### Issue Management
+- "Tell client about delay in Phase 2, explain why and new timeline"
+- "Update client that third-party dependency is causing slowdown"
+- "Notify client about scope creep and suggest change order"
+- "Alert client that their team hasn't provided inputs needed to proceed"
 
 ---
 
-## Information Retrieval & Analysis
+## Client Relationship Management 🤝
+
+### Past Client Re-Engagement
+- "Check in with past clients I haven't talked to in 6 months"
+- "Send 'thinking of you' emails to clients from last year"
+- "Ask past clients how their business is going since our engagement"
+- "Re-engage clients from 2023 asking if they need help with new initiatives"
+
+### Relationship Nurturing
+- "Send valuable industry article to top 10 clients with personal note"
+- "Share relevant case study with clients in similar industries"
+- "Check in with clients on quarterly basis asking about business goals"
+- "Send holiday greetings to all current and past clients"
+
+### Referral Requests
+- "Ask satisfied clients if they know anyone who could use my services"
+- "Send referral request to clients whose projects had great results"
+- "Thank clients for successful engagement and request introductions"
+- "Check in with happy clients and ask for LinkedIn recommendations"
+
+### Success Celebration
+- "Congratulate clients who hit major milestones using our work"
+- "Thank client for trusting me with their project and share impact"
+- "Celebrate project completion with client and share case study"
+
+### Client Feedback
+- "Send end-of-project survey to completed clients"
+- "Ask for feedback on how engagement went"
+- "Request testimonial from happy clients"
+- "Check in mid-project to see if client is satisfied so far"
+
+---
+
+## Pipeline & Opportunity Management 🎯
+
+### Lead Qualification & Tracking
+- "Show me all leads from the past month and their status"
+- "Which leads are hot and need immediate attention?"
+- "List all discovery calls scheduled for next week"
+- "Track which inquiries came from LinkedIn vs referrals vs website"
+
+### Opportunity Pipeline
+- "Show me all open opportunities and their deal value"
+- "Which proposals are most likely to close this month?"
+- "List all leads in negotiation stage"
+- "Report on pipeline value for Q2"
+
+### Activity Tracking
+- "Show me all follow-ups I need to do this week"
+- "List clients I haven't contacted in 30+ days"
+- "Which leads have I had multiple conversations with?"
+- "Track response rates from cold outreach last month"
+
+### Revenue Forecasting
+- "Calculate potential revenue from all active proposals"
+- "Show me deal values by stage: discovery, proposal, negotiation"
+- "Which opportunities will likely close this quarter?"
+- "Track monthly revenue from retainer clients"
+
+### Lead Source Analysis
+- "Which lead sources generate the best clients?"
+- "Compare conversion rates: referrals vs cold outreach vs content marketing"
+- "Which networking events led to actual projects?"
+- "Analyze which types of initial inquiries close at highest rates"
+
+---
+
+## Content & Thought Leadership 📝
+
+### Industry Insights Sharing
+- "Send market trend analysis to clients in fintech space"
+- "Share recent regulatory changes affecting SaaS companies with relevant clients"
+- "Tell clients about industry shift I noticed working across companies"
+- "Send quarterly insights newsletter to entire contact list"
+
+### Case Study Distribution
+- "Share new case study with leads in similar situations"
+- "Send relevant success story to prospects in discovery stage"
+- "Tell past clients about similar project I just completed"
+- "Distribute case study to LinkedIn connections in target market"
+
+### Value-Add Communication
+- "Send helpful resource to leads not ready to hire yet"
+- "Share framework I use with prospects to build credibility"
+- "Send recorded webinar to prospects who couldn't attend live"
+- "Give away valuable template to warm leads to stay top-of-mind"
+
+### Positioning & Expertise
+- "Announce new service offering to all contacts"
+- "Tell clients about speaking engagement at industry conference"
+- "Share published article with relevant prospects and clients"
+- "Update network about new certification or expertise area"
+
+---
+
+## Practice Management & Operations 🏢
+
+### Capacity Management
+- "Check my availability for taking on new projects this month"
+- "See when current projects end and new capacity opens up"
+- "Calculate how many client hours I have available next quarter"
+- "Block out vacation time and notify clients of unavailability"
+
+### Client Onboarding
+- "Send onboarding packet to new client: contract, questionnaire, kickoff details"
+- "Welcome new client and explain how we'll work together"
+- "Send new client all the information they need to get started"
+- "Schedule onboarding call and send preparation materials"
+
+### Invoicing & Payment
+- "Remind clients about outstanding invoices over 30 days"
+- "Send invoice for April retainer to all monthly clients"
+- "Follow up on payment for completed project"
+- "Thank clients for prompt payment and send receipt"
+
+### Contract & Agreement Management
+- "Send contract renewal to retainer clients 30 days before expiration"
+- "Notify clients that engagement is ending next month"
+- "Follow up on unsigned contracts sent 2 weeks ago"
+- "Send updated MSA to client for additional scope"
+
+### Professional Network Maintenance
+- "Check in with referral partners quarterly"
+- "Thank people who sent me referrals this year"
+- "Reconnect with former colleagues who might need consulting"
+- "Nurture relationships with complementary service providers"
+
+---
+
+## Information Retrieval & Analysis 📊
 
 ### Contact Lookups
-- "Find the email addresses for all parents in the Tuesday evening group"
-- "Show me contact information for all students who started in the last 3 months"
-- "Find parent phone numbers for all students in the advanced class"
-- "Look up contact details for families with outstanding balances"
+- "Find phone number for Sarah Johnson at TechCo"
+- "Show me all contacts at enterprise client organizations"
+- "Get email addresses for all clients I worked with in 2024"
+- "Find contact info for referral partners I want to check in with"
 
-### Email Search & Review
-- "Find all emails from parents about scheduling conflicts in the last 2 weeks"
-- "Show me all parent feedback emails from the past month"
-- "Search for emails about payment questions from the last quarter"
-- "Find all emails from parents mentioning specific concerns about student progress"
+### Communication Search
+- "Find all emails about the TechCo strategy project"
+- "Show me recent conversations with Sarah Johnson"
+- "Search emails about pricing discussions from last month"
+- "Find all proposals sent in Q1"
 
 ### Calendar Analysis
-- "Show me all makeup sessions scheduled for next week"
-- "Find all available time slots for new student orientations this month"
-- "Check instructor availability for scheduling 10 new sessions next week"
-- "Show me all cancelled sessions from last month for reporting"
+- "Show me all client meetings scheduled next week"
+- "Find available time slots for 5 discovery calls this week"
+- "List all project deadlines this month"
+- "Show me my billable hours last month"
 
-### Communication Summaries
-- "Summarize all parent feedback from the last month and identify common themes"
-- "Create a report of all scheduling conflicts and resolution outcomes from this quarter"
-- "Analyze all progress update responses and highlight students needing extra attention"
-- "Compile all parent concerns from the past 2 months into categories"
+### Client & Project Analysis
+- "Summarize all new inquiries from past week"
+- "Show me clients that haven't responded to follow-ups in 5+ days"
+- "List all active projects and their status"
+- "Report on client engagement levels over past quarter"
+
+### Business Intelligence
+- "Which clients generate the most revenue?"
+- "What's my average deal size and sales cycle length?"
+- "Track client retention rate over past year"
+- "Analyze which services have highest conversion rates"
 
 ---
 
-## Bulk Operations
+## Multi-Step Workflows 🔄
 
-### Mass Email with Personalization
-- "Send welcome emails to all new students using their names and programs"
-- "Tell all families their child did great this week and mention their specific achievements"
-- "Send holiday greetings to all families mentioning each child by name"
-- "Send year-end progress summaries to everyone personalizing for each student"
-- **Or with structured data:** "Send personalized emails to these 50 students using this template [paste] and data [attach spreadsheet]"
+### Complete Lead-to-Client Flow
+- "Handle new inquiry: respond immediately, qualify, schedule discovery call, send confirmation"
+- "Process referral: thank referrer, reach out to lead within 1 hour, offer discovery call times"
+- "Full sales workflow: respond, discovery call, send proposal, follow up, close deal"
+
+### Proposal-to-Kickoff Sequence
+- "Handle accepted proposal: send contract, request deposit, schedule kickoff, send onboarding materials"
+- "Process signed contract: thank client, schedule kickoff, send prep materials, add recurring meetings to calendar"
+- "Project start sequence: kickoff call, send project plan, schedule check-ins, send first status update"
+
+### Project Delivery Workflow
+- "Weekly project flow: send status update, check for client questions, update deliverable timeline"
+- "Milestone sequence: complete phase, notify client, send deliverables, get feedback, plan next phase"
+- "Project completion: deliver final work, send satisfaction survey, request testimonial, ask for referrals"
+
+### Client Retention Campaign
+- "Quarterly touchpoint: check in on business goals, share relevant insight, look for new opportunities"
+- "Past client re-engagement: send valuable content, ask how they're doing, offer help"
+- "Retainer renewal: send renewal offer 45 days early, highlight value delivered, schedule review call"
+
+### Cold Outreach Sequence
+- "Outreach campaign: personalized intro, wait 5 days, send value-add follow-up, wait 7 days, final check-in"
+- "LinkedIn outreach: connect, wait for acceptance, send intro message, offer free consultation"
+
+---
+
+## Bulk Operations 📨
+
+### Mass Communication with Personalization
+- "Send quarterly update to all clients mentioning their specific industry"
+- "Email all past clients about new service offering relevant to their business"
+- "Send holiday greetings to everyone mentioning our work together"
+- "Tell all leads in discovery stage about limited availability opening up"
+- **Or with structured data:** "Send personalized emails to these 50 leads using this template [paste] and data [attach spreadsheet]"
 
 ### Bulk Scheduling
-- "Schedule assessment sessions for all new students over the next 2 weeks avoiding conflicts"
-- "Book makeup sessions for everyone affected by the snow day"
-- "Schedule parent conferences for all students before semester ends"
-- "Set up orientation sessions for all new families starting next month"
+- "Schedule discovery calls with all hot leads this week"
+- "Book quarterly reviews with all retainer clients this month"
+- "Coordinate check-in calls with all active projects"
 
 ### Group Notifications
-- "Tell all active families about the policy change and new schedule"
-- "Announce program updates to all current students and parents"
-- "Tell everyone about the new instructor joining and their background"
-- "Send semester schedules to all families with their specific session times"
+- "Tell all active clients about vacation/unavailability next month"
+- "Notify all prospects about new availability for March projects"
+- "Announce speaking engagement to all contacts"
+- "Update all clients about new pricing effective next quarter"
+
+### Segmented Communications
+- "Send different messages: hot leads get pricing, warm leads get case study, cold leads get value content"
+- "Update clients differently: active projects get status, retainers get monthly recap, past clients get check-in"
+- "Segment by industry: send SaaS clients relevant insight, tell e-commerce clients about retail trends"
 
 ---
 
-## Conversational Template Generation
+## Conversational Template Generation 💬
 
 ### Generate Then Use
-- "Draft a welcome email template for new students" → "Send that to Emma, Lucas, and Sophia"
-- "Write me a recital invitation template" → "Send that to all my piano students"
-- "Create a payment reminder email" → "Send that to the families with overdue balances"
-- "Draft a progress update template" → "Send that to all students personalizing for each one"
+- "Draft a new inquiry response template" → "Send that to Sarah Johnson"
+- "Write a discovery call confirmation message" → "Send that to all calls scheduled tomorrow"
+- "Create a project kickoff email" → "Send that to new client at Acme Corp"
+- "Draft proposal follow-up message" → "Send to all open proposals from last 2 weeks"
 
 ### Provide Template Then Execute
-- "Here's my welcome template [paste] - send it to all new students starting next week"
-- "Use this payment reminder [paste] and send to families with overdue balances"
-- "Send this recital invitation [paste] to all performance students"
-- "Here's my progress template [paste] and student data [attach] - send personalized emails"
+- "Here's my inquiry response template [paste] - send it to all new leads from today"
+- "Use this discovery call confirmation [paste] and send to tomorrow's calls"
+- "Send this monthly update [paste] to all retainer clients"
+- "Here's my follow-up template [paste] and lead data [attach] - send personalized messages"
 
 ### Multi-Template Workflows
-- "Draft two templates: one for new students, one for returning students" → "Send the right one to each group"
-- "Write different progress updates for beginners vs advanced students" → "Send to the appropriate groups"
-- "Create welcome template and re-engagement template" → "Send welcome to new students, re-engagement to inactive ones"
+- "Draft templates for: hot leads, warm leads, cold re-engagement" → "Send appropriate one to each group"
+- "Create different updates for: active projects, retainers, past clients" → "Send to appropriate groups"
+- "Write templates for: accepted proposal, project kickoff, Phase 1 complete" → "Use for project communications"
+
+---
+
+## Schedule & Availability Management 📆
+
+### Availability Checks
+- "Check my availability this week for discovery calls"
+- "Find times next week when I'm free for client meetings"
+- "Show me my schedule for next month"
+- "Block out deep work time every morning 9-11am"
+
+### Calendar Coordination
+- "Add project deadline to calendar: TechCo strategy due March 15"
+- "Schedule recurring weekly check-ins with all active clients"
+- "Block calendar for conference next month"
+- "Add all project milestones to calendar with reminders"
+
+### Meeting Management
+- "Reschedule this week's meetings - need to push everything by one day"
+- "Find time for 5 discovery calls this week"
+- "Coordinate availability with client for workshop - need 3-hour block"
+- "Cancel Friday's meetings and notify all attendees"
+
+### Time Blocking
+- "Block Fridays for deep work and proposal writing"
+- "Reserve Monday mornings for client check-ins only"
+- "Protect 2pm-5pm daily for project delivery work"
+- "Set up focus time blocks around existing meetings"
 
 ---
 
 ## Understanding Request Framework
 
-### ✅ **SUPPORTED Requests** (Google Workspace APIs Only)
+### ✅ **SUPPORTED Requests** (MVP: Gmail, Google Calendar, Google Contacts)
 
 **Core Capabilities:**
 - **Email Operations**: Search, draft, send, organize emails using Gmail API
-- **Calendar Management**: Schedule sessions, check availability, manage events using Calendar API
-- **Contact Management**: Look up, organize, and manage contacts using Contacts API
-- **Bulk Operations**: Send mass emails and schedule multiple sessions via API calls
-- **Natural Language Understanding**: Parse any type of input - lists, descriptions, pasted templates, or structured data
-- **Data Analysis**: Analyze available data from emails, calendar, and contacts to provide insights
-- **Data Synthesis**: Combine information from multiple sources to create comprehensive reports
-- **Complex Workflows**: Multi-step processes accomplished through API sequences
+- **Calendar Management**: Schedule meetings, check availability, manage appointments using Google Calendar
+- **Contact Management**: Look up, organize, and manage leads/clients/partners using Google Contacts
+- **Bulk Operations**: Send mass emails and schedule multiple appointments
+- **Natural Language Understanding**: Parse any input - lists, descriptions, templates, or data
+- **Data Analysis**: Analyze emails, calendar data, contact history for insights
+- **Complex Workflows**: Multi-step processes coordinating communication and scheduling
 
 **What Makes Requests Supported:**
-- **API-Feasible**: Can be accomplished using only Gmail API, Calendar API, and Contacts API
-- **Data Available**: Required information exists within Google Workspace or user provides it naturally
-- **No External Dependencies**: Doesn't require access to external systems or services
-- **Flexible Input**: Works with any form of input - natural language, lists, templates, or structured data
+- **API-Feasible**: Can be accomplished using Gmail, Google Calendar, and Google Contacts APIs
+- **Data Available**: Information exists in your communication history or you provide it
+- **No External Dependencies**: Doesn't require CRM, project management tools, or accounting software (MVP)
+- **Flexible Input**: Works with natural language, lists, templates, or structured data
 
 **Examples of Supported Requests:**
-- "Send welcome emails to Emma, Lucas, Sophia, and the other new students saying I'm excited to work with them"
-- "Schedule makeup sessions with students who cancelled this week, checking instructor availability"
-- "Analyze parent feedback emails from last month and categorize by theme"
-- "Coordinate the recital: invitations, rehearsal scheduling, logistics emails, reminders"
-- "Send progress updates to all my Tuesday students highlighting their improvements"
-- "Schedule parent conferences with everyone avoiding conflicts"
-- **Or with structured data:** "Send these 80 students personalized emails using this template [paste] and data [attach spreadsheet]"
+- "New inquiry about marketing strategy - respond and offer discovery call times this week"
+- "Follow up with all proposals sent in last 2 weeks that haven't gotten responses"
+- "Schedule quarterly reviews with all retainer clients this month"
+- "Send weekly status updates to all active project clients"
+- "Check in with past clients I haven't contacted in 6 months"
+- **Or with data:** "Send personalized follow-ups to these 50 leads using this template [paste] and info [attach CSV]"
 
 ---
 
 ### ❌ **UNSUPPORTED Requests** (Require External Systems)
 
-**External System Dependencies:**
-These require integrations beyond Google Workspace:
-- Learning management systems (Canvas, Moodle, Schoology) - requires LMS API
-- Payment processing (Stripe, PayPal, Square) - requires payment processor API
-- Student information systems (PowerSchool, Infinite Campus) - requires SIS API
-- Booking/scheduling platforms (Calendly, Acuity) - requires booking system API
-- CRM systems (Salesforce, HubSpot) - requires CRM API
-- Video conferencing (Zoom, Teams) - requires video platform API
-- Attendance tracking systems - requires attendance system API
+**CRM & Pipeline Management:**
+- Updating deal stages in HubSpot, Pipedrive, Close
+- Logging activities in CRM database
+- Accessing pipeline reports and analytics from CRM
+- Syncing data between multiple systems
 
-**Data Not Available in Google Workspace:**
-- Student grades and academic records (requires LMS or SIS)
-- Tuition payment history and billing data (requires payment processor or accounting system)
-- Real-time attendance data (requires attendance tracking system)
-- Student assessment scores (requires testing/assessment platform)
-- Learning analytics and engagement metrics (requires LMS)
+**Project Management Systems:**
+- Managing tasks in Asana, Trello, ClickUp
+- Tracking project milestones in Monday.com
+- Updating deliverable status in project management software
+- Time tracking in Harvest, Toggl
 
-**System Creation Requirements:**
-These require persistent infrastructure we don't provide:
-- Building databases, dashboards, or automated workflows
-- Creating persistent student progress tracking systems
-- Setting up automated triggers that run independently
-- Real-time monitoring and alerting systems
-- Automated follow-up systems without user initiation
+**Document Management Systems:**
+- Storing files in Notion, Dropbox, Box
+- Managing contracts in PandaDoc, DocuSign
+- Accessing shared documents in client workspaces
+- Version control for deliverables
+
+**Accounting & Invoicing:**
+- Creating invoices in QuickBooks, FreshBooks
+- Processing payments through Stripe, PayPal
+- Tracking expenses and receipts
+- Generating financial reports
+
+**Specialized Business Tools:**
+- Updating LinkedIn company research
+- Pulling data from industry databases
+- Accessing market research platforms
+- Video conferencing setup (can send Zoom links you create)
 
 **Examples of Unsupported Requests:**
-- "Automatically track student progress across all sessions" ❌ (requires external tracking system)
-- "Process tuition payments and update billing records" ❌ (requires payment processor)
-- "Set up automated reminders that send every week without me initiating" ❌ (requires automation infrastructure)
-- "Pull student grades from Canvas and email parents" ❌ (requires LMS integration)
-- "Update student attendance in PowerSchool" ❌ (requires SIS integration)
-- "Create a dashboard showing real-time student engagement" ❌ (requires external system)
-- "Monitor parent emails 24/7 and alert me to urgent issues" ❌ (requires real-time monitoring infrastructure)
-- "Automatically send progress updates when students complete assignments" ❌ (requires LMS integration + automation)
-
-**Note:** These unsupported requests require external systems or persistent automation. But you CAN ask: "Send progress updates to all students who completed assignments this week" (if you tell us who they are or we can find them in your calendar/emails).
+- "Update deal stage to 'Proposal Sent' in HubSpot" ❌ (requires CRM integration)
+- "Create invoice for April retainer in QuickBooks" ❌ (requires accounting software)
+- "Mark deliverable complete in Asana" ❌ (requires project management integration)
+- "Upload final report to client's Dropbox" ❌ (requires file storage integration)
+- "Update time tracking in Harvest" ❌ (requires time tracking software)
+- "Research company background in Crunchbase" ❌ (requires external data source)
 
 ---
 
 ### **Making Requests Work Within Constraints**
 
-**Instead of requesting external system integration, provide data naturally:**
+**Instead of requesting external system access, work with communication and scheduling:**
 
 | ❌ Won't Work | ✅ Will Work |
 |---------------|-------------|
-| "Pull grades from Canvas and email parents" | "Send progress updates to Emma, Lucas, and Sophia about their recent test scores" OR "Here's grade data [attach] - send updates to all parents" |
-| "Automatically track attendance and notify parents" | "Send attendance notifications to parents of students who missed this week" OR "Here's attendance data [attach] - notify these families" |
-| "Process payments through Stripe" | "Send payment confirmations to the families who paid this week" OR "Use this confirmation template [paste] and send to these families" |
-| "Set up automated weekly reminders" | "Send reminder emails to all students about practice goals" (you initiate when needed) |
-| "Build a student progress dashboard" | "Analyze my calendar and emails from last month and summarize student progress" |
-| "Integrate with our booking system" | "Schedule makeup sessions for Emma, Lucas, and Sophia next week" |
-| "Monitor inbox 24/7 for urgent emails" | "Search my inbox for urgent parent emails and summarize them" |
+| "Update deal stage in CRM" | "Follow up with all open proposals asking about decision timeline" |
+| "Create invoice in QuickBooks" | "Send invoice [attach PDF] to client with payment instructions" |
+| "Log activity in CRM" | "Email myself summary of client meeting for records" |
+| "Pull data from project management tool" | "Send project status update based on this info [paste details]" |
+| "Update time tracking" | "Email myself today's billable hours by client" |
+| "Research company in LinkedIn Sales Nav" | "Send personalized outreach to lead at [Company Name] mentioning [insight you found]" |
+| "Generate contract in DocuSign" | "Email contract [attach PDF you created] to client for signature" |
 
 **Key Principles:**
-1. **Google Workspace Only**: Limited to Gmail, Calendar, and Contacts API functionality
-2. **User-Initiated Actions**: All operations initiated by coordinator commands, not automated triggers
-3. **Flexible Input**: Natural language, lists, pasted templates, or structured data files - whatever works for you
-4. **No Persistent State**: Cannot maintain databases or tracking systems outside Google Workspace
-5. **API-Feasible Only**: Can accomplish any task achievable through Google Workspace API calls
-6. **LLM Understands Context**: You don't need formal structure - just describe what you want
+1. **Communication-Focused**: Gmail, Google Calendar, Google Contacts only (MVP)
+2. **User-Initiated**: You trigger actions, no automated systems running 24/7
+3. **Flexible Input**: Natural language, templates, or data files - whatever you have
+4. **No External Integrations (MVP)**: No CRM, project management, or accounting software for MVP - you provide data as needed
+5. **You Provide Context**: Paste client details, project info, or proposal status in your commands
+6. **Context from Conversation History**: AI learns from your communication patterns
+
+**Post-MVP Additions:**
+- CRM integration (HubSpot, Pipedrive - read/write)
+- Project management tools (Asana, ClickUp - read-only)
+- Invoicing (QuickBooks, FreshBooks - invoice generation)
+- Document storage (Notion, Dropbox - file attachments)
+- Calendar integrations (Calendly booking links)
 
 ---
 
 ### **Workflow Patterns That Work**
 
-**✅ Multi-Step Workflows (All Google Workspace-based):**
-- "Handle student onboarding: welcome email → orientation scheduling → materials email → first session booking"
-- "Process cancellations: notify students → find makeup times → send options → confirm bookings"
-- "Coordinate recital: invitations → RSVP tracking → rehearsal scheduling → logistics emails → reminders"
-- "Monthly routine: progress updates → payment reminders → schedule confirmations → feedback collection"
+**✅ Lead-to-Client Workflows:**
+- "New inquiry workflow: immediate response → schedule discovery call → send confirmation and prep materials"
+- "Proposal sequence: send proposal → follow up day 3 → follow up day 7 → closing conversation"
+- "Discovery call flow: schedule call → send confirmation → post-call recap → proposal delivery"
 
-**✅ Bulk Operations (Natural or Structured):**
-- "Send personalized emails to all my students saying they had a great week"
-- "Schedule sessions with all new students next week"
-- "Notify all families about the schedule change"
-- **Or with files:** "Send 100 emails using this template [paste] and data [attach spreadsheet]"
+**✅ Client Onboarding:**
+- "New client sequence: send contract → request deposit → schedule kickoff → send onboarding materials"
+- "Kickoff flow: send agenda → conduct call → send recap and timeline → schedule check-ins"
 
-**✅ Analysis and Reporting:**
-- "Analyze all parent emails from last month and identify common concerns"
-- "Review calendar data and report on session attendance patterns"
-- "Summarize all feedback and create categories of improvement areas"
+**✅ Project Delivery:**
+- "Weekly updates: status email → check for questions → update timeline → confirm next steps"
+- "Milestone communication: complete phase → notify client → deliver work → get feedback → plan next phase"
+- "Project completion: final delivery → satisfaction survey → request testimonial → ask for referrals"
 
-**✅ Context-Aware Communication:**
-- "Reply to this parent email about scheduling with my available times"
-- "Send progress update to Emma's parents mentioning the progress we discussed last time"
-- "Reply to makeup session requests with times that work for me and the instructor"
-- "Tell Emma's parents she's really improved on the thing we were working on"
+**✅ Relationship Management:**
+- "Quarterly touchpoint: check in on goals → share relevant insight → explore new opportunities"
+- "Past client re-engagement: send valuable content → ask how they're doing → offer to help"
+- "Retainer renewal: send renewal offer 45 days early → highlight value → schedule review call"
+
+**✅ Bulk Operations:**
+- "Send quarterly update to all clients personalizing by industry"
+- "Follow up with all open proposals from last 2 weeks"
+- "Schedule quarterly reviews with all retainer clients this month"
+- **Or with data:** "Send 50 personalized emails using template [paste] and spreadsheet [attach]"
+
+**✅ Analysis & Insights:**
+- "Analyze inquiry response rates from last quarter and identify patterns"
+- "Review which lead sources convert to actual projects"
+- "Identify clients who haven't had check-ins in 90+ days"
 
 ---
 
-This framework ensures the AI assistant can be highly effective for education coordinators while maintaining realistic expectations about what requires external systems or additional infrastructure.
+## Consultant-Specific Intelligence
+
+**Client Context:**
+When you mention clients or projects, the AI understands:
+- Company names and contact details
+- Project stages (inquiry, discovery, proposal, active, completed)
+- Engagement types (one-time project, retainer, workshop)
+- Multiple stakeholders (decision maker, project lead, end users)
+
+**Relationship Context:**
+The AI tracks:
+- Lead temperature (hot, warm, cold based on communication patterns)
+- Client stage (lead, prospect, active, past client)
+- Communication history and conversation context
+- Project history and outcomes
+
+**Timing Intelligence:**
+The AI understands:
+- Speed-to-lead urgency (inquiries need same-day response)
+- Sales cycle timing (discovery → proposal → decision typically 1-3 weeks)
+- Follow-up cadence (proposals need follow-up every 3-5 days)
+- Project timelines and milestone deadlines
+- Client meeting rhythms (weekly check-ins, monthly reviews)
+
+**Communication Style:**
+The AI matches tone to situation:
+- Professional and responsive for new inquiries
+- Consultative and value-focused for proposals
+- Clear and proactive for project updates
+- Warm and relationship-focused for past client nurture
+- Strategic and insight-driven for thought leadership
+
+**Business Context:**
+The AI understands:
+- Consulting terminology (discovery, scope, deliverables, retainer)
+- Revenue models (hourly, project-based, retainer, value-based)
+- Service offerings and expertise areas
+- Client industries and business challenges
+- Capacity and availability constraints
+
+---
+
+This framework ensures the AI assistant is highly effective for independent consultants while working within the realistic constraints of email, calendar, and contacts APIs - no CRM, project management, or accounting integrations required for MVP.

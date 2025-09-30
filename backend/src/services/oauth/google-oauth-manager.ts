@@ -90,7 +90,7 @@ export class GoogleOAuthManager extends BaseService {
   /**
    * Generate OAuth authorization URL for Google services
    */
-  async generateAuthUrl(context: SlackContext, scopes?: string[]): Promise<string> {
+  async generateAuthUrl(context: SlackContext, scopes?: string[]): Promise<{ authUrl: string; state: string }> {
     try {
       this.logInfo('Starting Google OAuth URL generation', {
         userId: context.userId,
@@ -116,7 +116,7 @@ export class GoogleOAuthManager extends BaseService {
         authUrl: authUrl.substring(0, 100) + '...'
       });
 
-      return authUrl;
+      return { authUrl, state };
     } catch (error) {
       this.logError('Failed to generate Google OAuth URL', error);
       throw error;

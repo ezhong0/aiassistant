@@ -1,7 +1,7 @@
 import { BaseService } from './base-service';
 import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
-import { CryptoUtil } from '../utils/crypto.util';
+import { EncryptionService } from './encryption.service';
 import { AuditLogger } from '../utils/audit-logger';
 
 export interface GoogleTokens {
@@ -39,6 +39,7 @@ export class TokenStorageService extends BaseService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly cacheService: CacheService,
+    private readonly encryptionService: EncryptionService,
     private readonly config: any
   ) {
     super('TokenStorageService');
@@ -104,7 +105,7 @@ export class TokenStorageService extends BaseService {
     // Encrypt Google refresh token if present
     if (tokens.google?.refresh_token) {
       try {
-        encryptedGoogleRefreshToken = CryptoUtil.encryptSensitiveData(tokens.google.refresh_token);
+        encryptedGoogleRefreshToken = this.encryptionService.encryptSensitiveData(tokens.google.refresh_token);
         this.logDebug('Encrypted Google refresh token for secure storage', { userId });
       } catch (error) {
         this.logError('Failed to encrypt Google refresh token', { userId, error });
@@ -286,14 +287,14 @@ export class TokenStorageService extends BaseService {
           if (tokens.googleTokens?.refresh_token) {
             try {
               // Check if the token is encrypted
-              if (CryptoUtil.isEncrypted(tokens.googleTokens.refresh_token)) {
-                tokens.googleTokens.refresh_token = CryptoUtil.decryptSensitiveData(tokens.googleTokens.refresh_token);
+              if (this.isEncrypted(tokens.googleTokens.refresh_token)) {
+                tokens.googleTokens.refresh_token = this.encryptionService.decryptSensitiveData(tokens.googleTokens.refresh_token);
                 this.logDebug('Successfully decrypted Google refresh token', { userId });
               } else {
                 this.logDebug('Google refresh token is not encrypted (stored in plain text)', { userId });
                 // Encrypt it for security
                 try {
-                  const encrypted = CryptoUtil.encryptSensitiveData(tokens.googleTokens.refresh_token);
+                  const encrypted = this.encryptionService.encryptSensitiveData(tokens.googleTokens.refresh_token);
                   await this.databaseService!.updateUserTokenRefreshToken(userId, encrypted);
                   this.logInfo('Encrypted plain text refresh token for security', { userId });
                 } catch (encryptError) {
@@ -544,6 +545,23 @@ export class TokenStorageService extends BaseService {
     } catch (error) {
       this.logError('Failed to remove user tokens', error as Error, { userId });
       throw error;
+    }
+  }
+
+  /**
+   * Check if data appears to be encrypted
+   */
+  private isEncrypted(data: string): boolean {
+    if (!data || typeof data !== 'string') {
+      return false;
+    }
+    
+    try {
+      // Check if it's valid base64 and has reasonable length
+      const decoded = Buffer.from(data, 'base64');
+      return decoded.length >= 42; // Minimum reasonable size for AES-256-GCM
+    } catch {
+      return false;
     }
   }
 }

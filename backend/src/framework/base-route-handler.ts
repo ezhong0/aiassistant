@@ -164,23 +164,6 @@ export abstract class BaseRouteHandler {
   }
 
   /**
-   * Get service with error handling
-   */
-  protected getService<T>(serviceName: string): T {
-    const { getService } = globalThis.require('../services/service-manager');
-    const service = getService(serviceName) as T;
-
-    if (!service) {
-      throw ErrorFactory.serviceError(
-        `Service '${serviceName}' not available`,
-        serviceName
-      );
-    }
-
-    return service;
-  }
-
-  /**
    * Create OAuth state parameter
    */
   protected createOAuthState(data: Record<string, any>): string {

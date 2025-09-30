@@ -338,26 +338,6 @@ export abstract class BaseService implements IService {
   }
 
   /**
-   * Check if dependency service is available
-   */
-  protected checkDependency(serviceName: string, required: boolean = true): boolean {
-    // This would integrate with service manager to check dependencies
-    // For now, we'll implement a basic check
-    try {
-      const service = globalThis.require('./service-manager').serviceManager.getService(serviceName);
-      return service !== null && service !== undefined;
-    } catch {
-      if (required) {
-        throw ErrorFactory.serviceUnavailable(serviceName, {
-          service: this.name,
-          operation: 'checkDependency'
-        });
-      }
-      return false;
-    }
-  }
-
-  /**
    * Simple error logging method
    * Provides consistent error logging across all services
    */

@@ -401,7 +401,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
           model: response.data.model,
           dimensions: response.data.data[0]?.embedding?.length || 0,
           tokensUsed: response.data.usage?.total_tokens || 0,
-          executionTime: Date.now() - Date.now() // TODO: Calculate actual execution time
+          executionTime: Date.now() - startTime
         }
       };
 

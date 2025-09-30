@@ -207,7 +207,7 @@ export interface ICalendarDomainService extends IOAuthEnabledDomainService {
   /**
    * Update a calendar event
    */
-  updateEvent(eventId: string, updates: CalendarEventUpdate, calendarId?: string): Promise<CalendarEvent>;
+  updateEvent(userId: string, eventId: string, updates: CalendarEventUpdate, calendarId?: string): Promise<CalendarEvent>;
 
   /**
    * Delete a calendar event
