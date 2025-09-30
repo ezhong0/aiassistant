@@ -100,7 +100,6 @@ export class GoogleApiMocks {
     const timestamp = new Date().toISOString();
     
     return {
-      success: true,
       data: {
         id: `google-mock-${Date.now()}`,
         timestamp,
@@ -109,11 +108,12 @@ export class GoogleApiMocks {
         method: request.method,
         mockData: true
       },
-      status: 200,
-      statusText: 'OK',
+      statusCode: 200,
+      headers: {},
       metadata: {
         requestId: `google-mock-${Date.now()}`,
         timestamp,
+        executionTime: 0,
         mockGenerated: true
       }
     };

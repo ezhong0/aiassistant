@@ -14,7 +14,8 @@ import { ApiMockManager } from './framework/api-mock-manager';
 import { AITestScenarioGenerator, TestScenario } from './ai/scenario-generator';
 import { AIResponseEvaluator, ResponseEvaluation } from './ai/response-evaluator';
 import { ReportCleanup } from './framework/report-cleanup';
-import { serviceManager } from '../../src/services/service-manager';
+import { createTestContainer, AppContainer, initializeAllServices } from '../../src/di';
+import { registerAllServices } from '../../src/di/registrations';
 import { GenericAIService } from '../../src/services/generic-ai.service';
 import logger from '../../src/utils/logger';
 
@@ -24,6 +25,7 @@ describe('AI-Powered End-to-End Testing System', () => {
   let scenarioGenerator: AITestScenarioGenerator;
   let responseEvaluator: AIResponseEvaluator;
   let aiService: GenericAIService;
+  let container: AppContainer;
 
   beforeAll(async () => {
     // Archive old reports before starting new test run
@@ -32,16 +34,21 @@ describe('AI-Powered End-to-End Testing System', () => {
     // Verify E2E testing environment
     expect(process.env.E2E_TESTING).toBe('true');
 
-    // Initialize test services with mocks
-    const { initializeTestServices } = await import('../../src/services/test-service-initialization');
-    await initializeTestServices();
+    // Create test container with DI
+    container = createTestContainer();
+    
+    // Register all services in container
+    registerAllServices(container);
+    
+    // Initialize all services
+    await initializeAllServices(container);
 
-    // Initialize components
-    executor = new MasterAgentExecutor();
+    // Initialize components with DI container
+    executor = new MasterAgentExecutor(container);
     mockManager = ApiMockManager;
 
-    // Get AI service for scenario generation and evaluation
-    aiService = serviceManager.getService<GenericAIService>('genericAIService')!;
+    // Get AI service from DI container
+    aiService = container.cradle.genericAIService;
     expect(aiService).toBeDefined();
 
     // Initialize AI-powered components
@@ -69,6 +76,14 @@ describe('AI-Powered End-to-End Testing System', () => {
 
   afterEach(async () => {
     await executor.cleanup();
+  });
+
+  afterAll(async () => {
+    // Clean up DI container
+    const { shutdownAllServices } = await import('../../src/di');
+    if (container) {
+      await shutdownAllServices(container);
+    }
   });
 
   describe('Complete AI-Powered Workflow', () => {

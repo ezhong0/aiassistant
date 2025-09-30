@@ -55,19 +55,6 @@ export class SlackApiMocks {
   }
 
   /**
-   * Mock Slack user info using AI
-   */
-  async getUserInfo(userId: string, context: MockContext): Promise<APIResponse<any>> {
-    const request: APIRequest = {
-      endpoint: '/users.info',
-      method: 'GET',
-      data: { user: userId }
-    };
-    
-    return this.aiMockGenerator.generateSlackMock(request, context);
-  }
-
-  /**
    * Mock Slack conversation history using AI
    */
   async getConversationHistory(data: any, context: MockContext): Promise<APIResponse<any>> {
@@ -107,7 +94,6 @@ export class SlackApiMocks {
     const timestamp = new Date().toISOString();
     
     return {
-      success: true,
       data: {
         ok: true,
         id: `slack-mock-${Date.now()}`,
@@ -117,11 +103,12 @@ export class SlackApiMocks {
         method: request.method,
         mockData: true
       },
-      status: 200,
-      statusText: 'OK',
+      statusCode: 200,
+      headers: {},
       metadata: {
         requestId: `slack-mock-${Date.now()}`,
         timestamp,
+        executionTime: 0,
         mockGenerated: true
       }
     };

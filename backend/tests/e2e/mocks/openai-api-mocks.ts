@@ -61,7 +61,6 @@ export class OpenAiApiMocks {
     const timestamp = new Date().toISOString();
     
     return {
-      success: true,
       data: {
         id: `openai-mock-${Date.now()}`,
         object: 'chat.completion',
@@ -83,11 +82,12 @@ export class OpenAiApiMocks {
           total_tokens: 30
         }
       },
-      status: 200,
-      statusText: 'OK',
+      statusCode: 200,
+      headers: {},
       metadata: {
         requestId: `openai-mock-${Date.now()}`,
         timestamp,
+        executionTime: 0,
         mockGenerated: true
       }
     };

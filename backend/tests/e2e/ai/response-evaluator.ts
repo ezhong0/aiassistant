@@ -436,7 +436,7 @@ Be objective and thorough in your analysis.
     const averageScore = evaluations.reduce((sum, e) => sum + (e.overallScore || 0), 0) / totalScenarios;
 
     const categoryBreakdown = evaluations.reduce((acc, evaluation) => {
-      const category = evaluation.scenarioId.split('_')[0];
+      const category = evaluation.scenarioId?.split('_')[0] || 'unknown';
       if (!acc[category]) acc[category] = { total: 0, passed: 0 };
       acc[category].total++;
       if (evaluation.finalVerdict?.passed) acc[category].passed++;

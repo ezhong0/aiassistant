@@ -5,7 +5,6 @@
 
 import { APIRequest, APIResponse } from '../../../src/types/api/api-client.types';
 import { GenericAIService } from '../../../src/services/generic-ai.service';
-import { serviceManager } from '../../../src/services/service-manager';
 import logger from '../../../src/utils/logger';
 
 interface MockContext {
@@ -19,11 +18,11 @@ interface MockContext {
 export class AIMockGenerator {
   private aiService: GenericAIService | null = null;
 
-  constructor() {
-    try {
-      this.aiService = serviceManager.getService<GenericAIService>('genericAIService');
-    } catch (error) {
-      logger.warn('AI service not available for mock generation, using fallback responses', {
+  constructor(aiService?: GenericAIService) {
+    if (aiService) {
+      this.aiService = aiService;
+    } else {
+      logger.warn('AI service not provided for mock generation, using fallback responses', {
         operation: 'ai_mock_generator_init'
       });
       this.aiService = null;
@@ -116,7 +115,6 @@ Generate a response that would be realistic for this specific request and contex
       if (hasFunctionCall) {
         // Return function call response for structured data
         return {
-          success: true,
           data: {
             id: `chatcmpl-mock-${Date.now()}`,
             object: 'chat.completion',
@@ -155,11 +153,12 @@ NOTES: Mock response for E2E testing`
               total_tokens: 75
             }
           } as T,
-          status: 200,
-          statusText: 'OK',
+          statusCode: 200,
+          headers: {},
           metadata: {
             requestId: `openai-mock-${Date.now()}`,
             timestamp,
+            executionTime: 0,
             mockGenerated: true,
             fallback: true
           }
@@ -167,7 +166,6 @@ NOTES: Mock response for E2E testing`
       } else {
         // Return regular chat completion response
         return {
-          success: true,
           data: {
             id: `chatcmpl-mock-${Date.now()}`,
             object: 'chat.completion',
@@ -189,11 +187,12 @@ NOTES: Mock response for E2E testing`
               total_tokens: 75
             }
           } as T,
-          status: 200,
-          statusText: 'OK',
+          statusCode: 200,
+          headers: {},
           metadata: {
             requestId: `openai-mock-${Date.now()}`,
             timestamp,
+            executionTime: 0,
             mockGenerated: true,
             fallback: true
           }
@@ -203,7 +202,6 @@ NOTES: Mock response for E2E testing`
     
     // Default fallback response for other services
     return {
-      success: true,
       data: {
         id: `mock-${Date.now()}`,
         timestamp,
@@ -212,11 +210,12 @@ NOTES: Mock response for E2E testing`
         method: request.method,
         mockData: true
       } as T,
-      status: 200,
-      statusText: 'OK',
+      statusCode: 200,
+      headers: {},
       metadata: {
         requestId: `mock-${Date.now()}`,
         timestamp,
+        executionTime: 0,
         mockGenerated: true,
         fallback: true
       }

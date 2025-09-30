@@ -6,7 +6,7 @@
 import { MasterAgent, ProcessingResult } from '../../../src/agents/master.agent';
 import { SlackContext } from '../../../src/types/slack/slack.types';
 import logger from '../../../src/utils/logger';
-import { initializeAllCoreServices } from '../../../src/services/service-initialization';
+import { AppContainer } from '../../../src/di';
 import { DetailedExecutionLogger } from './detailed-execution-logger';
 
 interface ExecutionStage {
@@ -95,8 +95,10 @@ export class MasterAgentExecutor {
   private currentTrace: ExecutionTrace | null = null;
   private servicesInitialized: boolean = false;
   private detailedLogger: DetailedExecutionLogger;
+  private container?: AppContainer;
 
-  constructor() {
+  constructor(container?: AppContainer) {
+    this.container = container;
     this.masterAgent = new MasterAgent();
     this.detailedLogger = new DetailedExecutionLogger();
   }
@@ -111,12 +113,17 @@ export class MasterAgentExecutor {
 
     try {
       logger.info('Initializing services for E2E testing', {
-        operation: 'e2e_service_initialization'
+        operation: 'e2e_service_initialization',
+        usingDIContainer: !!this.container
       });
 
-      // Use test service initialization with mocks
-      const { initializeTestServices } = await import('../../../src/services/test-service-initialization');
-      await initializeTestServices();
+      // Services are already initialized in the DI container if provided
+      // No need to reinitialize
+      if (this.container) {
+        logger.info('Using DI container for E2E services', {
+          operation: 'e2e_service_initialization'
+        });
+      }
 
       this.servicesInitialized = true;
 
@@ -338,24 +345,25 @@ export class MasterAgentExecutor {
         request: call.request,
         response: call.response,
         duration: call.duration,
-        success: call.response.success
+        success: call.response.statusCode >= 200 && call.response.statusCode < 300
       })));
 
       // Log each API call to detailed logger
       for (const call of newCalls) {
+        const success = call.response.statusCode >= 200 && call.response.statusCode < 300;
         this.detailedLogger.logAPICall(
           call.clientName,
           call.request.endpoint,
           call.request.method,
           call.request,
-          { duration: call.duration, success: call.response.success }
+          { duration: call.duration, success }
         );
         
         this.detailedLogger.logAPIResponse(
           call.clientName,
           call.request.endpoint,
           call.response,
-          { duration: call.duration, success: call.response.success }
+          { duration: call.duration, success }
         );
       }
 
