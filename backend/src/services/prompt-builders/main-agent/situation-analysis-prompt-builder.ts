@@ -19,6 +19,10 @@ export class SituationAnalysisPromptBuilder extends BasePromptBuilder<string, Si
     return 'Analyzes user requests to determine intent, assess risk, and set output strategy';
   }
 
+  getName(): string {
+    return 'SituationAnalysisPromptBuilder';
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

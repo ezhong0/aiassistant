@@ -92,4 +92,30 @@ export class GoogleApiMocks {
   async handleRequest(request: APIRequest, context: MockContext): Promise<APIResponse<any>> {
     return this.aiMockGenerator.generateMockResponse('Google API', request, context);
   }
+
+  /**
+   * Get default response for any Google API request
+   */
+  async getDefaultResponse(request: APIRequest, context: MockContext): Promise<APIResponse<any>> {
+    const timestamp = new Date().toISOString();
+    
+    return {
+      success: true,
+      data: {
+        id: `google-mock-${Date.now()}`,
+        timestamp,
+        service: 'Google API',
+        endpoint: request.endpoint,
+        method: request.method,
+        mockData: true
+      },
+      status: 200,
+      statusText: 'OK',
+      metadata: {
+        requestId: `google-mock-${Date.now()}`,
+        timestamp,
+        mockGenerated: true
+      }
+    };
+  }
 }

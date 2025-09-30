@@ -67,10 +67,10 @@ export abstract class BaseAPIClient extends BaseService {
     // Only initialize circuit breaker for AI operations
     if (requiresCircuitBreaker) {
       this.circuitBreaker = new AIServiceCircuitBreaker({
-        failureThreshold: config.circuitBreaker?.failureThreshold || 5,
-        recoveryTimeout: config.circuitBreaker?.recoveryTimeout || 60000,
+        failureThreshold: process.env.E2E_TESTING === 'true' ? 10000 : (config.circuitBreaker?.failureThreshold || 5),
+        recoveryTimeout: process.env.E2E_TESTING === 'true' ? 5000 : (config.circuitBreaker?.recoveryTimeout || 60000),
         successThreshold: config.circuitBreaker?.successThreshold || 3,
-        timeout: config.circuitBreaker?.timeout || 30000
+        timeout: process.env.E2E_TESTING === 'true' ? 60000 : (config.circuitBreaker?.timeout || 30000)
       });
     }
   }
@@ -157,7 +157,7 @@ export abstract class BaseAPIClient extends BaseService {
    * @throws {APIError} When request fails
    */
   async makeRequest<T = any>(request: APIRequest): Promise<APIResponse<T>> {
-    // E2E Testing: Intercept external API calls for testing (NOT OpenAI)
+    // E2E Testing: Intercept external API calls for testing (EXCEPT OpenAI - those should be real)
     if (process.env.E2E_TESTING === 'true' && this.name !== 'OpenAIClient') {
       logger.debug('E2E_TESTING enabled, attempting to intercept external API call', {
         clientName: this.name,

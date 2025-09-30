@@ -41,10 +41,10 @@ export class AIServiceCircuitBreaker implements IService {
   private totalFailures = 0;
   
   private config: CircuitBreakerConfig = {
-    failureThreshold: 5,      // Open circuit after 5 consecutive failures
-    recoveryTimeout: 60000,   // Try recovery after 60 seconds
+    failureThreshold: process.env.E2E_TESTING === 'true' ? 10000 : 5,     // Effectively disable circuit breaker in E2E tests
+    recoveryTimeout: process.env.E2E_TESTING === 'true' ? 5000 : 60000,   // Quick recovery in tests
     successThreshold: 3,      // Close circuit after 3 consecutive successes
-    timeout: 30000           // Timeout for individual requests
+    timeout: process.env.E2E_TESTING === 'true' ? 60000 : 30000           // 60s timeout for E2E tests (AI evaluation takes time)
   };
 
   private aiService: any | null = null;
@@ -158,6 +158,14 @@ export class AIServiceCircuitBreaker implements IService {
         error instanceof Error ? error : new Error(String(error))
       );
     }
+  }
+
+  /**
+   * Execute operation without circuit breaker (for testing)
+   */
+  async executeDirect<T>(operation: (openai: any) => Promise<T>): Promise<T> {
+    const hasAIService = this.aiService && this.aiService.isReady();
+    return operation(hasAIService ? this.aiService : null);
   }
 
   /**

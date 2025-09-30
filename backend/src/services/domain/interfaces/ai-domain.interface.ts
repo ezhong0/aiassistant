@@ -60,6 +60,7 @@ export interface StructuredDataParams {
   maxTokens?: number;
   model?: string;
   timeout?: number;
+  metadata?: Record<string, any>;
 }
 
 /**

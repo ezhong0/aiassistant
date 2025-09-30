@@ -21,6 +21,10 @@ export class EnvironmentCheckPromptBuilder extends BasePromptBuilder<string, Env
     return 'Checks for interruptions, evaluates user input needs, and assesses readiness';
   }
 
+  getName(): string {
+    return 'EnvironmentCheckPromptBuilder';
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

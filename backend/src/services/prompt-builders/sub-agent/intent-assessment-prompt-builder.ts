@@ -23,6 +23,10 @@ export class IntentAssessmentPromptBuilder extends BaseSubAgentPromptBuilder<Int
     return 'Assesses Master Agent intent and plans tool execution for sub-agent';
   }
 
+  getName(): string {
+    return `IntentAssessmentPromptBuilder[${this.domain}]`;
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

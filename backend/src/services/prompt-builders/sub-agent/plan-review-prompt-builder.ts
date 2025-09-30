@@ -30,6 +30,10 @@ export class PlanReviewPromptBuilder extends BaseSubAgentPromptBuilder<PlanRevie
     return 'Reviews tool execution results and revises execution plan for sub-agent';
   }
 
+  getName(): string {
+    return `PlanReviewPromptBuilder[${this.domain}]`;
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

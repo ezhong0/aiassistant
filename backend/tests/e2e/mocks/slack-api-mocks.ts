@@ -24,7 +24,7 @@ export class SlackApiMocks {
   /**
    * Mock Slack message sending using AI
    */
-  async sendMessage(messageData: any, context: MockContext): Promise<APIResponse<any>> {
+  async postMessage(messageData: any, context: MockContext): Promise<APIResponse<any>> {
     const request: APIRequest = {
       endpoint: '/chat.postMessage',
       method: 'POST',
@@ -32,6 +32,13 @@ export class SlackApiMocks {
     };
     
     return this.aiMockGenerator.generateSlackMock(request, context);
+  }
+
+  /**
+   * Mock Slack message sending using AI (alias)
+   */
+  async sendMessage(messageData: any, context: MockContext): Promise<APIResponse<any>> {
+    return this.postMessage(messageData, context);
   }
 
   /**
@@ -63,11 +70,24 @@ export class SlackApiMocks {
   /**
    * Mock Slack conversation history using AI
    */
-  async getConversationHistory(channelId: string, context: MockContext): Promise<APIResponse<any>> {
+  async getConversationHistory(data: any, context: MockContext): Promise<APIResponse<any>> {
     const request: APIRequest = {
       endpoint: '/conversations.history',
       method: 'GET',
-      data: { channel: channelId }
+      data: data
+    };
+    
+    return this.aiMockGenerator.generateSlackMock(request, context);
+  }
+
+  /**
+   * Mock Slack user info using AI
+   */
+  async getUserInfo(data: any, context: MockContext): Promise<APIResponse<any>> {
+    const request: APIRequest = {
+      endpoint: '/users.info',
+      method: 'GET',
+      data: data
     };
     
     return this.aiMockGenerator.generateSlackMock(request, context);
@@ -78,5 +98,32 @@ export class SlackApiMocks {
    */
   async handleRequest(request: APIRequest, context: MockContext): Promise<APIResponse<any>> {
     return this.aiMockGenerator.generateSlackMock(request, context);
+  }
+
+  /**
+   * Get default response for any Slack API request
+   */
+  async getDefaultResponse(request: APIRequest, context: MockContext): Promise<APIResponse<any>> {
+    const timestamp = new Date().toISOString();
+    
+    return {
+      success: true,
+      data: {
+        ok: true,
+        id: `slack-mock-${Date.now()}`,
+        timestamp,
+        service: 'Slack API',
+        endpoint: request.endpoint,
+        method: request.method,
+        mockData: true
+      },
+      status: 200,
+      statusText: 'OK',
+      metadata: {
+        requestId: `slack-mock-${Date.now()}`,
+        timestamp,
+        mockGenerated: true
+      }
+    };
   }
 }

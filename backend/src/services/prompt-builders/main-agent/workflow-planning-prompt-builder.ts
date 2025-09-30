@@ -20,6 +20,10 @@ export class WorkflowPlanningPromptBuilder extends BasePromptBuilder<string, Wor
     return 'Creates specific execution steps that will be looped over in the workflow';
   }
 
+  getName(): string {
+    return 'WorkflowPlanningPromptBuilder';
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

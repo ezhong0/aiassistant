@@ -3,10 +3,14 @@
  * Complete implementation of AI-generated scenarios with AI-powered evaluation
  */
 
+// Load E2E test environment configuration
+import './setup';
+
 import { MasterAgentExecutor, ExecutionTrace } from './framework/master-agent-executor';
 import { ApiMockManager } from './framework/api-mock-manager';
 import { AITestScenarioGenerator, TestScenario } from './ai/scenario-generator';
 import { AIResponseEvaluator, ResponseEvaluation } from './ai/response-evaluator';
+import { ReportCleanup } from './framework/report-cleanup';
 import { serviceManager } from '../../src/services/service-manager';
 import { GenericAIService } from '../../src/services/generic-ai.service';
 import logger from '../../src/utils/logger';
@@ -19,6 +23,9 @@ describe('AI-Powered End-to-End Testing System', () => {
   let aiService: GenericAIService;
 
   beforeAll(async () => {
+    // Archive old reports before starting new test run
+    await ReportCleanup.archiveAllReports();
+
     // Verify E2E testing environment
     expect(process.env.E2E_TESTING).toBe('true');
 

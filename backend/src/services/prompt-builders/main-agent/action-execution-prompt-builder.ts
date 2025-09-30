@@ -21,6 +21,10 @@ export class ActionExecutionPromptBuilder extends BasePromptBuilder<string, Acti
     return 'Determines which agent to use and what request to send for a specific step';
   }
 
+  getName(): string {
+    return 'ActionExecutionPromptBuilder';
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

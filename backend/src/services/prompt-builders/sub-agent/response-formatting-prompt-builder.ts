@@ -28,6 +28,10 @@ export class ResponseFormattingPromptBuilder extends BaseSubAgentPromptBuilder<R
     return 'Formats tool execution results into structured response for Master Agent';
   }
 
+  getName(): string {
+    return `ResponseFormattingPromptBuilder[${this.domain}]`;
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

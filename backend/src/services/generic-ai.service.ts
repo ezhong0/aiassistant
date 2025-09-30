@@ -106,7 +106,8 @@ export class GenericAIService extends BaseService {
    */
   async executePrompt<T = any>(
     prompt: AIPrompt,
-    schema: StructuredSchema
+    schema: StructuredSchema,
+    promptBuilderName?: string
   ): Promise<AIResponse<T>> {
     const startTime = Date.now();
     const requestId = `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -114,7 +115,8 @@ export class GenericAIService extends BaseService {
     this.logInfo('Executing AI prompt', {
       requestId,
       schemaType: schema.type,
-      temperature: prompt.options?.temperature ?? this.config.TEMPERATURE
+      temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
+      promptBuilder: promptBuilderName || 'unknown'
     });
 
     try {
@@ -137,7 +139,8 @@ export class GenericAIService extends BaseService {
         systemPrompt: prompt.systemPrompt,
         temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
         maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
-        model: prompt.options?.model ?? this.config.MODEL
+        model: prompt.options?.model ?? this.config.MODEL,
+        metadata: { promptBuilder: promptBuilderName || 'unknown' }
       });
 
 

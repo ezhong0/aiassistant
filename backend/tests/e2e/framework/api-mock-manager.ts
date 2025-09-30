@@ -1,6 +1,9 @@
 /**
  * API Mock Manager
  * Intercepts and mocks external API calls during E2E testing
+ *
+ * NOTE: OpenAI API calls are NOT mocked - they go through to the real OpenAI API.
+ * Only external service APIs (Google, Slack, etc.) are mocked.
  */
 
 import { APIRequest, APIResponse } from '../../../src/types/api/api-client.types';
@@ -26,6 +29,9 @@ interface MockContext {
 
 /**
  * Central API Mock Manager for E2E Testing
+ *
+ * Handles interception and mocking of external APIs (Google, Slack, etc.)
+ * OpenAI calls are NOT mocked - they flow through to the real OpenAI API for authentic AI responses.
  */
 export class ApiMockManager {
   private static instance: ApiMockManager;
@@ -34,10 +40,9 @@ export class ApiMockManager {
   private mockResponders: Map<string, any> = new Map();
 
   constructor() {
-    // Initialize mock responders for external APIs only (NOT OpenAI)
+    // Initialize mock responders for external APIs (OpenAI is NOT mocked - it uses real API)
     this.mockResponders.set('GoogleAPIClient', new GoogleApiMocks());
     this.mockResponders.set('SlackAPIClient', new SlackApiMocks());
-    // OpenAI calls go to real API - no mocking
   }
 
   static getInstance(): ApiMockManager {
@@ -185,15 +190,13 @@ export class ApiMockManager {
     mockResponder: any
   ): Promise<APIResponse<T>> {
     // Route to appropriate mock method based on endpoint and client
+    // Note: OpenAI is NOT included here - it uses the real API
     switch (clientName) {
       case 'GoogleAPIClient':
         return this.handleGoogleApiRequest<T>(request, mockResponder);
 
       case 'SlackAPIClient':
         return this.handleSlackApiRequest<T>(request, mockResponder);
-
-      case 'OpenAIClient':
-        return this.handleOpenAiRequest<T>(request, mockResponder);
 
       default:
         throw new Error(`Unsupported client for mocking: ${clientName}`);
@@ -263,26 +266,6 @@ export class ApiMockManager {
   }
 
   /**
-   * Handle OpenAI API requests
-   */
-  private async handleOpenAiRequest<T = any>(
-    request: APIRequest,
-    mockResponder: OpenAiApiMocks
-  ): Promise<APIResponse<T>> {
-    const { endpoint, data } = request;
-
-    if (endpoint === '/chat/completions') {
-      return mockResponder.chatCompletion(data, this.mockContext);
-    }
-
-    if (endpoint === '/embeddings') {
-      return mockResponder.generateEmbeddings(data, this.mockContext);
-    }
-
-    return mockResponder.getDefaultResponse(request, this.mockContext);
-  }
-
-  /**
    * Add realistic delay based on API type and endpoint
    */
   private async addRealisticDelay(clientName: string, endpoint: string): Promise<void> {
@@ -298,10 +281,6 @@ export class ApiMockManager {
 
       case 'SlackAPIClient':
         delayMs = 150;
-        break;
-
-      case 'OpenAIClient':
-        delayMs = endpoint.includes('/chat/completions') ? 2000 : 800;
         break;
     }
 

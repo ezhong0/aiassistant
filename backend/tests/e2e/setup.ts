@@ -6,7 +6,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load .env.test file for E2E testing (mock configs)
+// Load .env.test file for E2E testing (mock configs) first
 const envTestPath = path.resolve(__dirname, '../../.env.test');
 dotenv.config({ path: envTestPath });
 

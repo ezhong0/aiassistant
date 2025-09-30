@@ -32,7 +32,8 @@ Your AI-powered end-to-end testing system has been fully implemented according t
 
 4. **🎭 API Mock Manager** (`tests/e2e/framework/api-mock-manager.ts`)
    - Single-point API interception at BaseAPIClient level
-   - Realistic mock responses for OpenAI, Google APIs, and Slack
+   - Realistic mock responses for Google APIs and Slack
+   - **OpenAI calls use the REAL API** for authentic AI responses
    - Performance simulation with realistic delays
    - Complete request/response logging and analytics
 
@@ -63,10 +64,11 @@ npm run test:e2e
 - **Edge case inclusion**: Handles ambiguous, incomplete, and error-prone requests
 - **Expected behavior**: Defines expected actions and API calls for validation
 
-### **✅ Complete API Mocking**
-- **Zero external dependencies**: All OpenAI, Google, and Slack API calls mocked
-- **Realistic responses**: Context-aware mock data generation
-- **Performance simulation**: Realistic response delays and behavior
+### **✅ Hybrid API Strategy**
+- **Real OpenAI calls**: All OpenAI API calls go through to the real API for authentic AI responses
+- **Mocked external APIs**: Google and Slack API calls are mocked with realistic responses
+- **Zero external service dependencies**: No real Google/Slack accounts needed
+- **Performance simulation**: Realistic response delays for mocked APIs
 - **Request tracking**: Complete visibility into all API interactions
 
 ### **✅ AI-Powered Evaluation**
@@ -95,8 +97,7 @@ tests/e2e/
 │   └── api-mock-manager.ts        # API mocking and interception
 ├── mocks/
 │   ├── google-api-mocks.ts        # Google API mock responses
-│   ├── slack-api-mocks.ts         # Slack API mock responses
-│   └── openai-api-mocks.ts        # OpenAI API mock responses
+│   └── slack-api-mocks.ts         # Slack API mock responses
 ├── e2e-basic.test.ts              # Basic E2E tests
 ├── ai-powered-e2e.test.ts         # Complete AI-powered E2E tests
 └── AI-E2E-TESTING-IMPLEMENTATION.md # This documentation
@@ -181,8 +182,8 @@ Your AI-powered E2E testing system now provides:
 
 You now have a **fully functional AI-powered end-to-end testing system** that:
 - ✅ Generates realistic test scenarios using AI
-- ✅ Executes complete MasterAgent workflows
-- ✅ Mocks all external API calls realistically
+- ✅ Executes complete MasterAgent workflows with real OpenAI API calls
+- ✅ Mocks external service APIs (Google, Slack) realistically
 - ✅ Evaluates responses and tool usage with AI
 - ✅ Provides comprehensive reports and insights
 - ✅ Runs automatically in your CI/CD pipeline

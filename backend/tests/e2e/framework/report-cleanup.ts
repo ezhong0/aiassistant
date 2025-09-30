@@ -17,6 +17,7 @@ export class ReportCleanup {
   private static readonly MAX_REPORTS_PER_TYPE = 5; // Keep only last 5 reports per test type
   private static readonly MAX_TOTAL_REPORTS = 50; // Keep only last 50 reports total
   private static readonly REPORTS_DIR = path.join(__dirname, '../reports/detailed-executions');
+  private static readonly ARCHIVE_DIR = path.join(__dirname, '../reports/archive');
 
   /**
    * Clean up old reports, keeping only the most recent ones
@@ -196,7 +197,7 @@ export class ReportCleanup {
   }> {
     const reportFiles = await this.getReportFiles();
     const reportsByType = this.groupReportsByType(reportFiles);
-    
+
     const stats = {
       totalReports: reportFiles.length,
       reportsByType: {} as Record<string, number>,
@@ -209,5 +210,125 @@ export class ReportCleanup {
     }
 
     return stats;
+  }
+
+  /**
+   * Archive all current reports before starting a new test run
+   * Moves all reports to a timestamped archive folder
+   */
+  static async archiveAllReports(): Promise<void> {
+    try {
+      logger.info('Archiving all E2E reports before test run', {
+        operation: 'report_archive_start',
+        reportsDir: this.REPORTS_DIR
+      });
+
+      if (!fs.existsSync(this.REPORTS_DIR)) {
+        logger.info('Reports directory does not exist, skipping archive', {
+          operation: 'report_archive_skip'
+        });
+        return;
+      }
+
+      const reportFiles = await this.getReportFiles();
+
+      if (reportFiles.length === 0) {
+        logger.info('No reports to archive', {
+          operation: 'report_archive_skip'
+        });
+        return;
+      }
+
+      // Create timestamped archive directory
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const archiveSubDir = path.join(this.ARCHIVE_DIR, timestamp);
+
+      if (!fs.existsSync(archiveSubDir)) {
+        fs.mkdirSync(archiveSubDir, { recursive: true });
+      }
+
+      // Move all reports to archive
+      let archivedCount = 0;
+      for (const report of reportFiles) {
+        try {
+          const filename = path.basename(report.filepath);
+          const archivePath = path.join(archiveSubDir, filename);
+
+          fs.renameSync(report.filepath, archivePath);
+          archivedCount++;
+        } catch (error) {
+          logger.warn('Failed to archive report', {
+            operation: 'report_archive_failed',
+            filepath: report.filepath,
+            error: (error as Error).message
+          });
+        }
+      }
+
+      logger.info('E2E reports archived successfully', {
+        operation: 'report_archive_complete',
+        archivedCount,
+        archiveDir: archiveSubDir
+      });
+
+    } catch (error) {
+      logger.error('Failed to archive E2E reports', error as Error, {
+        operation: 'report_archive_error'
+      });
+    }
+  }
+
+  /**
+   * Clear all reports (without archiving)
+   * Use this if you don't want to keep historical data
+   */
+  static async clearAllReports(): Promise<void> {
+    try {
+      logger.info('Clearing all E2E reports before test run', {
+        operation: 'report_clear_start',
+        reportsDir: this.REPORTS_DIR
+      });
+
+      if (!fs.existsSync(this.REPORTS_DIR)) {
+        logger.info('Reports directory does not exist, skipping clear', {
+          operation: 'report_clear_skip'
+        });
+        return;
+      }
+
+      const reportFiles = await this.getReportFiles();
+
+      if (reportFiles.length === 0) {
+        logger.info('No reports to clear', {
+          operation: 'report_clear_skip'
+        });
+        return;
+      }
+
+      // Delete all reports
+      let clearedCount = 0;
+      for (const report of reportFiles) {
+        try {
+          fs.unlinkSync(report.filepath);
+          clearedCount++;
+        } catch (error) {
+          logger.warn('Failed to delete report', {
+            operation: 'report_delete_failed',
+            filepath: report.filepath,
+            error: (error as Error).message
+          });
+        }
+      }
+
+      logger.info('E2E reports cleared successfully', {
+        operation: 'report_clear_complete',
+        clearedCount
+      });
+
+    } catch (error) {
+      logger.error('Failed to clear E2E reports', error as Error, {
+        operation: 'report_clear_error'
+      });
+    }
   }
 }

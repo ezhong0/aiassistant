@@ -4,7 +4,7 @@ import { OpenAIClient } from '../api/clients/openai-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, AIValidationSchemas } from '../../validation/api-client.validation';
-import { IAIDomainService } from './interfaces/ai-domain.interface';
+import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.interface';
 
 /**
  * AI Domain Service - High-level AI operations using standardized API client
@@ -617,30 +617,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   /**
    * Generate structured data using function calling
    */
-  async generateStructuredData<T = any>(params: {
-    prompt: string;
-    schema: {
-      type: 'object' | 'array' | 'string' | 'number' | 'boolean' | 'null';
-      properties?: Record<string, any>;
-      items?: any;
-      required?: string[];
-      description?: string;
-      enum?: any[];
-      minimum?: number;
-      maximum?: number;
-      minLength?: number;
-      maxLength?: number;
-      pattern?: string;
-      format?: string;
-      additionalProperties?: boolean | any;
-    };
-    systemPrompt?: string;
-    context?: string;
-    temperature?: number;
-    maxTokens?: number;
-    model?: string;
-    timeout?: number;
-  }): Promise<T> {
+  async generateStructuredData<T = any>(params: StructuredDataParams): Promise<T> {
     this.assertReady();
     
     if (!this.openaiClient) {
@@ -655,7 +632,8 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       this.logInfo('Generating structured data', {
         schemaType: params.schema.type,
         propertiesCount: Object.keys(params.schema.properties || {}).length,
-        temperature: params.temperature || 0.1
+        temperature: params.temperature || 0.1,
+        promptBuilder: params.metadata?.promptBuilder || 'unknown'
       });
 
       const response = await this.openaiClient.makeRequest({
@@ -674,7 +652,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
             description: params.schema.description || 'Generate structured response',
             parameters: params.schema
           }],
-          function_call: { name: 'structured_response' }
+          function_call: { name: 'structured_response' },
+          // Include promptBuilder for E2E test logging (OpenAI will ignore this field)
+          _promptBuilder: params.metadata?.promptBuilder || 'unknown'
         }
       });
 

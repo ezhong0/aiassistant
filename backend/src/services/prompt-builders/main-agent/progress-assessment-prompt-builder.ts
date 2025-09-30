@@ -20,6 +20,10 @@ export class ProgressAssessmentPromptBuilder extends BasePromptBuilder<string, P
     return 'Assesses progress and updates workflow steps if needed';
   }
 
+  getName(): string {
+    return 'ProgressAssessmentPromptBuilder';
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

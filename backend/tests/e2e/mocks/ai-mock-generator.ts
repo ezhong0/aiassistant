@@ -17,55 +17,37 @@ interface MockContext {
 }
 
 export class AIMockGenerator {
-  private aiService: GenericAIService;
+  private aiService: GenericAIService | null = null;
 
   constructor() {
-    this.aiService = serviceManager.getService<GenericAIService>('genericAIService')!;
+    try {
+      this.aiService = serviceManager.getService<GenericAIService>('genericAIService');
+    } catch (error) {
+      logger.warn('AI service not available for mock generation, using fallback responses', {
+        operation: 'ai_mock_generator_init'
+      });
+      this.aiService = null;
+    }
   }
 
   /**
-   * Generate a realistic mock response for any external API using AI
+   * Generate a realistic mock response for any external API using fallback responses
+   * Note: In E2E testing, we use fallback responses to avoid circular dependencies
    */
   async generateMockResponse<T = any>(
     serviceName: string,
     request: APIRequest,
     context: MockContext
   ): Promise<APIResponse<T>> {
-    try {
-      const prompt = this.buildMockGenerationPrompt(serviceName, request, context);
-      
-      const response = await this.aiService.executePrompt({
-        systemPrompt: `You are an expert at generating realistic API responses. Generate a JSON response that matches the expected format for the ${serviceName} API.`,
-        userPrompt: prompt,
-        schema: {
-          type: 'object',
-          description: `Realistic ${serviceName} API response`,
-          properties: {
-            success: { type: 'boolean' },
-            data: { type: 'object' },
-            status: { type: 'number' },
-            statusText: { type: 'string' },
-            metadata: { type: 'object' }
-          },
-          required: ['success', 'data', 'status', 'statusText']
-        }
-      });
-
-      if (response.success && response.data) {
-        return response.data as APIResponse<T>;
-      } else {
-        throw new Error('Failed to generate AI mock response');
-      }
-    } catch (error) {
-      logger.error('Failed to generate AI mock response', error as Error, {
-        serviceName,
-        endpoint: request.endpoint,
-        method: request.method
-      });
-      
-      // Fallback to basic mock response
-      return this.generateFallbackResponse<T>(serviceName, request);
-    }
+    logger.info('Generating fallback mock response for E2E testing', {
+      serviceName,
+      endpoint: request.endpoint,
+      method: request.method,
+      testScenario: context.testScenarioId
+    });
+    
+    // Always use fallback responses in E2E testing to avoid circular dependencies
+    return this.generateFallbackResponse<T>(serviceName, request);
   }
 
   /**
@@ -125,6 +107,101 @@ Generate a response that would be realistic for this specific request and contex
   ): APIResponse<T> {
     const timestamp = new Date().toISOString();
     
+    // Generate service-specific mock responses
+    if (serviceName === 'OpenAI' && request.endpoint === '/chat/completions') {
+      // Check if this is a function call request (structured data generation)
+      const requestData = request.data as any;
+      const hasFunctionCall = requestData?.function_call || requestData?.functions;
+      
+      if (hasFunctionCall) {
+        // Return function call response for structured data
+        return {
+          success: true,
+          data: {
+            id: `chatcmpl-mock-${Date.now()}`,
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: 'gpt-4o-mini',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: null,
+                  function_call: {
+                    name: 'structured_response',
+                    arguments: JSON.stringify({
+                      context: `GOAL: Process the user request and provide appropriate response
+ENTITIES: user, request
+CONSTRAINTS: E2E testing environment
+DATA: {}
+PROGRESS: Request received, Analysis completed
+BLOCKERS: []
+NEXT: Execute appropriate action
+CURRENT_TIME: ${new Date().toISOString()}
+RISK_LEVEL: low
+OUTPUT_STRATEGY: direct
+CONFIDENCE: 0.9
+NOTES: Mock response for E2E testing`
+                    })
+                  }
+                },
+                finish_reason: 'function_call'
+              }
+            ],
+            usage: {
+              prompt_tokens: 50,
+              completion_tokens: 25,
+              total_tokens: 75
+            }
+          } as T,
+          status: 200,
+          statusText: 'OK',
+          metadata: {
+            requestId: `openai-mock-${Date.now()}`,
+            timestamp,
+            mockGenerated: true,
+            fallback: true
+          }
+        };
+      } else {
+        // Return regular chat completion response
+        return {
+          success: true,
+          data: {
+            id: `chatcmpl-mock-${Date.now()}`,
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: 'gpt-4o-mini',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: 'This is a mock response from OpenAI API for E2E testing purposes. The request has been successfully processed.'
+                },
+                finish_reason: 'stop'
+              }
+            ],
+            usage: {
+              prompt_tokens: 50,
+              completion_tokens: 25,
+              total_tokens: 75
+            }
+          } as T,
+          status: 200,
+          statusText: 'OK',
+          metadata: {
+            requestId: `openai-mock-${Date.now()}`,
+            timestamp,
+            mockGenerated: true,
+            fallback: true
+          }
+        };
+      }
+    }
+    
+    // Default fallback response for other services
     return {
       success: true,
       data: {

@@ -20,6 +20,10 @@ export class FinalResponsePromptBuilder extends BasePromptBuilder<string, FinalR
     return 'Generates final output when workflow is complete';
   }
 
+  getName(): string {
+    return 'FinalResponsePromptBuilder';
+  }
+
   buildPrompt(context: string): AIPrompt<string> {
     return {
       systemPrompt: `

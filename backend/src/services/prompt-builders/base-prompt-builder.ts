@@ -58,14 +58,15 @@ Free-form Notes: [Additional context, reasoning, edge cases]`;
   async execute(context: TContext): Promise<AIResponse<TResult>> {
     const prompt = this.buildPrompt(context);
     const schema = this.getSchema();
-    return this.aiService.executePrompt<TResult>(prompt, schema);
+    const builderName = this.getName();
+    return this.aiService.executePrompt<TResult>(prompt, schema, builderName);
   }
 
   /**
    * Execute with custom options
    */
   async executeWithOptions(
-    context: TContext, 
+    context: TContext,
     options: {
       temperature?: number;
       maxTokens?: number;
@@ -74,7 +75,8 @@ Free-form Notes: [Additional context, reasoning, edge cases]`;
   ): Promise<AIResponse<TResult>> {
     const prompt = this.buildPrompt(context);
     const schema = this.getSchema();
-    
+    const builderName = this.getName();
+
     // Override options
     const enhancedPrompt: AIPrompt<TContext> = {
       ...prompt,
@@ -83,8 +85,8 @@ Free-form Notes: [Additional context, reasoning, edge cases]`;
         ...options
       }
     };
-    
-    return this.aiService.executePrompt<TResult>(enhancedPrompt, schema);
+
+    return this.aiService.executePrompt<TResult>(enhancedPrompt, schema, builderName);
   }
 
   /**
@@ -98,6 +100,11 @@ Free-form Notes: [Additional context, reasoning, edge cases]`;
    * Get a description of what this prompt builder does
    */
   abstract getDescription(): string;
+
+  /**
+   * Get the name of this prompt builder (for logging/debugging)
+   */
+  abstract getName(): string;
 
   /**
    * Get the updated context from the response
