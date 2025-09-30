@@ -3,6 +3,9 @@
  * Complete implementation of AI-generated scenarios with AI-powered evaluation
  */
 
+/// <reference types="jest" />
+/// <reference path="../jest.d.ts" />
+
 // Load E2E test environment configuration
 import './setup';
 

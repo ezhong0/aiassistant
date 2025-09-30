@@ -347,8 +347,8 @@ export class DetailedExecutionLogger {
       output += `**Model**: ${req.data.model}\n`;
     }
 
-    // Show prompt builder name if available (from request data or metadata)
-    const promptBuilder = req.data?._promptBuilder || metadata?.promptBuilder;
+    // Show prompt builder name if available (from request options.metadata)
+    const promptBuilder = req.options?.metadata?.promptBuilder || metadata?.promptBuilder;
     if (promptBuilder && promptBuilder !== 'unknown') {
       output += `**Prompt Builder**: \`${promptBuilder}\`\n`;
     }

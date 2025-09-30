@@ -97,7 +97,7 @@ export class ApiMockManager {
       operation: 'e2e_openai_call_recorded',
       endpoint: request.endpoint,
       duration,
-      success: response.success
+      statusCode: response.statusCode
     });
   }
 
@@ -151,7 +151,7 @@ export class ApiMockManager {
         client: clientName,
         endpoint: request.endpoint,
         duration: callRecord.duration,
-        success: mockResponse.success
+        statusCode: mockResponse.statusCode
       });
 
       return mockResponse;
@@ -165,16 +165,14 @@ export class ApiMockManager {
 
       // Return error response
       return {
-        success: false,
         data: null as T,
-        status: 500,
-        statusText: 'Mock Error',
+        statusCode: 500,
         headers: {},
-        url: `${request.endpoint}`,
         metadata: {
           requestId: `mock-error-${Date.now()}`,
           timestamp: new Date().toISOString(),
           duration: Date.now() - startTime,
+          executionTime: Date.now() - startTime,
           cached: false
         }
       };
@@ -332,6 +330,5 @@ export class ApiMockManager {
   }
 }
 
-// Export both class and singleton instance
-export { ApiMockManager };
+// Export singleton instance as default
 export default ApiMockManager.getInstance();

@@ -48,6 +48,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@sentry/node": "^8.45.0",
+    "@sentry/profiling-node": "^8.45.0",
     "@slack/bolt": "^4.4.0",
     "@slack/web-api": "^7.10.0",
     "@types/compression": "^1.8.1",
@@ -66,6 +68,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "module-alias": "^2.2.3",
+    "node-pg-migrate": "^6.2.2",
     "openai": "^5.13.1",
     "pg": "^8.16.3",
     "redis": "^4.7.1",
@@ -73,10 +76,7 @@
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "zod": "^3.23.8",
-    "@sentry/node": "^8.45.0",
-    "@sentry/profiling-node": "^8.45.0",
-    "node-pg-migrate": "^6.2.2"
+    "zod": "^3.23.8"
   },
   "lint-staged": {
     "*.ts": [

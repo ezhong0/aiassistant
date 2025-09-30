@@ -652,9 +652,12 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
             description: params.schema.description || 'Generate structured response',
             parameters: params.schema
           }],
-          function_call: { name: 'structured_response' },
-          // Include promptBuilder for E2E test logging (OpenAI will ignore this field)
-          _promptBuilder: params.metadata?.promptBuilder || 'unknown'
+          function_call: { name: 'structured_response' }
+        },
+        options: {
+          metadata: {
+            promptBuilder: params.metadata?.promptBuilder || 'unknown'
+          }
         }
       });
 
