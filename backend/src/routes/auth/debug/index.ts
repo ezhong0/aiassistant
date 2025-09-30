@@ -22,6 +22,3 @@ export function createDebugRoutes(container: AppContainer) {
 
   return router;
 }
-
-// Backward compatibility
-export default createDebugRoutes as any;

@@ -439,6 +439,3 @@ router.get('/oauth-validation',
 
   return router;
 }
-
-// Backward compatibility - will fail with proper error
-export default createDebugOAuthRoutes as any;

@@ -13,6 +13,17 @@ import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.i
  * It handles text generation, completions, embeddings, and image generation
  * with a clean interface that's easy to use from agents and other services.
  * 
+ * **Initialization Pattern:**
+ * Unlike most services, this uses lazy initialization in `onInitialize()` instead
+ * of constructor injection. This is intentional because:
+ * - API clients are obtained via factory (`getAPIClient()`) 
+ * - Authentication requires environment variables at runtime
+ * - Client initialization may fail and needs proper error handling
+ * - Allows service to exist before external API is ready
+ * 
+ * This pattern is appropriate for services that wrap external APIs with
+ * runtime configuration. For internal services, prefer constructor injection.
+ * 
  * Features:
  * - Chat completions with GPT models
  * - Text completions and generation
@@ -24,6 +35,10 @@ import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.i
 export class AIDomainService extends BaseService implements Partial<IAIDomainService> {
   private openaiClient: OpenAIClient | null = null;
 
+  /**
+   * Constructor with no dependencies - uses lazy initialization pattern
+   * API client is obtained in onInitialize() via factory
+   */
   constructor() {
     super('AIDomainService');
   }

@@ -91,11 +91,9 @@ const initializeApplication = async (): Promise<void> => {
     // Initialize utility factories with container
     const { initializeSentryMiddleware } = await import('./middleware/sentry.middleware');
     const { CryptoUtil } = await import('./utils/crypto.util');
-    const { initializeOAuthServiceFactory } = await import('./services/oauth/oauth-service-factory');
     
     initializeSentryMiddleware(appContainer);
     CryptoUtil.initializeFromContainer(appContainer);
-    initializeOAuthServiceFactory(appContainer);
 
     // Initialize all services via DI container
     logger.info('Initializing all services', {

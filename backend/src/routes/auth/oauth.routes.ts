@@ -17,7 +17,6 @@ import {
   AppError,
   ErrorFactory
 } from '../../utils/app-error';
-import { authRateLimit } from '../../middleware/rate-limiting.middleware';
 import { OAUTH_SCOPES } from '../../constants/oauth-scopes';
 
 /**
@@ -50,7 +49,6 @@ const debugQuerySchema = z.object({
  * Initiate Google OAuth flow specifically for Slack users
  */
 router.get('/google/slack',
-  authRateLimit,
   validateRequest({ query: debugQuerySchema }),
   (req: Request, res: Response) => {
   try {
@@ -98,7 +96,6 @@ router.get('/google/slack',
  * Initiate Google OAuth flow
  */
 router.get('/google',
-  authRateLimit,
   validateRequest({ query: debugQuerySchema }),
   (req: Request, res: Response) => {
   try {
@@ -131,7 +128,6 @@ router.get('/google',
  * General OAuth initiation endpoint that handles both regular and Slack users
  */
 router.get('/init',
-  authRateLimit,
   validateRequest({ query: debugQuerySchema }),
   (req: Request, res: Response) => {
   try {
@@ -191,7 +187,6 @@ router.get('/init',
  * Handle OAuth callback from Google
  */
 router.get('/callback',
-  authRateLimit,
   validateRequest({ query: GoogleOAuthCallbackSchema }),
   async (req: Request, res: Response) => {
   try {
@@ -543,9 +538,4 @@ router.get('/callback',
 });
 
   return router;
-}
-
-// For backward compatibility during transition
-export default function(container: AppContainer) {
-  return createOAuthRoutes(container);
 }

@@ -339,6 +339,3 @@ router.get('/health',
 
   return router;
 }
-
-// Default export for backward compatibility - will be removed after migration
-export default createProtectedRoutes as any;

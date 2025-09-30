@@ -79,22 +79,6 @@ export class AgentFactory {
     });
   }
 
-  /**
-   * Register a SubAgent class (deprecated - use registerAgent with instantiated agents)
-   * @deprecated Agents now require dependency injection - instantiate with dependencies and use registerAgent()
-   */
-  static registerAgentClass<T extends BaseSubAgent>(
-    name: string,
-    AgentClass: new () => T
-  ): void {
-    logger.warn('registerAgentClass is deprecated - agents require dependency injection', {
-      correlationId: `agent-register-deprecated-${Date.now()}`,
-      operation: 'agent_registration_deprecated',
-      metadata: { agentName: name }
-    });
-    throw new Error(`registerAgentClass is deprecated. Agents now require constructor parameters. Use registerAgent() with an instantiated agent instead.`);
-  }
-
   // ============================================================================
   // AGENT ACCESS
   // ============================================================================

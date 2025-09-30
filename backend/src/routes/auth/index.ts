@@ -8,8 +8,8 @@
  */
 
 import express from 'express';
-import createOAuthRoutes from './oauth.routes';
-import createTokenRoutes from './token.routes';
+import { createOAuthRoutes } from './oauth.routes';
+import { createTokenRoutes } from './token.routes';
 import { createDebugRoutes } from './debug';
 import logger from '../../utils/logger';
 import type { AppContainer } from '../../di';
@@ -38,9 +38,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
   return router;
-}
-
-// Default export for backward compatibility
-export default function(container: AppContainer) {
-  return createAuthRoutes(container);
 }

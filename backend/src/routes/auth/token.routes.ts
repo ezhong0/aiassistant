@@ -20,7 +20,6 @@ import {
   AppError,
   ErrorFactory
 } from '../../utils/app-error';
-import { authRateLimit } from '../../middleware/rate-limiting.middleware';
 
 export function createTokenRoutes(container: AppContainer) {
   const router = express.Router();
@@ -33,7 +32,6 @@ const emptyQuerySchema = z.object({});
  * Refresh access token using refresh token
  */
 router.post('/refresh',
-  authRateLimit,
   validateRequest({ body: TokenRefreshRequestSchema }),
   async (req: Request, res: Response) => {
   try {
@@ -162,7 +160,6 @@ router.get('/validate',
  * Exchange mobile OAuth tokens for JWT
  */
 router.post('/exchange-mobile-tokens',
-  authRateLimit,
   validateRequest({ body: MobileTokenExchangeSchema }),
   async (req: Request, res: Response) => {
   try {
@@ -214,8 +211,4 @@ router.post('/exchange-mobile-tokens',
 });
 
   return router;
-}
-
-export default function(container: AppContainer) {
-  return createTokenRoutes(container);
 }

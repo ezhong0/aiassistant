@@ -23,16 +23,18 @@ export type {
   IAIDomainService
 } from './interfaces';
 
-// Backward compatibility resolver removed - use DI container directly
-
-// Export service factory
-export {
-  DomainServiceFactory,
-  domainServiceFactory,
-  ServiceCreators,
-  type ServiceFactoryConfig,
-  type ServiceFactoryResult
-} from './factory/domain-service-factory';
+/**
+ * All services are registered in the DI container.
+ * 
+ * To use domain services in routes/middleware:
+ * ```typescript
+ * export function createMyRoutes(container: AppContainer) {
+ *   const emailService = container.resolve('emailDomainService');
+ *   const calendarService = container.resolve('calendarDomainService');
+ *   // ...
+ * }
+ * ```
+ */
 
 // Export error handling
 export {

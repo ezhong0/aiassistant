@@ -1,6 +1,8 @@
 /**
  * OAuth Service Factory
  * Centralized OAuth operations to eliminate duplication across routes
+ * 
+ * Uses factory pattern with DI container - no module-level state
  */
 
 import { AuthService } from '../auth.service';
@@ -11,20 +13,6 @@ import { ScopeManager } from '../../constants/oauth-scopes';
 import { ValidationUtils } from '../../utils/validation-helpers';
 import { HTMLTemplates } from '../../templates/html-templates';
 import logger from '../../utils/logger';
-
-// Service instances resolved from container
-let authService: AuthService | null = null;
-let googleOAuthManager: GoogleOAuthManager | null = null;
-let slackOAuthManager: SlackOAuthManager | null = null;
-
-/**
- * Initialize OAuth Service Factory with DI container
- */
-export function initializeOAuthServiceFactory(container: AppContainer): void {
-  authService = container.resolve('authService');
-  googleOAuthManager = container.resolve('googleOAuthManager');
-  slackOAuthManager = container.resolve('slackOAuthManager');
-}
 
 export interface OAuthInitiationResult {
   authUrl: string;
@@ -53,15 +41,19 @@ export interface OAuthContext {
 
 /**
  * OAuth Service Factory - Handles all OAuth operations
+ * Created via factory pattern with dependency injection
  */
 export class OAuthServiceFactory {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly googleOAuthManager: GoogleOAuthManager,
+    private readonly slackOAuthManager: SlackOAuthManager
+  ) {}
+
   /**
    * Initiate Google OAuth flow
    */
-  static async initiateGoogleAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
-    if (!authService) {
-      throw new Error('OAuthServiceFactory not initialized - call initializeOAuthServiceFactory() first');
-    }
+  async initiateGoogleAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
 
     // Determine scope based on context
     const scopeType = context.source === 'slack' ? 'slack' : 'full';
@@ -76,7 +68,7 @@ export class OAuthServiceFactory {
       return_url: context.returnUrl
     });
 
-    const authUrl = authService.generateAuthUrl(scopes, state);
+    const authUrl = this.authService.generateAuthUrl(scopes, state);
 
     logger.info('Google OAuth initiated', {
       correlationId: `oauth-init-${Date.now()}`,
@@ -94,7 +86,7 @@ export class OAuthServiceFactory {
   /**
    * Handle Google OAuth callback
    */
-  static async handleGoogleCallback(
+  async handleGoogleCallback(
     code?: string,
     state?: string,
     error?: string,
@@ -157,11 +149,8 @@ export class OAuthServiceFactory {
         };
       }
 
-      // Get Google OAuth manager
-      if (!googleOAuthManager) {
-        throw new Error('Google OAuth manager not initialized');
-      }
-      const googleOAuth = googleOAuthManager;
+      // Use injected Google OAuth manager
+      const googleOAuth = this.googleOAuthManager;
 
       // Exchange code for tokens
       const tokenResult = await googleOAuth.exchangeCodeForTokens(code, state);
@@ -232,11 +221,8 @@ export class OAuthServiceFactory {
   /**
    * Initiate Slack OAuth flow
    */
-  static async initiateSlackAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
-    if (!slackOAuthManager) {
-      throw new Error('Slack OAuth manager not initialized');
-    }
-    const slackOAuth = slackOAuthManager;
+  async initiateSlackAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
+    const slackOAuth = this.slackOAuthManager;
 
     const slackContext = {
       teamId: context.teamId || 'unknown',
@@ -271,7 +257,7 @@ export class OAuthServiceFactory {
   /**
    * Handle Slack OAuth callback
    */
-  static async handleSlackCallback(
+  async handleSlackCallback(
     code?: string,
     state?: string,
     error?: string,
@@ -328,11 +314,8 @@ export class OAuthServiceFactory {
         };
       }
 
-      // Get Slack OAuth manager and exchange code
-      if (!slackOAuthManager) {
-        throw new Error('Slack OAuth manager not initialized');
-      }
-      const slackOAuth = slackOAuthManager;
+      // Use injected Slack OAuth manager
+      const slackOAuth = this.slackOAuthManager;
 
       const tokenResult = await slackOAuth.exchangeCodeForTokens(code, state);
       if (!tokenResult.success) {
@@ -388,7 +371,7 @@ export class OAuthServiceFactory {
   /**
    * Revoke OAuth tokens
    */
-  static async revokeTokens(
+  async revokeTokens(
     provider: 'google' | 'slack',
     userId: string
   ): Promise<{ success: boolean; message: string; html?: string }> {
@@ -396,10 +379,7 @@ export class OAuthServiceFactory {
 
     try {
       if (provider === 'google') {
-        if (!googleOAuthManager) {
-          throw new Error('Google OAuth manager not initialized');
-        }
-        const googleOAuth = googleOAuthManager;
+        const googleOAuth = this.googleOAuthManager;
 
         await googleOAuth.revokeTokens(userId);
 
@@ -419,10 +399,7 @@ export class OAuthServiceFactory {
         };
 
       } else if (provider === 'slack') {
-        if (!slackOAuthManager) {
-          throw new Error('Slack OAuth manager not initialized');
-        }
-        const slackOAuth = slackOAuthManager;
+        const slackOAuth = this.slackOAuthManager;
 
         // Note: Slack doesn't typically support token revocation
         // This would typically remove tokens from local storage
@@ -466,7 +443,7 @@ export class OAuthServiceFactory {
   /**
    * Get OAuth status for a user
    */
-  static async getOAuthStatus(userId: string): Promise<{
+  async getOAuthStatus(userId: string): Promise<{
     google: { connected: boolean; email?: string };
     slack: { connected: boolean; teamId?: string };
   }> {
@@ -477,4 +454,16 @@ export class OAuthServiceFactory {
       slack: { connected: false }
     };
   }
+}
+
+/**
+ * Create OAuth Service Factory with dependency injection
+ * @param container DI container with required services
+ */
+export function createOAuthServiceFactory(container: AppContainer): OAuthServiceFactory {
+  const authService = container.resolve('authService');
+  const googleOAuthManager = container.resolve('googleOAuthManager');
+  const slackOAuthManager = container.resolve('slackOAuthManager');
+  
+  return new OAuthServiceFactory(authService, googleOAuthManager, slackOAuthManager);
 }
