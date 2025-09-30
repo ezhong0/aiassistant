@@ -4,6 +4,7 @@ import { registerAuthServices } from './auth-services';
 import { registerDomainServices } from './domain-services';
 import { registerAIServices } from './ai-services';
 import { registerWorkflowServices } from './workflow-services';
+import { registerMiddlewareServices } from './middleware-services';
 import logger from '../../utils/logger';
 
 /**
@@ -30,6 +31,7 @@ export function registerAllServices(container: AppContainer): AppContainer {
   registerDomainServices(container);
   registerAIServices(container);
   registerWorkflowServices(container);
+  registerMiddlewareServices(container);
 
   const registeredServices = Object.keys(container.registrations);
   logger.info('All services registered', {

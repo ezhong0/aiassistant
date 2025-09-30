@@ -7,8 +7,8 @@ import {
   MobileTokenExchangeSchema
 } from '../../schemas/auth.schemas';
 import { validateRequest } from '../../middleware/validation.middleware';
-import { serviceManager as serviceLocator } from '../../services/service-locator-compat';
 import { AuthService } from '../../services/auth.service';
+import type { AppContainer } from '../../di';
 import { AuthenticatedRequest } from '../../middleware/auth.middleware';
 import {
   GoogleTokens,
@@ -22,7 +22,9 @@ import {
 } from '../../utils/app-error';
 import { authRateLimit } from '../../middleware/rate-limiting.middleware';
 
-const router = express.Router();
+export function createTokenRoutes(container: AppContainer) {
+  const router = express.Router();
+  const authService = container.resolve<AuthService>('authService');
 
 const emptyQuerySchema = z.object({});
 
@@ -43,11 +45,7 @@ router.post('/refresh',
       return res.status(400).json(errorResponse);
     }
 
-    // Refresh the access token
-    const authService = serviceLocator.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Refresh the access token (use resolved authService)
     const newTokens: GoogleTokens = await authService.refreshGoogleToken(refresh_token);
 
     // Get updated user info with new access token
@@ -97,10 +95,7 @@ router.post('/logout',
 
     if (tokenToRevoke) {
       try {
-        const authService = serviceLocator.getService<AuthService>('authService');
-        if (!authService) {
-          throw new Error('Auth service not available');
-        }
+        // Use resolved authService
         await authService.revokeGoogleTokens(tokenToRevoke);
       } catch (revokeError) {
         // Log the error but don't fail the logout
@@ -139,10 +134,7 @@ router.get('/validate',
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    const authService = serviceLocator.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Use resolved authService
 
     try {
       const payload = authService.verifyJWT(token);
@@ -186,10 +178,7 @@ router.post('/exchange-mobile-tokens',
     }
 
     // Validate the access token with Google
-    const authService = serviceLocator.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Use resolved authService
 
     const tokenValidation = await authService.validateGoogleToken(access_token);
     if (!tokenValidation.valid) {
@@ -224,4 +213,9 @@ router.post('/exchange-mobile-tokens',
   }
 });
 
-export default router;
+  return router;
+}
+
+export default function(container: AppContainer) {
+  return createTokenRoutes(container);
+}

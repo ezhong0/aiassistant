@@ -12,7 +12,6 @@
 import logger from '../utils/logger';
 import { BaseSubAgent, SubAgentResponse, AgentCapabilities } from './base-subagent';
 import { AppContainer } from '../di';
-import { setGlobalContainer } from '../services/domain/service-resolver-compat';
 
 /**
  * Agent Registry Entry
@@ -81,23 +80,19 @@ export class AgentFactory {
   }
 
   /**
-   * Register a SubAgent class
+   * Register a SubAgent class (deprecated - use registerAgent with instantiated agents)
+   * @deprecated Agents now require dependency injection - instantiate with dependencies and use registerAgent()
    */
   static registerAgentClass<T extends BaseSubAgent>(
     name: string,
     AgentClass: new () => T
   ): void {
-    try {
-      const agent = new AgentClass();
-      this.registerAgent(name, agent);
-    } catch (error) {
-      logger.error(`Failed to register agent class ${name}`, error as Error, {
-        correlationId: `agent-register-error-${Date.now()}`,
-        operation: 'agent_registration_error',
-        metadata: { agentName: name }
-      });
-      throw new Error(`Agent registration failed for ${name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    logger.warn('registerAgentClass is deprecated - agents require dependency injection', {
+      correlationId: `agent-register-deprecated-${Date.now()}`,
+      operation: 'agent_registration_deprecated',
+      metadata: { agentName: name }
+    });
+    throw new Error(`registerAgentClass is deprecated. Agents now require constructor parameters. Use registerAgent() with an instantiated agent instead.`);
   }
 
   // ============================================================================
@@ -266,8 +261,6 @@ export class AgentFactory {
    */
   static setContainer(container: AppContainer): void {
     this.container = container;
-    // Set global container for backward compatibility with agents
-    setGlobalContainer(container);
   }
 
   /**
@@ -286,7 +279,11 @@ export class AgentFactory {
     }
 
     try {
-      // Import and register all SubAgents
+      if (!this.container) {
+        throw new Error('DI Container must be set before initializing agents');
+      }
+
+      // Import all SubAgent classes
       const [
         { CalendarAgent },
         { EmailAgent },
@@ -299,11 +296,18 @@ export class AgentFactory {
         import('../agents/slack.agent')
       ]);
 
-      // Register all core SubAgents
-      this.registerAgentClass('calendarAgent', CalendarAgent);
-      this.registerAgentClass('emailAgent', EmailAgent);
-      this.registerAgentClass('contactAgent', ContactAgent);
-      this.registerAgentClass('slackAgent', SlackAgent);
+      // Resolve services from container
+      const calendarService = this.container.resolve('calendarDomainService');
+      const emailService = this.container.resolve('emailDomainService');
+      const contactsService = this.container.resolve('contactsDomainService');
+      const slackService = this.container.resolve('slackDomainService');
+      const aiService = this.container.resolve('genericAIService');
+
+      // Register all core SubAgents with injected dependencies
+      this.registerAgent('calendarAgent', new CalendarAgent(calendarService, aiService));
+      this.registerAgent('emailAgent', new EmailAgent(emailService, aiService));
+      this.registerAgent('contactAgent', new ContactAgent(contactsService, aiService));
+      this.registerAgent('slackAgent', new SlackAgent(slackService, aiService));
 
       this.initialized = true;
 

@@ -7,6 +7,9 @@ import { ValidationHelper, SlackValidationSchemas } from '../../validation/api-c
 import { ISlackDomainService } from './interfaces/slack-domain.interface';
 import { SlackOAuthManager } from '../oauth/slack-oauth-manager';
 import { SlackContext } from '../../types/slack/slack.types';
+import { GenericAIService } from '../generic-ai.service';
+import { ContextManager } from '../context-manager.service';
+import { TokenManager } from '../token-manager';
 
 /**
  * Slack Domain Service - High-level Slack operations using standardized API client
@@ -26,7 +29,12 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
   private slackClient: SlackAPIClient | null = null;
   private botUserId: string | null = null;
 
-  constructor(private readonly slackOAuthManager: SlackOAuthManager) {
+  constructor(
+    private readonly slackOAuthManager: SlackOAuthManager,
+    private readonly aiService: GenericAIService,
+    private readonly contextManager: ContextManager,
+    private readonly tokenManager: TokenManager
+  ) {
     super('SlackDomainService');
   }
 
@@ -1103,7 +1111,7 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       // Process the message with MasterAgent (orchestrator only)
       try {
         const { MasterAgent } = await import('../../agents/master.agent');
-        const masterAgent = new MasterAgent();
+        const masterAgent = new MasterAgent(this.aiService, this.contextManager, this.tokenManager);
 
         // Create progress updater function
         const updateProgress = async (step: string) => {

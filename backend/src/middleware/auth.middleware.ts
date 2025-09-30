@@ -1,10 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
-import { serviceManager } from '../services/service-locator-compat';
 import { AuthService } from '../services/auth.service';
 import { createLogContext } from '../utils/log-context';
-
-const getService = <T>(serviceName: string): T | null => serviceManager.getService<T>(serviceName);
+import type { AppContainer } from '../di';
 
 /**
  * Authenticated user interface for request context
@@ -33,32 +31,27 @@ export interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Authentication middleware for JWT token validation
+ * Create authentication middleware for JWT token validation
  * 
+ * Factory function that creates middleware with injected AuthService.
  * This middleware validates JWT tokens from the Authorization header and
- * attaches user information to the request object. It provides comprehensive
- * error handling and logging for authentication failures.
+ * attaches user information to the request object.
  * 
- * @param req - Express request object with authentication context
- * @param res - Express response object
- * @param next - Express next function
+ * @param authService - AuthService instance for token validation
+ * @returns Express middleware function
  * 
  * @example
  * ```typescript
- * // Apply to protected routes
- * app.get('/protected', authenticateToken, (req: AuthenticatedRequest, res) => {
+ * // Create middleware with service
+ * const authMiddleware = createAuthenticateToken(authService);
+ * app.get('/protected', authMiddleware, (req: AuthenticatedRequest, res) => {
  *   // req.user?.email contains the user's email
  *   res.json({ message: 'Access granted' });
  * });
  * ```
- * 
- * @throws {Error} When auth service is not available
  */
-export const authenticateToken = (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): void => {
+export function createAuthenticateToken(authService: AuthService) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
   try {
     const authHeader = req.headers.authorization;
     
@@ -124,11 +117,7 @@ export const authenticateToken = (
       return;
     }
 
-    // Validate the JWT token
-    const authService = getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Validate the JWT token using injected authService
     const validation = authService.verifyJWT(token);
     
     // Extract user information from the token payload
@@ -194,16 +183,19 @@ export const authenticateToken = (
       message: 'Internal server error during authentication'
     });
   }
-};
+  };
+}
 
 /**
- * Optional authentication middleware - doesn't fail if no token provided
+ * Create optional authentication middleware - doesn't fail if no token provided
+ * 
+ * Factory function that creates middleware with injected AuthService.
+ * 
+ * @param authService - AuthService instance for token validation
+ * @returns Express middleware function
  */
-export const optionalAuth = (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): void => {
+export function createOptionalAuth(authService: AuthService) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
   try {
     const authHeader = req.headers.authorization;
     
@@ -220,13 +212,7 @@ export const optionalAuth = (
       return;
     }
 
-    // Validate the JWT token
-    const authService = getService<AuthService>('authService');
-    if (!authService) {
-      // Don't fail on service unavailability for optional auth
-      next();
-      return;
-    }
+    // Validate the JWT token using injected authService
     
     try {
       const payload = authService.verifyJWT(token);
@@ -276,7 +262,8 @@ export const optionalAuth = (
     // Don't fail on optional auth errors, just continue
     next();
   }
-};
+  };
+}
 
 /**
  * Middleware to check if user has specific permissions

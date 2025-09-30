@@ -23,7 +23,8 @@ export function registerDomainServices(container: AppContainer): void {
     // Contacts domain service (depends on googleOAuthManager)
     contactsDomainService: asClass(ContactsDomainService).singleton(),
 
-    // Slack domain service (depends on slackOAuthManager)
+    // Slack domain service - Awilix auto-resolves all dependencies
+    // Dependencies: slackOAuthManager, genericAIService (as aiService), contextManager, tokenManager
     slackDomainService: asClass(SlackDomainService).singleton(),
 
     // AI domain service (OpenAI integration)

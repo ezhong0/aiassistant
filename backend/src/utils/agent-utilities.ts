@@ -130,16 +130,9 @@ export function assertValidAISchema(schema: AISchema): void {
 /**
  * Analyze if a step result indicates an error using AI intelligence
  */
-export async function isErrorResult(result: string, openaiService?: any): Promise<boolean> {
-  // If no OpenAI service provided, try to get it from service manager
+export async function isErrorResult(result: string, openaiService: any): Promise<boolean> {
   if (!openaiService) {
-      try {
-        const { serviceManager } = await import('../services/service-locator-compat');
-        openaiService = serviceManager.getService('openaiService');
-      } catch {
-      // Service manager not available, throw error
-      throw new Error('No AI service available for error detection');
-    }
+    throw new Error('AI service required for error detection - must be provided as parameter');
   }
 
   // Use AI-powered error detection

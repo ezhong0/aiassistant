@@ -3,8 +3,8 @@ import express, { Response } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middleware/validation.middleware';
 import { 
-  authenticateToken, 
-  optionalAuth, 
+  createAuthenticateToken, 
+  createOptionalAuth, 
   requirePermissions, 
   requireOwnership,
   rateLimitAuth,
@@ -13,8 +13,18 @@ import {
 import { Permission } from '../types/auth.types';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
 import { validateAndSendResponse } from '../utils/response-validation.util';
+import type { AppContainer } from '../di';
 
-const router = express.Router();
+/**
+ * Create protected routes with DI container
+ */
+export function createProtectedRoutes(container: AppContainer) {
+  const router = express.Router();
+  
+  // Create middleware with injected dependencies
+  const authService = container.resolve('authService');
+  const authenticateToken = createAuthenticateToken(authService);
+  const optionalAuth = createOptionalAuth(authService);
 
 // Validation schemas
 const profileUpdateSchema = z.object({
@@ -327,4 +337,8 @@ router.get('/health',
   });
 });
 
-export default router;
+  return router;
+}
+
+// Default export for backward compatibility - will be removed after migration
+export default createProtectedRoutes as any;

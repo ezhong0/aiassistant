@@ -4,11 +4,20 @@ import { createLogContext } from '../../../utils/log-context';
 import { z } from 'zod';
 import { validateRequest } from '../../../middleware/validation.middleware';
 import axios from 'axios';
-import { serviceManager } from '../../../services/service-locator-compat';
-import { AuthService } from '../../../services/auth.service';
 import { OAUTH_SCOPES } from '../../../constants/oauth-scopes';
+import type { AppContainer } from '../../../di';
 
-const router = express.Router();
+/**
+ * Create debug OAuth routes with DI container
+ * 
+ * @param container - DI container for service resolution
+ * @returns Express router with debug routes
+ */
+export function createDebugOAuthRoutes(container: AppContainer) {
+  const router = express.Router();
+  
+  // Resolve AuthService from container
+  const authService = container.resolve('authService');
 
 // Debug query schema
 const debugQuerySchema = z.object({
@@ -35,13 +44,6 @@ router.get('/test-oauth-url',
   async (req: Request, res: Response) => {
   try {
     const { config } = await import('../../../config');
-    const { serviceManager } = await import('../../../services/service-locator-compat');
-    const getService = (name: string) => serviceManager.getService(name);
-
-    const authService = getService('authService');
-    if (!authService) {
-      return res.status(500).json({ error: 'Auth service not available' });
-    }
 
     // Create a test state parameter
     const testState = JSON.stringify({
@@ -139,10 +141,6 @@ router.get('/test-token-exchange',
       });
     }
 
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      return res.status(500).json({ error: 'Auth service not available' });
-    }
 
     try {
       // Test token exchange
@@ -263,10 +261,6 @@ router.get('/detailed-token-test',
       });
     }
 
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      return res.status(500).json({ error: 'Auth service not available' });
-    }
 
     const results: Record<string, unknown> = {
       step1_tokenExchange: null,
@@ -389,10 +383,6 @@ router.get('/oauth-validation',
   validateRequest({ query: emptyQuerySchema }),
   async (req: Request, res: Response) => {
   try {
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      return res.status(500).json({ error: 'Auth service not available' });
-    }
 
     // Generate a test OAuth URL to see what parameters we're using
     const testScopes = ['openid', 'email', 'profile'];
@@ -447,4 +437,8 @@ router.get('/oauth-validation',
   }
 });
 
-export default router;
+  return router;
+}
+
+// Backward compatibility - will fail with proper error
+export default createDebugOAuthRoutes as any;

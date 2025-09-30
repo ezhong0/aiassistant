@@ -31,15 +31,15 @@ export function registerAuthServices(container: AppContainer): void {
     // Auth status service (depends on tokenStorageService, tokenManager)
     authStatusService: asClass(AuthStatusService).singleton(),
 
-    // OAuth managers (pass primitives directly to avoid Awilix proxy issues)
+    // OAuth managers - Awilix auto-resolves services by constructor parameter names
+    // Only inject configuration primitives, not services
     googleOAuthManager: asClass(GoogleOAuthManager)
       .singleton()
-      .inject(() => {
-        // Create config object outside of return to avoid proxy
-        const clientId = process.env.GOOGLE_CLIENT_ID || '';
-        const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
-        const redirectUri = process.env.GOOGLE_REDIRECT_URI || '';
-        const scopes = [
+      .inject(() => ({
+        clientId: process.env.GOOGLE_CLIENT_ID || '',
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirectUri: process.env.GOOGLE_REDIRECT_URI || '',
+        scopes: [
           'openid',
           'email',
           'profile',
@@ -47,35 +47,18 @@ export function registerAuthServices(container: AppContainer): void {
           'https://www.googleapis.com/auth/gmail.send',
           'https://www.googleapis.com/auth/calendar',
           'https://www.googleapis.com/auth/contacts.readonly'
-        ];
-        
-        return {
-          clientId,
-          clientSecret,
-          redirectUri,
-          scopes,
-          authService: container.resolve('authService'),
-          tokenManager: container.resolve('tokenManager'),
-          oauthStateService: container.resolve('oauthStateService')
-        };
-      }),
+        ]
+        // authService, tokenManager, oauthStateService auto-injected by Awilix
+      })),
 
     slackOAuthManager: asClass(SlackOAuthManager)
       .singleton()
-      .inject(() => {
-        const clientId = process.env.SLACK_CLIENT_ID || '';
-        const clientSecret = process.env.SLACK_CLIENT_SECRET || '';
-        const redirectUri = process.env.SLACK_REDIRECT_URI || '';
-        const scopes = ['chat:write', 'channels:read', 'users:read'];
-        
-        return {
-          clientId,
-          clientSecret,
-          redirectUri,
-          scopes,
-          tokenManager: container.resolve('tokenManager'),
-          oauthStateService: container.resolve('oauthStateService')
-        };
-      }),
+      .inject(() => ({
+        clientId: process.env.SLACK_CLIENT_ID || '',
+        clientSecret: process.env.SLACK_CLIENT_SECRET || '',
+        redirectUri: process.env.SLACK_REDIRECT_URI || '',
+        scopes: ['chat:write', 'channels:read', 'users:read']
+        // tokenManager, oauthStateService auto-injected by Awilix
+      })),
   });
 }

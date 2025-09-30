@@ -10,15 +10,14 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
-import { DomainServiceResolver } from '../services/domain/service-resolver-compat';
-import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
-import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
+import { GenericAIService } from '../services/generic-ai.service';
+import { SlackDomainService } from '../services/domain/slack-domain.service';
 
 export class SlackAgent extends BaseSubAgent {
-  private slackService: ISlackDomainService;
+  private slackService: SlackDomainService;
 
-  constructor() {
-    super('slack', {
+  constructor(slackService: SlackDomainService, aiService: GenericAIService) {
+    super('slack', aiService, {
       name: 'SlackSubAgent',
       description: 'Slack management sub-agent for reading messages, managing channels, and handling interactions',
       enabled: true,
@@ -26,8 +25,8 @@ export class SlackAgent extends BaseSubAgent {
       retryCount: 3
     });
 
-    // Get existing domain service from container
-    this.slackService = DomainServiceResolver.getSlackService();
+    // Store injected domain service
+    this.slackService = slackService;
   }
 
   /**
@@ -54,7 +53,7 @@ export class SlackAgent extends BaseSubAgent {
   /**
    * Get the Slack domain service
    */
-  protected getService(): IDomainService {
+  protected getService(): SlackDomainService {
     return this.slackService;
   }
 
@@ -73,7 +72,7 @@ export class SlackAgent extends BaseSubAgent {
     }
 
     // TypeScript will enforce that service[serviceMethod] exists
-    const service = this.getService() as ISlackDomainService;
+    const service = this.getService();
     
     try {
       // Handle different method signatures

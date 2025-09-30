@@ -20,6 +20,7 @@
     "scripts/**/*",
     "data/**/*",
     "migrations/**/*",
-    "config/**/*"
+    "config/**/*",
+    "src/routes/auth/debug/**/*"
   ]
 }

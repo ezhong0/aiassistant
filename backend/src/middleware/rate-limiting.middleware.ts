@@ -3,7 +3,6 @@ import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { AuthenticatedRequest } from './auth.middleware';
 import { config } from '../config';
-import { serviceManager } from '../services/service-locator-compat';
 import { BaseService } from '../services/base-service';
 
 interface RateLimitData {
@@ -23,7 +22,7 @@ interface RateLimitOptions {
   legacyHeaders?: boolean; // Send legacy X-RateLimit headers
 }
 
-class RateLimitStore extends BaseService {
+export class RateLimitStore extends BaseService {
   private store = new Map<string, RateLimitData>();
   private cleanupInterval: ReturnType<typeof globalThis.setInterval> | null = null;
   private readonly maxStoreSize = 10000; // Maximum entries to prevent memory bloat
@@ -154,17 +153,17 @@ class RateLimitStore extends BaseService {
 
 }
 
-// Global rate limit store (initialized on import)
-const rateLimitStore = new RateLimitStore();
-// Initialize the store
-rateLimitStore.initialize().catch(err => {
-  logger.error('Failed to initialize rate limit store', err);
-});
+// Note: RateLimitStore should be registered in DI container and resolved from there
+// This ensures proper lifecycle management and testability
 
 /**
- * Generic rate limiting middleware
+ * Generic rate limiting middleware factory
+ * 
+ * @param rateLimitStore - RateLimitStore instance from DI container
+ * @param options - Rate limiting configuration
+ * @returns Express middleware function
  */
-export const rateLimit = (options: RateLimitOptions) => {
+export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLimitOptions) {
   const {
     windowMs,
     maxRequests,
@@ -252,62 +251,53 @@ export const rateLimit = (options: RateLimitOptions) => {
       next();
     }
   };
-};
+}
 
 /**
- * Pre-configured rate limiting middleware
+ * Pre-configured rate limiting middleware factories
+ * 
+ * These should be created via DI container with proper RateLimitStore injection.
+ * Use createRateLimit(rateLimitStore, options) to create rate limit middleware.
+ * 
+ * @deprecated Use factory functions with DI container instead
  */
 
-// General API rate limiting
-export const apiRateLimit = rateLimit({
-  windowMs: 900000, // 15 minutes
-  maxRequests: 100, // 109 requests
-  message: 'Too many API requests. Please try again later.',
-  keyGenerator: (req: Request) => req.ip || 'unknown'
-});
-
-// Strict rate limiting for authentication endpoints
-export const authRateLimit = rateLimit({
-  windowMs: config.security.rateLimiting.authWindowMs,
-  maxRequests: config.security.rateLimiting.authMaxRequests,
-  message: 'Too many authentication attempts. Please try again later.',
-  keyGenerator: (req: Request) => req.ip || 'unknown'
-});
-
-// Very strict rate limiting for sensitive operations
-export const sensitiveOperationRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  maxRequests: 5,
-  message: 'Too many sensitive operations. Please try again later.',
-  keyGenerator: (req: Request) => req.ip || 'unknown'
-});
-
-// User-specific rate limiting (requires authentication)
-export const userRateLimit = (
-  maxRequests: number = 100, 
-  windowMs: number = config.security.rateLimiting.windowMs
-) => {
-  return rateLimit({
-    windowMs,
-    maxRequests,
-    message: `Too many requests. Maximum ${maxRequests} requests per ${windowMs / 1000 / 60} minutes per user.`,
-    keyGenerator: (req: AuthenticatedRequest) => {
-      return req.user?.userId || req.ip || 'unknown';
-    }
+/**
+ * Create general API rate limiting middleware
+ */
+export function createApiRateLimit(rateLimitStore: RateLimitStore) {
+  return createRateLimit(rateLimitStore, {
+    windowMs: 900000, // 15 minutes
+    maxRequests: 100,
+    message: 'Too many API requests. Please try again later.',
+    keyGenerator: (req: Request) => req.ip || 'unknown'
   });
-};
+}
 
-// Progressive rate limiting (increases with repeated violations)
-export const progressiveRateLimit = (baseMaxRequests: number = 100) => {
-  return rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: baseMaxRequests,
-    keyGenerator: (req: Request) => {
-      const baseKey = req.ip || 'unknown';
-      return baseKey;
-    }
+/**
+ * Create strict rate limiting for authentication endpoints
+ */
+export function createAuthRateLimit(rateLimitStore: RateLimitStore) {
+  return createRateLimit(rateLimitStore, {
+    windowMs: config.security.rateLimiting.authWindowMs,
+    maxRequests: config.security.rateLimiting.authMaxRequests,
+    message: 'Too many authentication attempts. Please try again later.',
+    keyGenerator: (req: Request) => req.ip || 'unknown'
   });
-};
+}
 
-// Export store for monitoring
-export { rateLimitStore };
+/**
+ * Create very strict rate limiting for sensitive operations
+ */
+export function createSensitiveOperationRateLimit(rateLimitStore: RateLimitStore) {
+  return createRateLimit(rateLimitStore, {
+    windowMs: 60 * 60 * 1000, // 1 hour
+    maxRequests: 5,
+    message: 'Too many sensitive operations. Please try again later.',
+    keyGenerator: (req: Request) => req.ip || 'unknown'
+  });
+}
+
+// Temporary backward compatibility - to be removed
+// @deprecated - Will fail until RateLimitStore is added to DI container
+export const apiRateLimit: any = undefined as any;

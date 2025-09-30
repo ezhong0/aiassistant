@@ -1,6 +1,35 @@
 /**
  * Enhanced Domain Service Factory
- * Provides advanced service creation with unified config integration and flexible patterns
+ * 
+ * ⚠️ DEPRECATED: This singleton factory pattern is being phased out in favor of proper DI.
+ * 
+ * **Why this is deprecated:**
+ * - Creates services outside the DI container (bypasses lifecycle management)
+ * - Uses `new` operator directly (prevents dependency injection)
+ * - Singleton pattern creates global mutable state
+ * - Makes testing difficult (can't inject mocks)
+ * - Doesn't support constructor injection
+ * 
+ * **Migration path:**
+ * Instead of:
+ * ```typescript
+ * const emailService = domainServiceFactory.createEmailService();
+ * ```
+ * 
+ * Use DI container:
+ * ```typescript
+ * const emailService = container.resolve('emailDomainService');
+ * ```
+ * 
+ * Or in routes/middleware:
+ * ```typescript
+ * export function createMyRoutes(container: AppContainer) {
+ *   const emailService = container.resolve('emailDomainService');
+ *   // use emailService
+ * }
+ * ```
+ * 
+ * @deprecated Use DI container (container.resolve('serviceName')) instead
  */
 
 import { IEmailDomainService } from '../interfaces/email-domain.interface';

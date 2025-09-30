@@ -23,8 +23,7 @@ export type {
   IAIDomainService
 } from './interfaces';
 
-// Export backward compatibility resolver
-export { DomainServiceResolver } from './service-resolver-compat';
+// Backward compatibility resolver removed - use DI container directly
 
 // Export service factory
 export {

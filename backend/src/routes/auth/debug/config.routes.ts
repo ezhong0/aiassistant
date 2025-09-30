@@ -1,12 +1,13 @@
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
-import { validateRequest } from '../../../middleware/validation.middleware';
-import { serviceManager } from '../../../services/service-locator-compat';
-import { TokenStorageService } from '../../../services/token-storage.service';
+import { config } from '../../../config';
 import logger from '../../../utils/logger';
 import { createLogContext } from '../../../utils/log-context';
+import { validateRequest } from '../../../middleware/validation.middleware';
+import { TokenStorageService } from '../../../services/token-storage.service';
 import { OAuthConfigHandler, CurrentConfigHandler } from '../../handlers/oauth-debug.handler';
 
+// NOTE: Debug routes - temporarily disabled service manager access
 const router = express.Router();
 const emptyQuerySchema = z.object({});
 
@@ -42,15 +43,9 @@ router.get('/sessions',
   validateRequest({ query: emptyQuerySchema }),
   (req: Request, res: Response) => {
   try {
-    const tokenStorageService = serviceManager.getService('tokenStorageService') as TokenStorageService;
-    if (!tokenStorageService) {
-      return res.status(500).json({ error: 'TokenStorageService not available' });
-    }
-
-    // TokenStorageService doesn't have session stats, return basic info
+    // TODO: Update to use container injection
     return res.json({
-      message: 'Token storage service is operational',
-      serviceType: 'TokenStorageService',
+      message: 'Debug endpoint temporarily disabled - DI migration in progress',
       timestamp: new Date().toISOString()
     });
   } catch (error) {

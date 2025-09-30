@@ -6,11 +6,25 @@
 import { AuthService } from '../auth.service';
 import { GoogleOAuthManager } from './google-oauth-manager';
 import { SlackOAuthManager } from './slack-oauth-manager';
-import { serviceManager } from '../service-locator-compat';
+import type { AppContainer } from '../../di';
 import { ScopeManager } from '../../constants/oauth-scopes';
 import { ValidationUtils } from '../../utils/validation-helpers';
 import { HTMLTemplates } from '../../templates/html-templates';
 import logger from '../../utils/logger';
+
+// Service instances resolved from container
+let authService: AuthService | null = null;
+let googleOAuthManager: GoogleOAuthManager | null = null;
+let slackOAuthManager: SlackOAuthManager | null = null;
+
+/**
+ * Initialize OAuth Service Factory with DI container
+ */
+export function initializeOAuthServiceFactory(container: AppContainer): void {
+  authService = container.resolve('authService');
+  googleOAuthManager = container.resolve('googleOAuthManager');
+  slackOAuthManager = container.resolve('slackOAuthManager');
+}
 
 export interface OAuthInitiationResult {
   authUrl: string;
@@ -45,9 +59,8 @@ export class OAuthServiceFactory {
    * Initiate Google OAuth flow
    */
   static async initiateGoogleAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
-    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
-      throw new Error('Auth service not available');
+      throw new Error('OAuthServiceFactory not initialized - call initializeOAuthServiceFactory() first');
     }
 
     // Determine scope based on context
@@ -145,10 +158,10 @@ export class OAuthServiceFactory {
       }
 
       // Get Google OAuth manager
-      const googleOAuth = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager');
-      if (!googleOAuth) {
-        throw new Error('Google OAuth manager not available');
+      if (!googleOAuthManager) {
+        throw new Error('Google OAuth manager not initialized');
       }
+      const googleOAuth = googleOAuthManager;
 
       // Exchange code for tokens
       const tokenResult = await googleOAuth.exchangeCodeForTokens(code, state);
@@ -220,10 +233,10 @@ export class OAuthServiceFactory {
    * Initiate Slack OAuth flow
    */
   static async initiateSlackAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
-    const slackOAuth = serviceManager.getService<SlackOAuthManager>('slackOAuthManager');
-    if (!slackOAuth) {
-      throw new Error('Slack OAuth manager not available');
+    if (!slackOAuthManager) {
+      throw new Error('Slack OAuth manager not initialized');
     }
+    const slackOAuth = slackOAuthManager;
 
     const slackContext = {
       teamId: context.teamId || 'unknown',
@@ -316,10 +329,10 @@ export class OAuthServiceFactory {
       }
 
       // Get Slack OAuth manager and exchange code
-      const slackOAuth = serviceManager.getService<SlackOAuthManager>('slackOAuthManager');
-      if (!slackOAuth) {
-        throw new Error('Slack OAuth manager not available');
+      if (!slackOAuthManager) {
+        throw new Error('Slack OAuth manager not initialized');
       }
+      const slackOAuth = slackOAuthManager;
 
       const tokenResult = await slackOAuth.exchangeCodeForTokens(code, state);
       if (!tokenResult.success) {
@@ -383,10 +396,10 @@ export class OAuthServiceFactory {
 
     try {
       if (provider === 'google') {
-        const googleOAuth = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager');
-        if (!googleOAuth) {
-          throw new Error('Google OAuth manager not available');
+        if (!googleOAuthManager) {
+          throw new Error('Google OAuth manager not initialized');
         }
+        const googleOAuth = googleOAuthManager;
 
         await googleOAuth.revokeTokens(userId);
 
@@ -406,10 +419,10 @@ export class OAuthServiceFactory {
         };
 
       } else if (provider === 'slack') {
-        const slackOAuth = serviceManager.getService<SlackOAuthManager>('slackOAuthManager');
-        if (!slackOAuth) {
-          throw new Error('Slack OAuth manager not available');
+        if (!slackOAuthManager) {
+          throw new Error('Slack OAuth manager not initialized');
         }
+        const slackOAuth = slackOAuthManager;
 
         // Note: Slack doesn't typically support token revocation
         // This would typically remove tokens from local storage

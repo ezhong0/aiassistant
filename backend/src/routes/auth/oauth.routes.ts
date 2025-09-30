@@ -4,10 +4,9 @@ import { createLogContext } from '../../utils/log-context';
 import { z } from 'zod';
 import { GoogleOAuthCallbackSchema } from '../../schemas/auth.schemas';
 import { validateRequest } from '../../middleware/validation.middleware';
-import { serviceManager } from '../../services/service-locator-compat';
-import { DomainServiceResolver } from '../../services/domain/service-resolver-compat';
 import { AuthService } from '../../services/auth.service';
 import { TokenStorageService } from '../../services/token-storage.service';
+import type { AppContainer } from '../../di';
 import {
   GoogleTokens,
   GoogleUserInfo,
@@ -21,7 +20,16 @@ import {
 import { authRateLimit } from '../../middleware/rate-limiting.middleware';
 import { OAUTH_SCOPES } from '../../constants/oauth-scopes';
 
-const router = express.Router();
+/**
+ * Create OAuth routes with DI container
+ */
+export function createOAuthRoutes(container: AppContainer) {
+  const router = express.Router();
+  
+  // Resolve services once from container
+  const authService = container.resolve<AuthService>('authService');
+  const tokenStorageService = container.resolve<TokenStorageService>('tokenStorageService');
+  const slackDomainService = container.resolve('slackDomainService');
 
 // Query schemas
 const debugQuerySchema = z.object({
@@ -51,10 +59,7 @@ router.get('/google/slack',
     // Use centralized scope management
     const scopes = [...OAUTH_SCOPES.GOOGLE.SLACK_INTEGRATION];
 
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Use resolved authService from container
 
     // Add slack context to state parameter
     const state = JSON.stringify({
@@ -100,10 +105,7 @@ router.get('/google',
     // Use centralized scope management
     const scopes = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
 
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Use resolved authService from container
 
     const authUrl = authService.generateAuthUrl(scopes);
 
@@ -148,10 +150,7 @@ router.get('/init',
       // Not a Slack user, continue with regular flow
     }
 
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Use resolved authService from container
 
     // Use the provided parameters to generate the auth URL
     const scopesArray = (scope as string).split(' ');
@@ -283,10 +282,7 @@ router.get('/callback',
     }
 
     // Exchange code for tokens
-    const authService = serviceManager.getService<AuthService>('authService');
-    if (!authService) {
-      throw new Error('Auth service not available');
-    }
+    // Use resolved authService from container
 
     logger.info('Starting token exchange', {
       hasCode: !!code,
@@ -341,7 +337,6 @@ router.get('/callback',
 
     if (isSlackAuth && hasValidSlackIds) {
       try {
-        const tokenStorageService = serviceManager.getService<TokenStorageService>('tokenStorageService');
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
           const userId = `${teamId}:${userId_slack}`;
@@ -388,7 +383,7 @@ router.get('/callback',
           userId_slack,
           operation: 'token_storage_error',
           metadata: {
-            hasTokenStorageService: !!serviceManager.getService('tokenStorageService'),
+            hasTokenStorageService: !!tokenStorageService,
             errorMessage: (error as Error).message,
             errorStack: (error as Error).stack
           }
@@ -410,7 +405,7 @@ router.get('/callback',
 
       // Send success notification to Slack
       try {
-        const slackService = DomainServiceResolver.getSlackService();
+        const slackService = slackDomainService;
         if (slackService && userId_slack) {
           await slackService.sendMessage(userId_slack, {
             channel: userId_slack,
@@ -547,4 +542,10 @@ router.get('/callback',
   }
 });
 
-export default router;
+  return router;
+}
+
+// For backward compatibility during transition
+export default function(container: AppContainer) {
+  return createOAuthRoutes(container);
+}

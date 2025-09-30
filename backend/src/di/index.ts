@@ -10,6 +10,7 @@ export {
   createTestContainer, 
   initializeAllServices,
   shutdownAllServices,
+  validateContainer,
   type AppContainer,
   type Cradle
 } from './container';

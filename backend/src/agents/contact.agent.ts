@@ -10,15 +10,14 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
-import { DomainServiceResolver } from '../services/domain/service-resolver-compat';
-import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
-import { IContactsDomainService } from '../services/domain/interfaces/contacts-domain.interface';
+import { GenericAIService } from '../services/generic-ai.service';
+import { ContactsDomainService } from '../services/domain/contacts-domain.service';
 
 export class ContactAgent extends BaseSubAgent {
-  private contactsService: IContactsDomainService;
+  private contactsService: ContactsDomainService;
 
-  constructor() {
-    super('contacts', {
+  constructor(contactsService: ContactsDomainService, aiService: GenericAIService) {
+    super('contacts', aiService, {
       name: 'ContactSubAgent',
       description: 'Contact management sub-agent for searching, creating, and managing contacts',
       enabled: true,
@@ -26,8 +25,8 @@ export class ContactAgent extends BaseSubAgent {
       retryCount: 3
     });
 
-    // Get existing domain service from container
-    this.contactsService = DomainServiceResolver.getContactsService();
+    // Store injected domain service
+    this.contactsService = contactsService;
   }
 
   /**
@@ -54,7 +53,7 @@ export class ContactAgent extends BaseSubAgent {
   /**
    * Get the contacts domain service
    */
-  protected getService(): IDomainService {
+  protected getService(): ContactsDomainService {
     return this.contactsService;
   }
 
@@ -73,7 +72,7 @@ export class ContactAgent extends BaseSubAgent {
     }
 
     // TypeScript will enforce that service[serviceMethod] exists
-    const service = this.getService() as IContactsDomainService;
+    const service = this.getService();
     
     try {
       // Handle different method signatures

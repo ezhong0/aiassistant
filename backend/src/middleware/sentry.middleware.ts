@@ -1,19 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
-import { serviceManager } from '../services/service-locator-compat';
 import { SentryService } from '../services/sentry.service';
 import logger from '../utils/logger';
+import type { AppContainer } from '../di';
+
+let sentryServiceInstance: SentryService | null = null;
+
+export function initializeSentryMiddleware(container: AppContainer): void {
+  sentryServiceInstance = container.resolve('sentryService');
+}
 
 /**
  * Sentry middleware for error tracking and performance monitoring
  */
 export const sentryMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    const sentryService = serviceManager.getService<SentryService>('sentryService');
-    
-    if (!sentryService || !sentryService.isReady()) {
+    if (!sentryServiceInstance || !sentryServiceInstance.isReady()) {
       next();
       return;
     }
+    const sentryService = sentryServiceInstance;
 
     // Add request breadcrumb
     sentryService.addBreadcrumb({
@@ -94,9 +99,8 @@ export const sentryMiddleware = (req: Request, res: Response, next: NextFunction
  */
 export const sentryErrorHandler = (error: Error, req: Request, res: Response, next: NextFunction): void => {
   try {
-    const sentryService = serviceManager.getService<SentryService>('sentryService');
-    
-    if (sentryService && sentryService.isReady()) {
+    if (sentryServiceInstance && sentryServiceInstance.isReady()) {
+      const sentryService = sentryServiceInstance;
       // Capture the error
       sentryService.captureException(error, {
         request: {

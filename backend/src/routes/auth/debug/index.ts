@@ -6,13 +6,22 @@
  */
 
 import express from 'express';
-import testOAuthRoutes from './test-oauth.routes';
+import { createDebugOAuthRoutes } from './test-oauth.routes';
 import configRoutes from './config.routes';
+import type { AppContainer } from '../../../di';
 
-const router = express.Router();
+/**
+ * Create debug routes with DI container
+ */
+export function createDebugRoutes(container: AppContainer) {
+  const router = express.Router();
 
-// Mount debug route modules
-router.use('/', testOAuthRoutes);
-router.use('/', configRoutes);
+  // Mount debug route modules with container
+  router.use('/', createDebugOAuthRoutes(container));
+  router.use('/', configRoutes);
 
-export default router;
+  return router;
+}
+
+// Backward compatibility
+export default createDebugRoutes as any;

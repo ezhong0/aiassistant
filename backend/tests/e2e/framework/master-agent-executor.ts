@@ -98,8 +98,19 @@ export class MasterAgentExecutor {
   private container?: AppContainer;
 
   constructor(container?: AppContainer) {
+    if (!container) {
+      throw new Error('AppContainer is required for MasterAgentExecutor');
+    }
+    
     this.container = container;
-    this.masterAgent = new MasterAgent();
+    
+    // Resolve dependencies from container
+    const aiService = container.resolve('genericAIService');
+    const contextManager = container.resolve('contextManager');
+    const tokenManager = container.resolve('tokenManager');
+    
+    // Instantiate MasterAgent with injected dependencies
+    this.masterAgent = new MasterAgent(aiService, contextManager, tokenManager);
     this.detailedLogger = new DetailedExecutionLogger();
   }
 

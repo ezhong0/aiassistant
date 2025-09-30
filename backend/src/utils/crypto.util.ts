@@ -1,5 +1,5 @@
 import { EncryptionService } from '../services/encryption.service';
-import { serviceManager } from '../services/service-locator-compat';
+import type { AppContainer } from '../di';
 
 /**
  * Legacy crypto utilities - now delegates to EncryptionService
@@ -9,14 +9,18 @@ export class CryptoUtil {
   private static encryptionService: EncryptionService | null = null;
 
   /**
+   * Initialize with encryption service from container
+   */
+  static initializeFromContainer(container: AppContainer): void {
+    this.encryptionService = container.resolve('encryptionService');
+  }
+
+  /**
    * Get or create encryption service instance
    */
   private static getEncryptionService(): EncryptionService {
     if (!this.encryptionService) {
-      this.encryptionService = serviceManager.getService<EncryptionService>('encryptionService') || null;
-      if (!this.encryptionService) {
-        throw new Error('EncryptionService not available');
-      }
+      throw new Error('CryptoUtil not initialized - call initializeFromContainer() first');
     }
     return this.encryptionService;
   }

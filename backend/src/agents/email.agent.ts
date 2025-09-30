@@ -10,15 +10,14 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
-import { DomainServiceResolver } from '../services/domain/service-resolver-compat';
-import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
-import { IEmailDomainService } from '../services/domain/interfaces/email-domain.interface';
+import { GenericAIService } from '../services/generic-ai.service';
+import { EmailDomainService } from '../services/domain/email-domain.service';
 
 export class EmailAgent extends BaseSubAgent {
-  private emailService: IEmailDomainService;
+  private emailService: EmailDomainService;
 
-  constructor() {
-    super('email', {
+  constructor(emailService: EmailDomainService, aiService: GenericAIService) {
+    super('email', aiService, {
       name: 'EmailSubAgent',
       description: 'Email management sub-agent for sending, searching, and managing emails',
       enabled: true,
@@ -26,8 +25,8 @@ export class EmailAgent extends BaseSubAgent {
       retryCount: 3
     });
 
-    // Get existing domain service from container
-    this.emailService = DomainServiceResolver.getEmailService();
+    // Store injected domain service
+    this.emailService = emailService;
   }
 
   /**
@@ -54,7 +53,7 @@ export class EmailAgent extends BaseSubAgent {
   /**
    * Get the email domain service
    */
-  protected getService(): IDomainService {
+  protected getService(): EmailDomainService {
     return this.emailService;
   }
 
@@ -73,7 +72,7 @@ export class EmailAgent extends BaseSubAgent {
     }
 
     // TypeScript will enforce that service[serviceMethod] exists
-    const service = this.getService() as IEmailDomainService;
+    const service = this.getService();
     
     try {
       // Handle different method signatures

@@ -1,5 +1,4 @@
 import logger from '../utils/logger';
-import { serviceManager } from '../services/service-locator-compat';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
 // AgentFactory import removed - using new BaseSubAgent architecture
@@ -39,14 +38,24 @@ export interface ProcessingResult {
  * 3. Final Output Generation
  */
 export class MasterAgent {
-  private aiService: GenericAIService | null = null;
-  private contextManager: ContextManager | null = null;
-  private tokenManager: TokenManager | null = null;
+  private aiService: GenericAIService;
+  private contextManager: ContextManager;
+  private tokenManager: TokenManager;
   private workflowExecutor: WorkflowExecutor | null = null;
   private isInitialized = false;
 
   // Prompt builders - single object instead of individual properties
   private builders: PromptBuilderMap | null = null;
+
+  constructor(
+    aiService: GenericAIService,
+    contextManager: ContextManager,
+    tokenManager: TokenManager
+  ) {
+    this.aiService = aiService;
+    this.contextManager = contextManager;
+    this.tokenManager = tokenManager;
+  }
 
   /**
    * Initialize the new Master Agent
@@ -57,25 +66,17 @@ export class MasterAgent {
     }
 
     try {
-      // Get AI service
-      this.aiService = serviceManager.getService<GenericAIService>('genericAIService') || null;
-      
+      // Validate injected services
       if (!this.aiService) {
-        throw new Error('GenericAIService not available for NewMasterAgent');
+        throw new Error('GenericAIService not provided to MasterAgent');
       }
-
-      // Get context manager
-      this.contextManager = serviceManager.getService<ContextManager>('contextManager') || null;
 
       if (!this.contextManager) {
-        throw new Error('ContextManager not available for NewMasterAgent');
+        throw new Error('ContextManager not provided to MasterAgent');
       }
 
-      // Get token manager
-      this.tokenManager = serviceManager.getService<TokenManager>('tokenManager') || null;
-      
       if (!this.tokenManager) {
-        throw new Error('TokenManager not available for MasterAgent');
+        throw new Error('TokenManager not provided to MasterAgent');
       }
 
       // Initialize all prompt builders using factory

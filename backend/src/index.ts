@@ -8,8 +8,7 @@ dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
 import { initializeAgentFactory, AgentFactory } from './framework/agent-factory';
-import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, type AppContainer } from './di';
-import { setGlobalServiceContainer } from './services/service-locator-compat';
+import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, validateContainer, type AppContainer } from './di';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
@@ -22,10 +21,10 @@ import {
   requestTimeout,
   sanitizeRequest
 } from './middleware/security.middleware';
-import authRoutes from './routes/auth';
-import protectedRoutes from './routes/protected.routes';
+import { createAuthRoutes } from './routes/auth';
+import { createProtectedRoutes } from './routes/protected.routes';
 import { createSlackRoutes } from './routes/slack.routes';
-import { apiRateLimit } from './middleware/rate-limiting.middleware';
+import { createApiRateLimit } from './middleware/rate-limiting.middleware';
 // import { serviceManager } from './services/service-manager'; // REMOVED - Using DI container now
 import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
 import { setupSwagger } from './docs/swagger';
@@ -80,8 +79,23 @@ const initializeApplication = async (): Promise<void> => {
     appContainer = createAppContainer();
     registerAllServices(appContainer);
     
-    // Set global container for backward compatibility
-    setGlobalServiceContainer(appContainer);
+    // Validate container in development mode (catches dependency issues early)
+    if (unifiedConfig.nodeEnv === 'development') {
+      logger.info('Validating DI container', {
+        correlationId: 'startup',
+        operation: 'container_validation'
+      });
+      validateContainer(appContainer);
+    }
+    
+    // Initialize utility factories with container
+    const { initializeSentryMiddleware } = await import('./middleware/sentry.middleware');
+    const { CryptoUtil } = await import('./utils/crypto.util');
+    const { initializeOAuthServiceFactory } = await import('./services/oauth/oauth-service-factory');
+    
+    initializeSentryMiddleware(appContainer);
+    CryptoUtil.initializeFromContainer(appContainer);
+    initializeOAuthServiceFactory(appContainer);
 
     // Initialize all services via DI container
     logger.info('Initializing all services', {
@@ -104,6 +118,35 @@ const initializeApplication = async (): Promise<void> => {
     });
     throw error; // Don't continue with broken services in production
   }
+}
+
+/**
+ * Setup application routes with DI container
+ */
+function setupRoutes(app: express.Application, container: AppContainer): void {
+  logger.info('Setting up application routes', {
+    correlationId: 'startup',
+    operation: 'route_setup'
+  });
+  
+  // Create rate limiting middleware from DI container
+  const rateLimitStore = container.resolve('rateLimitStore');
+  const apiRateLimit = createApiRateLimit(rateLimitStore);
+  
+  // Apply rate limiting to all API routes
+  app.use(apiRateLimit);
+  
+  // API Routes - pass container for dependency resolution
+  app.use('/auth', createAuthRoutes(container));
+  app.use('/protected', createProtectedRoutes(container));
+  
+  // Slack routes - pass DI container for service access
+  app.use('/slack', createSlackRoutes(container, () => globalInterfaces));
+  
+  logger.info('Application routes configured', {
+    correlationId: 'startup',
+    operation: 'route_setup_complete'
+  });
 }
 
 const app = express();
@@ -196,19 +239,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting (apply to all routes)
-app.use(apiRateLimit);
+// Rate limiting will be applied after container is ready (see setupRoutes)
+// We'll create it from the DI container to ensure proper dependency injection
 
 
 // API Documentation
 setupSwagger(app);
 
-// API Routes
-app.use('/auth', authRoutes);
-app.use('/protected', protectedRoutes);
-
-// Slack routes - pass DI container for service access
-app.use('/slack', createSlackRoutes(appContainer!, () => globalInterfaces));
+// Note: API routes will be registered after bootstrap in setupRoutes()
 
 // Slack interface integration (runs in background, completely optional)
 const setupSlackInterface = async () => {
@@ -279,6 +317,11 @@ const startServer = async (): Promise<void> => {
           correlationId: 'startup',
           operation: 'services_initialized'
         });
+        
+        // Setup routes after DI container is ready
+        if (appContainer) {
+          setupRoutes(app, appContainer);
+        }
 
         // Set up Slack interface after services are ready
         setupSlackInterface().catch(error => {

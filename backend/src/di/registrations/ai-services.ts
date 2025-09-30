@@ -6,20 +6,19 @@ import { AIServiceCircuitBreaker } from '../../services/ai-circuit-breaker.servi
 /**
  * Register AI and machine learning services
  * 
- * These services handle AI operations, including
- * OpenAI integration and circuit breaker patterns.
+ * These services handle AI/ML operations including OpenAI integration,
+ * circuit breakers for AI service failures, and AI-related utilities.
  */
 export function registerAIServices(container: AppContainer): void {
   container.register({
-    // Generic AI service for OpenAI operations (requires aiDomainService + config)
-    genericAIService: asClass(GenericAIService)
-      .singleton()
-      .inject(() => ({
-        aiDomainService: container.resolve('aiDomainService'),
-        config: undefined // Uses DEFAULT_CONFIG
-      })),
+    // Generic AI service (OpenAI wrapper)
+    genericAIService: asClass(GenericAIService).singleton(),
+    
+    // Alias for genericAIService to support 'aiService' parameter name in constructors
+    // This allows services to inject via either 'genericAIService' or 'aiService'
+    aiService: asClass(GenericAIService).singleton(),
 
-    // Circuit breaker for AI service reliability (config via environment variables)
+    // AI Circuit breaker service
     aiCircuitBreakerService: asClass(AIServiceCircuitBreaker).singleton(),
   });
 }

@@ -27,35 +27,39 @@ export interface Cradle {
   config: typeof unifiedConfig;
 
   // Core Infrastructure Services
-  databaseService: any;
-  cacheService: any;
-  encryptionService: any;
-  sentryService: any;
+  databaseService: import('../services/database.service').DatabaseService;
+  cacheService: import('../services/cache.service').CacheService;
+  encryptionService: import('../services/encryption.service').EncryptionService;
+  sentryService: import('../services/sentry.service').SentryService;
 
   // Auth Services
-  authService: any;
-  tokenStorageService: any;
-  tokenManager: any;
-  authStatusService: any;
-  oauthStateService: any;
+  authService: import('../services/auth.service').AuthService;
+  tokenStorageService: import('../services/token-storage.service').TokenStorageService;
+  tokenManager: import('../services/token-manager').TokenManager;
+  authStatusService: import('../services/auth-status.service').AuthStatusService;
+  oauthStateService: import('../services/oauth-state.service').OAuthStateService;
 
   // OAuth Managers
-  googleOAuthManager: any;
-  slackOAuthManager: any;
+  googleOAuthManager: import('../services/oauth/google-oauth-manager').GoogleOAuthManager;
+  slackOAuthManager: import('../services/oauth/slack-oauth-manager').SlackOAuthManager;
 
-  // Domain Services
-  emailDomainService: any;
-  calendarDomainService: any;
-  contactsDomainService: any;
-  slackDomainService: any;
-  aiDomainService: any;
+  // Domain Services (using concrete classes - interfaces not fully implemented yet)
+  emailDomainService: import('../services/domain/email-domain.service').EmailDomainService;
+  calendarDomainService: import('../services/domain/calendar-domain.service').CalendarDomainService;
+  contactsDomainService: import('../services/domain/contacts-domain.service').ContactsDomainService;
+  slackDomainService: import('../services/domain/slack-domain.service').SlackDomainService;
+  aiDomainService: import('../services/domain/ai-domain.service').AIDomainService;
 
   // AI Services
-  genericAIService: any;
-  aiCircuitBreakerService: any;
+  genericAIService: import('../services/generic-ai.service').GenericAIService;
+  aiService: import('../services/generic-ai.service').GenericAIService; // Alias for genericAIService
+  aiCircuitBreakerService: import('../services/ai-circuit-breaker.service').AIServiceCircuitBreaker;
 
   // Context & Workflow
-  contextManager: any;
+  contextManager: import('../services/context-manager.service').ContextManager;
+
+  // Middleware Services
+  rateLimitStore: import('../middleware/rate-limiting.middleware').RateLimitStore;
 
   // Prompt Builders (will be added as needed)
   environmentCheckBuilder: any;
@@ -199,5 +203,64 @@ export async function shutdownAllServices(container: AppContainer): Promise<void
   logger.info('Graceful shutdown completed', {
     correlationId: `shutdown-${Date.now()}`,
     operation: 'shutdown_complete'
+  });
+}
+
+/**
+ * Validate that all services can be resolved from the container
+ * Catches circular dependencies and missing registrations early
+ */
+export function validateContainer(container: AppContainer): void {
+  logger.info('Starting container validation', {
+    correlationId: `container-validation-${Date.now()}`,
+    operation: 'container_validation_start'
+  });
+
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const registrationNames = Object.keys(container.registrations);
+
+  for (const serviceName of registrationNames) {
+    try {
+      // Try to resolve the service
+      container.resolve(serviceName as keyof Cradle);
+      logger.debug(`Service validated: ${serviceName}`, {
+        correlationId: `container-validation-${Date.now()}`,
+        operation: 'service_validation_success',
+        metadata: { serviceName }
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      errors.push(`Failed to resolve '${serviceName}': ${errorMessage}`);
+      logger.error(`Service validation failed: ${serviceName}`, error as Error, {
+        correlationId: `container-validation-${Date.now()}`,
+        operation: 'service_validation_error',
+        metadata: { serviceName }
+      });
+    }
+  }
+
+  if (errors.length > 0) {
+    const errorSummary = `Container validation failed with ${errors.length} error(s):\n${errors.join('\n')}`;
+    logger.error('Container validation failed', new Error(errorSummary), {
+      correlationId: `container-validation-${Date.now()}`,
+      operation: 'container_validation_failed',
+      metadata: { errorCount: errors.length, errors }
+    });
+    throw new Error(errorSummary);
+  }
+
+  if (warnings.length > 0) {
+    logger.warn('Container validation completed with warnings', {
+      correlationId: `container-validation-${Date.now()}`,
+      operation: 'container_validation_warnings',
+      metadata: { warningCount: warnings.length, warnings }
+    });
+  }
+
+  logger.info('Container validation completed successfully', {
+    correlationId: `container-validation-${Date.now()}`,
+    operation: 'container_validation_complete',
+    metadata: { servicesValidated: registrationNames.length }
   });
 }

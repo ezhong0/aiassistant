@@ -157,10 +157,9 @@ export abstract class BaseSubAgent {
   protected planReviewBuilder: PlanReviewPromptBuilder;
   protected responseFormattingBuilder: ResponseFormattingPromptBuilder;
 
-  constructor(domain: string, config: Partial<AgentConfig> = {}) {
+  constructor(domain: string, aiService: GenericAIService, config: Partial<AgentConfig> = {}) {
     this.domain = domain;
-    // Get AI service from service locator (lazy initialization)
-    this.aiService = null as any; // Will be set when needed
+    this.aiService = aiService;
     this.config = {
       name: `${domain}SubAgent`,
       description: `SubAgent for ${domain} operations`,
@@ -170,7 +169,7 @@ export abstract class BaseSubAgent {
       ...config
     };
     
-    // Initialize prompt builders
+    // Initialize prompt builders with injected AI service
     this.intentAssessmentBuilder = new IntentAssessmentPromptBuilder(this.aiService, this.domain);
     this.planReviewBuilder = new PlanReviewPromptBuilder(this.aiService, this.domain);
     this.responseFormattingBuilder = new ResponseFormattingPromptBuilder(this.aiService, this.domain);
@@ -195,17 +194,7 @@ export abstract class BaseSubAgent {
         userId
       });
 
-      // Get AI service if not already set
-      if (!this.aiService) {
-        const { serviceManager } = await import('../services/service-locator-compat');
-        const service = serviceManager.getService<GenericAIService>('genericAIService');
-        if (!service) {
-          throw new Error('GenericAIService not available');
-        }
-        this.aiService = service;
-      }
-      
-      // Initialize AI service if needed
+      // Ensure AI service is initialized
       if (!this.aiService.initialized) {
         await this.aiService.initialize();
       }

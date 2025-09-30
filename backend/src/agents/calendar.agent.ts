@@ -10,15 +10,14 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
-import { DomainServiceResolver } from '../services/domain/service-resolver-compat';
-import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
-import { ICalendarDomainService } from '../services/domain/interfaces/calendar-domain.interface';
+import { GenericAIService } from '../services/generic-ai.service';
+import { CalendarDomainService } from '../services/domain/calendar-domain.service';
 
 export class CalendarAgent extends BaseSubAgent {
-  private calendarService: ICalendarDomainService;
+  private calendarService: CalendarDomainService;
 
-  constructor() {
-    super('calendar', {
+  constructor(calendarService: CalendarDomainService, aiService: GenericAIService) {
+    super('calendar', aiService, {
       name: 'CalendarSubAgent',
       description: 'Calendar management sub-agent for creating, updating, and managing calendar events',
       enabled: true,
@@ -26,8 +25,8 @@ export class CalendarAgent extends BaseSubAgent {
       retryCount: 3
     });
 
-    // Get existing domain service from container
-    this.calendarService = DomainServiceResolver.getCalendarService();
+    // Store injected domain service
+    this.calendarService = calendarService;
   }
 
   /**
@@ -54,7 +53,7 @@ export class CalendarAgent extends BaseSubAgent {
   /**
    * Get the calendar domain service
    */
-  protected getService(): IDomainService {
+  protected getService(): CalendarDomainService {
     return this.calendarService;
   }
 
@@ -73,7 +72,7 @@ export class CalendarAgent extends BaseSubAgent {
     }
 
     // TypeScript will enforce that service[serviceMethod] exists
-    const service = this.getService() as ICalendarDomainService;
+    const service = this.getService();
     
     try {
       // Handle different method signatures
