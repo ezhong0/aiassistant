@@ -144,8 +144,11 @@ class RateLimitStore implements IService {
     let removedCount = 0;
     
     for (let i = 0; i < toRemove && i < entries.length; i++) {
-      this.store.delete(entries[i][0]);
-      removedCount++;
+      const entry = entries[i];
+      if (entry && entry[0]) {
+        this.store.delete(entry[0]);
+        removedCount++;
+      }
     }
     
     logger.warn('Aggressive rate limit cleanup performed', {

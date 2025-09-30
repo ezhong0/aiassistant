@@ -18,6 +18,17 @@ export class EncryptionService extends BaseService {
   }
 
   /**
+   * Cleanup resources when service is destroyed
+   */
+  protected async onDestroy(): Promise<void> {
+    // Clear encryption key from memory
+    if (this.encryptionKey) {
+      this.encryptionKey.fill(0);
+      this.encryptionKey = null;
+    }
+  }
+
+  /**
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {

@@ -13,7 +13,7 @@ export class CryptoUtil {
    */
   private static getEncryptionService(): EncryptionService {
     if (!this.encryptionService) {
-      this.encryptionService = serviceManager.getService<EncryptionService>('encryptionService');
+      this.encryptionService = serviceManager.getService<EncryptionService>('encryptionService') || null;
       if (!this.encryptionService) {
         throw new Error('EncryptionService not available');
       }

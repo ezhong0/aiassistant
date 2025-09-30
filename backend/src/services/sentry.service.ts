@@ -14,13 +14,21 @@ export class SentryService extends BaseService {
   }
 
   /**
+   * Cleanup resources when service is destroyed
+   */
+  protected async onDestroy(): Promise<void> {
+    // Sentry cleanup is handled automatically
+    this.logInfo('SentryService destroyed');
+  }
+
+  /**
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
     this.logInfo('Initializing SentryService...');
 
     try {
-      const config = unifiedConfig.getConfig();
+      const config = unifiedConfig;
       const sentryDsn = process.env.SENTRY_DSN;
 
       if (!sentryDsn) {
@@ -33,12 +41,12 @@ export class SentryService extends BaseService {
       // Initialize Sentry
       Sentry.init({
         dsn: sentryDsn,
-        environment: config.app.environment,
+        environment: process.env.NODE_ENV || 'development',
         release: process.env.npm_package_version || '1.0.0',
         
         // Performance monitoring
-        tracesSampleRate: config.app.environment === 'production' ? 0.1 : 1.0,
-        profilesSampleRate: config.app.environment === 'production' ? 0.1 : 1.0,
+        tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+        profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
         
         // Error filtering
         beforeSend(event, hint) {
@@ -66,12 +74,8 @@ export class SentryService extends BaseService {
           nodeProfilingIntegration(),
           Sentry.httpIntegration({
             breadcrumbs: true,
-            tracing: true,
           }),
-          Sentry.expressIntegration({
-            breadcrumbs: true,
-            tracing: true,
-          }),
+          Sentry.expressIntegration(),
         ],
 
         // Additional options
@@ -84,7 +88,7 @@ export class SentryService extends BaseService {
       this.logInfo('SentryService initialized successfully', {
         operation: 'sentry_initialization',
         metadata: {
-          environment: config.app.environment,
+          environment: process.env.NODE_ENV || 'development',
           dsn: sentryDsn.substring(0, 20) + '...' // Log partial DSN for verification
         }
       });
@@ -223,13 +227,13 @@ export class SentryService extends BaseService {
   /**
    * Start a transaction
    */
-  public startTransaction(name: string, op: string): Sentry.Transaction | undefined {
+  public startTransaction(name: string, op: string): any | undefined {
     if (!this.isInitialized) {
       return undefined;
     }
 
     try {
-      return Sentry.startTransaction({ name, op });
+      return Sentry.startSpan({ name, op }, () => {});
     } catch (sentryError) {
       this.logError('Failed to start transaction in Sentry', { 
         name,

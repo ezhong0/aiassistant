@@ -36,11 +36,11 @@ export const sentryMiddleware = (req: Request, res: Response, next: NextFunction
     });
 
     // Set user context if available
-    if (req.user) {
+    if ((req as any).user) {
       sentryService.setUser({
-        id: req.user.userId,
-        email: req.user.email,
-        username: req.user.email
+        id: (req as any).user.userId,
+        email: (req as any).user.email,
+        username: (req as any).user.email
       });
     }
 
@@ -107,9 +107,9 @@ export const sentryErrorHandler = (error: Error, req: Request, res: Response, ne
           query: req.query,
           params: req.params
         },
-        user: req.user ? {
-          id: req.user.userId,
-          email: req.user.email
+        user: (req as any).user ? {
+          id: (req as any).user.userId,
+          email: (req as any).user.email
         } : undefined
       });
 
