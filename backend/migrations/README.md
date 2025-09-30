@@ -4,11 +4,7 @@ This directory contains database migration files using node-pg-migrate.
 
 ## Migration Files
 
-- `001_initial_schema.sql` - Initial database schema
-- `002_oauth_tokens.sql` - OAuth tokens table
-- `003_user_tokens.sql` - User tokens table
-- `004_confirmations.sql` - Confirmations table
-- `005_workflow_support.sql` - Workflow support tables
+- `001_baseline_schema.sql` - Clean baseline schema (user_tokens table only)
 
 ## Running Migrations
 

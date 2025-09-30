@@ -77,6 +77,7 @@ export interface SlackUserData {
 export class DatabaseService extends BaseService {
   private pool: Pool | null = null;
   private config: DatabaseConfig;
+  private readonly appConfig: typeof config;
   private connectionStats: {
     totalConnections: number;
     activeConnections: number;
@@ -97,12 +98,16 @@ export class DatabaseService extends BaseService {
     lastHealthCheck: new Date()
   };
 
-  constructor() {
+  constructor(appConfig: typeof config) {
     super('databaseService');
     
-    // Initialize with unified config system
-    const dbServiceConfig = config.services.database;
+    // Store config reference
+    this.appConfig = appConfig;
+    
+    // Use environment directly to avoid Awilix proxy property access issues
     const isDevelopment = process.env.NODE_ENV === 'development';
+    const dbPoolSize = process.env.DB_POOL_SIZE ? parseInt(process.env.DB_POOL_SIZE) : undefined;
+    const dbTimeout = process.env.DB_TIMEOUT ? parseInt(process.env.DB_TIMEOUT) : undefined;
     
     this.config = {
       // Use localhost for development, Railway host for production
@@ -114,10 +119,10 @@ export class DatabaseService extends BaseService {
       // SSL only in production or when explicitly enabled
       ssl: isDevelopment ? false : (process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false),
       // Use unified config for connection pool settings
-      max: dbServiceConfig?.poolSize || (isDevelopment ? 5 : 10),
+      max: dbPoolSize || (isDevelopment ? 5 : 10),
       min: isDevelopment ? 1 : 2,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: dbServiceConfig?.timeout || (isDevelopment ? 10000 : 30000),
+      connectionTimeoutMillis: dbTimeout || (isDevelopment ? 10000 : 30000),
       acquireTimeoutMillis: isDevelopment ? 5000 : 10000,
       createTimeoutMillis: isDevelopment ? 5000 : 10000,
       destroyTimeoutMillis: 5000,
@@ -139,8 +144,8 @@ export class DatabaseService extends BaseService {
         return;
       }
 
-      // Parse DATABASE_URL if available (use unified config)
-      const databaseUrl = config.databaseUrl;
+      // Parse DATABASE_URL if available
+      const databaseUrl = process.env.DATABASE_URL;
       if (databaseUrl) {
         const url = new globalThis.URL(databaseUrl);
         this.config = {

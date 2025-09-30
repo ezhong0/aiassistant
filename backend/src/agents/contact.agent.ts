@@ -10,7 +10,7 @@
 
 import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
-import { DomainServiceResolver } from '../services/domain/dependency-injection/domain-service-container';
+import { DomainServiceResolver } from '../services/domain/service-resolver-compat';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import { IContactsDomainService } from '../services/domain/interfaces/contacts-domain.interface';
 

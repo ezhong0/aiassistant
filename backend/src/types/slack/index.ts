@@ -1,4 +1,4 @@
-import { ServiceManager } from '../../services/service-manager';
+import { AppContainer } from '../../di';
 import { ISlackDomainService } from '../../services/domain/interfaces/slack-domain.interface';
 import { SlackConfig } from './slack.types';
 import { config } from '../../config';
@@ -14,7 +14,7 @@ export interface InterfaceManager {
  * Note: Interfaces are NOT services - they handle input/output and route to services
  */
 export const initializeInterfaces = async (
-  serviceManager: ServiceManager
+  container: AppContainer
 ): Promise<InterfaceManager> => {
   const interfaces: InterfaceManager = {
     async start() {

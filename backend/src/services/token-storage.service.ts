@@ -3,8 +3,6 @@ import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { CryptoUtil } from '../utils/crypto.util';
 import { AuditLogger } from '../utils/audit-logger';
-// import { validateUserId } from '../utils/service-validation.util';
-import { serviceManager } from "./service-manager";
 
 export interface GoogleTokens {
   access_token: string;
@@ -33,14 +31,16 @@ export interface UserTokens {
  * Stores only essential OAuth tokens per user
  */
 export class TokenStorageService extends BaseService {
-  private databaseService: DatabaseService | null = null;
-  private cacheService: CacheService | null = null;
   private inMemoryTokens: Map<string, UserTokens> = new Map();
   
   // Cache TTL for tokens (2 hours)
   private readonly TOKEN_CACHE_TTL = 2 * 60 * 60;
 
-  constructor() {
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly cacheService: CacheService,
+    private readonly config: any
+  ) {
     super('TokenStorageService');
   }
 
@@ -50,21 +50,17 @@ export class TokenStorageService extends BaseService {
   protected async onInitialize(): Promise<void> {
     this.logInfo('Starting TokenStorageService initialization...');
     
-    // Get services from service manager
-    this.databaseService = serviceManager.getService('databaseService') as DatabaseService;
-    this.cacheService = serviceManager.getService('cacheService') as CacheService;
-    
-    if (!this.databaseService) {
+    // Dependencies injected via constructor, check availability (avoid proxy access)
+    const hasDatabaseService = this.databaseService && typeof this.databaseService === 'object';
+    if (!hasDatabaseService) {
       this.logWarn('Database service not available, falling back to in-memory storage');
       this.logWarn('⚠️  OAuth tokens will NOT persist across server restarts!');
-    } else if (!(this.databaseService as any)._initializationFailed && this.databaseService.isReady()) {
-      this.logInfo('✅ Database service available for persistent OAuth token storage');
     } else {
-      this.logWarn('Database service failed to initialize, falling back to in-memory storage');
-      this.logWarn('⚠️  OAuth tokens will NOT persist across server restarts!');
+      this.logInfo('✅ Database service available for persistent OAuth token storage');
     }
     
-    if (this.cacheService) {
+    const hasCacheService = this.cacheService && typeof this.cacheService === 'object';
+    if (hasCacheService) {
       this.logInfo('✅ Cache service available for token caching');
     } else {
       this.logInfo('Cache service not available, operating without token caching');
@@ -390,20 +386,14 @@ export class TokenStorageService extends BaseService {
     }
 
     try {
-      const configService = serviceManager.getService('configService') as any;
-      if (!configService) {
-        this.logError('Config service not available for token refresh', { userId });
-        return null;
-      }
-
       const response = await globalThis.fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new (globalThis.URLSearchParams || globalThis.require('url').URLSearchParams)({
-          client_id: configService.googleClientId,
-          client_secret: configService.googleClientSecret,
+          client_id: this.config.googleAuth?.clientId,
+          client_secret: this.config.googleAuth?.clientSecret,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
         }),

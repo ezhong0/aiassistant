@@ -5,7 +5,6 @@ import { CacheService } from './cache.service';
 import { GoogleTokens } from '../types/auth.types';
 // import { SlackTokens } from './token-storage.service';
 import { BaseService } from './base-service';
-import { serviceManager } from "./service-manager";
 import { AuditLogger } from '../utils/audit-logger';
 
 export interface OAuthTokens {
@@ -18,15 +17,15 @@ export interface OAuthTokens {
 }
 
 export class TokenManager extends BaseService {
-  private tokenStorageService: TokenStorageService | null = null;
-  private authService: AuthService | null = null;
-  private cacheService: CacheService | null = null;
-  
   // Cache TTL constants
   private readonly TOKEN_CACHE_TTL = 900; // 15 minutes
   private readonly STATUS_CACHE_TTL = 300; // 5 minutes
 
-  constructor() {
+  constructor(
+    private readonly tokenStorageService: TokenStorageService,
+    private readonly authService: AuthService,
+    private readonly cacheService: CacheService
+  ) {
     super('TokenManager');
   }
 
@@ -34,20 +33,7 @@ export class TokenManager extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    // Get dependencies from service registry
-    this.tokenStorageService = serviceManager.getService<TokenStorageService>('tokenStorageService') || null;
-    this.authService = serviceManager.getService<AuthService>('authService') || null;
-    this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
-    
-    if (!this.tokenStorageService) {
-      throw new Error('TokenStorageService not available from service registry');
-    }
-    
-    if (!this.authService) {
-      throw new Error('AuthService not available from service registry');
-    }
-    
-    if (this.cacheService) {
+    if (this.cacheService && this.cacheService.isReady()) {
       this.logInfo('TokenManager initialized with caching enabled');
     } else {
       this.logInfo('TokenManager initialized without caching (cache service not available)');
@@ -66,14 +52,12 @@ export class TokenManager extends BaseService {
    * Uses unified token validation and caching strategy
    */
   async getValidTokens(teamId: string, userId: string): Promise<string | null> {
-    if (!this.tokenStorageService || !this.authService) {
+    if (!this.tokenStorageService.isReady() || !this.authService.isReady()) {
       const errorDetails = {
-        hasTokenStorageService: !!this.tokenStorageService,
-        hasAuthService: !!this.authService,
-        tokenStorageServiceReady: this.tokenStorageService?.isReady() || false,
-        authServiceReady: this.authService?.isReady() || false
+        tokenStorageServiceReady: this.tokenStorageService.isReady(),
+        authServiceReady: this.authService.isReady()
       };
-      logger.error('TokenManager dependencies not initialized', new Error('Dependencies not initialized'), {
+      logger.error('TokenManager dependencies not ready', new Error('Dependencies not ready'), {
         correlationId: `token-mgr-init-${Date.now()}`,
         operation: 'token_manager_init',
         metadata: errorDetails

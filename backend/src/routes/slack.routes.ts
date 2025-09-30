@@ -7,8 +7,7 @@ import {
   SlackInteractiveComponentPayloadSchema
 } from '../schemas/slack.schemas';
 import { validateRequest } from '../middleware/validation.middleware';
-import { ServiceManager } from '../services/service-manager';
-import { DomainServiceResolver } from '../services/domain';
+import { AppContainer } from '../di';
 import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
 import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
@@ -21,7 +20,7 @@ const emptyBodySchema = z.object({});
  * Slack routes for handling OAuth callbacks and other Slack-specific endpoints
  * Note: These routes are separate from the Bolt framework routes
  */
-export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?: () => any): express.Router {
+export function createSlackRoutes(container: AppContainer, getInterfaces?: () => any): express.Router {
   const router = express.Router();
 
   /**
@@ -264,7 +263,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           }
         });
         
-        const slackService = DomainServiceResolver.getSlackService();
+        const slackService = container.resolve<ISlackDomainService>('slackDomainService');
         
         logger.info('SlackDomainService retrieval result', {
           ...logContext,
@@ -395,7 +394,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
         try {
           // Get user connections
-          const authStatusService = serviceManager.getService<AuthStatusService>('authStatusService');
+          const authStatusService = container.resolve<AuthStatusService>('authStatusService');
           if (!authStatusService) {
             throw new Error('AuthStatusService not available');
           }
@@ -422,7 +421,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           });
 
           // Send response via response_url for better UX
-          const slackService = DomainServiceResolver.getSlackService();
+          const slackService = container.resolve<ISlackDomainService>('slackDomainService');
           if (slackService && response_url) {
             logger.info('Sending auth response to Slack', {
               correlationId: logContext.correlationId,
@@ -481,7 +480,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
             metadata: { userId: user_id, teamId: team_id }
           });
 
-          const slackService = DomainServiceResolver.getSlackService();
+          const slackService = container.resolve<ISlackDomainService>('slackDomainService');
           if (slackService && response_url) {
             await slackService.sendToResponseUrl(response_url, {
               response_type: 'in_channel',
@@ -569,7 +568,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           });
 
           // Generate OAuth URL - using domain service instead
-          const slackService = DomainServiceResolver.getSlackService();
+          const slackService = container.resolve<ISlackDomainService>('slackDomainService');
 
           logger.info('OAuth service check', {
             correlationId: createLogContext(req).correlationId,
@@ -694,7 +693,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
           });
 
           if (userId && teamId) {
-            const authStatusService = serviceManager.getService<AuthStatusService>('authStatusService');
+            const authStatusService = container.resolve<AuthStatusService>('authStatusService');
             if (!authStatusService) {
               res.status(200).json({
                 text: '❌ Service not available. Please try again.',
@@ -727,7 +726,7 @@ export function createSlackRoutes(serviceManager: ServiceManager, getInterfaces?
 
           if (userId && teamId) {
             try {
-              const authStatusService = serviceManager.getService<AuthStatusService>('authStatusService');
+              const authStatusService = container.resolve<AuthStatusService>('authStatusService');
               if (!authStatusService) {
                 throw new Error('AuthStatusService not available');
               }

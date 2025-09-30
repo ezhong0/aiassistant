@@ -6,7 +6,6 @@ import { APIClientError, APIClientErrorCode } from '../../errors/api-client.erro
 import { ValidationHelper, SlackValidationSchemas } from '../../validation/api-client.validation';
 import { ISlackDomainService } from './interfaces/slack-domain.interface';
 import { SlackOAuthManager } from '../oauth/slack-oauth-manager';
-import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 
 /**
@@ -25,10 +24,9 @@ import { SlackContext } from '../../types/slack/slack.types';
  */
 export class SlackDomainService extends BaseService implements Partial<ISlackDomainService> {
   private slackClient: SlackAPIClient | null = null;
-  private slackOAuthManager: SlackOAuthManager | null = null;
   private botUserId: string | null = null;
 
-  constructor() {
+  constructor(private readonly slackOAuthManager: SlackOAuthManager) {
     super('SlackDomainService');
   }
 
@@ -41,9 +39,6 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       
       // Get Slack API client
       this.slackClient = await getAPIClient<SlackAPIClient>('slack');
-      
-      // Get OAuth manager
-      this.slackOAuthManager = serviceManager.getService<SlackOAuthManager>('slackOAuthManager') || null;
       
       // Get bot user ID dynamically
       await this.initializeBotUserId();

@@ -1,5 +1,6 @@
-import { IService, ServiceState } from "./service-manager";
 // Circuit breaker for AI services
+// Uses BaseService for service lifecycle management
+import { BaseService } from './base-service';
 
 export enum CircuitState {
   CLOSED = 'closed',
@@ -28,10 +29,7 @@ export interface CircuitBreakerMetrics {
  * Circuit breaker service for OpenAI API calls
  * Protects against cascading failures when AI service is unavailable
  */
-export class AIServiceCircuitBreaker implements IService {
-  public readonly name = 'aiCircuitBreakerService';
-  private _state: ServiceState = ServiceState.CREATED;
-  
+export class AIServiceCircuitBreaker extends BaseService {
   private circuitState: CircuitState = CircuitState.CLOSED;
   private failureCount = 0;
   private successCount = 0;
@@ -40,67 +38,38 @@ export class AIServiceCircuitBreaker implements IService {
   private totalRequests = 0;
   private totalFailures = 0;
   
-  private config: CircuitBreakerConfig = {
-    failureThreshold: process.env.E2E_TESTING === 'true' ? 10000 : 5,     // Effectively disable circuit breaker in E2E tests
-    recoveryTimeout: process.env.E2E_TESTING === 'true' ? 5000 : 60000,   // Quick recovery in tests
-    successThreshold: 3,      // Close circuit after 3 consecutive successes
-    timeout: process.env.E2E_TESTING === 'true' ? 60000 : 30000           // 60s timeout for E2E tests (AI evaluation takes time)
-  };
-
+  private config: CircuitBreakerConfig;
   private aiService: any | null = null;
 
-  constructor(config?: Partial<CircuitBreakerConfig>) {
-    if (config) {
-      this.config = { ...this.config, ...config };
-    }
-  }
-
-  get state(): ServiceState {
-    return this._state;
-  }
-
-  async initialize(): Promise<void> {
-    try {
-      this._state = ServiceState.INITIALIZING;
-      
-      // Circuit breaker doesn't need external dependencies to initialize
-      // It will get the OpenAI service reference when needed
-      
-      this._state = ServiceState.READY;
-      
-    } catch (error) {
-      this._state = ServiceState.ERROR;
-      
-      throw error;
-    }
-  }
-
-  isReady(): boolean {
-    return this._state === ServiceState.READY;
-  }
-
-  async destroy(): Promise<void> {
-    this._state = ServiceState.SHUTTING_DOWN;
+  constructor() {
+    super('AIServiceCircuitBreaker');
     
+    // Use environment variables for configuration
+    const e2eTesting = process.env.E2E_TESTING === 'true';
+    
+    this.config = {
+      failureThreshold: e2eTesting ? 10000 : 5,
+      recoveryTimeout: e2eTesting ? 5000 : 60000,
+      successThreshold: 3,
+      timeout: e2eTesting ? 60000 : 30000
+    };
+  }
+
+  protected async onInitialize(): Promise<void> {
+    // Circuit breaker doesn't need external dependencies to initialize
+    this.logInfo('AI Circuit Breaker initialized', {
+      config: this.config
+    });
+  }
+
+  protected async onDestroy(): Promise<void> {
     // Reset circuit state
     this.circuitState = CircuitState.CLOSED;
     this.failureCount = 0;
     this.successCount = 0;
     this.aiService = null;
     
-    this._state = ServiceState.DESTROYED;
-    
-  }
-
-  getHealth(): { healthy: boolean; details?: any } {
-    return {
-      healthy: this._state === ServiceState.READY && this.circuitState !== CircuitState.OPEN,
-      details: {
-        state: this._state,
-        circuitState: this.circuitState,
-        metrics: this.getMetrics()
-      }
-    };
+    this.logInfo('AI Circuit Breaker destroyed');
   }
 
   /**

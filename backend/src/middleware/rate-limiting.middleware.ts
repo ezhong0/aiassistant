@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { AuthenticatedRequest } from './auth.middleware';
 import { config } from '../config';
-import { serviceManager, IService, ServiceState } from '../services/service-manager';
+import { serviceManager } from '../services/service-locator-compat';
+import { BaseService } from '../services/base-service';
 
 interface RateLimitData {
   count: number;
@@ -21,56 +22,33 @@ interface RateLimitOptions {
   legacyHeaders?: boolean; // Send legacy X-RateLimit headers
 }
 
-class RateLimitStore implements IService {
-  public readonly name = 'RateLimitStore';
-  private _state: ServiceState = ServiceState.INITIALIZING;
+class RateLimitStore extends BaseService {
   private store = new Map<string, RateLimitData>();
   private cleanupInterval: ReturnType<typeof globalThis.setInterval> | null = null;
   private readonly maxStoreSize = 10000; // Maximum entries to prevent memory bloat
   private readonly ttlMs = 24 * 60 * 60 * 1000; // 24 hours TTL for entries
   
   constructor() {
-    // Cleanup expired entries using configured interval from unified config
+    super('RateLimitStore');
+  }
+  
+  protected async onInitialize(): Promise<void> {
+    // Cleanup expired entries using configured interval
     this.cleanupInterval = globalThis.setInterval(() => {
       this.cleanup();
-    }, 5 * 60 * 1000); // 5 minutes from unified config
+    }, 5 * 60 * 1000); // 5 minutes
     
-    this._state = ServiceState.READY;
+    this.logInfo('Rate limit store initialized');
   }
   
-  get state(): ServiceState {
-    return this._state;
-  }
-  
-  async initialize(): Promise<void> {
-    // Already initialized in constructor
-  }
-  
-  isReady(): boolean {
-    return this._state === ServiceState.READY;
-  }
-  
-  async destroy(): Promise<void> {
-    this._state = ServiceState.SHUTTING_DOWN;
-    
+  protected async onDestroy(): Promise<void> {
     if (this.cleanupInterval) {
       globalThis.clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
     this.store.clear();
     
-    this._state = ServiceState.DESTROYED;
-  }
-  
-  getHealth(): { healthy: boolean; details?: any } {
-    return {
-      healthy: this.isReady(),
-      details: {
-        state: this._state,
-        totalEntries: this.store.size,
-        hasCleanupInterval: !!this.cleanupInterval
-      }
-    };
+    this.logInfo('Rate limit store destroyed');
   }
   
   get(key: string): RateLimitData | undefined {
@@ -175,11 +153,12 @@ class RateLimitStore implements IService {
 
 }
 
-// Global rate limit store
+// Global rate limit store (initialized on import)
 const rateLimitStore = new RateLimitStore();
-
-// Register with service manager for graceful shutdown
-serviceManager.registerService('rateLimitStore', rateLimitStore);
+// Initialize the store
+rateLimitStore.initialize().catch(err => {
+  logger.error('Failed to initialize rate limit store', err);
+});
 
 /**
  * Generic rate limiting middleware

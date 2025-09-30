@@ -2,7 +2,6 @@ import { BaseService } from '../base-service';
 import { AuthService } from '../auth.service';
 import { TokenManager } from '../token-manager';
 import { OAuthStateService } from '../oauth-state.service';
-import { serviceManager } from '../service-manager';
 import { GoogleTokens } from '../../types/auth.types';
 import { SlackContext } from '../../types/slack/slack.types';
 
@@ -35,14 +34,13 @@ export interface GoogleOAuthValidationResult {
  * provides a unified interface for all Google domain services.
  */
 export class GoogleOAuthManager extends BaseService {
-  private config: GoogleOAuthConfig;
-  private authService: AuthService | null = null;
-  private tokenManager: TokenManager | null = null;
-  private oauthStateService: OAuthStateService | null = null;
-
-  constructor(config: GoogleOAuthConfig) {
+  constructor(
+    private readonly config: GoogleOAuthConfig,
+    private readonly authService: AuthService,
+    private readonly tokenManager: TokenManager,
+    private readonly oauthStateService: OAuthStateService
+  ) {
     super('GoogleOAuthManager');
-    this.config = config;
   }
 
   /**
@@ -52,15 +50,10 @@ export class GoogleOAuthManager extends BaseService {
     try {
       this.logInfo('Initializing GoogleOAuthManager...');
 
-      // Initialize service dependencies
-      await this.initializeDependencies();
-
       this.logInfo('GoogleOAuthManager initialized successfully', {
         clientId: this.config.clientId,
         redirectUri: this.config.redirectUri,
-        scopes: this.config.scopes,
-        hasAuthService: !!this.authService,
-        hasTokenManager: !!this.tokenManager
+        scopes: this.config.scopes
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -78,21 +71,6 @@ export class GoogleOAuthManager extends BaseService {
     }
   }
 
-  /**
-   * Initialize service dependencies
-   */
-  private async initializeDependencies(): Promise<void> {
-    this.authService = serviceManager.getService('authService') as AuthService;
-    this.tokenManager = serviceManager.getService('tokenManager') as TokenManager;
-    this.oauthStateService = serviceManager.getService('oauthStateService') as OAuthStateService;
-
-    if (!this.authService) {
-      throw new Error('AuthService not available');
-    }
-    if (!this.tokenManager) {
-      throw new Error('TokenManager not available');
-    }
-  }
 
   /**
    * Generate OAuth authorization URL for Google services

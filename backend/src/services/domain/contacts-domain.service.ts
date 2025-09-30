@@ -6,7 +6,6 @@ import { APIClientError, APIClientErrorCode } from '../../errors/api-client.erro
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 
 /**
@@ -25,9 +24,8 @@ import { SlackContext } from '../../types/slack/slack.types';
  */
 export class ContactsDomainService extends BaseService implements Partial<IContactsDomainService> {
   private googleClient: GoogleAPIClient | null = null;
-  private googleOAuthManager: GoogleOAuthManager | null = null;
 
-  constructor() {
+  constructor(private readonly googleOAuthManager: GoogleOAuthManager) {
     super('ContactsDomainService');
   }
 
@@ -40,9 +38,6 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
       
       // Get Google API client
       this.googleClient = await getAPIClient<GoogleAPIClient>('google');
-      
-      // Get OAuth manager
-      this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
       
       this.logInfo('Contacts Domain Service initialized successfully');
     } catch (error) {

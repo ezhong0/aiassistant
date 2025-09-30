@@ -159,7 +159,8 @@ export abstract class BaseSubAgent {
 
   constructor(domain: string, config: Partial<AgentConfig> = {}) {
     this.domain = domain;
-    this.aiService = new GenericAIService();
+    // Get AI service from service locator (lazy initialization)
+    this.aiService = null as any; // Will be set when needed
     this.config = {
       name: `${domain}SubAgent`,
       description: `SubAgent for ${domain} operations`,
@@ -194,6 +195,16 @@ export abstract class BaseSubAgent {
         userId
       });
 
+      // Get AI service if not already set
+      if (!this.aiService) {
+        const { serviceManager } = await import('../services/service-locator-compat');
+        const service = serviceManager.getService<GenericAIService>('genericAIService');
+        if (!service) {
+          throw new Error('GenericAIService not available');
+        }
+        this.aiService = service;
+      }
+      
       // Initialize AI service if needed
       if (!this.aiService.initialized) {
         await this.aiService.initialize();

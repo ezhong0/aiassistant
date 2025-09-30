@@ -1,7 +1,6 @@
 import { BaseService } from './base-service';
 import { TokenManager } from './token-manager';
 import { TokenStorageService } from './token-storage.service';
-import { serviceManager } from "./service-manager";
 import { GoogleOAuthManager } from './oauth/google-oauth-manager';
 import { SlackOAuthManager } from './oauth/slack-oauth-manager';
 
@@ -29,27 +28,16 @@ export interface SlackBlock {
 }
 
 export class AuthStatusService extends BaseService {
-  private tokenManager: TokenManager;
-  private tokenStorageService: TokenStorageService | null = null;
-  private googleOAuthManager: GoogleOAuthManager | null = null;
-  private slackOAuthManager: SlackOAuthManager | null = null;
-
-  constructor() {
+  constructor(
+    private readonly tokenStorageService: TokenStorageService,
+    private readonly tokenManager: TokenManager,
+    private readonly googleOAuthManager: GoogleOAuthManager,
+    private readonly slackOAuthManager: SlackOAuthManager
+  ) {
     super('AuthStatusService');
-    this.tokenManager = new TokenManager();
   }
 
   protected async onInitialize(): Promise<void> {
-    // Get token storage service from service manager
-    this.tokenStorageService = serviceManager.getService<TokenStorageService>('tokenStorageService') || null;
-    if (!this.tokenStorageService) {
-      this.logWarn('TokenStorageService not available, auth status will be limited');
-    }
-    
-    // Get OAuth managers
-    this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
-    this.slackOAuthManager = serviceManager.getService<SlackOAuthManager>('slackOAuthManager') || null;
-    
     this.logInfo('AuthStatusService initialized');
   }
 

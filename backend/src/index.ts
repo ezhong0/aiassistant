@@ -7,9 +7,9 @@ const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
-// ConfigService is now managed by the service manager
 import { initializeAgentFactory, AgentFactory } from './framework/agent-factory';
-import { initializeAllCoreServices } from './services/service-initialization';
+import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, type AppContainer } from './di';
+import { setGlobalServiceContainer } from './services/service-locator-compat';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import logger from './utils/logger';
@@ -26,12 +26,13 @@ import authRoutes from './routes/auth';
 import protectedRoutes from './routes/protected.routes';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';
-import { serviceManager } from './services/service-manager';
+// import { serviceManager } from './services/service-manager'; // REMOVED - Using DI container now
 import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
 import { setupSwagger } from './docs/swagger';
 import { unifiedConfig } from './config/unified-config';
 
-// Global interfaces store
+// Global DI container and interfaces store
+let appContainer: AppContainer | null = null;
 let globalInterfaces: InterfaceManager | null = null;
 
 // Error boundary logging for unhandled errors
@@ -57,7 +58,7 @@ process.on('uncaughtException', (error: Error) => {
   // Don't exit immediately, let the error handler deal with it
 });
 
-// Initialize services and AgentFactory
+// Initialize services and AgentFactory with DI container
 const initializeApplication = async (): Promise<void> => {
   try {
     // Validate configuration (includes production env guardrails)
@@ -71,12 +72,31 @@ const initializeApplication = async (): Promise<void> => {
       throw new Error('Configuration validation failed');
     }
 
-    // Initialize all core services with enhanced dependency management
-    await initializeAllCoreServices();
-
-    // Initialize AgentFactory after services
-    await initializeAgentFactory();
+    // Create and configure DI container
+    logger.info('Creating DI container', {
+      correlationId: 'startup',
+      operation: 'di_container_creation'
+    });
+    appContainer = createAppContainer();
+    registerAllServices(appContainer);
     
+    // Set global container for backward compatibility
+    setGlobalServiceContainer(appContainer);
+
+    // Initialize all services via DI container
+    logger.info('Initializing all services', {
+      correlationId: 'startup',
+      operation: 'service_initialization'
+    });
+    await initializeAllServices(appContainer);
+
+    // Initialize AgentFactory after services (pass container)
+    await initializeAgentFactory(appContainer);
+    
+    logger.info('Application initialized successfully with DI container', {
+      correlationId: 'startup',
+      operation: 'app_initialization_complete'
+    });
   } catch (error) {
     logger.error('Application initialization failed', error as Error, {
       correlationId: 'startup',
@@ -107,7 +127,21 @@ const getDetailedHealthStatus = async () => {
   // Only include detailed service health in development or when explicitly requested
   if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DETAILED_HEALTH === 'true') {
     try {
-      const serviceHealth = await serviceManager.getAllServicesHealth();
+      // Get service health from DI container
+      const serviceHealth: Record<string, any> = {};
+      if (appContainer) {
+        const cradle = appContainer.cradle;
+        for (const [name, service] of Object.entries(cradle)) {
+          if (service && typeof service.getHealth === 'function') {
+            try {
+              serviceHealth[name] = service.getHealth();
+            } catch (err) {
+              serviceHealth[name] = { healthy: false, error: 'Failed to get health' };
+            }
+          }
+        }
+      }
+      
       const agentHealth = AgentFactory.getAllAgentHealth();
       
       return {
@@ -173,8 +207,8 @@ setupSwagger(app);
 app.use('/auth', authRoutes);
 app.use('/protected', protectedRoutes);
 
-// Slack routes - pass global interfaces for event handling
-app.use('/slack', createSlackRoutes(serviceManager, () => globalInterfaces));
+// Slack routes - pass DI container for service access
+app.use('/slack', createSlackRoutes(appContainer!, () => globalInterfaces));
 
 // Slack interface integration (runs in background, completely optional)
 const setupSlackInterface = async () => {
@@ -183,7 +217,7 @@ const setupSlackInterface = async () => {
       correlationId: 'startup',
       operation: 'slack_interface_setup'
     });
-    globalInterfaces = await initializeInterfaces(serviceManager);
+    globalInterfaces = await initializeInterfaces(appContainer!);
     if (globalInterfaces.slackInterface) {
       await startInterfaces(globalInterfaces);
       logger.info('Slack interface initialized successfully', {
@@ -304,6 +338,22 @@ const startServer = async (): Promise<void> => {
         operation: 'graceful_shutdown_start',
         metadata: { signal }
       });
+      
+      // Shutdown all services
+      if (appContainer) {
+        try {
+          await shutdownAllServices(appContainer);
+          logger.info('All services shut down successfully', {
+            correlationId: 'shutdown',
+            operation: 'services_shutdown_complete'
+          });
+        } catch (error) {
+          logger.error('Error shutting down services', error as Error, {
+            correlationId: 'shutdown',
+            operation: 'services_shutdown_error'
+          });
+        }
+      }
       
       server.close((err) => {
         if (err) {

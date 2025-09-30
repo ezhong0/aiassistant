@@ -4,7 +4,7 @@ import { createLogContext } from '../../../utils/log-context';
 import { z } from 'zod';
 import { validateRequest } from '../../../middleware/validation.middleware';
 import axios from 'axios';
-import { getService } from '../../../services/service-manager';
+import { serviceManager } from '../../../services/service-locator-compat';
 import { AuthService } from '../../../services/auth.service';
 import { OAUTH_SCOPES } from '../../../constants/oauth-scopes';
 
@@ -35,7 +35,8 @@ router.get('/test-oauth-url',
   async (req: Request, res: Response) => {
   try {
     const { config } = await import('../../../config');
-    const { getService } = await import('../../../services/service-manager');
+    const { serviceManager } = await import('../../../services/service-locator-compat');
+    const getService = (name: string) => serviceManager.getService(name);
 
     const authService = getService('authService');
     if (!authService) {
@@ -138,7 +139,7 @@ router.get('/test-token-exchange',
       });
     }
 
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       return res.status(500).json({ error: 'Auth service not available' });
     }
@@ -262,7 +263,7 @@ router.get('/detailed-token-test',
       });
     }
 
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       return res.status(500).json({ error: 'Auth service not available' });
     }
@@ -388,7 +389,7 @@ router.get('/oauth-validation',
   validateRequest({ query: emptyQuerySchema }),
   async (req: Request, res: Response) => {
   try {
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       return res.status(500).json({ error: 'Auth service not available' });
     }

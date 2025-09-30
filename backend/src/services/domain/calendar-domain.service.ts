@@ -6,7 +6,6 @@ import { APIClientError, APIClientErrorCode } from '../../errors/api-client.erro
 import { ValidationHelper, CalendarValidationSchemas } from '../../validation/api-client.validation';
 import { ICalendarDomainService } from './interfaces/calendar-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 
 /**
@@ -26,9 +25,8 @@ import { SlackContext } from '../../types/slack/slack.types';
  */
 export class CalendarDomainService extends BaseService implements Partial<ICalendarDomainService> {
   private googleClient: GoogleAPIClient | null = null;
-  private googleOAuthManager: GoogleOAuthManager | null = null;
 
-  constructor() {
+  constructor(private readonly googleOAuthManager: GoogleOAuthManager) {
     super('CalendarDomainService');
   }
 
@@ -41,9 +39,6 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
       
       // Get Google API client
       this.googleClient = await getAPIClient<GoogleAPIClient>('google');
-      
-      // Get OAuth manager
-      this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
       
       this.logInfo('Calendar Domain Service initialized successfully');
     } catch (error) {

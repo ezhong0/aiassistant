@@ -7,7 +7,7 @@ import {
   MobileTokenExchangeSchema
 } from '../../schemas/auth.schemas';
 import { validateRequest } from '../../middleware/validation.middleware';
-import { getService } from '../../services/service-manager';
+import { serviceManager as serviceLocator } from '../../services/service-locator-compat';
 import { AuthService } from '../../services/auth.service';
 import { AuthenticatedRequest } from '../../middleware/auth.middleware';
 import {
@@ -44,7 +44,7 @@ router.post('/refresh',
     }
 
     // Refresh the access token
-    const authService = getService<AuthService>('authService');
+    const authService = serviceLocator.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
@@ -97,7 +97,7 @@ router.post('/logout',
 
     if (tokenToRevoke) {
       try {
-        const authService = getService<AuthService>('authService');
+        const authService = serviceLocator.getService<AuthService>('authService');
         if (!authService) {
           throw new Error('Auth service not available');
         }
@@ -139,7 +139,7 @@ router.get('/validate',
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    const authService = getService<AuthService>('authService');
+    const authService = serviceLocator.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
@@ -186,7 +186,7 @@ router.post('/exchange-mobile-tokens',
     }
 
     // Validate the access token with Google
-    const authService = getService<AuthService>('authService');
+    const authService = serviceLocator.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }

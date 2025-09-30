@@ -1,5 +1,4 @@
 import { BaseService } from './base-service';
-import { serviceManager } from "./service-manager";
 import { SlackContext } from '../types/slack/slack.types';
 import { CacheService } from './cache.service';
 // Context management service types
@@ -62,15 +61,13 @@ export interface GatheredContext {
  * - Manages context caching and retrieval
  */
 export class ContextManager extends BaseService {
-  private cacheService: CacheService | null = null;
-
   // Cache TTL for context (5 minutes)
   private readonly CONTEXT_CACHE_TTL = 300;
 
   // Maximum conversation history to maintain
   private readonly MAX_HISTORY_LENGTH = 20;
 
-  constructor() {
+  constructor(private readonly cacheService: CacheService) {
     super('ContextManager');
   }
 
@@ -78,9 +75,7 @@ export class ContextManager extends BaseService {
    * Service initialization
    */
   protected async onInitialize(): Promise<void> {
-    this.cacheService = serviceManager.getService<CacheService>('cacheService') || null;
-
-    if (this.cacheService) {
+    if (this.cacheService && this.cacheService.isReady()) {
       this.logInfo('ContextManager initialized with caching enabled');
     } else {
       this.logInfo('ContextManager initialized without caching');
@@ -224,12 +219,12 @@ export class ContextManager extends BaseService {
     this.assertReady();
 
     try {
-      // Get Slack service for message retrieval
-      const slackService = serviceManager.getService('slackService');
-      if (!slackService) {
-        this.logWarn('Slack service not available for message context');
-        return [];
-      }
+      // TODO: Inject SlackService if needed for Slack context
+      // const slackService = this.slackService;
+      // if (!slackService) {
+      //   this.logWarn('Slack service not available for message context');
+      //   return [];
+      // }
 
       // This would integrate with Slack service to get recent messages
       // For now, return empty array as placeholder
@@ -516,9 +511,9 @@ export class ContextManager extends BaseService {
    */
   private async getRecentEmailsFrom(target: string): Promise<Array<{from: string, subject: string, date: Date}>> {
     try {
-      // Try to get EmailAgent if available
-      const emailAgent = serviceManager.getService('emailAgent');
-      if (!emailAgent) return [];
+      // TODO: Refactor to inject EmailDomainService if this feature is needed
+      // const emailAgent = this.emailDomainService;
+      // if (!emailAgent) return [];
 
       // Simple search for recent emails from target
       // Note: executeOperation method removed, using fallback
@@ -550,9 +545,9 @@ export class ContextManager extends BaseService {
    */
   private async getCalendarConflicts(): Promise<Array<{title: string, time: Date}>> {
     try {
-      // Try to get CalendarAgent if available
-      const calendarAgent = serviceManager.getService('calendarAgent');
-      if (!calendarAgent) return [];
+      // TODO: Refactor to inject CalendarDomainService if this feature is needed
+      // const calendarAgent = this.calendarDomainService;
+      // if (!calendarAgent) return [];
 
       // Simple check for today's events
       const today = new Date();

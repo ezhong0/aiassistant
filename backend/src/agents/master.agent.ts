@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { serviceManager } from '../services/service-manager';
+import { serviceManager } from '../services/service-locator-compat';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
 // AgentFactory import removed - using new BaseSubAgent architecture

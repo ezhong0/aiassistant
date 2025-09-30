@@ -10,6 +10,8 @@
 
 import logger from '../utils/logger';
 import { BaseSubAgent, SubAgentResponse, AgentCapabilities } from './base-subagent';
+import { AppContainer } from '../di';
+import { setGlobalContainer } from '../services/domain/service-resolver-compat';
 
 /**
  * Agent Registry Entry
@@ -39,6 +41,7 @@ export interface NaturalLanguageExecutionResult {
 export class AgentFactory {
   private static agents = new Map<string, AgentRegistration>();
   private static initialized = false;
+  private static container: AppContainer | null = null;
 
   // ============================================================================
   // CORE REGISTRATION
@@ -258,9 +261,21 @@ export class AgentFactory {
   // ============================================================================
 
   /**
+   * Set the DI container for agent initialization
+   */
+  static setContainer(container: AppContainer): void {
+    this.container = container;
+    // Set global container for backward compatibility with agents
+    setGlobalContainer(container);
+  }
+
+  /**
    * Initialize all core agents
    */
-  static async initialize(): Promise<void> {
+  static async initialize(container?: AppContainer): Promise<void> {
+    if (container) {
+      this.setContainer(container);
+    }
     if (this.initialized) {
       logger.debug('AgentFactory already initialized', {
         correlationId: 'factory-init-skip',
@@ -480,8 +495,8 @@ export class AgentFactory {
 /**
  * Initialize the factory
  */
-export const initializeAgentFactory = async (): Promise<void> => {
-  await AgentFactory.initialize();
+export const initializeAgentFactory = async (container?: AppContainer): Promise<void> => {
+  await AgentFactory.initialize(container);
 };
 
 /**

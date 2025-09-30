@@ -134,7 +134,7 @@ export async function isErrorResult(result: string, openaiService?: any): Promis
   // If no OpenAI service provided, try to get it from service manager
   if (!openaiService) {
       try {
-        const { serviceManager } = await import('../services/service-manager');
+        const { serviceManager } = await import('../services/service-locator-compat');
         openaiService = serviceManager.getService('openaiService');
       } catch {
       // Service manager not available, throw error

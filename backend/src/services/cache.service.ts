@@ -12,11 +12,11 @@ export class CacheService extends BaseService {
   private memoryUsage: { used: number; peak: number; timestamp: number } = { used: 0, peak: 0, timestamp: Date.now() };
   private connectionPool: Map<string, RedisClientType> = new Map();
 
-  constructor() {
+  constructor(private readonly appConfig: typeof config) {
     super('cacheService');
     
-    // Use unified config system for Redis URL, fallback to Railway environment variables
-    this.REDIS_URL = config.redisUrl || 
+    // Use environment variables directly to avoid Awilix proxy property resolution
+    this.REDIS_URL = 
                      process.env.REDIS_URL || 
                      process.env.REDISCLOUD_URL || 
                      process.env.REDIS_PRIVATE_URL ||
@@ -175,15 +175,20 @@ export class CacheService extends BaseService {
       // Clean up client on failure
       if (this.client) {
         try {
-          this.client.disconnect();
+          // Check if client is already closed before disconnecting
+          if (this.client.isOpen) {
+            await this.client.disconnect();
+          }
         } catch (disconnectError) {
-          logger.warn('Error disconnecting Redis client', {
+          // Ignore disconnect errors during cleanup
+          logger.debug('Redis client disconnect during error handling', {
             correlationId: `cache-init-${Date.now()}`,
             operation: 'cache_service_init',
-            metadata: { phase: 'disconnect_error', error: disconnectError }
+            metadata: { phase: 'disconnect_cleanup' }
           });
+        } finally {
+          this.client = null;
         }
-        this.client = null;
       }
       
       // Always continue without cache rather than failing

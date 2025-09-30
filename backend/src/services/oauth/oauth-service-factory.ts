@@ -6,7 +6,7 @@
 import { AuthService } from '../auth.service';
 import { GoogleOAuthManager } from './google-oauth-manager';
 import { SlackOAuthManager } from './slack-oauth-manager';
-import { serviceManager } from '../service-manager';
+import { serviceManager } from '../service-locator-compat';
 import { ScopeManager } from '../../constants/oauth-scopes';
 import { ValidationUtils } from '../../utils/validation-helpers';
 import { HTMLTemplates } from '../../templates/html-templates';

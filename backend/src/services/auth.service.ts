@@ -15,9 +15,8 @@ import { ScopeManager, OAUTH_SCOPES } from '../constants/oauth-scopes';
 
 export class AuthService extends BaseService {
   private oauth2Client!: OAuth2Client;
-  private config: typeof unifiedConfig | null = null;
 
-  constructor() {
+  constructor(private readonly config: typeof unifiedConfig) {
     super('AuthService');
   }
 
@@ -25,28 +24,25 @@ export class AuthService extends BaseService {
    * Service-specific initialization
    */
   protected async onInitialize(): Promise<void> {
-    // Get config service from ServiceManager
-    this.config = unifiedConfig;
+    // Initialize OAuth2Client using environment variables to avoid Awilix proxy
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
     
-    if (!this.config) {
-      throw new Error('ConfigService not available from service registry');
-    }
-    
-    // Initialize OAuth2Client only if Google OAuth is configured
-    if (this.config.googleAuth?.clientId && this.config.googleAuth?.clientSecret && this.config.googleAuth?.redirectUri) {
+    if (clientId && clientSecret && redirectUri) {
       this.oauth2Client = new OAuth2Client(
-        this.config.googleAuth.clientId,
-        this.config.googleAuth.clientSecret,
-        this.config.googleAuth.redirectUri
+        clientId,
+        clientSecret,
+        redirectUri
       );
     } else {
       this.logWarn('Google OAuth not configured - OAuth functionality will be disabled');
     }
 
     this.logInfo('Auth service initialized successfully', {
-      environment: this.config.nodeEnv,
-      jwtIssuer: this.config.auth.jwt.issuer,
-      jwtExpiresIn: this.config.auth.jwt.expiresIn
+      environment: process.env.NODE_ENV || 'development',
+      jwtIssuer: process.env.JWT_ISSUER || 'ai-assistant',
+      jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
   }
 
@@ -57,15 +53,6 @@ export class AuthService extends BaseService {
     this.logInfo('Auth service destroyed');
   }
 
-  /**
-   * Check if service is ready and config is available
-   */
-  private assertConfig(): typeof unifiedConfig {
-    if (!this.config) {
-      throw new Error('AuthService config not initialized');
-    }
-    return this.config;
-  }
 
   /**
    * Generate Google OAuth authorization URL
@@ -78,7 +65,6 @@ export class AuthService extends BaseService {
     }
     
     try {
-      // const config = this.assertConfig();
       const authOptions: any = {
         access_type: 'offline',
         scope: scopes,
@@ -111,9 +97,8 @@ export class AuthService extends BaseService {
    * Generate Slack OAuth URL
    */
   generateSlackAuthURL(state: string): string {
-    const config = this.assertConfig();
-    const clientId = config.slackAuth?.clientId;
-    const redirectUri = config.slackAuth?.redirectUri;
+    const clientId = this.config.slackAuth?.clientId;
+    const redirectUri = this.config.slackAuth?.redirectUri;
     
     if (!clientId || !redirectUri) {
       throw new Error('Slack OAuth not configured');
@@ -150,13 +135,12 @@ export class AuthService extends BaseService {
     }
     
     try {
-      const config = this.assertConfig();
       this.logDebug('Exchanging authorization code for tokens', {
         codeLength: code.length,
         clientConfig: {
-          hasClientId: !!config.googleAuth?.clientId,
-          redirectUri: config.googleAuth?.redirectUri || 'not_set',
-          hasClientSecret: !!config.googleAuth?.clientSecret
+          hasClientId: !!this.config.googleAuth?.clientId,
+          redirectUri: this.config.googleAuth?.redirectUri || 'not_set',
+          hasClientSecret: !!this.config.googleAuth?.clientSecret
         }
       });
       
@@ -189,8 +173,8 @@ export class AuthService extends BaseService {
         errorDetails: error.response?.data,
         status: error.response?.status,
         clientConfig: {
-          clientId: this.config?.googleAuth?.clientId?.substring(0, 20) + '...' || 'unknown',
-          redirectUri: this.config?.googleAuth?.redirectUri || 'unknown'
+          clientId: this.config.googleAuth?.clientId?.substring(0, 20) + '...' || 'unknown',
+          redirectUri: this.config.googleAuth?.redirectUri || 'unknown'
         }
       });
       this.handleError(error, 'exchangeCodeForTokens');
@@ -237,14 +221,13 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
-      const config = this.assertConfig();
       const payload: JWTPayload = {
         sub: userId,
         email,
-        iss: config.auth.jwt.issuer,
-        aud: config.auth.jwt.audience,
+        iss: this.config.auth.jwt.issuer,
+        aud: this.config.auth.jwt.audience,
         iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(config.auth.jwt.expiresIn),
+        exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(this.config.auth.jwt.expiresIn),
         ...additionalClaims
       };
 
@@ -252,11 +235,11 @@ export class AuthService extends BaseService {
         algorithm: 'HS256'
       };
 
-      const token = jwt.sign(payload, config.jwtSecret, options);
+      const token = jwt.sign(payload, this.config.jwtSecret, options);
       
       this.logDebug('Generated JWT token', { 
         userId, 
-        expiresIn: config.auth.jwt.expiresIn 
+        expiresIn: this.config.auth.jwt.expiresIn 
       });
       
       return token;
@@ -272,15 +255,14 @@ export class AuthService extends BaseService {
     this.assertReady();
     
     try {
-      const config = this.assertConfig();
       // Validate token format first
       if (!token || typeof token !== 'string' || token.trim().length === 0) {
         throw new Error('Invalid token format: token must be a non-empty string');
       }
 
-      const decoded = jwt.verify(token, config.jwtSecret, {
-        issuer: config.auth.jwt.issuer,
-        audience: config.auth.jwt.audience
+      const decoded = jwt.verify(token, this.config.jwtSecret, {
+        issuer: this.config.auth.jwt.issuer,
+        audience: this.config.auth.jwt.audience
       }) as JWTPayload;
 
       this.logDebug('JWT token verified successfully', { 
@@ -467,15 +449,14 @@ export class AuthService extends BaseService {
   getHealth(): { healthy: boolean; details?: any } {
     try {
       const healthy = this.isReady() && !!this.oauth2Client;
-      const config = this.config; // May be null if not initialized
       const details = {
         oauth2Client: !!this.oauth2Client,
-        config: config ? {
-          hasGoogleClientId: !!config.googleAuth?.clientId,
-          hasGoogleClientSecret: !!config.googleAuth?.clientSecret,
-          hasGoogleRedirectUri: !!config.googleAuth?.redirectUri,
-          hasJWTSecret: !!config.jwtSecret
-        } : null
+        config: {
+          hasGoogleClientId: !!this.config.googleAuth?.clientId,
+          hasGoogleClientSecret: !!this.config.googleAuth?.clientSecret,
+          hasGoogleRedirectUri: !!this.config.googleAuth?.redirectUri,
+          hasJWTSecret: !!this.config.jwtSecret
+        }
       };
 
       return { healthy, details };

@@ -1,7 +1,6 @@
 import { BaseService } from '../base-service';
 import { TokenManager } from '../token-manager';
 import { OAuthStateService } from '../oauth-state.service';
-import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 
 export interface SlackOAuthConfig {
@@ -41,13 +40,12 @@ export interface SlackOAuthValidationResult {
  * for Slack domain services.
  */
 export class SlackOAuthManager extends BaseService {
-  private config: SlackOAuthConfig;
-  private tokenManager: TokenManager | null = null;
-  private oauthStateService: OAuthStateService | null = null;
-
-  constructor(config: SlackOAuthConfig) {
+  constructor(
+    private readonly config: SlackOAuthConfig,
+    private readonly tokenManager: TokenManager,
+    private readonly oauthStateService: OAuthStateService
+  ) {
     super('SlackOAuthManager');
-    this.config = config;
   }
 
   /**
@@ -57,14 +55,10 @@ export class SlackOAuthManager extends BaseService {
     try {
       this.logInfo('Initializing SlackOAuthManager...');
 
-      // Initialize service dependencies
-      await this.initializeDependencies();
-
       this.logInfo('SlackOAuthManager initialized successfully', {
         clientId: this.config.clientId,
         redirectUri: this.config.redirectUri,
-        scopes: this.config.scopes,
-        hasTokenManager: !!this.tokenManager
+        scopes: this.config.scopes
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -82,17 +76,6 @@ export class SlackOAuthManager extends BaseService {
     }
   }
 
-  /**
-   * Initialize service dependencies
-   */
-  private async initializeDependencies(): Promise<void> {
-    this.tokenManager = serviceManager.getService('tokenManager') as TokenManager;
-    this.oauthStateService = serviceManager.getService('oauthStateService') as OAuthStateService;
-
-    if (!this.tokenManager) {
-      throw new Error('TokenManager not available');
-    }
-  }
 
   /**
    * Generate OAuth authorization URL for Slack

@@ -66,12 +66,8 @@ export abstract class BaseAPIClient extends BaseService {
 
     // Only initialize circuit breaker for AI operations
     if (requiresCircuitBreaker) {
-      this.circuitBreaker = new AIServiceCircuitBreaker({
-        failureThreshold: process.env.E2E_TESTING === 'true' ? 10000 : (config.circuitBreaker?.failureThreshold || 5),
-        recoveryTimeout: process.env.E2E_TESTING === 'true' ? 5000 : (config.circuitBreaker?.recoveryTimeout || 60000),
-        successThreshold: config.circuitBreaker?.successThreshold || 3,
-        timeout: process.env.E2E_TESTING === 'true' ? 60000 : (config.circuitBreaker?.timeout || 30000)
-      });
+      // AIServiceCircuitBreaker now uses environment variables for config
+      this.circuitBreaker = new AIServiceCircuitBreaker();
     }
   }
 

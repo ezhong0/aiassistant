@@ -4,8 +4,8 @@ import { createLogContext } from '../../utils/log-context';
 import { z } from 'zod';
 import { GoogleOAuthCallbackSchema } from '../../schemas/auth.schemas';
 import { validateRequest } from '../../middleware/validation.middleware';
-import { getService } from '../../services/service-manager';
-import { DomainServiceResolver } from '../../services/domain';
+import { serviceManager } from '../../services/service-locator-compat';
+import { DomainServiceResolver } from '../../services/domain/service-resolver-compat';
 import { AuthService } from '../../services/auth.service';
 import { TokenStorageService } from '../../services/token-storage.service';
 import {
@@ -51,7 +51,7 @@ router.get('/google/slack',
     // Use centralized scope management
     const scopes = [...OAUTH_SCOPES.GOOGLE.SLACK_INTEGRATION];
 
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
@@ -100,7 +100,7 @@ router.get('/google',
     // Use centralized scope management
     const scopes = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
 
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
@@ -148,7 +148,7 @@ router.get('/init',
       // Not a Slack user, continue with regular flow
     }
 
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
@@ -283,7 +283,7 @@ router.get('/callback',
     }
 
     // Exchange code for tokens
-    const authService = getService<AuthService>('authService');
+    const authService = serviceManager.getService<AuthService>('authService');
     if (!authService) {
       throw new Error('Auth service not available');
     }
@@ -341,7 +341,7 @@ router.get('/callback',
 
     if (isSlackAuth && hasValidSlackIds) {
       try {
-        const tokenStorageService = getService('tokenStorageService') as TokenStorageService;
+        const tokenStorageService = serviceManager.getService<TokenStorageService>('tokenStorageService');
         if (tokenStorageService) {
           // Store OAuth tokens for the Slack user
           const userId = `${teamId}:${userId_slack}`;
@@ -388,7 +388,7 @@ router.get('/callback',
           userId_slack,
           operation: 'token_storage_error',
           metadata: {
-            hasTokenStorageService: !!getService('tokenStorageService'),
+            hasTokenStorageService: !!serviceManager.getService('tokenStorageService'),
             errorMessage: (error as Error).message,
             errorStack: (error as Error).stack
           }

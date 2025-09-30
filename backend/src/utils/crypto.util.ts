@@ -1,5 +1,5 @@
 import { EncryptionService } from '../services/encryption.service';
-import { serviceManager } from '../services/service-manager';
+import { serviceManager } from '../services/service-locator-compat';
 
 /**
  * Legacy crypto utilities - now delegates to EncryptionService

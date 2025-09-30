@@ -1,5 +1,4 @@
 import { BaseService } from './base-service';
-import { DomainServiceResolver } from './domain';
 import { IAIDomainService } from './domain/interfaces/ai-domain.interface';
 
 /**
@@ -67,10 +66,12 @@ const DEFAULT_CONFIG = {
  * - Flow control support for dynamic workflows
  */
 export class GenericAIService extends BaseService {
-  private aiDomainService: IAIDomainService | null = null;
   private config: typeof DEFAULT_CONFIG;
 
-  constructor(config?: Partial<typeof DEFAULT_CONFIG>) {
+  constructor(
+    private readonly aiDomainService: IAIDomainService,
+    config?: Partial<typeof DEFAULT_CONFIG>
+  ) {
     super('GenericAIService');
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -80,13 +81,10 @@ export class GenericAIService extends BaseService {
    */
   protected async onInitialize(): Promise<void> {
     try {
-      this.aiDomainService = DomainServiceResolver.getAIService();
-      await this.aiDomainService.initialize();
-      
       this.logInfo('GenericAIService initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize GenericAIService', error);
-      throw new Error('AIDomainService not available for GenericAIService');
+      throw error;
     }
   }
 

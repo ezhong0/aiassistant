@@ -1,7 +1,6 @@
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
-import { serviceManager } from "./service-manager";
 import { CacheService } from './cache.service';
 import { SlackContext } from '../types/slack/slack.types';
 
@@ -11,18 +10,18 @@ import { SlackContext } from '../types/slack/slack.types';
  * Ensures tamper protection and single-use (anti-replay) across multiple instances.
  */
 export class OAuthStateService extends BaseService {
-  private cache: CacheService | null = null;
   private readonly ttlMs = 10 * 60 * 1000; // 10 minutes
   private readonly prefix = 'oauth_state';
 
-  constructor() {
+  constructor(private readonly cache: CacheService) {
     super('oauthStateService');
   }
 
   protected async onInitialize(): Promise<void> {
     try {
-      this.cache = serviceManager.getService('cacheService') as unknown as CacheService;
-      if (!this.cache) {
+      // Check if cache is available (avoid proxy access with typeof check)
+      const hasCacheService = this.cache && typeof this.cache === 'object';
+      if (!hasCacheService) {
         logger.warn('OAuthStateService initialized without CacheService - falling back to stateless behavior', {
           correlationId: `oauth-state-init-${Date.now()}`,
           operation: 'oauth_state_init'

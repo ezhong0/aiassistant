@@ -6,7 +6,6 @@ import { APIClientError, APIClientErrorCode } from '../../errors/api-client.erro
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
 import { IEmailDomainService, EmailThread } from './interfaces/email-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { serviceManager } from '../service-manager';
 import { SlackContext } from '../../types/slack/slack.types';
 
 /**
@@ -26,9 +25,8 @@ import { SlackContext } from '../../types/slack/slack.types';
  */
 export class EmailDomainService extends BaseService implements Partial<IEmailDomainService> {
   private googleClient: GoogleAPIClient | null = null;
-  private googleOAuthManager: GoogleOAuthManager | null = null;
 
-  constructor() {
+  constructor(private readonly googleOAuthManager: GoogleOAuthManager) {
     super('EmailDomainService');
   }
 
@@ -41,9 +39,6 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       
       // Get Google API client
       this.googleClient = await getAPIClient<GoogleAPIClient>('google');
-      
-      // Get OAuth manager
-      this.googleOAuthManager = serviceManager.getService<GoogleOAuthManager>('googleOAuthManager') || null;
       
       this.logInfo('Email Domain Service initialized successfully');
     } catch (error) {

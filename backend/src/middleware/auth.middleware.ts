@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
-import { getService } from '../services/service-manager';
+import { serviceManager } from '../services/service-locator-compat';
 import { AuthService } from '../services/auth.service';
 import { createLogContext } from '../utils/log-context';
+
+const getService = <T>(serviceName: string): T | null => serviceManager.getService<T>(serviceName);
 
 /**
  * Authenticated user interface for request context
@@ -26,6 +28,8 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
   /** JWT token used for authentication */
   token?: string;
+  /** Validated request body from validation middleware */
+  validatedBody?: any;
 }
 
 /**

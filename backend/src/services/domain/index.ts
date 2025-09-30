@@ -23,15 +23,8 @@ export type {
   IAIDomainService
 } from './interfaces';
 
-// Export dependency injection
-export {
-  DomainServiceContainer,
-  domainServiceContainer,
-  DomainServiceRegistrations,
-  DomainServiceResolver,
-  initializeDomainServices,
-  initializeDomainServicesForTesting
-} from './dependency-injection/domain-service-container';
+// Export backward compatibility resolver
+export { DomainServiceResolver } from './service-resolver-compat';
 
 // Export service factory
 export {

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { serviceManager } from '../services/service-manager';
+import { serviceManager } from '../services/service-locator-compat';
 import { SentryService } from '../services/sentry.service';
 import logger from '../utils/logger';
 

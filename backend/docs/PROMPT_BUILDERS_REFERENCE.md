@@ -59,6 +59,8 @@ User Request
 │  │  │     ↓                            │    │  │
 │  │  │  [Tool Execution]                │    │  │
 │  │  │     ↓                            │    │  │
+│  │  │  8. PlanReviewPromptBuilder     │    │  │
+│  │  │     ↓                            │    │  │
 │  │  │  9. ResponseFormattingPromptBuilder │  │
 │  │  └─────────────────────────────────┘    │  │
 │  │     ↓                                     │  │
@@ -91,6 +93,134 @@ Final Response to User
 
 **Tool Calls**: Specific operations like `send_email`, `calendar_create`, `search_contacts`
 
+**State Machine**: The workflow follows a clear state progression from analysis to completion, with defined transitions and decision points.
+
+**Composition Patterns**: Complex workflows are built from simple, reusable patterns that can be combined and adapted.
+
+---
+
+## Context Engineering Principles
+
+The prompt builders use several core principles to ensure robust, flexible, and maintainable AI interactions:
+
+### Abstraction Layers
+
+Each prompt builder operates at a specific abstraction level:
+
+**Intent Layer** (SituationAnalysis, WorkflowPlanning):
+- Understands user goals and constraints
+- Domain-agnostic reasoning about what the user wants
+
+**Strategy Layer** (ActionExecution, ProgressAssessment):
+- Determines how to achieve goals
+- Domain-specific but tool-agnostic
+
+**Execution Layer** (IntentAssessment, ResponseFormatting):
+- Performs specific operations
+- Tool-specific implementation details
+
+### State Machine Thinking
+
+The workflow follows a clear state machine pattern:
+
+```
+[analyzing] → [planning] → [executing] → [assessing] → [complete]
+     ↑           ↓           ↓           ↓
+     └─── [user_input_needed] ←─────────┘
+```
+
+**States**:
+- `analyzing`: Understanding user intent
+- `planning`: Breaking down into steps
+- `executing`: Performing operations
+- `assessing`: Evaluating progress
+- `complete`: Goal achieved
+
+**Transitions**:
+- State changes based on confidence levels and blockers
+- User input can interrupt any state
+- Failed operations trigger state reassessment
+
+### Composition Patterns
+
+Complex workflows are built from simple, reusable patterns:
+
+**Gather → Validate → Execute**:
+- Most common pattern across all domains
+- Ensures data quality before operations
+
+**Parallel Execution**:
+- Multiple independent operations (e.g., checking multiple calendars)
+- Improves performance and user experience
+
+**Conditional Branching**:
+- Different paths based on results
+- Handles edge cases and error conditions
+
+**Iterative Refinement**:
+- Repeat operations until success criteria met
+- Adapts to changing conditions
+
+### Declarative vs Imperative
+
+**Declarative Approach** (What):
+- "Find all emails about budget from last week"
+- "Schedule meeting with team for next Friday"
+- Focuses on desired outcome
+
+**Imperative Constraints** (How):
+- "Must validate recipient addresses before sending"
+- "Must check timezone consistency for all attendees"
+- Specifies required validation and safety checks
+
+### Contextual Reasoning
+
+Adapts behavior based on available information:
+
+**Confidence-Based Execution**:
+- High confidence (90%+): Direct execution
+- Medium confidence (50-89%): Preview mode
+- Low confidence (<50%): Request user input
+
+**Constraint Propagation**:
+- Risk level affects output strategy
+- Available data influences execution path
+- User permissions determine operation scope
+
+### Meta-Programming Patterns
+
+The system reasons about its own capabilities:
+
+**Capability Discovery**:
+- "What tools are available for this domain?"
+- "Which agent can handle this request?"
+
+**Strategy Selection**:
+- "Which approach is most likely to succeed?"
+- "What's the optimal execution order?"
+
+**Performance Monitoring**:
+- "How can this operation be optimized?"
+- "What's causing delays or failures?"
+
+### Chain of Thought Reasoning
+
+Each prompt builder outputs a thinking process before generating results:
+
+**Thinking Process Structure**:
+- **Analysis**: What information is available and what needs to be determined
+- **Reasoning**: Step-by-step logical progression
+- **Considerations**: Edge cases, constraints, and alternative approaches
+- **Decision**: Final choice with justification
+- **Confidence**: Level of certainty in the decision
+
+**Benefits**:
+- **Transparency**: Makes AI reasoning visible and debuggable
+- **Quality**: Forces systematic thinking before output
+- **Learning**: Enables pattern recognition and improvement
+- **Debugging**: Easier to identify where reasoning goes wrong
+- **Consistency**: Standardized thinking process across all builders
+
 ---
 
 ## MasterAgent Prompt Builders
@@ -102,6 +232,14 @@ Final Response to User
 **Phase**: Initial Analysis (Step 1)
 
 **Purpose**: Understand user intent, assess risk, and determine output strategy
+
+#### Principles Applied
+
+**Abstraction Layer**: Intent Layer - focuses on understanding user goals
+**State Machine**: Transitions from `analyzing` to `planning` state
+**Declarative Approach**: Determines "what" the user wants, not "how" to do it
+**Contextual Reasoning**: Adapts risk assessment based on available information
+**Meta-Programming**: Reasons about system capabilities and constraints
 
 #### What It Does
 
@@ -119,8 +257,25 @@ Final Response to User
 #### Output
 ```typescript
 {
-  context: string // Structured context with GOAL, ENTITIES, RISK_LEVEL, etc.
+  thinking: string,  // Chain of thought reasoning process
+  context: string    // Structured context with GOAL, ENTITIES, RISK_LEVEL, etc.
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: User wants to send email to all board members about Q3 results
+REASONING: 
+1. This is a mass communication operation affecting multiple people
+2. Board members are high-level stakeholders requiring careful handling
+3. Q3 results are financial information that may be sensitive
+4. Risk level should be high due to mass operation and sensitive content
+CONSIDERATIONS: 
+- Need to verify all board member email addresses
+- Should require user confirmation before sending
+- May need to check for any compliance requirements
+DECISION: Set RISK_LEVEL to high and OUTPUT_STRATEGY to confirmation
+CONFIDENCE: 90% - clear mass operation with sensitive content
 ```
 
 #### Risk Assessment Rules
@@ -181,6 +336,14 @@ CURRENT_TIME: 2025-09-30T14:30:00Z
 
 **Purpose**: Break down the user request into specific, executable steps
 
+#### Principles Applied
+
+**Abstraction Layer**: Intent Layer - translates goals into actionable plans
+**State Machine**: Transitions from `planning` to `executing` state
+**Composition Patterns**: Uses Gather → Validate → Execute pattern
+**Declarative Approach**: Focuses on desired outcomes, not implementation details
+**Meta-Programming**: Selects optimal execution strategy
+
 #### What It Does
 
 1. **Analyzes** the context and user intent
@@ -195,9 +358,29 @@ CURRENT_TIME: 2025-09-30T14:30:00Z
 #### Output
 ```typescript
 {
+  thinking: string,   // Chain of thought reasoning process
   context: string,    // Updated context with workflow plan
   steps: string[]     // Ordered list of specific steps
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Need to break down "send email to board members about Q3 results" into executable steps
+REASONING:
+1. First must identify who the board members are
+2. Then verify their email addresses are valid
+3. Need to draft the email content about Q3 results
+4. Should generate preview before sending
+5. Require user approval due to high risk level
+6. Finally send and confirm delivery
+CONSIDERATIONS:
+- Board members might be in different contact groups
+- Some email addresses might be invalid
+- Q3 results content might need to be retrieved from another source
+- Should handle partial failures gracefully
+DECISION: Create 7-step workflow with validation and approval checkpoints
+CONFIDENCE: 85% - logical progression with proper safeguards
 ```
 
 #### Step Creation Guidelines
@@ -240,6 +423,14 @@ OUTPUT_STRATEGY: confirmation
 
 **Purpose**: Check if workflow can continue or needs user input
 
+#### Principles Applied
+
+**Abstraction Layer**: Strategy Layer - evaluates execution readiness
+**State Machine**: Manages transitions between `executing` and `user_input_needed` states
+**Contextual Reasoning**: Adapts based on confidence levels and available information
+**Conditional Branching**: Different paths based on workflow state
+**Meta-Programming**: Monitors system state and performance
+
 #### What It Does
 
 1. **Checks** for interruptions or new user messages
@@ -256,10 +447,27 @@ OUTPUT_STRATEGY: confirmation
 #### Output
 ```typescript
 {
+  thinking: string,          // Chain of thought reasoning process
   context: string,           // Updated context
   needsUserInput?: boolean,  // True if pausing for user input
   requiredInfo?: string      // What information is needed
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Current step is "Retrieve board member list" with 85% confidence
+REASONING:
+1. Confidence is above 70% threshold, so can proceed
+2. No blockers identified in current context
+3. All required information is available
+4. No ambiguous entities that need clarification
+CONSIDERATIONS:
+- Board member list retrieval is a standard operation
+- Contact agent should handle this without issues
+- No user input needed at this stage
+DECISION: Continue with execution, no user input required
+CONFIDENCE: 90% - clear path forward with no obstacles
 ```
 
 #### User Input Decision Criteria
@@ -314,6 +522,14 @@ context: "GOAL: Search for emails from last week"
 
 **Purpose**: Translate workflow steps into specific SubAgent requests
 
+#### Principles Applied
+
+**Abstraction Layer**: Strategy Layer - bridges intent and execution
+**State Machine**: Manages `executing` state transitions
+**Composition Patterns**: Orchestrates domain-specific operations
+**Declarative Approach**: Focuses on desired outcomes for SubAgents
+**Meta-Programming**: Selects optimal agent and strategy
+
 #### What It Does
 
 1. **Analyzes** the current step from workflow plan
@@ -329,10 +545,27 @@ context: "GOAL: Search for emails from last week"
 #### Output
 ```typescript
 {
+  thinking: string,                                 // Chain of thought reasoning process
   context: string,                                  // Updated context
   agent: 'email' | 'calendar' | 'contact' | 'slack', // Which agent to use
   request: string                                   // Natural language request for agent
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Current step is "Retrieve list of all board members from contacts"
+REASONING:
+1. This is a contact-related operation requiring contact agent
+2. Need to search for contacts tagged as board members
+3. Should return names and email addresses for verification
+4. Contact agent has the right tools for this operation
+CONSIDERATIONS:
+- Board members might be in different contact groups
+- Some might be tagged differently (e.g., "Board of Directors")
+- Should include all variations to ensure completeness
+DECISION: Use contact agent with comprehensive search criteria
+CONFIDENCE: 95% - clear contact operation with well-defined scope
 ```
 
 #### Agent Selection Guidelines
@@ -403,6 +636,14 @@ PROGRESS: Planning complete, ready to execute
 
 **Purpose**: Assess progress and determine if workflow should continue
 
+#### Principles Applied
+
+**Abstraction Layer**: Strategy Layer - evaluates execution results
+**State Machine**: Manages transitions between `assessing` and `executing`/`complete` states
+**Contextual Reasoning**: Adapts based on results and confidence levels
+**Iterative Refinement**: Revises plans based on new information
+**Meta-Programming**: Monitors performance and optimizes strategy
+
 #### What It Does
 
 1. **Analyzes** results from SubAgent execution
@@ -419,9 +660,27 @@ PROGRESS: Planning complete, ready to execute
 #### Output
 ```typescript
 {
+  thinking: string,     // Chain of thought reasoning process
   context: string,      // Updated context with progress
   newSteps?: string[]   // Only if plan needs revision
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Contact agent returned 5 board members, all with valid email addresses
+REASONING:
+1. Step 1 completed successfully - board member list retrieved
+2. All email addresses are valid, no issues found
+3. Progress toward goal is on track
+4. Next step should be to draft email content
+5. Confidence increased due to successful data gathering
+CONSIDERATIONS:
+- No plan revision needed - original plan is working
+- All board members found, no missing contacts
+- Ready to proceed to next step
+DECISION: Continue with existing plan, update confidence to 90%
+CONFIDENCE: 90% - successful completion of first step
 ```
 
 #### Progress Assessment Criteria
@@ -508,6 +767,14 @@ Confidence = Data Completeness (40%)
 
 **Purpose**: Generate human-readable response when workflow is complete
 
+#### Principles Applied
+
+**Abstraction Layer**: Intent Layer - communicates results to user
+**State Machine**: Transitions to `complete` state
+**Contextual Reasoning**: Adapts response based on output strategy and results
+**Declarative Approach**: Focuses on user experience and clarity
+**Meta-Programming**: Optimizes communication effectiveness
+
 #### What It Does
 
 1. **Reviews** completed workflow and gathered data
@@ -523,9 +790,28 @@ Confidence = Data Completeness (40%)
 #### Output
 ```typescript
 {
+  thinking: string,  // Chain of thought reasoning process
   context: string,   // Final context state
   response: string   // Human-readable response
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Workflow complete - email sent to 5 board members about Q3 results
+REASONING:
+1. All steps completed successfully
+2. Email was sent to all intended recipients
+3. Delivery confirmation received
+4. Goal has been fully accomplished
+5. User should be informed of success
+CONSIDERATIONS:
+- Should provide clear summary of what was accomplished
+- Include details about recipients and delivery status
+- Offer next steps if appropriate
+- Use positive, confident tone
+DECISION: Generate success response with clear summary and next steps
+CONFIDENCE: 95% - complete success with full confirmation
 ```
 
 #### Output Strategy Execution
@@ -633,7 +919,7 @@ I can continue in 5 minutes when the rate limit resets, or you can send them man
 SubAgents execute a **3-phase workflow** for domain-specific operations:
 
 ```
-1. Intent Assessment → 2. Tool Execution → 3. Response Formatting
+1. Intent Assessment → 2. Tool Execution → 3. Plan Review → 4. Response Formatting
 ```
 
 ### 7. IntentAssessmentPromptBuilder
@@ -643,6 +929,14 @@ SubAgents execute a **3-phase workflow** for domain-specific operations:
 **Phase**: SubAgent Phase 1
 
 **Purpose**: Understand SubAgent request and plan tool execution
+
+#### Principles Applied
+
+**Abstraction Layer**: Execution Layer - translates strategy into tool calls
+**State Machine**: Manages SubAgent execution state
+**Composition Patterns**: Plans tool execution sequences
+**Declarative Approach**: Focuses on desired tool outcomes
+**Meta-Programming**: Selects optimal tools and parameters
 
 #### What It Does
 
@@ -660,10 +954,28 @@ SubAgents execute a **3-phase workflow** for domain-specific operations:
 #### Output
 ```typescript
 {
+  thinking: string,      // Chain of thought reasoning process
   context: string,       // Updated context with understanding
   toolCalls: ToolCall[], // List of tools to execute
   executionPlan: string  // Brief plan description
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Need to search for emails from john@company.com about budget from last week
+REASONING:
+1. This is an email search operation requiring search_emails tool
+2. Need to filter by sender: john@company.com
+3. Need to filter by date range: last week
+4. Need to filter by content: containing "budget"
+5. Should limit results to reasonable number (50 max)
+CONSIDERATIONS:
+- Date range needs to be calculated (last week = 2025-09-23 to 2025-09-30)
+- Search query should be specific to avoid false positives
+- Max results should prevent overwhelming response
+DECISION: Use search_emails tool with specific filters
+CONFIDENCE: 95% - clear email search operation with well-defined parameters
 ```
 
 #### Tool Call Structure
@@ -744,9 +1056,17 @@ interface ToolCall {
 
 **Location**: `src/services/prompt-builders/sub-agent/plan-review-prompt-builder.ts`
 
-**Phase**: SubAgent Phase 2 (Optional - between tool executions)
+**Phase**: SubAgent Phase 3 (Between tool executions)
 
 **Purpose**: Review tool results and revise plan if needed
+
+#### Principles Applied
+
+**Abstraction Layer**: Execution Layer - refines tool execution strategy
+**State Machine**: Manages SubAgent execution state transitions
+**Iterative Refinement**: Revises plans based on tool results
+**Contextual Reasoning**: Adapts based on execution outcomes
+**Meta-Programming**: Optimizes tool execution strategy
 
 #### What It Does
 
@@ -763,9 +1083,28 @@ interface ToolCall {
 #### Output
 ```typescript
 {
+  thinking: string,  // Chain of thought reasoning process
   context: string,   // Updated context with results
   steps: string[]    // Updated execution steps (may be modified)
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Email search returned 0 results for exact criteria
+REASONING:
+1. Original search was too restrictive
+2. Need to broaden search criteria to find relevant emails
+3. Should try searching for emails from john@company.com (any content)
+4. Should also try searching for emails containing "budget" (any sender)
+5. This will help identify if the issue is sender, content, or date range
+CONSIDERATIONS:
+- User specifically asked for emails from john@company.com about budget
+- But no results found with exact criteria
+- Should broaden search while maintaining relevance
+- Need to report findings clearly to user
+DECISION: Revise plan to use broader search criteria
+CONFIDENCE: 80% - logical approach to handle no results scenario
 ```
 
 #### Plan Review Guidelines
@@ -810,9 +1149,17 @@ STATUS: Tool executed successfully but no emails found
 
 **Location**: `src/services/prompt-builders/sub-agent/response-formatting-prompt-builder.ts`
 
-**Phase**: SubAgent Phase 3 (Final)
+**Phase**: SubAgent Phase 4 (Final)
 
 **Purpose**: Format tool execution results for MasterAgent
+
+#### Principles Applied
+
+**Abstraction Layer**: Execution Layer - formats results for higher layers
+**State Machine**: Completes SubAgent execution state
+**Contextual Reasoning**: Adapts formatting based on results and context
+**Declarative Approach**: Focuses on clear communication of outcomes
+**Meta-Programming**: Optimizes result presentation
 
 #### What It Does
 
@@ -829,6 +1176,7 @@ STATUS: Tool executed successfully but no emails found
 #### Output
 ```typescript
 {
+  thinking: string,    // Chain of thought reasoning process
   context: string,     // Final context with results
   response: {
     success: boolean,  // Was request fulfilled?
@@ -836,6 +1184,24 @@ STATUS: Tool executed successfully but no emails found
     data?: any         // Optional structured data
   }
 }
+```
+
+#### Thinking Process Example
+```
+ANALYSIS: Email search completed successfully, found 3 emails matching criteria
+REASONING:
+1. Tool execution was successful - no errors occurred
+2. Found 3 emails from john@company.com about budget from last week
+3. All emails have valid subjects and dates
+4. Request was fully fulfilled as asked
+5. Should provide clear summary with email details
+CONSIDERATIONS:
+- User asked for emails from john@company.com about budget from last week
+- Found exactly what was requested
+- Should include email subjects and dates for context
+- No additional data needed beyond summary
+DECISION: Mark as successful with detailed summary
+CONFIDENCE: 95% - complete success with all requested information
 ```
 
 #### Response Formatting Guidelines
@@ -1210,8 +1576,8 @@ Output:
 | **ProgressAssessment** | After each SubAgent | Check if complete | Context + optional new steps |
 | **FinalResponse** | Once at end | Generate user response | Context + human-readable response |
 | **IntentAssessment** | SubAgent Phase 1 | Plan tool execution | Context + tool calls |
-| **PlanReview** | SubAgent Phase 2 (optional) | Revise plan if needed | Context + updated steps |
-| **ResponseFormatting** | SubAgent Phase 3 | Format results | Context + structured response |
+| **PlanReview** | SubAgent Phase 3 | Revise plan if needed | Context + updated steps |
+| **ResponseFormatting** | SubAgent Phase 4 | Format results | Context + structured response |
 
 ### Design Principles
 
@@ -1222,6 +1588,58 @@ Output:
 5. **Iterative Refinement**: Plans can be revised based on results
 6. **User Control**: High-risk operations require approval
 7. **Clear Communication**: Natural language throughout
+8. **Abstraction Layers**: Clear separation between intent, strategy, and execution
+9. **State Machine Thinking**: Explicit state transitions and decision points
+10. **Composition Patterns**: Complex behaviors built from simple, reusable components
+11. **Declarative vs Imperative**: Separate "what" from "how" for flexibility
+12. **Contextual Reasoning**: Adapt behavior based on available information and constraints
+13. **Meta-Programming**: System reasons about its own capabilities and performance
+14. **Chain of Thought**: Systematic thinking process before generating outputs
+
+---
+
+## Principles in Action
+
+### Example: Complex Email Workflow
+
+**User Request**: "Send Q3 results to all board members and schedule a follow-up meeting"
+
+**Abstraction Layers in Action**:
+1. **Intent Layer** (SituationAnalysis): "Communicate results and schedule follow-up"
+2. **Strategy Layer** (WorkflowPlanning): "Email first, then calendar coordination"
+3. **Execution Layer** (ActionExecution): "Use email agent, then calendar agent"
+
+**State Machine Progression**:
+```
+[analyzing] → [planning] → [executing] → [assessing] → [complete]
+     ↓           ↓           ↓           ↓
+   Intent     Steps      Email +      Progress     Final
+   Analysis   Created    Calendar     Checked      Response
+```
+
+**Composition Patterns Used**:
+- **Gather → Validate → Execute**: Get board members, validate emails, send
+- **Sequential Execution**: Email first, then calendar
+- **Conditional Branching**: Different paths if email fails
+
+**Declarative vs Imperative**:
+- **Declarative**: "Send results to all board members"
+- **Imperative**: "Must validate email addresses, must check permissions"
+
+**Contextual Reasoning**:
+- **High Risk**: Mass email to board members
+- **Output Strategy**: Confirmation required
+- **Confidence**: Starts at 70%, increases as data gathered
+
+**Meta-Programming**:
+- **Capability Discovery**: "Which agents can handle this request?"
+- **Strategy Selection**: "Email first or calendar first?"
+- **Performance Monitoring**: "How to optimize this workflow?"
+
+**Chain of Thought**:
+- **SituationAnalysis**: "ANALYSIS: Mass email to board members... REASONING: High risk due to sensitive content... DECISION: Set RISK_LEVEL to high"
+- **WorkflowPlanning**: "ANALYSIS: Need to break down into steps... REASONING: First get contacts, then validate... DECISION: Create 7-step workflow"
+- **ActionExecution**: "ANALYSIS: Current step is contact retrieval... REASONING: Use contact agent... DECISION: Request board member list"
 
 ---
 
