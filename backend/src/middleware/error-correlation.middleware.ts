@@ -196,7 +196,7 @@ const correlationStore = new CorrelationStore();
 /**
  * Start periodic cleanup
  */
-setInterval(() => {
+globalThis.setInterval(() => {
   correlationStore.cleanup();
 }, 300000); // Every 5 minutes
 
@@ -411,9 +411,7 @@ export function createCorrelationMiddleware(options: {
 } = {}) {
   const {
     headerName = 'x-correlation-id',
-    includeUserAgent = true,
-    includeBody = false,
-    maxRecentRequests = 1000
+    includeUserAgent = true
   } = options;
 
   return (req: Request, res: Response, next: NextFunction): void => {

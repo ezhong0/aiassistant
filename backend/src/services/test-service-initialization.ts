@@ -13,6 +13,8 @@ import { AuthStatusService } from './auth-status.service';
 import { AuthService } from './auth.service';
 import { TokenManager } from './token-manager';
 import { GenericAIService } from './generic-ai.service';
+import { EncryptionService } from './encryption.service';
+import { SentryService } from './sentry.service';
 // Use real domain services, not mocks
 import logger from '../utils/logger';
 
@@ -79,7 +81,15 @@ const registerTestServices = async (): Promise<void> => {
     const mockDatabaseService = new MockDatabaseService();
     serviceManager.registerService('databaseService', mockDatabaseService, []);
 
-    // 2. Mock Cache Service - No dependencies, high priority
+    // 2. EncryptionService - No dependencies, high priority
+    const encryptionService = new EncryptionService();
+    serviceManager.registerService('encryptionService', encryptionService, []);
+
+    // 3. SentryService - No dependencies, high priority (error tracking)
+    const sentryService = new SentryService();
+    serviceManager.registerService('sentryService', sentryService, []);
+
+    // 4. Mock Cache Service - No dependencies, high priority
     const mockCacheService = new MockCacheService();
     serviceManager.registerService('cacheService', mockCacheService, []);
 
@@ -87,27 +97,27 @@ const registerTestServices = async (): Promise<void> => {
     const oauthStateService = new OAuthStateService();
     serviceManager.registerService('oauthStateService', oauthStateService, ['cacheService']);
 
-    // 4. TokenStorageService - Depends on databaseService
+    // 5. TokenStorageService - Depends on databaseService and encryptionService
     const tokenStorageService = new TokenStorageService();
-    serviceManager.registerService('tokenStorageService', tokenStorageService, ['databaseService']);
+    serviceManager.registerService('tokenStorageService', tokenStorageService, ['databaseService', 'encryptionService']);
 
-    // 5. AuthStatusService - Depends on tokenStorageService
+    // 6. AuthStatusService - Depends on tokenStorageService
     const authStatusService = new AuthStatusService();
     serviceManager.registerService('authStatusService', authStatusService, ['tokenStorageService']);
 
-    // 6. AuthService - No external dependencies
+    // 7. AuthService - No external dependencies
     const authService = new AuthService();
     serviceManager.registerService('authService', authService, []);
 
-    // 7. TokenManager - Depends on tokenStorageService and authService
+    // 8. TokenManager - Depends on tokenStorageService and authService
     const tokenManager = new TokenManager();
     serviceManager.registerService('tokenManager', tokenManager, ['tokenStorageService', 'authService']);
 
-    // 8. Mock Context Manager Service - No dependencies
+    // 9. Mock Context Manager Service - No dependencies
     const mockContextManagerService = new MockContextManagerService();
     serviceManager.registerService('contextManager', mockContextManagerService, []);
 
-    // 9. GenericAIService - Centralized AI operations with structured output (REAL AI)
+    // 10. GenericAIService - Centralized AI operations with structured output (REAL AI)
     // Note: GenericAIService uses DomainServiceResolver.getAIService() which requires
     // domain services to be registered BEFORE initialization (not before registration)
     const genericAIService = new GenericAIService();

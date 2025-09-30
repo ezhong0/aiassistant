@@ -55,7 +55,7 @@ export abstract class BaseRouteHandler {
   public createHandler<TQuery = any, TBody = any>(
     handler: (req: Request<any, any, TBody, TQuery>, res: Response) => Promise<RouteResponse>
   ) {
-    return async (req: Request<any, any, TBody, TQuery>, res: Response, next: NextFunction): Promise<void> => {
+    return async (req: Request<any, any, TBody, TQuery>, res: Response, _next: NextFunction): Promise<void> => {
       const logContext = createLogContext(req, { operation: this.operation });
 
       try {
@@ -101,7 +101,7 @@ export abstract class BaseRouteHandler {
   /**
    * Standardized error handling
    */
-  private handleError(error: unknown, res: Response, logContext: any): void {
+  private handleError(error: unknown, res: Response, _logContext: any): void {
     if (error instanceof AppError) {
       if (error.category === ERROR_CATEGORIES.VALIDATION) {
         res.status(400).json({
@@ -165,7 +165,7 @@ export abstract class BaseRouteHandler {
    * Get service with error handling
    */
   protected getService<T>(serviceName: string): T {
-    const { getService } = require('../services/service-manager');
+    const { getService } = globalThis.require('../services/service-manager');
     const service = getService(serviceName) as T;
 
     if (!service) {
@@ -201,7 +201,7 @@ export abstract class BaseRouteHandler {
       }
 
       return parsed;
-    } catch (error) {
+    } catch {
       throw ErrorFactory.validationFailed('Invalid OAuth state parameter', 'OAuth state parameter is invalid');
     }
   }

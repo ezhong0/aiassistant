@@ -1,125 +1,53 @@
-import crypto from 'crypto';
-import logger from '../utils/logger';
+import { EncryptionService } from '../services/encryption.service';
+import { serviceManager } from '../services/service-manager';
 
 /**
- * Crypto utilities for token encryption/decryption
- * Uses AES-256-GCM for authenticated encryption
+ * Legacy crypto utilities - now delegates to EncryptionService
+ * @deprecated Use EncryptionService directly for new code
  */
 export class CryptoUtil {
-  private static readonly ALGORITHM = 'aes-256-gcm';
-  private static readonly KEY_LENGTH = 32; // 256 bits
-  private static readonly IV_LENGTH = 16;  // 128 bits
-  private static readonly TAG_LENGTH = 16; // 128 bits
-  
-  private static encryptionKey: Buffer | null = null;
-  
+  private static encryptionService: EncryptionService | null = null;
+
+  /**
+   * Get or create encryption service instance
+   */
+  private static getEncryptionService(): EncryptionService {
+    if (!this.encryptionService) {
+      this.encryptionService = serviceManager.getService<EncryptionService>('encryptionService');
+      if (!this.encryptionService) {
+        throw new Error('EncryptionService not available');
+      }
+    }
+    return this.encryptionService;
+  }
+
   /**
    * Initialize encryption key from environment or generate one
+   * @deprecated Use EncryptionService directly
    */
   static initialize(): void {
-    const envKey = process.env.TOKEN_ENCRYPTION_KEY;
-    
-    if (envKey) {
-      // Use provided key (should be base64 encoded)
-      try {
-        this.encryptionKey = Buffer.from(envKey, 'base64');
-        if (this.encryptionKey.length !== this.KEY_LENGTH) {
-          throw new Error(`Invalid key length: ${this.encryptionKey.length}, expected ${this.KEY_LENGTH}`);
-        }
-        logger.debug('Using provided token encryption key', {
-          correlationId: `crypto-init-${Date.now()}`,
-          operation: 'crypto_initialization'
-        });
-      } catch (error) {
-        logger.warn('Invalid TOKEN_ENCRYPTION_KEY format, generating new key', {
-          correlationId: `crypto-init-${Date.now()}`,
-          operation: 'crypto_key_generation',
-          metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
-        });
-        this.encryptionKey = crypto.randomBytes(this.KEY_LENGTH);
-      }
-    } else {
-      // Generate a new key (will be lost on restart - should use env var in production)
-      this.encryptionKey = crypto.randomBytes(this.KEY_LENGTH);
-      const keyBase64 = this.encryptionKey.toString('base64');
-      logger.warn('No TOKEN_ENCRYPTION_KEY provided, generated temporary key. Set TOKEN_ENCRYPTION_KEY=' + keyBase64 + ' in production', {
-        correlationId: `crypto-init-${Date.now()}`,
-        operation: 'crypto_temp_key_generation'
-      });
-    }
+    // No-op - initialization is handled by EncryptionService
   }
   
   /**
    * Encrypt sensitive data (like refresh tokens)
+   * @deprecated Use EncryptionService.encryptSensitiveData() directly
    */
   static encryptSensitiveData(plaintext: string): string {
-    if (!this.encryptionKey) {
-      this.initialize();
-    }
-    
-    if (!plaintext || typeof plaintext !== 'string') {
-      throw new Error('Invalid plaintext for encryption');
-    }
-    
-    try {
-      const iv = crypto.randomBytes(this.IV_LENGTH);
-      const cipher = crypto.createCipheriv(this.ALGORITHM, this.encryptionKey!, iv);
-      
-      let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
-      
-      const tag = cipher.getAuthTag();
-      
-      // Combine IV + tag + encrypted data
-      const combined = Buffer.concat([iv, tag, Buffer.from(encrypted, 'hex')]);
-      return combined.toString('base64');
-    } catch (error) {
-      logger.error('Token encryption failed', error as Error, {
-        correlationId: `crypto-encrypt-${Date.now()}`,
-        operation: 'crypto_encryption_error'
-      });
-      throw new Error('Failed to encrypt sensitive data');
-    }
+    return this.getEncryptionService().encryptSensitiveData(plaintext);
   }
   
   /**
    * Decrypt sensitive data (like refresh tokens)
+   * @deprecated Use EncryptionService.decryptSensitiveData() directly
    */
   static decryptSensitiveData(encryptedData: string): string {
-    if (!this.encryptionKey) {
-      this.initialize();
-    }
-    
-    if (!encryptedData || typeof encryptedData !== 'string') {
-      throw new Error('Invalid encrypted data for decryption');
-    }
-    
-    try {
-      const combined = Buffer.from(encryptedData, 'base64');
-      
-      // Extract IV, tag, and encrypted data
-      const iv = combined.subarray(0, this.IV_LENGTH);
-      const tag = combined.subarray(this.IV_LENGTH, this.IV_LENGTH + this.TAG_LENGTH);
-      const encrypted = combined.subarray(this.IV_LENGTH + this.TAG_LENGTH);
-      
-      const decipher = crypto.createDecipheriv(this.ALGORITHM, this.encryptionKey!, iv);
-      decipher.setAuthTag(tag);
-      
-      let decrypted = decipher.update(encrypted, undefined, 'utf8');
-      decrypted += decipher.final('utf8');
-      
-      return decrypted;
-    } catch (error) {
-      logger.error('Token decryption failed', error as Error, {
-        correlationId: `crypto-decrypt-${Date.now()}`,
-        operation: 'crypto_decryption_error'
-      });
-      throw new Error('Failed to decrypt sensitive data');
-    }
+    return this.getEncryptionService().decryptSensitiveData(encryptedData);
   }
   
   /**
    * Check if data appears to be encrypted
+   * @deprecated Use EncryptionService directly
    */
   static isEncrypted(data: string): boolean {
     if (!data || typeof data !== 'string') {
@@ -129,7 +57,7 @@ export class CryptoUtil {
     try {
       // Check if it's valid base64 and has reasonable length
       const decoded = Buffer.from(data, 'base64');
-      return decoded.length >= (this.IV_LENGTH + this.TAG_LENGTH + 10); // Minimum reasonable size
+      return decoded.length >= 42; // Minimum reasonable size for AES-256-GCM
     } catch {
       return false;
     }
@@ -150,11 +78,29 @@ export class CryptoUtil {
    * Generate a secure random session ID
    */
   static generateSecureSessionId(prefix: string = 'session'): string {
+    const crypto = globalThis.require('crypto');
     const randomBytes = crypto.randomBytes(16);
     const timestamp = Date.now().toString(36);
     return `${prefix}_${timestamp}_${randomBytes.toString('hex')}`;
   }
-}
 
-// Initialize on import
-CryptoUtil.initialize();
+  /**
+   * Generate a new encryption key (for key rotation)
+   * @deprecated Use EncryptionService.generateNewKey() directly
+   */
+  static generateNewKey(): string {
+    return this.getEncryptionService().generateNewKey();
+  }
+  
+  /**
+   * Get current encryption key status
+   * @deprecated Use EncryptionService.getStats() directly
+   */
+  static getKeyStatus(): { hasKey: boolean; keyLength?: number } {
+    const stats = this.getEncryptionService().getStats();
+    return {
+      hasKey: stats.hasKey,
+      keyLength: stats.keyLength
+    };
+  }
+}

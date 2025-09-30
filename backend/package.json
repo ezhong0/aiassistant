@@ -29,6 +29,11 @@
     "db:setup": "npx ts-node scripts/setup-database.ts",
     "db:test": "npx ts-node scripts/setup-database.ts",
     "db:optimize": "npx ts-node scripts/optimize-database.ts",
+    "db:migrate": "node-pg-migrate",
+    "db:migrate:up": "node-pg-migrate up",
+    "db:migrate:down": "node-pg-migrate down",
+    "db:migrate:create": "node-pg-migrate create",
+    "db:migrate:run": "npx ts-node scripts/migrate-database.ts",
     "audit": "npm audit",
     "audit:fix": "npm audit --fix",
     "secrets:scan": "gitleaks detect --source . --verbose",
@@ -68,12 +73,18 @@
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@sentry/node": "^8.45.0",
+    "@sentry/profiling-node": "^8.45.0",
+    "node-pg-migrate": "^6.2.2"
   },
   "lint-staged": {
     "*.ts": [
       "eslint --fix",
       "prettier --write"
+    ],
+    "package*.json": [
+      "npm audit --audit-level=moderate"
     ],
     "*": [
       "gitleaks protect --staged"

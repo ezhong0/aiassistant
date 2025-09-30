@@ -152,7 +152,7 @@ export class CacheService extends BaseService {
       // Connect to Redis with timeout
       const connectPromise = this.client.connect();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 15000));
+        globalThis.setTimeout(() => reject(new Error('Connection timeout')), 15000));
       
       await Promise.race([connectPromise, timeoutPromise]);
       
@@ -280,7 +280,7 @@ export class CacheService extends BaseService {
       
       return parsed as T;
       
-    } catch (error) {
+    } catch {
       
       return null; // Graceful degradation
     }
@@ -303,7 +303,7 @@ export class CacheService extends BaseService {
       
       return true;
       
-    } catch (error) {
+    } catch {
       
       return false; // Graceful degradation
     }
@@ -324,7 +324,7 @@ export class CacheService extends BaseService {
       
       return deleted > 0;
       
-    } catch (error) {
+    } catch {
       
       return false; // Graceful degradation
     }
@@ -342,7 +342,7 @@ export class CacheService extends BaseService {
       const exists = await this.client!.exists(this.prefixKey(key));
       return exists === 1;
       
-    } catch (error) {
+    } catch {
       
       return false;
     }
@@ -360,7 +360,7 @@ export class CacheService extends BaseService {
       const result = await this.client!.expire(this.prefixKey(key), ttlSeconds);
       return result;
       
-    } catch (error) {
+    } catch {
       
       return false;
     }
@@ -412,7 +412,7 @@ export class CacheService extends BaseService {
       
       return true;
       
-    } catch (error) {
+    } catch {
       
       return false;
     }
@@ -443,7 +443,7 @@ export class CacheService extends BaseService {
     try {
       const result = await this.client!.ping();
       return result === 'PONG';
-    } catch (error) {
+    } catch {
       
       return false;
     }
@@ -605,7 +605,7 @@ export class CacheService extends BaseService {
       await this.client!.setEx(this.prefixKey(key), seconds, value);
       
       return true;
-    } catch (error) {
+    } catch {
       
       return false;
     }

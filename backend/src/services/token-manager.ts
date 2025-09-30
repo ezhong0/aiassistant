@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 import logger from '../utils/logger';
 import { CacheService } from './cache.service';
 import { GoogleTokens } from '../types/auth.types';
-import { SlackTokens } from './token-storage.service';
+// import { SlackTokens } from './token-storage.service';
 import { BaseService } from './base-service';
 import { serviceManager } from "./service-manager";
 import { AuditLogger } from '../utils/audit-logger';
@@ -331,8 +331,8 @@ export class TokenManager extends BaseService {
           // Delete the tokens entirely instead of storing empty tokens
           await this.tokenStorageService!.deleteUserTokens(userId_key);
 
-        } catch (clearError) {
-
+        } catch {
+          // Ignore clear errors
         }
       }
       
@@ -350,17 +350,10 @@ export class TokenManager extends BaseService {
    * Check if a user has valid OAuth tokens
    */
   async hasValidOAuthTokens(teamId: string, userId: string): Promise<boolean> {
-    try {
-      
-      const accessToken = await this.getValidTokens(teamId, userId);
-      const hasValidTokens = !!accessToken;
-      
-      return hasValidTokens;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      throw error;
-    }
+    const accessToken = await this.getValidTokens(teamId, userId);
+    const hasValidTokens = !!accessToken;
+    
+    return hasValidTokens;
   }
 
   /**

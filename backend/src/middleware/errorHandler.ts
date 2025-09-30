@@ -8,7 +8,7 @@ export const errorHandler = (
   err: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
   // Use the centralized error handling service
   errorHandlingService.handleError(err, req, res);

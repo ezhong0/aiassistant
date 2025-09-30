@@ -1,7 +1,6 @@
 import { BaseService } from './base-service';
 import { DomainServiceResolver } from './domain';
 import { IAIDomainService } from './domain/interfaces/ai-domain.interface';
-import logger from '../utils/logger';
 
 /**
  * AI Prompt interface for structured AI requests

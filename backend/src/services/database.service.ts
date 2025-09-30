@@ -142,7 +142,7 @@ export class DatabaseService extends BaseService {
       // Parse DATABASE_URL if available (use unified config)
       const databaseUrl = config.databaseUrl;
       if (databaseUrl) {
-        const url = new URL(databaseUrl);
+        const url = new globalThis.URL(databaseUrl);
         this.config = {
           ...this.config,
           host: url.hostname,
@@ -265,7 +265,7 @@ export class DatabaseService extends BaseService {
   private setupPoolEventHandlers(): void {
     if (!this.pool) return;
 
-    this.pool.on('connect', (client: PoolClient) => {
+    this.pool.on('connect', (_client: PoolClient) => {
       this.connectionStats.totalConnections++;
       logger.debug('New database connection established', {
         correlationId: `db-connect-${Date.now()}`,
@@ -274,7 +274,7 @@ export class DatabaseService extends BaseService {
       });
     });
 
-    this.pool.on('acquire', (client: PoolClient) => {
+    this.pool.on('acquire', (_client: PoolClient) => {
       this.connectionStats.activeConnections++;
       logger.debug('Database connection acquired', {
         correlationId: `db-acquire-${Date.now()}`,
@@ -283,7 +283,7 @@ export class DatabaseService extends BaseService {
       });
     });
 
-    this.pool.on('release', (err: Error, client: PoolClient) => {
+    this.pool.on('release', (_err: Error, _client: PoolClient) => {
       this.connectionStats.activeConnections = Math.max(0, this.connectionStats.activeConnections - 1);
       logger.debug('Database connection released', {
         correlationId: `db-release-${Date.now()}`,
@@ -292,7 +292,7 @@ export class DatabaseService extends BaseService {
       });
     });
 
-    this.pool.on('remove', (client: PoolClient) => {
+    this.pool.on('remove', (_client: PoolClient) => {
       this.connectionStats.totalConnections = Math.max(0, this.connectionStats.totalConnections - 1);
       logger.debug('Database connection removed', {
         correlationId: `db-remove-${Date.now()}`,
@@ -342,7 +342,7 @@ export class DatabaseService extends BaseService {
    * Start health monitoring
    */
   private startHealthMonitoring(): void {
-    setInterval(async () => {
+    globalThis.setInterval(async () => {
       try {
         await this.updateConnectionStats();
         this.connectionStats.lastHealthCheck = new Date();
@@ -481,7 +481,7 @@ export class DatabaseService extends BaseService {
     try {
       await this.query('SELECT 1');
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

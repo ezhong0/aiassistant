@@ -5,7 +5,7 @@
  * proper HTTP status codes, and Winston logging integration.
  */
 
-import logger from './logger';
+// import logger from './logger';
 
 /**
  * Error categories for classification

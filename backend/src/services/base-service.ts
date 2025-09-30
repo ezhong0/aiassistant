@@ -344,7 +344,7 @@ export abstract class BaseService implements IService {
     // This would integrate with service manager to check dependencies
     // For now, we'll implement a basic check
     try {
-      const service = require('./service-manager').serviceManager.getService(serviceName);
+      const service = globalThis.require('./service-manager').serviceManager.getService(serviceName);
       return service !== null && service !== undefined;
     } catch {
       if (required) {

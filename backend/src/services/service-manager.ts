@@ -1,5 +1,5 @@
 import logger from '../utils/logger';
-import { BaseService } from './base-service';
+// import { BaseService } from './base-service';
 import { ServiceState, IService } from '../types/service.types';
 
 // Re-export types and values for external use
@@ -16,6 +16,7 @@ export { ServiceState };
 
 export interface SimpleService extends IService {
   // Additional methods can be added here if needed
+  [key: string]: any;
 }
 
 /**

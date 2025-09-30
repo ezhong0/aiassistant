@@ -7,8 +7,8 @@ import {
   TokenValidationResult,
   JWTPayload
 } from '../types/auth.types';
-import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
-import { serviceManager } from "./service-manager";
+// import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
+// import { serviceManager } from "./service-manager";
 import { config as unifiedConfig } from '../config/unified-config';
 import { BaseService } from './base-service';
 import { ScopeManager, OAUTH_SCOPES } from '../constants/oauth-scopes';
@@ -78,7 +78,7 @@ export class AuthService extends BaseService {
     }
     
     try {
-      const config = this.assertConfig();
+      // const config = this.assertConfig();
       const authOptions: any = {
         access_type: 'offline',
         scope: scopes,
@@ -120,7 +120,7 @@ export class AuthService extends BaseService {
     }
 
     const userScopes = [...OAUTH_SCOPES.SLACK.USER].join(',');
-    const params = new URLSearchParams({
+    const params = new (globalThis.URLSearchParams || globalThis.require('url').URLSearchParams)({
       client_id: clientId,
       scope: userScopes,
       redirect_uri: redirectUri,

@@ -202,10 +202,10 @@ export class AIServiceCircuitBreaker implements IService {
    * Execute operation with timeout
    */
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-    let timeoutHandle: NodeJS.Timeout;
+    let timeoutHandle: ReturnType<typeof globalThis.setTimeout>;
 
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
+      timeoutHandle = globalThis.setTimeout(() => {
         reject(new AIServiceUnavailableError(
           '🤖 Request timed out. Please try again.',
           'TIMEOUT'
@@ -215,10 +215,10 @@ export class AIServiceCircuitBreaker implements IService {
 
     try {
       const result = await Promise.race([promise, timeoutPromise]);
-      clearTimeout(timeoutHandle!);
+      globalThis.clearTimeout(timeoutHandle!);
       return result;
     } catch (error) {
-      clearTimeout(timeoutHandle!);
+      globalThis.clearTimeout(timeoutHandle!);
       throw error;
     }
   }

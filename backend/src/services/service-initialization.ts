@@ -8,6 +8,8 @@ import { CacheService } from './cache.service';
 import { OAuthStateService } from './oauth-state.service';
 import { AIServiceCircuitBreaker } from './ai-circuit-breaker.service';
 import { AuthStatusService } from './auth-status.service';
+import { EncryptionService } from './encryption.service';
+import { SentryService } from './sentry.service';
 import { unifiedConfig } from '../config/unified-config';
 import { initializeDomainServices } from './domain';
 import { GenericAIService } from './generic-ai.service';
@@ -92,7 +94,15 @@ const registerCoreServices = async (): Promise<void> => {
     const databaseService = new DatabaseService();
     serviceManager.registerService('databaseService', databaseService, []);
 
-    // 3. CacheService - Always register, handles DISABLE_REDIS internally
+    // 3. EncryptionService - No dependencies, high priority
+    const encryptionService = new EncryptionService();
+    serviceManager.registerService('encryptionService', encryptionService, []);
+
+    // 4. SentryService - No dependencies, high priority (error tracking)
+    const sentryService = new SentryService();
+    serviceManager.registerService('sentryService', sentryService, []);
+
+    // 5. CacheService - Always register, handles DISABLE_REDIS internally
     const cacheService = new CacheService();
     serviceManager.registerService('cacheService', cacheService, []);
 
@@ -100,9 +110,9 @@ const registerCoreServices = async (): Promise<void> => {
     const oauthStateService = new OAuthStateService();
     serviceManager.registerService('oauthStateService', oauthStateService, ['cacheService']);
 
-    // 4. TokenStorageService - Depends on databaseService (replaces SessionService)
+    // 6. TokenStorageService - Depends on databaseService and encryptionService (replaces SessionService)
     const tokenStorageService = new TokenStorageService();
-    serviceManager.registerService('tokenStorageService', tokenStorageService, ['databaseService']);
+    serviceManager.registerService('tokenStorageService', tokenStorageService, ['databaseService', 'encryptionService']);
 
     // 4b. AuthStatusService - Depends on tokenStorageService
     const authStatusService = new AuthStatusService();

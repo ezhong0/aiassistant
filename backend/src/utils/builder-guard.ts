@@ -76,7 +76,7 @@ export class BuilderGuard {
   static ensureBuilder<T extends keyof PromptBuilderMap>(
     builder: PromptBuilderMap[T] | null | undefined,
     builderType: T,
-    context?: Record<string, any>
+    _context?: Record<string, any>
   ): PromptBuilderMap[T] {
     if (!builder) {
       const errorContext = ErrorContextBuilder.create()

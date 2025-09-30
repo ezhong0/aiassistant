@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { AuthenticatedRequest } from './auth.middleware';
 import { config } from '../config';
-import { getService } from '../services/service-manager';
 import { serviceManager, IService, ServiceState } from '../services/service-manager';
 
 interface RateLimitData {
@@ -26,11 +25,13 @@ class RateLimitStore implements IService {
   public readonly name = 'RateLimitStore';
   private _state: ServiceState = ServiceState.INITIALIZING;
   private store = new Map<string, RateLimitData>();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof globalThis.setInterval> | null = null;
+  private readonly maxStoreSize = 10000; // Maximum entries to prevent memory bloat
+  private readonly ttlMs = 24 * 60 * 60 * 1000; // 24 hours TTL for entries
   
   constructor() {
     // Cleanup expired entries using configured interval from unified config
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = globalThis.setInterval(() => {
       this.cleanup();
     }, 5 * 60 * 1000); // 5 minutes from unified config
     
@@ -53,7 +54,7 @@ class RateLimitStore implements IService {
     this._state = ServiceState.SHUTTING_DOWN;
     
     if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
+      globalThis.clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
     this.store.clear();
@@ -81,16 +82,23 @@ class RateLimitStore implements IService {
   }
   
   increment(key: string, windowMs: number): RateLimitData {
-    const now = Date.now();
     const existing = this.store.get(key);
     
-    if (!existing || now > existing.resetTime) {
+    // Check if entry exists and is not expired
+    if (!existing || Date.now() > existing.resetTime) {
       // Create new entry or reset expired entry
+      const now = Date.now();
       const newData: RateLimitData = {
         count: 1,
         resetTime: now + windowMs,
         firstRequestTime: now
       };
+      
+      // Prevent memory bloat by enforcing max store size
+      if (this.store.size >= this.maxStoreSize) {
+        this.aggressiveCleanup();
+      }
+      
       this.store.set(key, newData);
       return newData;
     }
@@ -105,7 +113,8 @@ class RateLimitStore implements IService {
     let cleanedCount = 0;
     
     for (const [key, data] of this.store.entries()) {
-      if (now > data.resetTime) {
+      // Clean up expired entries (beyond reset time) or entries older than TTL
+      if (now > data.resetTime || (now - data.firstRequestTime) > this.ttlMs) {
         this.store.delete(key);
         cleanedCount++;
       }
@@ -115,15 +124,48 @@ class RateLimitStore implements IService {
       logger.debug('Rate limit cleanup completed', {
         correlationId: `cleanup-${Date.now()}`,
         operation: 'rate_limit_cleanup',
-        metadata: { cleanedCount }
+        metadata: { 
+          cleanedCount,
+          remainingEntries: this.store.size,
+          maxStoreSize: this.maxStoreSize
+        }
       });
     }
+  }
+
+  private aggressiveCleanup(): void {
+    const entries = Array.from(this.store.entries());
+    
+    // Sort by first request time (oldest first)
+    entries.sort(([, a], [, b]) => a.firstRequestTime - b.firstRequestTime);
+    
+    // Remove oldest 25% of entries
+    const toRemove = Math.floor(entries.length * 0.25);
+    let removedCount = 0;
+    
+    for (let i = 0; i < toRemove && i < entries.length; i++) {
+      this.store.delete(entries[i][0]);
+      removedCount++;
+    }
+    
+    logger.warn('Aggressive rate limit cleanup performed', {
+      correlationId: `aggressive-cleanup-${Date.now()}`,
+      operation: 'rate_limit_aggressive_cleanup',
+      metadata: { 
+        removedCount,
+        remainingEntries: this.store.size,
+        maxStoreSize: this.maxStoreSize
+      }
+    });
   }
   
   getStats() {
     return {
       totalEntries: this.store.size,
-      memoryUsage: process.memoryUsage().heapUsed
+      maxStoreSize: this.maxStoreSize,
+      ttlMs: this.ttlMs,
+      memoryUsage: process.memoryUsage().heapUsed,
+      isNearCapacity: this.store.size >= this.maxStoreSize * 0.8
     };
   }
   

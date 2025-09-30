@@ -8,7 +8,7 @@
  * These utilities prevent the exact issues we encountered in production.
  */
 
-import { AgentError, AgentErrorCode, failure } from '../types/agents/agent-result';
+import { AgentErrorCode } from '../types/agents/agent-result';
 
 
 // ========== Null Safety ==========

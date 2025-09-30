@@ -9,14 +9,14 @@ import { BuilderGuard, createBuilderContext } from '../utils/builder-guard';
 import { UnifiedErrorFactory, ErrorContextBuilder } from '../types/workflow/unified-errors';
 import { AgentFactory } from '../framework/agent-factory';
 import { TokenManager } from './token-manager';
-import { TokenServiceType, TokenContext } from '../types/workflow/token-service.types';
+import { TokenServiceType } from '../types/workflow/token-service.types';
 import logger from '../utils/logger';
 import {
   EnvironmentCheckPromptBuilder,
   ActionExecutionPromptBuilder,
   ProgressAssessmentPromptBuilder
 } from './prompt-builders/main-agent';
-import { DomainServiceResolver } from './domain';
+// import { DomainServiceResolver } from './domain';
 
 /**
  * Workflow execution context
@@ -368,12 +368,12 @@ export class WorkflowExecutor {
         try {
           const serviceType = this.getServiceTypeForAgent(agentName);
           if (serviceType) {
-            const tokenContext: TokenContext = {
-              userId: context.userId,
-              sessionId: context.sessionId,
-              service: serviceType,
-              correlationId: context.correlationId
-            };
+            // const tokenContext: TokenContext = {
+            //   userId: context.userId,
+            //   sessionId: context.sessionId,
+            //   service: serviceType,
+            //   correlationId: context.correlationId
+            // };
 
             // Parse userId to get teamId and userId for TokenManager
             const { teamId, userId: parsedUserId } = this.parseUserId(context.userId);

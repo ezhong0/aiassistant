@@ -8,7 +8,7 @@
  * - Natural language interface
  */
 
-import { GenericAIService, AIPrompt, StructuredSchema } from '../services/generic-ai.service';
+import { GenericAIService } from '../services/generic-ai.service';
 import { IDomainService } from '../services/domain/interfaces/base-domain.interface';
 import logger from '../utils/logger';
 import {
@@ -63,88 +63,88 @@ export interface AgentConfig {
 /**
  * Intent Assessment Response Schema
  */
-const INTENT_ASSESSMENT_SCHEMA: StructuredSchema = {
-  type: 'object',
-  properties: {
-    context: {
-      type: 'string',
-      description: 'Updated context in SimpleContext format'
-    },
-    toolsNeeded: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'List of tools needed to fulfill the request'
-    },
-    executionPlan: {
-      type: 'string',
-      description: 'Brief plan for tool execution'
-    }
-  },
-  required: ['context', 'toolsNeeded', 'executionPlan'],
-  description: 'Intent assessment and planning response'
-};
+// const INTENT_ASSESSMENT_SCHEMA: StructuredSchema = {
+//   type: 'object',
+//   properties: {
+//     context: {
+//       type: 'string',
+//       description: 'Updated context in SimpleContext format'
+//     },
+//     toolsNeeded: {
+//       type: 'array',
+//       items: { type: 'string' },
+//       description: 'List of tools needed to fulfill the request'
+//     },
+//     executionPlan: {
+//       type: 'string',
+//       description: 'Brief plan for tool execution'
+//     }
+//   },
+//   required: ['context', 'toolsNeeded', 'executionPlan'],
+//   description: 'Intent assessment and planning response'
+// };
 
 /**
  * Tool Execution Response Schema
  */
-const TOOL_EXECUTION_SCHEMA: StructuredSchema = {
-  type: 'object',
-  properties: {
-    context: {
-      type: 'string',
-      description: 'Updated context in SimpleContext format'
-    },
-    toolCalls: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          toolName: { type: 'string' },
-          params: { type: 'object' },
-          result: { type: 'object' }
-        }
-      },
-      description: 'Tool calls made and their results'
-    },
-    needsMoreWork: {
-      type: 'boolean',
-      description: 'Whether more tool execution is needed'
-    },
-    nextSteps: {
-      type: 'string',
-      description: 'What to do next if more work is needed'
-    }
-  },
-  required: ['context', 'toolCalls', 'needsMoreWork'],
-  description: 'Tool execution results and next steps'
-};
+// const TOOL_EXECUTION_SCHEMA: StructuredSchema = {
+//   type: 'object',
+//   properties: {
+//     context: {
+//       type: 'string',
+//       description: 'Updated context in SimpleContext format'
+//     },
+//     toolCalls: {
+//       type: 'array',
+//       items: {
+//         type: 'object',
+//         properties: {
+//           toolName: { type: 'string' },
+//           params: { type: 'object' },
+//           result: { type: 'object' }
+//         }
+//       },
+//       description: 'Tool calls made and their results'
+//     },
+//     needsMoreWork: {
+//       type: 'boolean',
+//       description: 'Whether more tool execution is needed'
+//     },
+//     nextSteps: {
+//       type: 'string',
+//       description: 'What to do next if more work is needed'
+//     }
+//   },
+//   required: ['context', 'toolCalls', 'needsMoreWork'],
+//   description: 'Tool execution results and next steps'
+// };
 
 /**
  * Response Formatting Schema
  */
-const RESPONSE_FORMATTING_SCHEMA: StructuredSchema = {
-  type: 'object',
-  properties: {
-    context: {
-      type: 'string',
-      description: 'Final context in SimpleContext format'
-    },
-    success: {
-      type: 'boolean',
-      description: 'Whether the operation was successful'
-    },
-    message: {
-      type: 'string',
-      description: 'Human-readable summary of what was accomplished'
-    },
-    metadata: {
-      type: 'object',
-      description: 'Structured metadata with tool execution results'
-    }
-  },
-  required: ['context', 'success', 'message', 'metadata'],
-  description: 'Final formatted response'
-};
+// const RESPONSE_FORMATTING_SCHEMA: StructuredSchema = {
+//   type: 'object',
+//   properties: {
+//     context: {
+//       type: 'string',
+//       description: 'Final context in SimpleContext format'
+//     },
+//     success: {
+//       type: 'boolean',
+//       description: 'Whether the operation was successful'
+//     },
+//     message: {
+//       type: 'string',
+//       description: 'Human-readable summary of what was accomplished'
+//     },
+//     metadata: {
+//       type: 'object',
+//       description: 'Structured metadata with tool execution results'
+//     }
+//   },
+//   required: ['context', 'success', 'message', 'metadata'],
+//   description: 'Final formatted response'
+// };
 
 /**
  * Abstract BaseSubAgent class
@@ -513,7 +513,7 @@ ORIGINAL_REQUEST: ${request}
           if (parsed.toolCalls && Array.isArray(parsed.toolCalls)) {
             return parsed.toolCalls;
           }
-        } catch (e) {
+        } catch {
           // Not valid JSON, continue
         }
       }
@@ -608,7 +608,7 @@ TOOL_RESULT_${toolResult.tool}:
         
         // Wait before retry
         if (errorInfo.retryDelay) {
-          await new Promise(resolve => setTimeout(resolve, errorInfo.retryDelay));
+          await new Promise(resolve => globalThis.setTimeout(resolve, errorInfo.retryDelay));
         }
         
         logger.warn(`Tool call failed, retrying (attempt ${attempt}/${maxRetries})`, {

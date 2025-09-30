@@ -195,7 +195,7 @@ export class ValidationUtils {
       }
 
       return validated;
-    } catch (_error) {
+    } catch {
       throw new Error('Invalid or expired OAuth state parameter');
     }
   }

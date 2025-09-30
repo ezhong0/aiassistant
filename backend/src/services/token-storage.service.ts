@@ -3,7 +3,7 @@ import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { CryptoUtil } from '../utils/crypto.util';
 import { AuditLogger } from '../utils/audit-logger';
-import { validateUserId } from '../utils/service-validation.util';
+// import { validateUserId } from '../utils/service-validation.util';
 import { serviceManager } from "./service-manager";
 
 export interface GoogleTokens {
@@ -91,7 +91,7 @@ export class TokenStorageService extends BaseService {
       throw new Error('Valid userId is required');
     }
 
-    const validatedUserId = validateUserId(userId);
+    // const validatedUserId = validateUserId(userId);
 
     // Validate Google tokens if present
     if (tokens.google && !tokens.google.access_token) {
@@ -396,12 +396,12 @@ export class TokenStorageService extends BaseService {
         return null;
       }
 
-      const response = await fetch('https://oauth2.googleapis.com/token', {
+      const response = await globalThis.fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({
+        body: new (globalThis.URLSearchParams || globalThis.require('url').URLSearchParams)({
           client_id: configService.googleClientId,
           client_secret: configService.googleClientSecret,
           refresh_token: refreshToken,
