@@ -71,6 +71,32 @@ export class ApiMockManager {
   }
 
   /**
+   * Record API call for OpenAI (real calls that should be tracked)
+   */
+  static recordOpenAICall<T = any>(
+    request: APIRequest,
+    response: APIResponse<T>,
+    duration: number
+  ): void {
+    const instance = ApiMockManager.getInstance();
+    const callRecord: ApiCallRecord = {
+      timestamp: new Date(),
+      clientName: 'OpenAIClient',
+      request: { ...request },
+      response,
+      duration
+    };
+    instance.callRecords.push(callRecord);
+    
+    logger.info('OpenAI API call recorded for E2E testing', {
+      operation: 'e2e_openai_call_recorded',
+      endpoint: request.endpoint,
+      duration,
+      success: response.success
+    });
+  }
+
+  /**
    * Handle individual API request with appropriate mock
    */
   private async handleRequest<T = any>(

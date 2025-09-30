@@ -28,8 +28,28 @@ export const initializeTestServices = async (): Promise<void> => {
     });
 
     // Initialize real domain services for E2E testing
-    const { DomainServiceRegistrations } = await import('./domain/dependency-injection/domain-service-container');
+    const { DomainServiceRegistrations, DomainServiceResolver } = await import('./domain/dependency-injection/domain-service-container');
     DomainServiceRegistrations.registerForTesting();
+
+    // Pre-initialize domain services by calling their factories
+    // This ensures they exist before GenericAIService tries to access them
+    logger.info('Pre-initializing domain services for E2E testing', {
+      operation: 'test_service_initialization',
+      metadata: { phase: 'domain_service_pre_init' }
+    });
+
+    try {
+      const aiDomainService = DomainServiceResolver.getAIService();
+      await aiDomainService.initialize();
+      logger.info('AI Domain Service pre-initialized successfully', {
+        operation: 'test_service_initialization'
+      });
+    } catch (error) {
+      logger.error('Failed to pre-initialize AI Domain Service', error as Error, {
+        operation: 'test_service_initialization'
+      });
+      throw error;
+    }
 
     // Register core services with mocks
     await registerTestServices();
@@ -88,6 +108,8 @@ const registerTestServices = async (): Promise<void> => {
     serviceManager.registerService('contextManager', mockContextManagerService, []);
 
     // 9. GenericAIService - Centralized AI operations with structured output (REAL AI)
+    // Note: GenericAIService uses DomainServiceResolver.getAIService() which requires
+    // domain services to be registered BEFORE initialization (not before registration)
     const genericAIService = new GenericAIService();
     serviceManager.registerService('genericAIService', genericAIService, []);
 

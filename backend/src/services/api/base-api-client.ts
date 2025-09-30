@@ -233,6 +233,19 @@ export abstract class BaseAPIClient extends BaseService {
 
       const executionTime = Date.now() - startTime;
       
+      // Record OpenAI calls for E2E testing
+      if (process.env.E2E_TESTING === 'true' && this.name === 'OpenAIClient') {
+        try {
+          const path = await import('path');
+          const mockManagerPath = path.resolve(process.cwd(), 'tests/e2e/framework/api-mock-manager');
+          const mockManagerModule = await import(mockManagerPath);
+          mockManagerModule.ApiMockManager.recordOpenAICall(request, response, executionTime);
+        } catch (error) {
+          // Ignore errors in E2E recording
+          logger.debug('Failed to record OpenAI call for E2E testing', { error: (error as Error).message });
+        }
+      }
+      
       // CENTRALIZED API CALL LOGGING - Output on Success
       logger.info('API_REQUEST_OUTPUT_SUCCESS', {
         correlationId: requestId,
