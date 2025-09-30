@@ -22,7 +22,7 @@ import {
   requestTimeout,
   sanitizeRequest
 } from './middleware/security.middleware';
-import authRoutes from './routes/auth.routes';
+import authRoutes from './routes/auth';
 import protectedRoutes from './routes/protected.routes';
 import { createSlackRoutes } from './routes/slack.routes';
 import { apiRateLimit } from './middleware/rate-limiting.middleware';

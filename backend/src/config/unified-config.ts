@@ -104,12 +104,12 @@ const AIConfigSchema = z.object({
     }),
     
     content: z.object({
-      model: z.string().default('gpt-4'),
+      model: z.string().default('gpt-4o-mini'),
       temperature: z.number().min(0).max(2).default(0.7),
       maxTokens: z.number().positive().default(2000),
       timeout: z.number().positive().default(30000),
     }).default({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       temperature: 0.7,
       maxTokens: 2000,
       timeout: 30000,
@@ -230,7 +230,7 @@ const UnifiedConfigSchema = z.object({
         timeout: 15000,
       },
       content: {
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         temperature: 0.7,
         maxTokens: 2000,
         timeout: 30000,

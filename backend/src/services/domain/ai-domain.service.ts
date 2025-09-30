@@ -172,10 +172,12 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     }
 
     try {
+      const startTime = Date.now();
+
       // Validate input parameters - use a more flexible validation
       const validatedParams = {
         ...params,
-        model: params.model || 'gpt-4',
+        model: params.model || 'gpt-4o-mini',
         temperature: params.temperature || 0.7,
         maxTokens: params.maxTokens,
         topP: params.topP,
@@ -197,7 +199,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         method: 'POST',
         endpoint: '/chat/completions',
         data: {
-          model: validatedParams.model || 'gpt-4',
+          model: validatedParams.model || 'gpt-4o-mini',
           messages: validatedParams.messages,
           temperature: validatedParams.temperature || 0.7,
           max_tokens: validatedParams.maxTokens,
@@ -225,7 +227,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
             completion: response.data.usage?.completion_tokens || 0,
             total: response.data.usage?.total_tokens || 0
           },
-          executionTime: Date.now() - Date.now(), // TODO: Calculate actual execution time
+          executionTime: Date.now() - startTime,
           finishReason: response.data.choices[0]?.finish_reason,
           requestId: response.data.id,
           cached: false
@@ -286,6 +288,8 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     }
 
     try {
+      const startTime = Date.now();
+
       this.logInfo('Generating text completion', {
         promptLength: params.prompt.length,
         model: params.model || 'text-davinci-003',
@@ -316,7 +320,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
             completion: response.data.usage?.completion_tokens || 0,
             total: response.data.usage?.total_tokens || 0
           },
-          executionTime: Date.now() - Date.now(), // TODO: Calculate actual execution time
+          executionTime: Date.now() - startTime,
           finishReason: response.data.choices[0]?.finish_reason,
           requestId: response.data.id,
           cached: false
@@ -359,6 +363,8 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     }
 
     try {
+      const startTime = Date.now();
+
       this.logInfo('Generating embeddings', {
         inputType: Array.isArray(params.input) ? 'array' : 'string',
         inputLength: Array.isArray(params.input) ? params.input.length : 1,
@@ -656,7 +662,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         method: 'POST',
         endpoint: '/chat/completions',
         data: {
-          model: params.model || 'gpt-4',
+          model: params.model || 'gpt-4o-mini',
           messages: [
             { role: 'system', content: params.systemPrompt || 'Generate structured response' },
             { role: 'user', content: params.prompt }
@@ -680,7 +686,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       const result = JSON.parse(functionCall.arguments);
 
       this.logInfo('Structured data generated successfully', {
-        model: params.model || 'gpt-4',
+        model: params.model || 'gpt-4o-mini',
         hasResult: !!result
       });
 

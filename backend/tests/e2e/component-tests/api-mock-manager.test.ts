@@ -165,7 +165,7 @@ describe('API Mock Manager Component Tests', () => {
         endpoint: '/chat/completions',
         method: 'POST',
         data: {
-          model: 'gpt-4',
+          model: 'gpt-4o-mini',
           messages: [
             { role: 'user', content: 'Hello, how are you?' }
           ],
@@ -233,7 +233,7 @@ describe('API Mock Manager Component Tests', () => {
           request: {
             endpoint: '/chat/completions',
             method: 'POST',
-            data: { model: 'gpt-4', messages: [] },
+            data: { model: 'gpt-4o-mini', messages: [] },
             headers: {},
             requiresAuth: true
           } as APIRequest
@@ -323,7 +323,7 @@ describe('API Mock Manager Component Tests', () => {
         endpoint: '/chat/completions',
         method: 'POST',
         data: {
-          model: 'gpt-4',
+          model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: 'Test' }]
         },
         headers: {},
@@ -344,7 +344,7 @@ describe('API Mock Manager Component Tests', () => {
           endpoint: '/chat/completions',
           method: 'POST',
           data: {
-            model: 'gpt-4',
+            model: 'gpt-4o-mini',
             messages: [{ role: 'user', content: `Test ${i}` }]
           },
           headers: {},
