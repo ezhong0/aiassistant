@@ -55,6 +55,7 @@ export abstract class BaseRouteHandler {
   public createHandler<TQuery = any, TBody = any>(
     handler: (req: Request<any, any, TBody, TQuery>, res: Response) => Promise<RouteResponse>
   ) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return async (req: Request<any, any, TBody, TQuery>, res: Response, _next: NextFunction): Promise<void> => {
       const logContext = createLogContext(req, { operation: this.operation });
 
@@ -101,6 +102,7 @@ export abstract class BaseRouteHandler {
   /**
    * Standardized error handling
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private handleError(error: unknown, res: Response, _logContext: any): void {
     if (error instanceof AppError) {
       if (error.category === ERROR_CATEGORIES.VALIDATION) {

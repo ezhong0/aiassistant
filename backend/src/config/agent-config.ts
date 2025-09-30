@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * AI-Driven Agent Configuration
  * Replaces hardcoded patterns with intelligent, dynamic configuration

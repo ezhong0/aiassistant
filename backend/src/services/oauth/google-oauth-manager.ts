@@ -34,13 +34,28 @@ export interface GoogleOAuthValidationResult {
  * provides a unified interface for all Google domain services.
  */
 export class GoogleOAuthManager extends BaseService {
+  // Store config as primitives (injected directly)
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private readonly redirectUri: string;
+  private readonly scopes: string[];
+  
   constructor(
-    private readonly config: GoogleOAuthConfig,
+    clientId: string,
+    clientSecret: string,
+    redirectUri: string,
+    scopes: string[],
     private readonly authService: AuthService,
     private readonly tokenManager: TokenManager,
     private readonly oauthStateService: OAuthStateService
   ) {
     super('GoogleOAuthManager');
+    
+    // Store primitives directly (no proxy access needed)
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
+    this.redirectUri = redirectUri;
+    this.scopes = scopes;
   }
 
   /**
@@ -51,9 +66,9 @@ export class GoogleOAuthManager extends BaseService {
       this.logInfo('Initializing GoogleOAuthManager...');
 
       this.logInfo('GoogleOAuthManager initialized successfully', {
-        clientId: this.config.clientId,
-        redirectUri: this.config.redirectUri,
-        scopes: this.config.scopes
+        clientId: this.clientId,
+        redirectUri: this.redirectUri,
+        scopes: this.scopes
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -81,10 +96,10 @@ export class GoogleOAuthManager extends BaseService {
         userId: context.userId,
         teamId: context.teamId,
         channelId: context.channelId,
-        scopes: scopes || this.config.scopes
+        scopes: scopes || this.scopes
       });
 
-      const scopesToUse = scopes || this.config.scopes;
+      const scopesToUse = scopes || this.scopes;
       const state = this.buildSignedState(context);
 
       this.logInfo('Google OAuth state built', {

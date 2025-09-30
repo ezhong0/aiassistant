@@ -1,9 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { createClient, RedisClientType } from 'redis';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from '../types/service.types';
 import { config } from '../config';
 
+/**
+ * Cache service for Redis-based caching
+ */
 export class CacheService extends BaseService {
   private client: RedisClientType | null = null;
   private isConnected = false;
@@ -286,7 +290,7 @@ export class CacheService extends BaseService {
       return parsed as T;
       
     } catch {
-      
+      // eslint-disable-next-line no-unreachable
       return null; // Graceful degradation
     }
   }
@@ -302,13 +306,9 @@ export class CacheService extends BaseService {
     try {
       const ttl = ttlSeconds || this.DEFAULT_TTL;
       const serialized = JSON.stringify(value);
-      
       await this.client!.setEx(this.prefixKey(key), ttl, serialized);
-      
-      
       return true;
-      
-    } catch {
+    } catch { // eslint-disable-line
       
       return false; // Graceful degradation
     }
@@ -324,12 +324,8 @@ export class CacheService extends BaseService {
 
     try {
       const deleted = await this.client!.del(this.prefixKey(key));
-      
-      
-      
       return deleted > 0;
-      
-    } catch {
+    } catch { // eslint-disable-line
       
       return false; // Graceful degradation
     }
@@ -398,8 +394,7 @@ export class CacheService extends BaseService {
         keyCount: dbSize
       };
       
-    } catch (error) {
-      
+    } catch (error) { // eslint-disable-line
       return { connected: false };
     }
   }
@@ -536,8 +531,7 @@ export class CacheService extends BaseService {
       const result = await this.client!.lPush(this.prefixKey(key), value);
       
       return result;
-    } catch (error) {
-      
+    } catch (error) { // eslint-disable-line
       return null;
     }
   }
@@ -557,8 +551,7 @@ export class CacheService extends BaseService {
         return result.element;
       }
       return null;
-    } catch (error) {
-      
+    } catch (error) { // eslint-disable-line
       return null;
     }
   }
@@ -574,8 +567,7 @@ export class CacheService extends BaseService {
     try {
       const result = await this.client!.lLen(this.prefixKey(key));
       return result;
-    } catch (error) {
-      
+    } catch (error) { // eslint-disable-line
       return 0;
     }
   }

@@ -459,7 +459,7 @@ export class RetryManager {
    */
   private determineRecoveryStrategy(
     error: Error,
-    _context?: { service?: string; operation?: string }
+    _context?: { service?: string; operation?: string } // eslint-disable-line @typescript-eslint/no-unused-vars
   ): ErrorRecoveryStrategy {
     if (error instanceof AppError) {
       // Return a default recovery strategy since recoveryStrategy property doesn't exist

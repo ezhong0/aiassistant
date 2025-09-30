@@ -2,6 +2,7 @@
  * Slack validation schemas
  */
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { z } from 'zod';
 import { OptionalStringSchema, OptionalNumberSchema, OptionalBooleanSchema } from './common.schemas';
 

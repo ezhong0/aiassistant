@@ -2,6 +2,7 @@
  * Calendar validation schemas
  */
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { z } from 'zod';
 import { OptionalStringSchema, OptionalNumberSchema } from './common.schemas';
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import express, { Response } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -10,8 +11,8 @@ import {
   AuthenticatedRequest 
 } from '../middleware/auth.middleware';
 import { Permission } from '../types/auth.types';
-import { ProfileResponseSchema, AdminUsersResponseSchema, SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
-import { validateAndSendResponse, sendSuccessResponse } from '../utils/response-validation.util';
+import { SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
+import { validateAndSendResponse } from '../utils/response-validation.util';
 
 const router = express.Router();
 

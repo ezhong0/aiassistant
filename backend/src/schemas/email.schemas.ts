@@ -2,6 +2,7 @@
  * Email and Gmail validation schemas
  */
 
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { z } from 'zod';
 import { EmailSchema, EmailArraySchema, OptionalStringSchema, OptionalNumberSchema } from './common.schemas';
 

@@ -1,9 +1,10 @@
-import { asClass, asValue, createContainer, InjectionMode, AwilixContainer } from 'awilix';
+import { asValue, createContainer, AwilixContainer } from 'awilix';
 import { unifiedConfig } from '../config/unified-config';
 import logger from '../utils/logger';
 
 /**
  * Application Dependency Injection Container
+{{ ... }}
  * 
  * Uses awilix for clean constructor-based dependency injection.
  * 

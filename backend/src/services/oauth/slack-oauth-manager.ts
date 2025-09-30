@@ -40,12 +40,27 @@ export interface SlackOAuthValidationResult {
  * for Slack domain services.
  */
 export class SlackOAuthManager extends BaseService {
+  // Store config as primitives (injected directly)
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private readonly redirectUri: string;
+  private readonly scopes: string[];
+  
   constructor(
-    private readonly config: SlackOAuthConfig,
+    clientId: string,
+    clientSecret: string,
+    redirectUri: string,
+    scopes: string[],
     private readonly tokenManager: TokenManager,
     private readonly oauthStateService: OAuthStateService
   ) {
     super('SlackOAuthManager');
+    
+    // Store primitives directly (no proxy access needed)
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
+    this.redirectUri = redirectUri;
+    this.scopes = scopes;
   }
 
   /**
@@ -56,9 +71,9 @@ export class SlackOAuthManager extends BaseService {
       this.logInfo('Initializing SlackOAuthManager...');
 
       this.logInfo('SlackOAuthManager initialized successfully', {
-        clientId: this.config.clientId,
-        redirectUri: this.config.redirectUri,
-        scopes: this.config.scopes
+        clientId: this.clientId,
+        redirectUri: this.redirectUri,
+        scopes: this.scopes
       });
     } catch (error) {
       this.handleError(error, 'onInitialize');
@@ -86,10 +101,10 @@ export class SlackOAuthManager extends BaseService {
         userId: context.userId,
         teamId: context.teamId,
         channelId: context.channelId,
-        scopes: scopes || this.config.scopes
+        scopes: scopes || this.scopes
       });
 
-      const scopesToUse = scopes || this.config.scopes;
+      const scopesToUse = scopes || this.scopes;
       const state = this.buildSignedState(context);
 
       this.logInfo('Slack OAuth state built', {
@@ -98,8 +113,8 @@ export class SlackOAuthManager extends BaseService {
       });
 
       const params = new URLSearchParams({
-        client_id: this.config.clientId,
-        redirect_uri: this.config.redirectUri,
+        client_id: this.clientId,
+        redirect_uri: this.redirectUri,
         scope: scopesToUse.join(','),
         response_type: 'code',
         state
@@ -145,10 +160,10 @@ export class SlackOAuthManager extends BaseService {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          client_id: this.config.clientId,
-          client_secret: this.config.clientSecret,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
           code,
-          redirect_uri: this.config.redirectUri
+          redirect_uri: this.redirectUri
         })
       });
 

@@ -3,7 +3,6 @@
  */
 
 import { z } from 'zod';
-import { BaseAPIResponseSchema } from './common.schemas';
 
 // Tool execution schemas
 export const ToolCallSchema = z.object({

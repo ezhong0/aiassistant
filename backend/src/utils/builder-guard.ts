@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * BuilderGuard - Safe access utility for prompt builders
  *

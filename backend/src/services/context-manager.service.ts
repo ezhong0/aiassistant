@@ -75,7 +75,9 @@ export class ContextManager extends BaseService {
    * Service initialization
    */
   protected async onInitialize(): Promise<void> {
-    if (this.cacheService && this.cacheService.isReady()) {
+    // Check cache availability (avoid proxy access with typeof check)
+    const hasCacheService = this.cacheService && typeof this.cacheService === 'object';
+    if (hasCacheService) {
       this.logInfo('ContextManager initialized with caching enabled');
     } else {
       this.logInfo('ContextManager initialized without caching');
