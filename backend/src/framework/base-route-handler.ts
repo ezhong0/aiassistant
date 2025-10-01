@@ -7,7 +7,8 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import logger from '../utils/logger';
 import { createLogContext } from '../utils/log-context';
-import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
+import { AppError, ERROR_CATEGORIES } from '../utils/app-error';
+import { ErrorFactory } from '../errors/error-factory';
 import { HTMLTemplates } from '../templates/html-templates';
 
 /**
@@ -26,7 +27,7 @@ export interface RouteHandlerOptions {
  */
 export interface RouteResponse {
   success: boolean;
-  data?: any;
+  data?: Record<string, unknown>;
   message?: string;
   redirect?: string;
   html?: string;
@@ -45,7 +46,7 @@ export abstract class BaseRouteHandler {
       operation,
       requiresAuth: false,
       rateLimit: false,
-      ...options
+      ...options,
     };
   }
 
@@ -53,9 +54,9 @@ export abstract class BaseRouteHandler {
    * Create standardized route handler with error handling
    */
   public createHandler<TQuery = any, TBody = any>(
-    handler: (req: Request<any, any, TBody, TQuery>, res: Response) => Promise<RouteResponse>
+    handler: (req: Request<any, any, TBody, TQuery>, res: Response) => Promise<RouteResponse>,
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     return async (req: Request<any, any, TBody, TQuery>, res: Response, _next: NextFunction): Promise<void> => {
       const logContext = createLogContext(req, { operation: this.operation });
 
@@ -65,8 +66,8 @@ export abstract class BaseRouteHandler {
           metadata: {
             query: req.query,
             params: req.params,
-            userAgent: req.get('User-Agent')
-          }
+            userAgent: req.get('User-Agent'),
+          },
         });
 
         const result = await handler(req, res);
@@ -80,7 +81,7 @@ export abstract class BaseRouteHandler {
             success: result.success,
             data: result.data,
             message: result.message,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           });
         }
 
@@ -88,8 +89,8 @@ export abstract class BaseRouteHandler {
           ...logContext,
           metadata: {
             success: result.success,
-            responseType: result.html ? 'html' : result.redirect ? 'redirect' : 'json'
-          }
+            responseType: result.html ? 'html' : result.redirect ? 'redirect' : 'json',
+          },
         });
 
       } catch (error) {
@@ -102,29 +103,29 @@ export abstract class BaseRouteHandler {
   /**
    * Standardized error handling
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private handleError(error: unknown, res: Response, _logContext: any): void {
+   
+  private handleError(error: unknown, res: Response, _logContext: Record<string, unknown>): void {
     if (error instanceof AppError) {
       if (error.category === ERROR_CATEGORIES.VALIDATION) {
         res.status(400).json({
           success: false,
           error: error.message,
           details: (error as any).details,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       } else if (error.category === ERROR_CATEGORIES.AUTH) {
         res.status(401).send(
           HTMLTemplates.authError({
             title: 'Authentication Required',
             message: error.message,
-            details: (error as any).details?.join(', ')
-          })
+            details: (error as any).details?.join(', '),
+          }),
         );
       } else {
         res.status(error.statusCode || 500).json({
           success: false,
           error: error.message,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
     } else if (error instanceof z.ZodError) {
@@ -132,7 +133,7 @@ export abstract class BaseRouteHandler {
         success: false,
         error: 'Validation failed',
         details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } else {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -140,8 +141,8 @@ export abstract class BaseRouteHandler {
         HTMLTemplates.error({
           title: 'Server Error',
           message: 'An unexpected error occurred',
-          details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-        })
+          details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+        }),
       );
     }
   }
@@ -154,10 +155,11 @@ export abstract class BaseRouteHandler {
       return schema.parse(data);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        throw ErrorFactory.validationFailed(
-          'Request validation failed',
-          error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
-        );
+        const errors: Record<string, string> = {};
+        error.errors.forEach(e => {
+          errors[e.path.join('.')] = e.message;
+        });
+        throw ErrorFactory.validation.multipleErrors(errors);
       }
       throw error;
     }
@@ -169,7 +171,7 @@ export abstract class BaseRouteHandler {
   protected createOAuthState(data: Record<string, any>): string {
     return JSON.stringify({
       timestamp: Date.now(),
-      ...data
+      ...data,
     });
   }
 
@@ -182,12 +184,12 @@ export abstract class BaseRouteHandler {
 
       // Validate state is not too old (30 minutes)
       if (parsed.timestamp && Date.now() - parsed.timestamp > 30 * 60 * 1000) {
-        throw new Error('OAuth state expired');
+        throw ErrorFactory.api.unauthorized('OAuth state expired');
       }
 
       return parsed;
     } catch {
-      throw ErrorFactory.validationFailed('Invalid OAuth state parameter', 'OAuth state parameter is invalid');
+      throw ErrorFactory.validation.invalidInput('OAuth state', state, 'valid OAuth state parameter');
     }
   }
 
@@ -201,10 +203,10 @@ export abstract class BaseRouteHandler {
  * Route handler decorator for common middleware
  */
 export function routeHandler(options: RouteHandlerOptions) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (target: unknown, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
-    descriptor.value = function (...args: any[]) {
+    descriptor.value = function (...args: unknown[]) {
       const handler = new (class extends BaseRouteHandler {
         constructor() {
           super(options.operation, options);

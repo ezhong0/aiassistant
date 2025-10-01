@@ -95,9 +95,20 @@ export function registerAgentServices(container: AppContainer): void {
     // Domain-specific agents for calendar, email, contacts, and slack operations
     // All depend on their respective domain service and GenericAIService (as 'aiService')
 
-    calendarAgent: asClass(CalendarAgent).singleton(),
-    emailAgent: asClass(EmailAgent).singleton(),
-    contactAgent: asClass(ContactAgent).singleton(),
-    slackAgent: asClass(SlackAgent).singleton(),
+    calendarAgent: asFunction(({ calendarDomainService, aiService }) => {
+      return new CalendarAgent(calendarDomainService, aiService);
+    }).singleton(),
+
+    emailAgent: asFunction(({ emailDomainService, aiService }) => {
+      return new EmailAgent(emailDomainService, aiService);
+    }).singleton(),
+
+    contactAgent: asFunction(({ contactsDomainService, aiService }) => {
+      return new ContactAgent(contactsDomainService, aiService);
+    }).singleton(),
+
+    slackAgent: asFunction(({ slackDomainService, aiService }) => {
+      return new SlackAgent(slackDomainService, aiService);
+    }).singleton(),
   });
 }

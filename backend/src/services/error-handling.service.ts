@@ -7,8 +7,9 @@
 
 import { Request, Response } from 'express';
 import logger from '../utils/logger';
-import { AppError, ERROR_CATEGORIES, ERROR_SEVERITY } from '../utils/app-error';
+import { AppError, ERROR_SEVERITY } from '../utils/app-error';
 import { ErrorFactory, ensureAppError } from '../errors';
+import { BaseService } from './base-service';
 
 /**
  * Request with correlation ID
@@ -20,12 +21,12 @@ interface CorrelatedRequest extends Request {
 /**
  * Error Handling Service
  */
-export class ErrorHandlingService {
+export class ErrorHandlingService extends BaseService {
   private errorCounts = new Map<string, number>();
   private errorThresholds = new Map<string, number>();
-  private logger = logger;
 
   constructor() {
+    super('ErrorHandlingService');
     // Set default thresholds
     this.errorThresholds.set('RATE_LIMITED', 100);
     this.errorThresholds.set('SERVICE_UNAVAILABLE', 50);
@@ -38,7 +39,7 @@ export class ErrorHandlingService {
     err: AppError | Error,
     req: Request,
     res: Response,
-    context?: Record<string, unknown>
+    context?: Record<string, unknown>,
   ): void {
     const correlatedReq = req as CorrelatedRequest;
 
@@ -75,25 +76,25 @@ export class ErrorHandlingService {
       operation: appError.operation,
       metadata: appError.metadata,
       stack: appError.stack,
-      ...context
+      ...context,
     };
 
     // Log based on severity
     switch (appError.severity) {
       case ERROR_SEVERITY.CRITICAL:
-        this.logger.error(appError.message, appError, logData);
+        this.logError(appError.message, appError, logData);
         break;
       case ERROR_SEVERITY.HIGH:
-        this.logger.error(appError.message, appError, logData);
+        this.logError(appError.message, appError, logData);
         break;
       case ERROR_SEVERITY.MEDIUM:
-        this.logger.warn(appError.message, appError, logData);
+        this.logWarn(appError.message, appError, logData);
         break;
       case ERROR_SEVERITY.LOW:
-        this.logger.info(appError.message, appError, logData);
+        this.logInfo(appError.message, appError, logData);
         break;
       default:
-        this.logger.error(appError.message, appError, logData);
+        this.logError(appError.message, appError, logData);
     }
   }
 
@@ -108,11 +109,11 @@ export class ErrorHandlingService {
     // Check if error threshold is exceeded
     const threshold = this.errorThresholds.get(appError.code) || 0;
     if (threshold > 0 && currentCount + 1 >= threshold) {
-      this.logger.warn(`Error threshold exceeded for error type: ${errorType}`, {
+      this.logWarn(`Error threshold exceeded for error type: ${errorType}`, {
         count: currentCount + 1,
         threshold,
         correlationId: appError.correlationId,
-        operation: 'error_threshold_exceeded'
+        operation: 'error_threshold_exceeded',
       });
     }
   }
@@ -121,14 +122,14 @@ export class ErrorHandlingService {
    * Send standardized error response
    */
   private sendErrorResponse(res: Response, appError: AppError): void {
-    const response: any = {
+    const response: Record<string, unknown> = {
       success: false,
       error: {
         code: appError.code,
         message: appError.userFriendly ? appError.message : 'Internal server error',
         category: appError.category,
-        ...(appError.correlationId && { correlationId: appError.correlationId })
-      }
+        ...(appError.correlationId && { correlationId: appError.correlationId }),
+      },
     };
 
     // Add retry-after header if available

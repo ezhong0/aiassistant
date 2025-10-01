@@ -5,10 +5,9 @@ import {
   GoogleTokens,
   GoogleUserInfo,
   TokenValidationResult,
-  JWTPayload
+  JWTPayload,
 } from '../types/auth.types';
-// import { ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
-// import { serviceManager } from "./service-manager";
+import { ErrorFactory } from '../errors/error-factory';
 import { config as unifiedConfig } from '../config/unified-config';
 import { BaseService } from './base-service';
 import { ScopeManager, OAUTH_SCOPES } from '../constants/oauth-scopes';
@@ -33,7 +32,7 @@ export class AuthService extends BaseService {
       this.oauth2Client = new OAuth2Client(
         clientId,
         clientSecret,
-        redirectUri
+        redirectUri,
       );
     } else {
       this.logWarn('Google OAuth not configured - OAuth functionality will be disabled');
@@ -42,7 +41,7 @@ export class AuthService extends BaseService {
     this.logInfo('Auth service initialized successfully', {
       environment: process.env.NODE_ENV || 'development',
       jwtIssuer: process.env.JWT_ISSUER || 'ai-assistant',
-      jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d'
+      jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
     });
   }
 
@@ -59,16 +58,16 @@ export class AuthService extends BaseService {
    */
   generateAuthUrl(scopes: string[] = ScopeManager.getGoogleScopes('full'), state?: string): string {
     this.assertReady();
-    
+
     if (!this.oauth2Client) {
-      throw new Error('Google OAuth not configured - cannot generate auth URL');
+      throw ErrorFactory.domain.serviceUnavailable('GoogleAuthService', { reason: 'OAuth not configured' });
     }
     
     try {
       const authOptions: any = {
         access_type: 'offline',
         scope: scopes,
-        prompt: 'consent'
+        prompt: 'consent',
       };
 
       // Add state parameter if provided
@@ -99,9 +98,9 @@ export class AuthService extends BaseService {
   generateSlackAuthURL(state: string): string {
     const clientId = this.config.slackAuth?.clientId;
     const redirectUri = this.config.slackAuth?.redirectUri;
-    
+
     if (!clientId || !redirectUri) {
-      throw new Error('Slack OAuth not configured');
+      throw ErrorFactory.domain.serviceUnavailable('SlackAuthService', { reason: 'OAuth not configured' });
     }
 
     const userScopes = [...OAUTH_SCOPES.SLACK.USER].join(',');
@@ -110,7 +109,7 @@ export class AuthService extends BaseService {
       scope: userScopes,
       redirect_uri: redirectUri,
       state: state,
-      user_scope: userScopes
+      user_scope: userScopes,
     });
 
     return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
@@ -129,9 +128,9 @@ export class AuthService extends BaseService {
    */
   async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
     this.assertReady();
-    
+
     if (!this.oauth2Client) {
-      throw new Error('Google OAuth not configured - cannot exchange authorization code');
+      throw ErrorFactory.domain.serviceUnavailable('GoogleAuthService', { reason: 'OAuth not configured' });
     }
     
     try {
@@ -140,14 +139,14 @@ export class AuthService extends BaseService {
         clientConfig: {
           hasClientId: !!this.config.googleAuth?.clientId,
           redirectUri: this.config.googleAuth?.redirectUri || 'not_set',
-          hasClientSecret: !!this.config.googleAuth?.clientSecret
-        }
+          hasClientSecret: !!this.config.googleAuth?.clientSecret,
+        },
       });
       
       const { tokens } = await this.oauth2Client.getToken(code);
-      
+
       if (!tokens.access_token) {
-        throw new Error('No access token received from Google');
+        throw ErrorFactory.external.google.serverError('No access token received');
       }
 
       const googleTokens: GoogleTokens = {
@@ -156,13 +155,13 @@ export class AuthService extends BaseService {
         expires_in: 3600, // Default to 1 hour (Google converts expires_in to expiry_date)
         token_type: tokens.token_type || 'Bearer',
         scope: tokens.scope || '',
-        expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + (3600 * 1000)) // Use Google's actual expiry_date or default to 1 hour
+        expires_at: tokens.expiry_date ? new Date(tokens.expiry_date) : new Date(Date.now() + (3600 * 1000)), // Use Google's actual expiry_date or default to 1 hour
       };
 
       this.logInfo('Successfully exchanged code for tokens', {
         hasRefreshToken: !!googleTokens.refresh_token,
         expiresIn: googleTokens.expires_in,
-        hasScope: !!googleTokens.scope
+        hasScope: !!googleTokens.scope,
       });
 
       return googleTokens;
@@ -173,9 +172,9 @@ export class AuthService extends BaseService {
         errorDetails: error.response?.data,
         status: error.response?.status,
         clientConfig: {
-          clientId: this.config.googleAuth?.clientId?.substring(0, 20) + '...' || 'unknown',
-          redirectUri: this.config.googleAuth?.redirectUri || 'unknown'
-        }
+          clientId: `${this.config.googleAuth?.clientId?.substring(0, 20)  }...` || 'unknown',
+          redirectUri: this.config.googleAuth?.redirectUri || 'unknown',
+        },
       });
       this.handleError(error, 'exchangeCodeForTokens');
     }
@@ -193,7 +192,7 @@ export class AuthService extends BaseService {
       // Validate access token by calling Google's userinfo endpoint
       const userInfo = await this.getGoogleUserInfo(accessToken);
       
-      if (!userInfo || !userInfo.sub) {
+      if (!userInfo?.sub) {
         return { valid: false, error: 'Unable to fetch user info with provided access token' };
       }
 
@@ -206,7 +205,7 @@ export class AuthService extends BaseService {
       
       return {
         valid: true,
-        userInfo
+        userInfo,
       };
     } catch (error) {
       this.logWarn('Google token validation failed', { error });
@@ -228,18 +227,18 @@ export class AuthService extends BaseService {
         aud: this.config.auth.jwt.audience,
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + this.parseJWTExpiration(this.config.auth.jwt.expiresIn),
-        ...additionalClaims
+        ...additionalClaims,
       };
 
       const options: SignOptions = {
-        algorithm: 'HS256'
+        algorithm: 'HS256',
       };
 
       const token = jwt.sign(payload, this.config.jwtSecret, options);
       
       this.logDebug('Generated JWT token', { 
         userId, 
-        expiresIn: this.config.auth.jwt.expiresIn 
+        expiresIn: this.config.auth.jwt.expiresIn, 
       });
       
       return token;
@@ -257,22 +256,22 @@ export class AuthService extends BaseService {
     try {
       // Validate token format first
       if (!token || typeof token !== 'string' || token.trim().length === 0) {
-        throw new Error('Invalid token format: token must be a non-empty string');
+        throw ErrorFactory.validation.invalidInput('token', token, 'non-empty string');
       }
 
       const decoded = jwt.verify(token, this.config.jwtSecret, {
         issuer: this.config.auth.jwt.issuer,
-        audience: this.config.auth.jwt.audience
+        audience: this.config.auth.jwt.audience,
       }) as JWTPayload;
 
       this.logDebug('JWT token verified successfully', { 
-        userId: decoded.sub
+        userId: decoded.sub,
       });
       
       return decoded;
     } catch (error) {
       this.logWarn('JWT token verification failed', { error });
-      throw new Error('Invalid or expired token');
+      throw ErrorFactory.api.unauthorized('Invalid or expired token');
     }
   }
 
@@ -286,13 +285,13 @@ export class AuthService extends BaseService {
       this.logDebug('Refreshing Google access token');
       
       this.oauth2Client.setCredentials({
-        refresh_token: refreshToken
+        refresh_token: refreshToken,
       });
 
       const { credentials } = await this.oauth2Client.refreshAccessToken();
-      
+
       if (!credentials.access_token) {
-        throw new Error('No access token received during refresh');
+        throw ErrorFactory.external.google.serverError('No access token received during refresh');
       }
 
       const googleTokens: GoogleTokens = {
@@ -301,11 +300,11 @@ export class AuthService extends BaseService {
         expires_in: 3600, // Default to 1 hour (Google converts expires_in to expiry_date)
         token_type: credentials.token_type || 'Bearer',
         scope: credentials.scope || '',
-        expires_at: credentials.expiry_date ? new Date(credentials.expiry_date) : new Date(Date.now() + (3600 * 1000)) // Use Google's actual expiry_date or default to 1 hour
+        expires_at: credentials.expiry_date ? new Date(credentials.expiry_date) : new Date(Date.now() + (3600 * 1000)), // Use Google's actual expiry_date or default to 1 hour
       };
 
       this.logInfo('Successfully refreshed Google tokens', {
-        expiresIn: googleTokens.expires_in
+        expiresIn: googleTokens.expires_in,
       });
 
       return googleTokens;
@@ -341,7 +340,7 @@ export class AuthService extends BaseService {
     try {
       this.logInfo('Fetching user info from Google', { 
         tokenLength: accessToken.length,
-        tokenPrefix: accessToken.substring(0, 20) + '...'
+        tokenPrefix: `${accessToken.substring(0, 20)  }...`,
       });
       
       // Try the OpenID Connect userinfo endpoint first (more reliable)
@@ -352,14 +351,14 @@ export class AuthService extends BaseService {
         this.logInfo('Trying OpenID Connect userinfo endpoint');
         response = await axios.get('https://openidconnect.googleapis.com/v1/userinfo', {
           headers: {
-            Authorization: `Bearer ${accessToken}`
-          }
+            Authorization: `Bearer ${accessToken}`,
+          },
         });
         
         this.logInfo('OpenID Connect userinfo successful', {
           hasSub: !!response.data.sub,
           hasEmail: !!response.data.email,
-          email: response.data.email
+          email: response.data.email,
         });
         
         userInfo = {
@@ -367,28 +366,28 @@ export class AuthService extends BaseService {
           email: response.data.email,
           name: response.data.name || '',
           picture: response.data.picture || '',
-          email_verified: response.data.email_verified || false
+          email_verified: response.data.email_verified || false,
         };
       } catch (oidcError: any) {
         this.logWarn('OpenID Connect endpoint failed, trying OAuth2 v2 endpoint', { 
           status: oidcError.response?.status,
           statusText: oidcError.response?.statusText,
           data: oidcError.response?.data,
-          message: oidcError.message 
+          message: oidcError.message, 
         });
         
         // Fallback to OAuth2 v2 userinfo endpoint
         this.logInfo('Trying OAuth2 v2 userinfo endpoint');
         response = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
           headers: {
-            Authorization: `Bearer ${accessToken}`
-          }
+            Authorization: `Bearer ${accessToken}`,
+          },
         });
 
         this.logInfo('OAuth2 v2 userinfo successful', {
           hasId: !!response.data.id,
           hasEmail: !!response.data.email,
-          email: response.data.email
+          email: response.data.email,
         });
 
         userInfo = {
@@ -396,13 +395,13 @@ export class AuthService extends BaseService {
           email: response.data.email,
           name: response.data.name || '',
           picture: response.data.picture || '',
-          email_verified: response.data.verified_email || false
+          email_verified: response.data.verified_email || false,
         };
       }
 
       // Validate user info
       if (!userInfo.sub || !userInfo.email || !userInfo.name) {
-        throw new Error('Invalid user info: Missing required user info fields');
+        throw ErrorFactory.validation.invalidInput('userInfo', userInfo, 'complete user information with sub, email, and name');
       }
 
       this.logDebug('Successfully fetched Google user info', { email: userInfo.email });
@@ -415,7 +414,7 @@ export class AuthService extends BaseService {
           status: error.response.status,
           statusText: error.response.statusText,
           data: error.response.data,
-          tokenPrefix: accessToken.substring(0, 20) + '...'
+          tokenPrefix: `${accessToken.substring(0, 20)  }...`,
         });
       }
       this.handleError(error, 'getGoogleUserInfo');
@@ -455,15 +454,15 @@ export class AuthService extends BaseService {
           hasGoogleClientId: !!this.config.googleAuth?.clientId,
           hasGoogleClientSecret: !!this.config.googleAuth?.clientSecret,
           hasGoogleRedirectUri: !!this.config.googleAuth?.redirectUri,
-          hasJWTSecret: !!this.config.jwtSecret
-        }
+          hasJWTSecret: !!this.config.jwtSecret,
+        },
       };
 
       return { healthy, details };
     } catch (error) {
       return { 
         healthy: false, 
-        details: { error: error instanceof Error ? error.message : 'Unknown error' }
+        details: { error: error instanceof Error ? error.message : 'Unknown error' },
       };
     }
   }

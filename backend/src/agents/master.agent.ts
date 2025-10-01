@@ -6,7 +6,6 @@ import { ContextManager } from '../services/context-manager.service';
 
 // Utilities and error handling
 import { BuilderGuard, createBuilderContext, PromptBuilderMap } from '../utils/builder-guard';
-import { PromptBuilderFactory } from '../utils/prompt-builder-factory';
 import { ErrorFactory } from '../errors';
 
 import { TokenManager } from '../services/token-manager';
@@ -52,7 +51,7 @@ export class MasterAgent {
     contextManager: ContextManager,
     tokenManager: TokenManager,
     workflowExecutor: WorkflowExecutor,
-    builders: PromptBuilderMap
+    builders: PromptBuilderMap,
   ) {
     this.aiService = aiService;
     this.contextManager = contextManager;
@@ -74,23 +73,23 @@ export class MasterAgent {
 
     // Validate injected dependencies
     if (!this.aiService) {
-      throw new Error('GenericAIService not provided to MasterAgent');
+      throw ErrorFactory.domain.serviceError('MasterAgent', 'GenericAIService not provided to MasterAgent');
     }
 
     if (!this.contextManager) {
-      throw new Error('ContextManager not provided to MasterAgent');
+      throw ErrorFactory.domain.serviceError('MasterAgent', 'ContextManager not provided to MasterAgent');
     }
 
     if (!this.tokenManager) {
-      throw new Error('TokenManager not provided to MasterAgent');
+      throw ErrorFactory.domain.serviceError('MasterAgent', 'TokenManager not provided to MasterAgent');
     }
 
     if (!this.workflowExecutor) {
-      throw new Error('WorkflowExecutor not provided to MasterAgent');
+      throw ErrorFactory.workflow.executionFailed('WorkflowExecutor not provided to MasterAgent');
     }
 
     if (!this.builders) {
-      throw new Error('Builders not provided to MasterAgent');
+      throw ErrorFactory.domain.serviceError('MasterAgent', 'Builders not provided to MasterAgent');
     }
 
     BuilderGuard.validateAllBuilders(this.builders);
@@ -98,7 +97,7 @@ export class MasterAgent {
     this.isInitialized = true;
 
     logger.info('MasterAgent initialized successfully', {
-      operation: 'master_agent_init'
+      operation: 'master_agent_init',
     });
   }
 
@@ -109,7 +108,7 @@ export class MasterAgent {
     userInput: string,
     sessionId: string,
     userId?: string,
-    slackContext?: SlackContext
+    slackContext?: SlackContext,
   ): Promise<ProcessingResult> {
     await this.ensureInitialized();
 
@@ -120,7 +119,7 @@ export class MasterAgent {
       sessionId,
       userId,
       hasSlackContext: !!slackContext,
-      operation: 'process_user_input'
+      operation: 'process_user_input',
     });
 
     try {
@@ -160,10 +159,10 @@ export class MasterAgent {
 
     } catch (error) {
       logger.error('Failed to process user input', error as Error, {
-        userInput: userInput.substring(0, 100) + '...',
+        userInput: `${userInput.substring(0, 100)  }...`,
         sessionId,
         userId,
-        operation: 'process_user_input_error'
+        operation: 'process_user_input_error',
       });
 
       return this.createErrorResult('I encountered an error while processing your request. Please try again.', processingStartTime);
@@ -177,7 +176,7 @@ export class MasterAgent {
   private async buildMessageHistory(
     userInput: string,
     sessionId: string,
-    slackContext?: SlackContext
+    slackContext?: SlackContext,
   ): Promise<string> {
     logger.info('Building message history', { sessionId });
 
@@ -211,7 +210,7 @@ export class MasterAgent {
   private async analyzeAndPlan(
     messageHistory: string,
     sessionId: string,
-    userId?: string
+    userId?: string,
   ): Promise<string> {
     logger.info('Analyzing situation and creating plan', { sessionId, userId });
 
@@ -222,7 +221,7 @@ export class MasterAgent {
       this.builders?.situation,
       'situation',
       messageHistory,
-      context
+      context,
     );
     let workflowContext = situationResult.parsed.context;
 
@@ -231,7 +230,7 @@ export class MasterAgent {
       this.builders?.planning,
       'planning',
       workflowContext,
-      context
+      context,
     );
     workflowContext = planningResult.parsed.context;
 
@@ -244,14 +243,14 @@ export class MasterAgent {
   private async executeWorkflow(
     workflowContext: string,
     sessionId: string,
-    userId?: string
+    userId?: string,
   ): Promise<string> {
     if (!this.workflowExecutor) {
       throw ErrorFactory.domain.serviceUnavailable('WorkflowExecutor', {
         component: 'master-agent',
         operation: 'execute_workflow',
         sessionId,
-        userId
+        userId,
       });
     }
 
@@ -263,7 +262,7 @@ export class MasterAgent {
       logger.error('Workflow execution failed', error as Error, {
         sessionId,
         userId,
-        operation: 'execute_workflow'
+        operation: 'execute_workflow',
       });
       throw error;
     }
@@ -274,7 +273,7 @@ export class MasterAgent {
    */
   private async generateFinalResponse(
     workflowContext: string,
-    processingStartTime: number
+    processingStartTime: number,
   ): Promise<ProcessingResult> {
     logger.info('Generating final response');
 
@@ -284,7 +283,7 @@ export class MasterAgent {
       this.builders?.final,
       'final',
       workflowContext,
-      context
+      context,
     );
     const response = finalResult.parsed.response;
 
@@ -292,8 +291,8 @@ export class MasterAgent {
       message: response,
       success: true,
       metadata: {
-        processingTime: Date.now() - processingStartTime
-      }
+        processingTime: Date.now() - processingStartTime,
+      },
     };
   }
 
@@ -319,8 +318,8 @@ export class MasterAgent {
       message,
       success: false,
       metadata: {
-        processingTime: Date.now() - processingStartTime
-      }
+        processingTime: Date.now() - processingStartTime,
+      },
     };
   }
 

@@ -23,12 +23,12 @@ const swaggerDocument = {
     `,
     contact: {
       name: 'API Support',
-      email: 'support@assistantapp.com'
+      email: 'support@assistantapp.com',
     },
     license: {
       name: 'MIT',
-      url: 'https://opensource.org/licenses/MIT'
-    }
+      url: 'https://opensource.org/licenses/MIT',
+    },
   },
   servers: [
     {
@@ -50,7 +50,7 @@ const swaggerDocument = {
             content: {
               'application/json': {
                 schema: {
-                  $ref: '#/components/schemas/HealthStatus'
+                  $ref: '#/components/schemas/HealthStatus',
                 },
                 examples: {
                   healthy: {
@@ -61,12 +61,12 @@ const swaggerDocument = {
                       services: {
                         database: { status: 'healthy' },
                         cache: { status: 'healthy' },
-                        encryption: { status: 'healthy' }
+                        encryption: { status: 'healthy' },
                       },
-                      version: '1.0.0'
-                    }
-                  }
-                }
+                      version: '1.0.0',
+                    },
+                  },
+                },
               },
             },
           },
@@ -75,11 +75,11 @@ const swaggerDocument = {
             content: {
               'application/json': {
                 schema: {
-                  $ref: '#/components/schemas/HealthStatus'
-                }
-              }
-            }
-          }
+                  $ref: '#/components/schemas/HealthStatus',
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -95,9 +95,9 @@ const swaggerDocument = {
             description: 'Optional state parameter for CSRF protection',
             required: false,
             schema: {
-              type: 'string'
-            }
-          }
+              type: 'string',
+            },
+          },
         ],
         responses: {
           '302': {
@@ -106,21 +106,21 @@ const swaggerDocument = {
               'Location': {
                 description: 'Google OAuth authorization URL',
                 schema: {
-                  type: 'string'
-                }
-              }
-            }
+                  type: 'string',
+                },
+              },
+            },
           },
           '400': {
             description: 'Invalid request parameters',
             content: {
               'application/json': {
                 schema: {
-                  $ref: '#/components/schemas/Error'
-                }
-              }
-            }
-          }
+                  $ref: '#/components/schemas/Error',
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -251,7 +251,7 @@ const swaggerDocument = {
             content: {
               'application/json': {
                 schema: {
-                  $ref: '#/components/schemas/TokenValidation'
+                  $ref: '#/components/schemas/TokenValidation',
                 },
                 examples: {
                   valid: {
@@ -261,12 +261,12 @@ const swaggerDocument = {
                       user: {
                         userId: 'user_123456',
                         email: 'user@example.com',
-                        name: 'John Doe'
+                        name: 'John Doe',
                       },
-                      expiresAt: '2024-01-15T11:30:00Z'
-                    }
-                  }
-                }
+                      expiresAt: '2024-01-15T11:30:00Z',
+                    },
+                  },
+                },
               },
             },
           },
@@ -275,7 +275,7 @@ const swaggerDocument = {
             content: {
               'application/json': {
                 schema: {
-                  $ref: '#/components/schemas/Error'
+                  $ref: '#/components/schemas/Error',
                 },
                 examples: {
                   invalid: {
@@ -284,14 +284,14 @@ const swaggerDocument = {
                       success: false,
                       error: {
                         code: 'INVALID_TOKEN',
-                        message: 'Token is invalid or expired'
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
+                        message: 'Token is invalid or expired',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -302,7 +302,7 @@ const swaggerDocument = {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'JWT token obtained through OAuth flow'
+        description: 'JWT token obtained through OAuth flow',
       },
     },
     schemas: {
@@ -311,26 +311,26 @@ const swaggerDocument = {
         properties: {
           success: {
             type: 'boolean',
-            example: false
+            example: false,
           },
           error: {
             type: 'object',
             properties: {
               code: {
                 type: 'string',
-                example: 'VALIDATION_ERROR'
+                example: 'VALIDATION_ERROR',
               },
               message: {
                 type: 'string',
-                example: 'Invalid request parameters'
+                example: 'Invalid request parameters',
               },
               details: {
                 type: 'object',
-                description: 'Additional error details'
-              }
-            }
-          }
-        }
+                description: 'Additional error details',
+              },
+            },
+          },
+        },
       },
       HealthStatus: {
         type: 'object',
@@ -338,62 +338,62 @@ const swaggerDocument = {
           status: {
             type: 'string',
             enum: ['healthy', 'unhealthy', 'degraded'],
-            example: 'healthy'
+            example: 'healthy',
           },
           timestamp: {
             type: 'string',
             format: 'date-time',
-            example: '2024-01-15T10:30:00Z'
+            example: '2024-01-15T10:30:00Z',
           },
           services: {
             type: 'object',
-            description: 'Status of individual services'
+            description: 'Status of individual services',
           },
           version: {
             type: 'string',
-            example: '1.0.0'
-          }
-        }
+            example: '1.0.0',
+          },
+        },
       },
       User: {
         type: 'object',
         properties: {
           userId: {
             type: 'string',
-            example: 'user_123456'
+            example: 'user_123456',
           },
           email: {
             type: 'string',
             format: 'email',
-            example: 'user@example.com'
+            example: 'user@example.com',
           },
           name: {
             type: 'string',
-            example: 'John Doe'
+            example: 'John Doe',
           },
           createdAt: {
             type: 'string',
-            format: 'date-time'
-          }
-        }
+            format: 'date-time',
+          },
+        },
       },
       TokenValidation: {
         type: 'object',
         properties: {
           valid: {
             type: 'boolean',
-            example: true
+            example: true,
           },
           user: {
-            $ref: '#/components/schemas/User'
+            $ref: '#/components/schemas/User',
           },
           expiresAt: {
             type: 'string',
-            format: 'date-time'
-          }
-        }
-      }
-    }
+            format: 'date-time',
+          },
+        },
+      },
+    },
   },
   security: [
     {
@@ -403,21 +403,21 @@ const swaggerDocument = {
   tags: [
     {
       name: 'Health',
-      description: 'Health check endpoints'
+      description: 'Health check endpoints',
     },
     {
       name: 'Authentication',
-      description: 'OAuth authentication endpoints'
+      description: 'OAuth authentication endpoints',
     },
     {
       name: 'Protected',
-      description: 'Protected endpoints requiring authentication'
+      description: 'Protected endpoints requiring authentication',
     },
     {
       name: 'Slack',
-      description: 'Slack integration endpoints'
-    }
-  ]
+      description: 'Slack integration endpoints',
+    },
+  ],
 };
 
 export function setupSwagger(app: Application): void {

@@ -9,24 +9,24 @@ export const OAUTH_SCOPES = {
     CORE: [
       'openid',
       'email',
-      'profile'
+      'profile',
     ],
 
     // Gmail scopes
     GMAIL: [
       'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly'
+      'https://www.googleapis.com/auth/gmail.readonly',
     ],
 
     // Calendar scopes
     CALENDAR: [
       'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
+      'https://www.googleapis.com/auth/calendar.events',
     ],
 
     // Contacts scopes
     CONTACTS: [
-      'https://www.googleapis.com/auth/contacts.readonly'
+      'https://www.googleapis.com/auth/contacts.readonly',
     ],
 
     // Combined scopes for different use cases
@@ -38,7 +38,7 @@ export const OAUTH_SCOPES = {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/contacts.readonly',
       'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
+      'https://www.googleapis.com/auth/calendar.events',
     ],
 
     SLACK_INTEGRATION: [
@@ -49,23 +49,23 @@ export const OAUTH_SCOPES = {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/contacts.readonly',
       'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
-    ]
+      'https://www.googleapis.com/auth/calendar.events',
+    ],
   },
 
   SLACK: {
     BOT: [
       'chat:write',
       'channels:read',
-      'users:read'
+      'users:read',
     ],
 
     USER: [
       'identity.basic',
       'identity.email',
-      'identity.team'
-    ]
-  }
+      'identity.team',
+    ],
+  },
 } as const;
 
 /**

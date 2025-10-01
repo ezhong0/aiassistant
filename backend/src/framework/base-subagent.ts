@@ -14,7 +14,7 @@ import logger from '../utils/logger';
 import {
   IntentAssessmentPromptBuilder,
   PlanReviewPromptBuilder,
-  ResponseFormattingPromptBuilder
+  ResponseFormattingPromptBuilder,
 } from '../services/prompt-builders/sub-agent';
 
 /**
@@ -26,7 +26,7 @@ export interface SubAgentResponse {
   metadata?: {
     tools_used: string[];       // Tools that were executed
     execution_time: number;     // Time taken in seconds
-    data?: any;                 // Optional structured data
+    data?: Record<string, unknown>;                 // Optional structured data
   };
   error?: {
     type: 'auth' | 'params' | 'network' | 'rate_limit' | 'permission' | 'tool_error';
@@ -166,7 +166,7 @@ export abstract class BaseSubAgent {
       enabled: true,
       timeout: 30000,
       retryCount: 3,
-      ...config
+      ...config,
     };
     
     // Initialize prompt builders with injected AI service
@@ -180,7 +180,7 @@ export abstract class BaseSubAgent {
    */
   async processNaturalLanguageRequest(
     request: string, 
-    userId: string
+    userId: string,
   ): Promise<SubAgentResponse> {
     const startTime = Date.now();
     const correlationId = `${this.domain}-${Date.now()}`;
@@ -191,7 +191,7 @@ export abstract class BaseSubAgent {
         operation: 'process_natural_language_request',
         domain: this.domain,
         requestLength: request.length,
-        userId
+        userId,
       });
 
       // Ensure AI service is initialized
@@ -213,7 +213,7 @@ export abstract class BaseSubAgent {
         operation: 'process_natural_language_request_success',
         domain: this.domain,
         success: response.success,
-        executionTime: response.metadata?.execution_time
+        executionTime: response.metadata?.execution_time,
       });
 
       return response;
@@ -224,7 +224,7 @@ export abstract class BaseSubAgent {
         correlationId,
         operation: 'process_natural_language_request_error',
         domain: this.domain,
-        executionTime
+        executionTime,
       });
 
       return {
@@ -233,14 +233,14 @@ export abstract class BaseSubAgent {
         metadata: {
           tools_used: [],
           execution_time: executionTime,
-          data: null
+          data: undefined,
         },
         error: {
           type: 'tool_error',
           message: error instanceof Error ? error.message : 'Unknown error',
           tool: 'unknown',
-          recoverable: false
-        }
+          recoverable: false,
+        },
       };
     }
   }
@@ -285,7 +285,7 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
         try {
           const result = await this.executeToolCallWithRetry(
             toolCall.tool, 
-            { ...toolCall.params, userId }
+            { ...toolCall.params, userId },
           );
           
           // Update context with structured tool result
@@ -293,7 +293,7 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
             tool: toolCall.tool,
             success: true,
             result: result,
-            executionTime: Date.now()
+            executionTime: Date.now(),
           });
           
         } catch (error) {
@@ -305,7 +305,7 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
             params: toolCall.params,
             errorType: errorInfo.type,
             errorMessage: errorMessage,
-            userId
+            userId,
           });
           
           // Update context with structured error
@@ -314,7 +314,7 @@ AVAILABLE_TOOLS: ${this.getAvailableTools().join(', ')}
             success: false,
             error: errorMessage,
             errorType: errorInfo.type,
-            executionTime: Date.now()
+            executionTime: Date.now(),
           });
         }
 
@@ -392,8 +392,8 @@ ORIGINAL_REQUEST: ${request}
       metadata: {
         tools_used: this.extractToolsUsedFromContext(context),
         execution_time: executionTime,
-        data: response.parsed.response.data
-      }
+        data: response.parsed.response.data,
+      },
     };
   }
 
@@ -412,7 +412,7 @@ ORIGINAL_REQUEST: ${request}
   /**
    * Execute a tool call by mapping to domain service method
    */
-  protected abstract executeToolCall(toolName: string, params: any): Promise<any>;
+  protected abstract executeToolCall(toolName: string, params: Record<string, unknown>): Promise<Record<string, unknown>>;
 
   /**
    * Get tool-to-service method mapping
@@ -446,7 +446,7 @@ ORIGINAL_REQUEST: ${request}
       requiresAuth: true,
       requiresConfirmation: false,
       isCritical: false,
-      examples: []
+      examples: [],
     };
   }
 
@@ -474,14 +474,14 @@ ORIGINAL_REQUEST: ${request}
   /**
    * Get agent health status
    */
-  getHealth(): { healthy: boolean; details?: any } {
+  getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     return {
       healthy: this.config.enabled,
       details: {
         domain: this.domain,
         enabled: this.config.enabled,
-        availableTools: this.getAvailableTools().length
-      }
+        availableTools: this.getAvailableTools().length,
+      },
     };
   }
 
@@ -503,7 +503,7 @@ ORIGINAL_REQUEST: ${request}
   /**
    * Extract tool calls from structured AI response
    */
-  protected extractToolCallsFromContext(context: string): Array<{tool: string, params: any, description: string}> {
+  protected extractToolCallsFromContext(context: string): Array<{tool: string, params: Record<string, unknown>, description: string}> {
     try {
       // Try to parse as JSON first (structured response)
       const jsonMatch = context.match(/\{.*\}/s);
@@ -520,7 +520,7 @@ ORIGINAL_REQUEST: ${request}
       
       // Fallback: Look for TOOL_CALLS pattern
       const toolCallsMatch = context.match(/TOOL_CALLS:\s*(\[.*?\])/s);
-      if (toolCallsMatch && toolCallsMatch[1]) {
+      if (toolCallsMatch?.[1]) {
         const toolCallsJson = toolCallsMatch[1];
         return JSON.parse(toolCallsJson);
       }
@@ -538,7 +538,7 @@ ORIGINAL_REQUEST: ${request}
   protected updateContextWithToolResult(context: string, toolResult: {
     tool: string;
     success: boolean;
-    result?: any;
+    result?: Record<string, unknown>;
     error?: string;
     errorType?: string;
     executionTime: number;
@@ -555,7 +555,7 @@ TOOL_RESULT_${toolResult.tool}:
   /**
    * Classify error types for better handling and retry logic
    */
-  protected classifyError(error: any): { type: string; retryable: boolean; retryDelay?: number } {
+  protected classifyError(error: unknown): { type: string; retryable: boolean; retryDelay?: number } {
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
       
@@ -586,8 +586,8 @@ TOOL_RESULT_${toolResult.tool}:
   /**
    * Execute tool call with retry logic
    */
-  protected async executeToolCallWithRetry(toolName: string, params: any, maxRetries: number = 3): Promise<any> {
-    let lastError: any;
+  protected async executeToolCallWithRetry(toolName: string, params: Record<string, unknown>, maxRetries = 3): Promise<Record<string, unknown>> {
+    let lastError: unknown;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -614,7 +614,7 @@ TOOL_RESULT_${toolResult.tool}:
         logger.warn(`Tool call failed, retrying (attempt ${attempt}/${maxRetries})`, {
           toolName,
           errorType: errorInfo.type,
-          retryDelay: errorInfo.retryDelay
+          retryDelay: errorInfo.retryDelay,
         });
       }
     }

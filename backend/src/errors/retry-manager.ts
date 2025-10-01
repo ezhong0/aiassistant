@@ -92,7 +92,7 @@ export const DEFAULT_RETRY_CONFIGS: Record<string, RetryConfig> = {
       return message.includes('connection') ||
              message.includes('timeout') ||
              message.includes('econnrefused');
-    }
+    },
   },
 
   externalAPI: {
@@ -110,7 +110,7 @@ export const DEFAULT_RETRY_CONFIGS: Record<string, RetryConfig> = {
              message.includes('5') || // 5xx status codes
              message.includes('econnrefused') ||
              message.includes('enotfound');
-    }
+    },
   },
 
   serviceInitialization: {
@@ -125,7 +125,7 @@ export const DEFAULT_RETRY_CONFIGS: Record<string, RetryConfig> = {
       return message.includes('connection') ||
              message.includes('dependency') ||
              message.includes('unavailable');
-    }
+    },
   },
 
   openai: {
@@ -141,7 +141,7 @@ export const DEFAULT_RETRY_CONFIGS: Record<string, RetryConfig> = {
              message.includes('timeout') ||
              message.includes('overloaded') ||
              message.includes('5');
-    }
+    },
   },
 
   immediate: {
@@ -150,8 +150,8 @@ export const DEFAULT_RETRY_CONFIGS: Record<string, RetryConfig> = {
     maxDelay: 0,
     backoffMultiplier: 1,
     jitter: false,
-    strategy: RetryStrategy.IMMEDIATE
-  }
+    strategy: RetryStrategy.IMMEDIATE,
+  },
 };
 
 /**
@@ -172,7 +172,7 @@ export class RetryManager {
     maxDelay: 10000,
     backoffMultiplier: 2,
     jitter: true,
-    strategy: RetryStrategy.EXPONENTIAL_BACKOFF
+    strategy: RetryStrategy.EXPONENTIAL_BACKOFF,
   };
 
   /**
@@ -181,7 +181,7 @@ export class RetryManager {
   async execute<T>(
     operation: () => Promise<T>,
     config?: Partial<RetryConfig>,
-    context?: { service?: string; operation?: string }
+    context?: { service?: string; operation?: string },
   ): Promise<RetryResult<T>> {
     const retryConfig: RetryConfig = { ...this.defaultConfig, ...(config || {}) };
     const startTime = Date.now();
@@ -197,7 +197,7 @@ export class RetryManager {
           error: new Error(`Circuit breaker is open for ${circuitBreakerKey}`),
           attempts: 0,
           totalTime: 0,
-          recoveryStrategy: ErrorRecoveryStrategy.CIRCUIT_BREAKER
+          recoveryStrategy: ErrorRecoveryStrategy.CIRCUIT_BREAKER,
         };
       }
     }
@@ -215,7 +215,7 @@ export class RetryManager {
           success: true,
           result,
           attempts,
-          totalTime: Date.now() - startTime
+          totalTime: Date.now() - startTime,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -255,7 +255,7 @@ export class RetryManager {
       error: lastError,
       attempts,
       totalTime: Date.now() - startTime,
-      recoveryStrategy
+      recoveryStrategy,
     };
   }
 
@@ -266,7 +266,7 @@ export class RetryManager {
     primaryOperation: () => Promise<T>,
     fallbackOperation: () => Promise<T>,
     config?: Partial<RetryConfig>,
-    context?: { service?: string; operation?: string }
+    context?: { service?: string; operation?: string },
   ): Promise<RetryResult<T>> {
     // Try primary operation first
     const primaryResult = await this.execute(primaryOperation, config, context);
@@ -281,14 +281,14 @@ export class RetryManager {
     const fallbackResult = await this.execute(
       fallbackOperation,
       { ...config, maxAttempts: 2 }, // Reduce attempts for fallback
-      { ...context, operation: `${context?.operation || 'fallback'}_fallback` }
+      { ...context, operation: `${context?.operation || 'fallback'}_fallback` },
     );
 
     return {
       ...fallbackResult,
       attempts: primaryResult.attempts + fallbackResult.attempts,
       totalTime: primaryResult.totalTime + fallbackResult.totalTime,
-      recoveryStrategy: ErrorRecoveryStrategy.FALLBACK
+      recoveryStrategy: ErrorRecoveryStrategy.FALLBACK,
     };
   }
 
@@ -297,15 +297,15 @@ export class RetryManager {
    */
   registerCircuitBreaker(
     service: string,
-    operation: string = 'default',
-    config: Partial<CircuitBreakerConfig> = {}
+    operation = 'default',
+    config: Partial<CircuitBreakerConfig> = {},
   ): void {
     const key = `${service}:${operation}`;
     const defaultConfig: CircuitBreakerConfig = {
       failureThreshold: 5,
       recoveryTimeout: 60000, // 1 minute
       monitoringPeriod: 300000, // 5 minutes
-      minimumThroughput: 10
+      minimumThroughput: 10,
     };
 
     this.circuitBreakers.set(key, {
@@ -313,14 +313,14 @@ export class RetryManager {
       failures: 0,
       lastFailureTime: 0,
       lastAttemptTime: 0,
-      config: { ...defaultConfig, ...config }
+      config: { ...defaultConfig, ...config },
     });
   }
 
   /**
    * Get circuit breaker status
    */
-  getCircuitBreakerStatus(service: string, operation: string = 'default'): {
+  getCircuitBreakerStatus(service: string, operation = 'default'): {
     state: CircuitBreakerState;
     failures: number;
     isOpen: boolean;
@@ -332,21 +332,21 @@ export class RetryManager {
       return {
         state: CircuitBreakerState.CLOSED,
         failures: 0,
-        isOpen: false
+        isOpen: false,
       };
     }
 
     return {
       state: breaker.state,
       failures: breaker.failures,
-      isOpen: breaker.state === CircuitBreakerState.OPEN
+      isOpen: breaker.state === CircuitBreakerState.OPEN,
     };
   }
 
   /**
    * Manually reset circuit breaker
    */
-  resetCircuitBreaker(service: string, operation: string = 'default'): void {
+  resetCircuitBreaker(service: string, operation = 'default'): void {
     const key = `${service}:${operation}`;
     const breaker = this.circuitBreakers.get(key);
 
@@ -367,14 +367,14 @@ export class RetryManager {
       case RetryStrategy.EXPONENTIAL_BACKOFF:
         delay = Math.min(
           config.baseDelay * Math.pow(config.backoffMultiplier, attempt - 1),
-          config.maxDelay
+          config.maxDelay,
         );
         break;
 
       case RetryStrategy.LINEAR_BACKOFF:
         delay = Math.min(
           config.baseDelay * attempt,
-          config.maxDelay
+          config.maxDelay,
         );
         break;
 
@@ -459,7 +459,7 @@ export class RetryManager {
    */
   private determineRecoveryStrategy(
     error: Error,
-    _context?: { service?: string; operation?: string } // eslint-disable-line @typescript-eslint/no-unused-vars
+    _context?: { service?: string; operation?: string },  
   ): ErrorRecoveryStrategy {
     if (error instanceof AppError) {
       // Return a default recovery strategy since recoveryStrategy property doesn't exist

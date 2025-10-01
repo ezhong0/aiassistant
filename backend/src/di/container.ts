@@ -1,6 +1,7 @@
-import { asValue, createContainer, AwilixContainer } from 'awilix';
+import { asValue, createContainer, AwilixContainer, InjectionMode } from 'awilix';
 import { unifiedConfig } from '../config/unified-config';
 import logger from '../utils/logger';
+import { ErrorFactory } from '../errors/error-factory';
 
 /**
  * Application Dependency Injection Container
@@ -95,20 +96,20 @@ export type AppContainer = AwilixContainer<Cradle>;
  */
 export function createAppContainer(): AppContainer {
   const container = createContainer<Cradle>({
-    injectionMode: 'CONSTRUCTOR' as any,
-    strict: true // Fail fast on missing dependencies
+    injectionMode: InjectionMode.PROXY,
+    strict: true, // Fail fast on missing dependencies
   });
 
   // Register configuration and logger as singleton values
   container.register({
     config: asValue(unifiedConfig),
-    logger: asValue(logger)
+    logger: asValue(logger),
   });
 
   logger.info('DI Container created', {
     correlationId: `di-container-${Date.now()}`,
     operation: 'container_creation',
-    metadata: { mode: 'constructor_injection', strict: true }
+    metadata: { mode: 'constructor_injection', strict: true },
   });
 
   return container;
@@ -121,11 +122,11 @@ export function createAppContainer(): AppContainer {
 export async function initializeAllServices(container: AppContainer): Promise<void> {
   logger.info('Starting service initialization', {
     correlationId: `service-init-${Date.now()}`,
-    operation: 'service_initialization_start'
+    operation: 'service_initialization_start',
   });
 
   const cradle = container.cradle;
-  const services: any[] = [];
+  const services: Array<{ name: string; service: { initialize(): Promise<void> } }> = [];
 
   // Collect all services that have an initialize method
   for (const [name, service] of Object.entries(cradle)) {
@@ -137,7 +138,7 @@ export async function initializeAllServices(container: AppContainer): Promise<vo
   logger.debug('Initializing services', {
     correlationId: `service-init-${Date.now()}`,
     operation: 'service_initialization',
-    metadata: { serviceCount: services.length }
+    metadata: { serviceCount: services.length },
   });
 
   // Initialize each service
@@ -147,13 +148,13 @@ export async function initializeAllServices(container: AppContainer): Promise<vo
       logger.debug(`Service initialized: ${name}`, {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialized',
-        metadata: { serviceName: name }
+        metadata: { serviceName: name },
       });
     } catch (error) {
       logger.error(`Failed to initialize service: ${name}`, error as Error, {
         correlationId: `service-init-${Date.now()}`,
         operation: 'service_initialization_error',
-        metadata: { serviceName: name }
+        metadata: { serviceName: name },
       });
       throw error;
     }
@@ -162,7 +163,7 @@ export async function initializeAllServices(container: AppContainer): Promise<vo
   logger.info('All services initialized successfully', {
     correlationId: `service-init-${Date.now()}`,
     operation: 'service_initialization_complete',
-    metadata: { initializedServices: services.length }
+    metadata: { initializedServices: services.length },
   });
 }
 
@@ -170,13 +171,13 @@ export async function initializeAllServices(container: AppContainer): Promise<vo
  * Create a test container with optional overrides
  * Perfect for unit testing with mocked dependencies
  */
-export function createTestContainer(overrides: Partial<Record<keyof Cradle, any>> = {}): AppContainer {
+export function createTestContainer(overrides: Partial<Record<keyof Cradle, unknown>> = {}): AppContainer {
   const container = createAppContainer();
 
   // Apply overrides
   for (const [key, value] of Object.entries(overrides)) {
     container.register({
-      [key]: asValue(value)
+      [key]: asValue(value),
     });
   }
 
@@ -189,11 +190,11 @@ export function createTestContainer(overrides: Partial<Record<keyof Cradle, any>
 export async function shutdownAllServices(container: AppContainer): Promise<void> {
   logger.info('Starting graceful shutdown', {
     correlationId: `shutdown-${Date.now()}`,
-    operation: 'shutdown_start'
+    operation: 'shutdown_start',
   });
 
   const cradle = container.cradle;
-  const services: any[] = [];
+  const services: Array<{ name: string; service: { destroy(): Promise<void> } }> = [];
 
   // Collect all services that have a destroy method
   for (const [name, service] of Object.entries(cradle)) {
@@ -211,20 +212,20 @@ export async function shutdownAllServices(container: AppContainer): Promise<void
       logger.debug(`Service destroyed: ${name}`, {
         correlationId: `shutdown-${Date.now()}`,
         operation: 'service_destroyed',
-        metadata: { serviceName: name }
+        metadata: { serviceName: name },
       });
     } catch (error) {
       logger.error(`Error destroying service: ${name}`, error as Error, {
         correlationId: `shutdown-${Date.now()}`,
         operation: 'service_destruction_error',
-        metadata: { serviceName: name }
+        metadata: { serviceName: name },
       });
     }
   }
 
   logger.info('Graceful shutdown completed', {
     correlationId: `shutdown-${Date.now()}`,
-    operation: 'shutdown_complete'
+    operation: 'shutdown_complete',
   });
 }
 
@@ -235,7 +236,7 @@ export async function shutdownAllServices(container: AppContainer): Promise<void
 export function validateContainer(container: AppContainer): void {
   logger.info('Starting container validation', {
     correlationId: `container-validation-${Date.now()}`,
-    operation: 'container_validation_start'
+    operation: 'container_validation_start',
   });
 
   const errors: string[] = [];
@@ -249,7 +250,7 @@ export function validateContainer(container: AppContainer): void {
       logger.debug(`Service validated: ${serviceName}`, {
         correlationId: `container-validation-${Date.now()}`,
         operation: 'service_validation_success',
-        metadata: { serviceName }
+        metadata: { serviceName },
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -257,7 +258,7 @@ export function validateContainer(container: AppContainer): void {
       logger.error(`Service validation failed: ${serviceName}`, error as Error, {
         correlationId: `container-validation-${Date.now()}`,
         operation: 'service_validation_error',
-        metadata: { serviceName }
+        metadata: { serviceName },
       });
     }
   }
@@ -267,22 +268,22 @@ export function validateContainer(container: AppContainer): void {
     logger.error('Container validation failed', new Error(errorSummary), {
       correlationId: `container-validation-${Date.now()}`,
       operation: 'container_validation_failed',
-      metadata: { errorCount: errors.length, errors }
+      metadata: { errorCount: errors.length, errors },
     });
-    throw new Error(errorSummary);
+    throw ErrorFactory.domain.serviceError('AppContainer', errorSummary);
   }
 
   if (warnings.length > 0) {
     logger.warn('Container validation completed with warnings', {
       correlationId: `container-validation-${Date.now()}`,
       operation: 'container_validation_warnings',
-      metadata: { warningCount: warnings.length, warnings }
+      metadata: { warningCount: warnings.length, warnings },
     });
   }
 
   logger.info('Container validation completed successfully', {
     correlationId: `container-validation-${Date.now()}`,
     operation: 'container_validation_complete',
-    metadata: { servicesValidated: registrationNames.length }
+    metadata: { servicesValidated: registrationNames.length },
   });
 }

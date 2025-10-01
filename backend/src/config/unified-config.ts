@@ -302,7 +302,7 @@ export class UnifiedConfigService extends BaseService {
   protected async onInitialize(): Promise<void> {
     // Configuration is validated in constructor
     console.log('Configuration validated successfully', {
-      environment: this.config.environment.NODE_ENV
+      environment: this.config.environment.NODE_ENV,
     });
   }
 
@@ -614,8 +614,8 @@ export class UnifiedConfigService extends BaseService {
           database: !!this.databaseUrl,
           redis: !!this.redisUrl,
         },
-        issues
-      }
+        issues,
+      },
     };
   }
 

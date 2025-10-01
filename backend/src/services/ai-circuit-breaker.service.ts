@@ -52,14 +52,14 @@ export class AIServiceCircuitBreaker extends BaseService {
       failureThreshold: e2eTesting ? 10000 : 5,
       recoveryTimeout: e2eTesting ? 5000 : 60000,
       successThreshold: 3,
-      timeout: e2eTesting ? 60000 : 30000
+      timeout: e2eTesting ? 60000 : 30000,
     };
   }
 
   protected async onInitialize(): Promise<void> {
     // Circuit breaker doesn't need external dependencies to initialize
     this.logInfo('AI Circuit Breaker initialized', {
-      config: this.config
+      config: this.config,
     });
   }
 
@@ -91,7 +91,7 @@ export class AIServiceCircuitBreaker extends BaseService {
       if (Date.now() - this.lastFailureTime < this.config.recoveryTimeout) {
         throw ErrorFactory.domain.serviceUnavailable(
           'ai-service',
-          { message: '🤖 AI service is temporarily unavailable. Please try again in a few moments.' }
+          { message: '🤖 AI service is temporarily unavailable. Please try again in a few moments.' },
         );
       } else {
         // Move to half-open state
@@ -102,13 +102,13 @@ export class AIServiceCircuitBreaker extends BaseService {
 
     // For AI operations, check if AI service is available
     // For other operations (like Slack API calls), allow execution without AI service
-    const hasAIService = this.aiService && this.aiService.isReady();
+    const hasAIService = this.aiService?.isReady();
 
     try {
       // Execute with timeout
       const result = await this.withTimeout(
         operation(hasAIService ? this.aiService : null),
-        this.config.timeout
+        this.config.timeout,
       );
 
       this.recordSuccess();
@@ -124,7 +124,7 @@ export class AIServiceCircuitBreaker extends BaseService {
       // Convert other errors to user-friendly messages
       throw ErrorFactory.domain.serviceUnavailable(
         'ai-service',
-        { message: '🤖 I\'m having trouble processing your request right now. Please try again.' }
+        { message: '🤖 I\'m having trouble processing your request right now. Please try again.' },
       );
     }
   }
@@ -133,7 +133,7 @@ export class AIServiceCircuitBreaker extends BaseService {
    * Execute operation without circuit breaker (for testing)
    */
   async executeDirect<T>(operation: (openai: any) => Promise<T>): Promise<T> {
-    const hasAIService = this.aiService && this.aiService.isReady();
+    const hasAIService = this.aiService?.isReady();
     return operation(hasAIService ? this.aiService : null);
   }
 
@@ -208,7 +208,7 @@ export class AIServiceCircuitBreaker extends BaseService {
       lastFailureTime: this.lastFailureTime,
       lastSuccessTime: this.lastSuccessTime,
       totalRequests: this.totalRequests,
-      totalFailures: this.totalFailures
+      totalFailures: this.totalFailures,
     };
   }
 

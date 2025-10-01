@@ -12,13 +12,13 @@
 export {
   AppError,
   ERROR_CATEGORIES,
-  ERROR_SEVERITY
+  ERROR_SEVERITY,
 } from '../utils/app-error';
 
 export type {
   AppErrorOptions,
   ErrorCategory,
-  ErrorSeverity
+  ErrorSeverity,
 } from '../utils/app-error';
 
 // Specialized error classes
@@ -27,7 +27,7 @@ export {
   WorkflowError,
   DomainError,
   ValidationError,
-  AuthenticationError
+  AuthenticationError,
 } from './specialized-errors';
 
 // Error codes
@@ -35,12 +35,12 @@ export {
   ERROR_CODES,
   ERROR_CODE_CATEGORIES,
   getErrorCategory,
-  isValidErrorCode
+  isValidErrorCode,
 } from './error-codes';
 
 export type {
   ErrorCode,
-  ErrorCodeCategory
+  ErrorCodeCategory,
 } from './error-codes';
 
 // Error factory
@@ -68,7 +68,7 @@ export {
   getErrorMessage,
   getErrorCode,
   shouldLogError,
-  shouldCaptureInSentry
+  shouldCaptureInSentry,
 } from './type-guards';
 
 // Error transformers
@@ -77,7 +77,7 @@ export {
   GoogleErrorTransformer,
   OpenAIErrorTransformer,
   SlackErrorTransformer,
-  HTTPErrorTransformer
+  HTTPErrorTransformer,
 } from './transformers';
 
 export type { TransformContext } from './transformers';

@@ -12,7 +12,7 @@ export {
   AuditEventSchema,
   CacheOperationSchema,
   ProfileResponseSchema,
-  AdminUsersResponseSchema
+  AdminUsersResponseSchema,
 } from './api.schemas';
 export * from './common.schemas';
 export { 
@@ -22,11 +22,11 @@ export {
   SlackDraftSchema,
   SlackChannelSchema,
   SlackWebhookEventSchema,
-  SlackTokensSchema as SlackTokensValidationSchema
+  SlackTokensSchema as SlackTokensValidationSchema,
 } from './slack.schemas';
 
 // Tool execution schemas
 export { 
   ToolCallSchema,
-  ToolResultSchema
+  ToolResultSchema,
 } from '../framework/tool-execution';

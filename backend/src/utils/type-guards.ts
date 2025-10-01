@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { ErrorFactory } from '../errors/error-factory';
 import {
   SlackContext,
   SlackMessage,
@@ -13,7 +14,7 @@ import {
   SlackMessageEvent,
   SlackAppMentionEvent,
   SlackSlashCommandPayload,
-  SlackInteractiveComponentPayload
+  SlackInteractiveComponentPayload,
 } from '../types/slack/slack.types';
 import { ToolCall, ToolResult, ToolCallSchema, ToolResultSchema } from '../framework/tool-execution';
 // OpenAI function schema type
@@ -114,7 +115,7 @@ export function isSlackElement(value: unknown): value is SlackElement {
 
   const validTypes = [
     'button', 'static_select', 'multi_static_select',
-    'datepicker', 'timepicker', 'image', 'plain_text_input'
+    'datepicker', 'timepicker', 'image', 'plain_text_input',
   ];
 
   return (
@@ -194,14 +195,14 @@ export function isSlackInteractivePayload(value: unknown): value is SlackInterac
   return (
     isNonEmptyString(value.type) &&
     isObject(value.user) &&
-    isNonEmptyString((value.user as any).id) &&
-    isNonEmptyString((value.user as any).name) &&
+    isNonEmptyString((value.user as Record<string, unknown>).id as string) &&
+    isNonEmptyString((value.user as Record<string, unknown>).name as string) &&
     isObject(value.channel) &&
-    isNonEmptyString((value.channel as any).id) &&
-    isNonEmptyString((value.channel as any).name) &&
+    isNonEmptyString((value.channel as Record<string, unknown>).id as string) &&
+    isNonEmptyString((value.channel as Record<string, unknown>).name as string) &&
     isObject(value.team) &&
-    isNonEmptyString((value.team as any).id) &&
-    isNonEmptyString((value.team as any).domain) &&
+    isNonEmptyString((value.team as Record<string, unknown>).id as string) &&
+    isNonEmptyString((value.team as Record<string, unknown>).domain as string) &&
     isArray(value.actions) &&
     isNonEmptyString(value.trigger_id) &&
     isNonEmptyString(value.response_url)
@@ -308,7 +309,7 @@ export function isOpenAIFunctionSchema(value: unknown): value is OpenAIFunctionS
  */
 export function validateSlackContext(value: unknown): SlackContext {
   if (!isSlackContext(value)) {
-    throw new Error('Invalid SlackContext: missing required fields or invalid types');
+    throw ErrorFactory.api.badRequest('Invalid SlackContext: missing required fields or invalid types');
   }
   return value;
 }
@@ -319,7 +320,7 @@ export function validateSlackContext(value: unknown): SlackContext {
  */
 export function validateSlackMessage(value: unknown): SlackMessage {
   if (!isSlackMessage(value)) {
-    throw new Error('Invalid SlackMessage: invalid structure or types');
+    throw ErrorFactory.api.badRequest('Invalid SlackMessage: invalid structure or types');
   }
   return value;
 }
@@ -330,7 +331,7 @@ export function validateSlackMessage(value: unknown): SlackMessage {
  */
 export function validateSlackEvent(value: unknown): SlackEvent {
   if (!isSlackEvent(value)) {
-    throw new Error('Invalid SlackEvent: unknown event type or invalid structure');
+    throw ErrorFactory.api.badRequest('Invalid SlackEvent: unknown event type or invalid structure');
   }
   return value;
 }
@@ -341,7 +342,7 @@ export function validateSlackEvent(value: unknown): SlackEvent {
  */
 export function validateToolCall(value: unknown): ToolCall {
   if (!isToolCall(value)) {
-    throw new Error('Invalid ToolCall: missing name or parameters');
+    throw ErrorFactory.api.badRequest('Invalid ToolCall: missing name or parameters');
   }
   return value;
 }
@@ -352,7 +353,7 @@ export function validateToolCall(value: unknown): ToolCall {
  */
 export function validateToolResult(value: unknown): ToolResult {
   if (!isToolResult(value)) {
-    throw new Error('Invalid ToolResult: missing required fields');
+    throw ErrorFactory.api.badRequest('Invalid ToolResult: missing required fields');
   }
   return value;
 }
@@ -362,14 +363,14 @@ export function validateToolResult(value: unknown): ToolResult {
  */
 export function validateToolCalls(value: unknown): ToolCall[] {
   if (!isArray(value)) {
-    throw new Error('Invalid ToolCalls: must be an array');
+    throw ErrorFactory.api.badRequest('Invalid ToolCalls: must be an array');
   }
 
   return value.map((item, index) => {
     try {
       return validateToolCall(item);
     } catch (error) {
-      throw new Error(`Invalid ToolCall at index ${index}: ${error instanceof Error ? error.message : String(error)}`);
+      throw ErrorFactory.api.badRequest(`Invalid ToolCall at index ${index}: ${error instanceof Error ? error.message : String(error)}`);
     }
   });
 }
@@ -379,14 +380,14 @@ export function validateToolCalls(value: unknown): ToolCall[] {
  */
 export function validateToolResults(value: unknown): ToolResult[] {
   if (!isArray(value)) {
-    throw new Error('Invalid ToolResults: must be an array');
+    throw ErrorFactory.api.badRequest('Invalid ToolResults: must be an array');
   }
 
   return value.map((item, index) => {
     try {
       return validateToolResult(item);
     } catch (error) {
-      throw new Error(`Invalid ToolResult at index ${index}: ${error instanceof Error ? error.message : String(error)}`);
+      throw ErrorFactory.api.badRequest(`Invalid ToolResult at index ${index}: ${error instanceof Error ? error.message : String(error)}`);
     }
   });
 }
@@ -397,7 +398,7 @@ export function validateToolResults(value: unknown): ToolResult[] {
 export function safeTypeAssertion<T>(
   value: unknown,
   validator: (value: unknown) => value is T,
-  fallback: T
+  fallback: T,
 ): T {
   return validator(value) ? value : fallback;
 }
@@ -408,7 +409,7 @@ export function safeTypeAssertion<T>(
 export function safeGetProperty<T>(
   obj: unknown,
   property: string,
-  validator: (value: unknown) => value is T
+  validator: (value: unknown) => value is T,
 ): T | undefined {
   if (!isObject(obj)) return undefined;
   const value = (obj as Record<string, unknown>)[property];
@@ -421,7 +422,7 @@ export function safeGetProperty<T>(
  */
 export function validateMultipleWithZod<T>(
   values: unknown[],
-  schema: z.ZodSchema<T>
+  schema: z.ZodSchema<T>,
 ): { success: true; data: T[] } | { success: false; errors: z.ZodError[] } {
   const results: T[] = [];
   const errors: z.ZodError[] = [];
@@ -446,7 +447,7 @@ export function validateMultipleWithZod<T>(
  */
 export function validateObjectProperties<T extends Record<string, unknown>>(
   obj: unknown,
-  schemas: { [K in keyof T]: z.ZodSchema<T[K]> }
+  schemas: { [K in keyof T]: z.ZodSchema<T[K]> },
 ): { success: true; data: T } | { success: false; errors: Record<string, z.ZodError> } {
   if (!isObject(obj)) {
     return { success: false, errors: { root: new z.ZodError([{ code: 'invalid_type', expected: 'object', received: typeof obj, path: [], message: `Expected object, received ${typeof obj}` }]) } };
@@ -485,7 +486,7 @@ export function createTypeGuard<T>(schema: z.ZodSchema<T>): (value: unknown) => 
 export function validateWithFallback<T>(
   value: unknown,
   schema: z.ZodSchema<T>,
-  fallback: T
+  fallback: T,
 ): T {
   const result = schema.safeParse(value);
   return result.success ? result.data : fallback;

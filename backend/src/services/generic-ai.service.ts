@@ -1,5 +1,6 @@
 import { BaseService } from './base-service';
 import { IAIDomainService } from './domain/interfaces/ai-domain.interface';
+import { ErrorFactory } from '../errors/error-factory';
 
 /**
  * AI Prompt interface for structured AI requests
@@ -53,7 +54,7 @@ export interface StructuredSchema {
 const DEFAULT_CONFIG = {
   TEMPERATURE: 0.1,
   MAX_TOKENS: 1000,
-  MODEL: 'gpt-4o-mini'
+  MODEL: 'gpt-4o-mini',
 } as const;
 
 /**
@@ -70,7 +71,7 @@ export class GenericAIService extends BaseService {
 
   constructor(
     private readonly aiDomainService: IAIDomainService,
-    config?: Partial<typeof DEFAULT_CONFIG>
+    config?: Partial<typeof DEFAULT_CONFIG>,
   ) {
     super('GenericAIService');
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -105,7 +106,7 @@ export class GenericAIService extends BaseService {
   async executePrompt<T = any>(
     prompt: AIPrompt,
     schema: StructuredSchema,
-    promptBuilderName?: string
+    promptBuilderName?: string,
   ): Promise<AIResponse<T>> {
     const startTime = Date.now();
     const requestId = `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -114,19 +115,19 @@ export class GenericAIService extends BaseService {
       requestId,
       schemaType: schema.type,
       temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
-      promptBuilder: promptBuilderName || 'unknown'
+      promptBuilder: promptBuilderName || 'unknown',
     });
 
     try {
       if (!this.aiDomainService) {
-        throw new Error('AI domain service not available');
+        throw ErrorFactory.domain.serviceUnavailable('AIDomainService');
       }
 
       this.logDebug('Executing structured AI prompt', {
         requestId,
         schemaType: schema.type,
         propertiesCount: Object.keys(schema.properties).length,
-        temperature: prompt.options?.temperature ?? this.config.TEMPERATURE
+        temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
       });
 
 
@@ -138,7 +139,7 @@ export class GenericAIService extends BaseService {
         temperature: prompt.options?.temperature ?? this.config.TEMPERATURE,
         maxTokens: prompt.options?.maxTokens ?? this.config.MAX_TOKENS,
         model: prompt.options?.model ?? this.config.MODEL,
-        metadata: { promptBuilder: promptBuilderName || 'unknown' }
+        metadata: { promptBuilder: promptBuilderName || 'unknown' },
       });
 
 
@@ -149,12 +150,12 @@ export class GenericAIService extends BaseService {
       try {
         parsed = structuredResponse as T;
       } catch (parseError) {
-        this.logError('Failed to parse structured response', { 
+        this.logError('Failed to parse structured response', {
           requestId,
-          error: parseError, 
-          response: response.substring(0, 200) 
+          error: parseError,
+          response: response.substring(0, 200),
         });
-        throw new Error('Failed to parse structured response');
+        throw ErrorFactory.validation.invalidInput('AI response', response, 'valid structured data');
       }
 
       const result: AIResponse<T> = {
@@ -165,14 +166,14 @@ export class GenericAIService extends BaseService {
           model: prompt.options?.model ?? this.config.MODEL,
           tokens: 0, // Would extract from OpenAI response if available
           processingTime: Date.now() - startTime,
-          success: true
-        }
+          success: true,
+        },
       };
 
       this.logInfo('AI prompt completed successfully', {
         requestId,
         processingTime: Date.now() - startTime,
-        model: result.metadata.model
+        model: result.metadata.model,
       });
 
       return result;
@@ -188,20 +189,20 @@ export class GenericAIService extends BaseService {
           systemPromptLength: prompt.systemPrompt?.length || 0,
           userPromptLength: prompt.userPrompt?.length || 0,
           model: prompt.options?.model,
-          temperature: prompt.options?.temperature
+          temperature: prompt.options?.temperature,
         },
         metadata: {
           processingTime: Date.now() - startTime,
-          success: false
+          success: false,
         },
-        schema: schema.description || 'custom schema'
+        schema: schema.description || 'custom schema',
       });
 
       this.logError('AI prompt execution failed', { 
         requestId,
         error, 
         userPrompt: prompt.userPrompt.substring(0, 100),
-        schema: schema.description || 'custom schema'
+        schema: schema.description || 'custom schema',
       });
 
       return {
@@ -213,8 +214,8 @@ export class GenericAIService extends BaseService {
           tokens: 0,
           processingTime: Date.now() - startTime,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
       };
     }
   }

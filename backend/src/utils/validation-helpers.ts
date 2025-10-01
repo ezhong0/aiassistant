@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { ErrorFactory } from '../errors/error-factory';
 import { createHmac, timingSafeEqual } from 'crypto';
 
 // ============================================================================
@@ -82,7 +83,7 @@ export const GoogleOAuthCallbackQuerySchema = z.object({
   scope: z.string().optional(),
 }).refine(
   data => data.code || data.error,
-  { message: 'Either code or error must be present' }
+  { message: 'Either code or error must be present' },
 );
 
 /**
@@ -95,7 +96,7 @@ export const SlackOAuthCallbackQuerySchema = z.object({
   error_description: z.string().optional(),
 }).refine(
   data => data.code || data.error,
-  { message: 'Either code or error must be present' }
+  { message: 'Either code or error must be present' },
 );
 
 /**
@@ -191,12 +192,12 @@ export class ValidationUtils {
 
       // Check if state is not too old (30 minutes)
       if (validated.timestamp && Date.now() - validated.timestamp > 30 * 60 * 1000) {
-        throw new Error('OAuth state expired');
+        throw ErrorFactory.api.badRequest('OAuth state expired');
       }
 
       return validated;
     } catch {
-      throw new Error('Invalid or expired OAuth state parameter');
+      throw ErrorFactory.api.badRequest('Invalid or expired OAuth state parameter');
     }
   }
 
@@ -208,11 +209,11 @@ export class ValidationUtils {
     user_id?: string;
     team_id?: string;
     channel_id?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   }): string {
     return JSON.stringify({
       timestamp: Date.now(),
-      ...data
+      ...data,
     });
   }
 
@@ -236,14 +237,14 @@ export class ValidationUtils {
     // Compare signatures
     return timingSafeEqual(
       Buffer.from(signature),
-      Buffer.from(expectedSignature)
+      Buffer.from(expectedSignature),
     );
   }
 
   /**
    * Sanitize user input for logging
    */
-  static sanitizeForLogging(data: any): any {
+  static sanitizeForLogging(data: unknown): unknown {
     if (typeof data !== 'object' || data === null) {
       return data;
     }

@@ -59,7 +59,7 @@ class CorrelationStore {
   startRequest(correlationId: string, metrics: Omit<RequestMetrics, 'correlationId'>): void {
     const requestMetrics: RequestMetrics = {
       correlationId,
-      ...metrics
+      ...metrics,
     };
 
     this.activeRequests.set(correlationId, requestMetrics);
@@ -71,7 +71,7 @@ class CorrelationStore {
   completeRequest(
     correlationId: string,
     statusCode: number,
-    error?: { code: string; message: string; stack?: string; severity: string }
+    error?: { code: string; message: string; stack?: string; severity: string },
   ): RequestMetrics | undefined {
     const metrics = this.activeRequests.get(correlationId);
     if (!metrics) {
@@ -114,14 +114,14 @@ class CorrelationStore {
   /**
    * Get recent completed requests
    */
-  getRecentRequests(limit: number = 50): RequestMetrics[] {
+  getRecentRequests(limit = 50): RequestMetrics[] {
     return this.recentRequests.slice(-limit);
   }
 
   /**
    * Get requests by user
    */
-  getRequestsByUser(userId: string, limit: number = 20): RequestMetrics[] {
+  getRequestsByUser(userId: string, limit = 20): RequestMetrics[] {
     return this.recentRequests
       .filter(req => req.userId === userId)
       .slice(-limit);
@@ -167,7 +167,7 @@ class CorrelationStore {
       errorRate,
       averageResponseTime,
       slowRequests,
-      errorsByCode
+      errorsByCode,
     };
   }
 
@@ -235,7 +235,7 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
     userId: correlatedReq.userId,
     sessionId: correlatedReq.sessionId,
     userAgent: req.headers['user-agent'],
-    ip: req.ip || req.socket.remoteAddress || 'unknown'
+    ip: req.ip || req.socket.remoteAddress || 'unknown',
   });
 
   // Log request start
@@ -248,8 +248,8 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
       method: req.method,
       path: req.path,
       ip: req.ip,
-      userAgent: req.headers['user-agent']
-    }
+      userAgent: req.headers['user-agent'],
+    },
   });
 
   // Capture original res.end to track completion
@@ -258,7 +258,7 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
     // Complete request tracking
     const metrics = correlationStore.completeRequest(
       correlatedReq.correlationId,
-      res.statusCode
+      res.statusCode,
     );
 
     // Log request completion
@@ -272,8 +272,8 @@ export function correlationMiddleware(req: Request, res: Response, next: NextFun
           statusCode: res.statusCode,
           duration: metrics.duration,
           method: req.method,
-          path: req.path
-        }
+          path: req.path,
+        },
       });
     }
 
@@ -291,7 +291,7 @@ export function errorCorrelationMiddleware(
   error: any,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const correlatedReq = req as CorrelatedRequest;
   const correlationId = correlatedReq.correlationId || 'unknown';
@@ -301,7 +301,7 @@ export function errorCorrelationMiddleware(
     code: error.code || error.name || 'UNKNOWN_ERROR',
     message: error.message || 'An unknown error occurred',
     stack: error.stack,
-    severity: error.severity || 'medium'
+    severity: error.severity || 'medium',
   };
 
   // Update request tracking with error
@@ -329,8 +329,8 @@ export function errorCorrelationMiddleware(
     metadata: {
       error: errorInfo,
       endpoint: correlatedReq.endpoint,
-      requestDuration: Date.now() - correlatedReq.startTime
-    }
+      requestDuration: Date.now() - correlatedReq.startTime,
+    },
   });
 
   next(error);
@@ -352,7 +352,7 @@ export function getCurrentCorrelationId(): string | undefined {
 export function addCorrelationContext(
   error: any,
   correlationId?: string,
-  additionalContext?: Record<string, any>
+  additionalContext?: Record<string, any>,
 ): void {
   if (error.setContext && typeof error.setContext === 'function') {
     error.setContext(undefined, undefined, correlationId);
@@ -381,7 +381,7 @@ export function getCorrelationStats(): {
   return {
     activeRequests: correlationStore.getActiveRequests(),
     recentRequests: correlationStore.getRecentRequests(),
-    errorStats: correlationStore.getErrorStats()
+    errorStats: correlationStore.getErrorStats(),
   };
 }
 
@@ -411,7 +411,7 @@ export function createCorrelationMiddleware(options: {
 } = {}) {
   const {
     headerName = 'x-correlation-id',
-    includeUserAgent = true
+    includeUserAgent = true,
   } = options;
 
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -439,7 +439,7 @@ export function createCorrelationMiddleware(options: {
       startTime: correlatedReq.startTime,
       userId: correlatedReq.userId,
       sessionId: correlatedReq.sessionId,
-      ip: req.ip || req.socket.remoteAddress || 'unknown'
+      ip: req.ip || req.socket.remoteAddress || 'unknown',
     };
 
     if (includeUserAgent) {
@@ -455,8 +455,8 @@ export function createCorrelationMiddleware(options: {
       operation: 'correlation_start',
       metadata: {
         method: req.method,
-        path: req.path
-      }
+        path: req.path,
+      },
     });
 
     next();

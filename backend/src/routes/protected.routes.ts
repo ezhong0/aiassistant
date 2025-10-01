@@ -8,7 +8,7 @@ import {
   requirePermissions, 
   requireOwnership,
   rateLimitAuth,
-  AuthenticatedRequest 
+  AuthenticatedRequest, 
 } from '../middleware/auth.middleware';
 import { Permission } from '../types/auth.types';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
@@ -79,19 +79,19 @@ router.get('/profile',
           id: user.userId,
           email: user.email,
           name: user.name,
-          picture: user.picture
+          picture: user.picture,
         },
         metadata: {
           lastAccess: new Date().toISOString(),
-          tokenValid: true
-        }
-      }
+          tokenValid: true,
+        },
+      },
     });
   } catch (error) {
     
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     });
   }
 });
@@ -117,16 +117,16 @@ router.put('/profile',
           id: user.userId,
           email: user.email,
           name: name || user.name,
-          picture: picture || user.picture
+          picture: picture || user.picture,
         },
-        message: 'Profile updated successfully'
-      }
+        message: 'Profile updated successfully',
+      },
     });
   } catch (error) {
     
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     });
   }
 });
@@ -153,23 +153,23 @@ router.get('/users/:userId',
             id: user.userId,
             email: user.email,
             name: user.name,
-            picture: user.picture
+            picture: user.picture,
           },
           permissions: ['READ_PROFILE', 'UPDATE_PROFILE'],
           settings: {
             notifications: true,
-            privacy: 'private'
-          }
-        }
+            privacy: 'private',
+          },
+        },
       });
     } catch (error) {
       
       res.status(500).json({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
       });
     }
-  }
+  },
 );
 
 /**
@@ -196,22 +196,22 @@ router.get('/admin/users',
               email: user.email,
               name: user.name,
               role: 'admin',
-              lastLogin: new Date().toISOString()
-            }
+              lastLogin: new Date().toISOString(),
+            },
           ],
           total: 1,
           page: 1,
-          limit: 10
-        }
+          limit: 10,
+        },
       });
     } catch (error) {
       
       res.status(500).json({
         success: false,
-        error: 'Internal server error'
+        error: 'Internal server error',
       });
     }
-  }
+  },
 );
 
 /**
@@ -236,15 +236,15 @@ router.get('/dashboard',
             id: user.userId,
             email: user.email,
             name: user.name,
-            picture: user.picture
+            picture: user.picture,
           },
           personalizedContent: [
             'Your recent activity',
             'Recommended for you',
-            'Your calendar events'
+            'Your calendar events',
           ],
-          authenticated: true
-        }
+          authenticated: true,
+        },
       });
     } else {
       
@@ -256,18 +256,18 @@ router.get('/dashboard',
           publicContent: [
             'Getting started guide',
             'Feature overview',
-            'Sign up benefits'
+            'Sign up benefits',
           ],
           authenticated: false,
-          callToAction: 'Sign in to see personalized content'
-        }
+          callToAction: 'Sign in to see personalized content',
+        },
       });
     }
   } catch (error) {
     
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Internal server error',
     });
   }
 });
@@ -293,8 +293,8 @@ router.post('/api-heavy',
           data: {
             result: 'Heavy operation completed',
             processedBy: user.userId,
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         };
         
         // ✅ Validate response with Zod schema
@@ -306,11 +306,11 @@ router.post('/api-heavy',
       const errorData = {
         success: false,
         error: 'Internal server error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
       validateAndSendResponse(res, ErrorResponseSchema, errorData, 500);
     }
-  }
+  },
 );
 
 /**
@@ -331,9 +331,9 @@ router.get('/health',
       timestamp: new Date().toISOString(),
       middleware: {
         authentication: 'working',
-        logging: 'working'
-      }
-    }
+        logging: 'working',
+      },
+    },
   });
 });
 

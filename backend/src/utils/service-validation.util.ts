@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod';
+import { ErrorFactory } from '../errors/error-factory';
 
 // Common validation schemas for services
 export const UserIdSchema = z.string().min(1);
@@ -40,7 +41,7 @@ export function validateServiceInput<T>(schema: z.ZodSchema<T>, data: unknown): 
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new Error(`Validation failed: ${error.errors.map(e => e.message).join(', ')}`);
+      throw ErrorFactory.api.badRequest(`Validation failed: ${error.errors.map(e => e.message).join(', ')}`);
     }
     throw error;
   }

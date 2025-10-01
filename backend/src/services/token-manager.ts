@@ -25,7 +25,7 @@ export class TokenManager extends BaseService {
   constructor(
     private readonly tokenStorageService: TokenStorageService,
     private readonly authService: AuthService,
-    private readonly cacheService: CacheService
+    private readonly cacheService: CacheService,
   ) {
     super('TokenManager');
   }
@@ -56,23 +56,23 @@ export class TokenManager extends BaseService {
     if (!this.tokenStorageService.isReady() || !this.authService.isReady()) {
       const errorDetails = {
         tokenStorageServiceReady: this.tokenStorageService.isReady(),
-        authServiceReady: this.authService.isReady()
+        authServiceReady: this.authService.isReady(),
       };
       logger.error('TokenManager dependencies not ready', new Error('Dependencies not ready'), {
         correlationId: `token-mgr-init-${Date.now()}`,
         operation: 'token_manager_init',
-        metadata: errorDetails
+        metadata: errorDetails,
       });
       throw ErrorFactory.domain.serviceError('TokenManager', 'Dependencies not initialized', {
         details: errorDetails,
-        operation: 'getValidTokens'
+        operation: 'getValidTokens',
       });
     }
     
     logger.debug(`Getting valid tokens for teamId="${teamId}", userId="${userId}"`, {
       correlationId: `token-mgr-${Date.now()}`,
       operation: 'token_manager',
-      metadata: { teamId, userId, method: 'getValidTokens' }
+      metadata: { teamId, userId, method: 'getValidTokens' },
     });
     
     const cacheKey = this.getTokenCacheKey(teamId, userId);
@@ -133,9 +133,9 @@ export class TokenManager extends BaseService {
           expires_in: tokens.googleTokens.expires_at ? 
             Math.max(0, Math.floor((this.ensureDate(tokens.googleTokens.expires_at)!.getTime() - Date.now()) / 1000)) : 3600,
           scope: tokens.googleTokens.scope,
-          expiry_date: this.ensureDate(tokens.googleTokens.expires_at)?.getTime()
+          expiry_date: this.ensureDate(tokens.googleTokens.expires_at)?.getTime(),
         },
-        slack: tokens.slackTokens
+        slack: tokens.slackTokens,
       };
       await this.cacheService.set(cacheKey, cacheTokens, this.TOKEN_CACHE_TTL);
       
@@ -210,7 +210,7 @@ export class TokenManager extends BaseService {
       await Promise.all([
         this.cacheService.del(tokenKey),
         this.cacheService.del(statusKey),
-        this.cacheService.del(`session:${sessionId}`)
+        this.cacheService.del(`session:${sessionId}`),
       ]);
       
       
@@ -242,14 +242,14 @@ export class TokenManager extends BaseService {
         hasRefreshToken: !!refreshedTokens.refresh_token,
         hasScope: !!refreshedTokens.scope,
         accessTokenLength: refreshedTokens.access_token?.length || 0,
-        operation: 'token_refresh_response'
+        operation: 'token_refresh_response',
       });
 
       if (!refreshedTokens.access_token) {
         logger.error('Token refresh returned no access token', {
           teamId,
           userId,
-          operation: 'token_refresh_failed'
+          operation: 'token_refresh_failed',
         });
         return null;
       }
@@ -261,9 +261,9 @@ export class TokenManager extends BaseService {
           refresh_token: refreshedTokens.refresh_token || tokens.googleTokens.refresh_token,
           expires_at: refreshedTokens.expires_at || (refreshedTokens.expiry_date ? new Date(refreshedTokens.expiry_date) : new Date(Date.now() + (3600 * 1000))),
           token_type: refreshedTokens.token_type,
-          scope: refreshedTokens.scope || undefined
+          scope: refreshedTokens.scope || undefined,
         },
-        slack: tokens.slackTokens // Preserve existing Slack tokens
+        slack: tokens.slackTokens, // Preserve existing Slack tokens
       });
       
       // Create return value in OAuthTokens format
@@ -274,9 +274,9 @@ export class TokenManager extends BaseService {
           expires_in: refreshedTokens.expires_in,
           token_type: refreshedTokens.token_type,
           scope: refreshedTokens.scope,
-          expiry_date: refreshedTokens.expiry_date
+          expiry_date: refreshedTokens.expiry_date,
         },
-        slack: tokens.slackTokens // Preserve existing Slack tokens
+        slack: tokens.slackTokens, // Preserve existing Slack tokens
       };
       
       const stored = true; // TokenStorageService throws on failure
@@ -298,7 +298,7 @@ export class TokenManager extends BaseService {
         logger.error('Failed to store refreshed tokens', new Error('Token storage failed'), {
           correlationId: `token-mgr-${Date.now()}`,
           operation: 'token_manager',
-          metadata: { teamId, userId, method: 'refreshTokens' }
+          metadata: { teamId, userId, method: 'refreshTokens' },
         });
         // If storage failed, make sure cache is still clean
         await this.invalidateAllTokenCaches(teamId, userId);
@@ -308,7 +308,7 @@ export class TokenManager extends BaseService {
       logger.error('Token refresh failed', error as Error, {
         correlationId: `token-mgr-${Date.now()}`,
         operation: 'token_manager',
-        metadata: { teamId, userId, method: 'refreshTokens' }
+        metadata: { teamId, userId, method: 'refreshTokens' },
       });
       
       // Handle specific OAuth errors
@@ -366,7 +366,7 @@ export class TokenManager extends BaseService {
       const status = { 
         hasTokens: false, 
         status: 'no_tokens',
-        sessionId: `user:${teamId}:${userId}`
+        sessionId: `user:${teamId}:${userId}`,
       };
       
       // Cache the no-tokens status briefly
@@ -396,7 +396,7 @@ export class TokenManager extends BaseService {
       expiresIn: tokens.googleTokens?.expires_at ? Math.max(0, this.ensureDate(tokens.googleTokens.expires_at)!.getTime() - Date.now()) / 1000 : null,
       timeUntilExpiry: tokens.googleTokens?.expires_at ? Math.max(0, this.ensureDate(tokens.googleTokens.expires_at)!.getTime() - Date.now()) : null,
       sessionId: `user:${teamId}:${userId}`,
-      lastChecked: new Date().toISOString()
+      lastChecked: new Date().toISOString(),
     };
     
     // Cache the status result (shorter TTL for invalid tokens)
@@ -442,12 +442,12 @@ export class TokenManager extends BaseService {
     const scopes = token.scope.split(' ');
     const requiredCalendarScopes = [
       'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
+      'https://www.googleapis.com/auth/calendar.events',
     ];
 
     // Check if token has at least one calendar scope
     return requiredCalendarScopes.some(requiredScope =>
-      scopes.includes(requiredScope)
+      scopes.includes(requiredScope),
     );
   }
 
@@ -462,12 +462,12 @@ export class TokenManager extends BaseService {
     const scopes = token.scope.split(' ');
     const requiredGmailScopes = [
       'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly'
+      'https://www.googleapis.com/auth/gmail.readonly',
     ];
 
     // Check if token has at least one Gmail scope
     return requiredGmailScopes.some(requiredScope =>
-      scopes.includes(requiredScope)
+      scopes.includes(requiredScope),
     );
   }
 
@@ -481,7 +481,7 @@ export class TokenManager extends BaseService {
     logger.debug('Getting valid tokens for calendar', {
       correlationId,
       operation: 'get_calendar_tokens',
-      metadata: { teamId, userId }
+      metadata: { teamId, userId },
     });
 
     const userId_key = `${teamId}:${userId}`;
@@ -497,15 +497,15 @@ export class TokenManager extends BaseService {
         hasTokens: !!tokens,
         hasGoogleTokens: !!googleTokens,
         hasAccessToken: !!googleTokens?.access_token,
-        source: tokens?.googleTokens ? 'googleTokens' : 'google'
-      }
+        source: tokens?.googleTokens ? 'googleTokens' : 'google',
+      },
     });
 
     if (!googleTokens?.access_token) {
       logger.debug('No access token found for calendar operations', {
         correlationId,
         operation: 'token_validation',
-        metadata: { userId_key }
+        metadata: { userId_key },
       });
       return null;
     }
@@ -516,7 +516,7 @@ export class TokenManager extends BaseService {
       logger.debug('Calendar token validation failed', {
         correlationId,
         operation: 'token_validation',
-        metadata: { reason: validationResult.reason }
+        metadata: { reason: validationResult.reason },
       });
       return null;
     }
@@ -527,14 +527,14 @@ export class TokenManager extends BaseService {
       logger.warn('Token does not have ideal calendar scopes, but proceeding', {
         correlationId,
         operation: 'calendar_scope_check',
-        metadata: { scopes: googleTokens.scope }
+        metadata: { scopes: googleTokens.scope },
       });
       // Don't return null - let the calendar API handle scope issues
     }
 
     logger.debug('Returning valid calendar access token', {
       correlationId,
-      operation: 'calendar_token_success'
+      operation: 'calendar_token_success',
     });
     return googleTokens.access_token;
   }
@@ -550,7 +550,7 @@ export class TokenManager extends BaseService {
       correlationId,
       teamId,
       userId,
-      operation: 'gmail_token_retrieval_start'
+      operation: 'gmail_token_retrieval_start',
     });
 
     const userId_key = `${teamId}:${userId}`;
@@ -562,7 +562,7 @@ export class TokenManager extends BaseService {
         userId_key,
         hasTokens: !!tokens,
         hasGoogleTokens: !!tokens?.googleTokens,
-        operation: 'gmail_token_missing'
+        operation: 'gmail_token_missing',
       });
       return null;
     }
@@ -574,7 +574,7 @@ export class TokenManager extends BaseService {
         correlationId,
         reason: validationResult.reason,
         hasRefreshToken: !!tokens.googleTokens.refresh_token,
-        operation: 'gmail_token_invalid'
+        operation: 'gmail_token_invalid',
       });
 
       // Try to refresh token
@@ -586,7 +586,7 @@ export class TokenManager extends BaseService {
           if (refreshedValidation.isValid && this.hasGmailScopes(refreshedTokens.google)) {
             logger.info('Gmail token refreshed successfully', {
               correlationId,
-              operation: 'gmail_token_refreshed'
+              operation: 'gmail_token_refreshed',
             });
             return refreshedTokens.google.access_token;
           }
@@ -602,14 +602,14 @@ export class TokenManager extends BaseService {
       logger.warn('Gmail token missing required scopes', {
         correlationId,
         scopes: tokens.googleTokens.scope,
-        operation: 'gmail_scope_missing'
+        operation: 'gmail_scope_missing',
       });
       return null;
     }
 
     logger.debug('Returning valid Gmail token', {
       correlationId,
-      operation: 'gmail_token_success'
+      operation: 'gmail_token_success',
     });
     return tokens.googleTokens.access_token;
   }
@@ -646,7 +646,7 @@ export class TokenManager extends BaseService {
     if (!this.tokenStorageService) {
       throw ErrorFactory.domain.serviceUnavailable('TokenStorageService', {
         service: 'TokenManager',
-        operation: 'tokenStorageService'
+        operation: 'tokenStorageService',
       });
     }
 
@@ -675,7 +675,7 @@ export class TokenManager extends BaseService {
     if (!this.tokenStorageService) {
       throw ErrorFactory.domain.serviceUnavailable('TokenStorageService', {
         service: 'TokenManager',
-        operation: 'tokenStorageService'
+        operation: 'tokenStorageService',
       });
     }
 
@@ -696,7 +696,7 @@ export class TokenManager extends BaseService {
     if (!this.tokenStorageService) {
       throw ErrorFactory.domain.serviceUnavailable('TokenStorageService', {
         service: 'TokenManager',
-        operation: 'tokenStorageService'
+        operation: 'tokenStorageService',
       });
     }
 

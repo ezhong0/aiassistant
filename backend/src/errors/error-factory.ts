@@ -16,7 +16,7 @@ import {
   WorkflowError,
   DomainError,
   ValidationError,
-  AuthenticationError
+  AuthenticationError,
 } from './specialized-errors';
 import { ERROR_CODES } from './error-codes';
 
@@ -28,41 +28,41 @@ export class APIErrorFactory {
   /**
    * Bad request - client sent invalid data
    */
-  static badRequest(message: string, details?: any): APIClientError {
+  static badRequest(message: string, details?: Record<string, unknown>): APIClientError {
     return new APIClientError(
       message,
       ERROR_CODES.BAD_REQUEST,
       {
         category: ERROR_CATEGORIES.API,
         metadata: details,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
   /**
    * Unauthorized - authentication required or failed
    */
-  static unauthorized(message: string = 'Authentication required'): AuthenticationError {
+  static unauthorized(message = 'Authentication required'): AuthenticationError {
     return new AuthenticationError(
       message,
       ERROR_CODES.UNAUTHORIZED,
       {
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
   /**
    * Forbidden - insufficient permissions
    */
-  static forbidden(message: string = 'Access denied'): AuthenticationError {
+  static forbidden(message = 'Access denied'): AuthenticationError {
     return new AuthenticationError(
       message,
       ERROR_CODES.FORBIDDEN,
       {
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -76,38 +76,38 @@ export class APIErrorFactory {
       {
         category: ERROR_CATEGORIES.API,
         metadata: { resource },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
   /**
    * Rate limited - too many requests
    */
-  static rateLimited(message: string = 'Rate limit exceeded', retryAfter?: number): APIClientError {
+  static rateLimited(message = 'Rate limit exceeded', retryAfter?: number): APIClientError {
     return new APIClientError(
       message,
       ERROR_CODES.RATE_LIMITED,
       {
         category: ERROR_CATEGORIES.API,
         retryable: true,
-        retryAfter: retryAfter || 60
-      }
+        retryAfter: retryAfter || 60,
+      },
     );
   }
 
   /**
    * Conflict - resource conflict (e.g., duplicate entry)
    */
-  static conflict(message: string, details?: any): APIClientError {
+  static conflict(message: string, details?: Record<string, unknown>): APIClientError {
     return new APIClientError(
       message,
       ERROR_CODES.CONFLICT,
       {
         category: ERROR_CATEGORIES.API,
         metadata: details,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 }
@@ -127,8 +127,8 @@ export class WorkflowErrorFactory {
       {
         workflowId,
         iteration,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -144,8 +144,8 @@ export class WorkflowErrorFactory {
         iteration: currentIteration,
         maxIterations,
         retryable: false,
-        userFriendly: true
-      }
+        userFriendly: true,
+      },
     );
   }
 
@@ -158,8 +158,8 @@ export class WorkflowErrorFactory {
       ERROR_CODES.WORKFLOW_INTERRUPTED,
       {
         workflowId,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -174,8 +174,8 @@ export class WorkflowErrorFactory {
         workflowId,
         workflowState: currentState,
         metadata: { expectedStates },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 }
@@ -188,7 +188,7 @@ export class DomainErrorFactory {
   /**
    * Service unavailable
    */
-  static serviceUnavailable(serviceName: string, details?: any): DomainError {
+  static serviceUnavailable(serviceName: string, details?: Record<string, unknown>): DomainError {
     return new DomainError(
       `Service '${serviceName}' is not available`,
       ERROR_CODES.SERVICE_UNAVAILABLE,
@@ -196,8 +196,8 @@ export class DomainErrorFactory {
         service: serviceName,
         metadata: details,
         retryable: true,
-        retryAfter: 30
-      }
+        retryAfter: 30,
+      },
     );
   }
 
@@ -212,23 +212,23 @@ export class DomainErrorFactory {
         service: serviceName,
         metadata: { timeout },
         retryable: true,
-        retryAfter: 10
-      }
+        retryAfter: 10,
+      },
     );
   }
 
   /**
    * Generic service error
    */
-  static serviceError(serviceName: string, message: string, details?: any): DomainError {
+  static serviceError(serviceName: string, message: string, details?: Record<string, unknown>): DomainError {
     return new DomainError(
       message,
       ERROR_CODES.SERVICE_ERROR,
       {
         service: serviceName,
         metadata: details,
-        retryable: true
-      }
+        retryable: true,
+      },
     );
   }
 
@@ -243,8 +243,8 @@ export class DomainErrorFactory {
         service: 'master-agent',
         metadata: { builderName },
         retryable: false,
-        userFriendly: true
-      }
+        userFriendly: true,
+      },
     );
   }
 
@@ -260,8 +260,8 @@ export class DomainErrorFactory {
         metadata: { builderName },
         originalError,
         retryable: true,
-        retryAfter: 5
-      }
+        retryAfter: 5,
+      },
     );
   }
 
@@ -277,8 +277,8 @@ export class DomainErrorFactory {
         metadata: { agentName },
         originalError,
         retryable: true,
-        retryAfter: 5
-      }
+        retryAfter: 5,
+      },
     );
   }
 
@@ -294,8 +294,8 @@ export class DomainErrorFactory {
         metadata: { agentName, reason },
         retryable: true,
         retryAfter: 10,
-        userFriendly: true
-      }
+        userFriendly: true,
+      },
     );
   }
 
@@ -310,8 +310,8 @@ export class DomainErrorFactory {
         service: 'master-agent',
         metadata: { reason },
         retryable: false,
-        userFriendly: true
-      }
+        userFriendly: true,
+      },
     );
   }
 
@@ -327,8 +327,8 @@ export class DomainErrorFactory {
         metadata: { contextSnippet: contextSnippet?.substring(0, 100) },
         originalError,
         retryable: true,
-        retryAfter: 2
-      }
+        retryAfter: 2,
+      },
     );
   }
 }
@@ -341,30 +341,30 @@ export class ValidationErrorFactory {
   /**
    * Validation failed for a specific field
    */
-  static fieldValidationFailed(field: string, message: string, value?: any): ValidationError {
+  static fieldValidationFailed(field: string, message: string, value?: unknown): ValidationError {
     return new ValidationError(
       `Validation failed for ${field}: ${message}`,
       {
         field,
         value,
         metadata: { message },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
   /**
    * Invalid input
    */
-  static invalidInput(field: string, value: any, expected?: string): ValidationError {
+  static invalidInput(field: string, value: unknown, expected?: string): ValidationError {
     return new ValidationError(
       `Invalid input for ${field}${expected ? `. Expected: ${expected}` : ''}`,
       {
         field,
         value,
         metadata: { expected },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -379,8 +379,8 @@ export class ValidationErrorFactory {
       message,
       {
         metadata: { errors },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 }
@@ -394,15 +394,15 @@ export class ExternalAPIErrorFactory {
    * Google API Errors
    */
   static google = {
-    authFailed: (message: string = 'Google authentication failed'): APIClientError => {
+    authFailed: (message = 'Google authentication failed'): APIClientError => {
       return new APIClientError(
         message,
         ERROR_CODES.GOOGLE_AUTH_FAILED,
         {
           serviceName: 'google',
           category: ERROR_CATEGORIES.EXTERNAL,
-          retryable: false
-        }
+          retryable: false,
+        },
       );
     },
 
@@ -414,8 +414,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'google',
           category: ERROR_CATEGORIES.EXTERNAL,
           metadata: { resource },
-          retryable: false
-        }
+          retryable: false,
+        },
       );
     },
 
@@ -427,8 +427,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'google',
           category: ERROR_CATEGORIES.EXTERNAL,
           metadata: { resource },
-          retryable: false
-        }
+          retryable: false,
+        },
       );
     },
 
@@ -440,8 +440,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'google',
           category: ERROR_CATEGORIES.EXTERNAL,
           retryable: true,
-          retryAfter: 60
-        }
+          retryAfter: 60,
+        },
       );
     },
 
@@ -453,10 +453,10 @@ export class ExternalAPIErrorFactory {
           serviceName: 'google',
           category: ERROR_CATEGORIES.EXTERNAL,
           retryable: true,
-          retryAfter: 30
-        }
+          retryAfter: 30,
+        },
       );
-    }
+    },
   };
 
   /**
@@ -470,8 +470,8 @@ export class ExternalAPIErrorFactory {
         {
           serviceName: 'openai',
           category: ERROR_CATEGORIES.EXTERNAL,
-          retryable: false
-        }
+          retryable: false,
+        },
       );
     },
 
@@ -483,8 +483,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'openai',
           category: ERROR_CATEGORIES.EXTERNAL,
           retryable: true,
-          retryAfter: 20
-        }
+          retryAfter: 20,
+        },
       );
     },
 
@@ -496,8 +496,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'openai',
           category: ERROR_CATEGORIES.EXTERNAL,
           retryable: true,
-          retryAfter: 5
-        }
+          retryAfter: 5,
+        },
       );
     },
 
@@ -509,8 +509,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'openai',
           category: ERROR_CATEGORIES.EXTERNAL,
           retryable: true,
-          retryAfter: 10
-        }
+          retryAfter: 10,
+        },
       );
     },
 
@@ -521,10 +521,10 @@ export class ExternalAPIErrorFactory {
         {
           serviceName: 'openai',
           category: ERROR_CATEGORIES.EXTERNAL,
-          retryable: false
-        }
+          retryable: false,
+        },
       );
-    }
+    },
   };
 
   /**
@@ -538,8 +538,8 @@ export class ExternalAPIErrorFactory {
         {
           serviceName: 'slack',
           category: ERROR_CATEGORIES.EXTERNAL,
-          retryable: false
-        }
+          retryable: false,
+        },
       );
     },
 
@@ -551,8 +551,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'slack',
           category: ERROR_CATEGORIES.EXTERNAL,
           retryable: true,
-          retryAfter: 60
-        }
+          retryAfter: 60,
+        },
       );
     },
 
@@ -564,8 +564,8 @@ export class ExternalAPIErrorFactory {
           serviceName: 'slack',
           category: ERROR_CATEGORIES.EXTERNAL,
           metadata: { channelId },
-          retryable: false
-        }
+          retryable: false,
+        },
       );
     },
 
@@ -577,10 +577,10 @@ export class ExternalAPIErrorFactory {
           serviceName: 'slack',
           category: ERROR_CATEGORIES.EXTERNAL,
           metadata: { action },
-          retryable: false
-        }
+          retryable: false,
+        },
       );
-    }
+    },
   };
 
   /**
@@ -594,8 +594,8 @@ export class ExternalAPIErrorFactory {
         serviceName,
         category: ERROR_CATEGORIES.EXTERNAL,
         retryable: true,
-        retryAfter: 30
-      }
+        retryAfter: 30,
+      },
     );
   }
 }
@@ -612,8 +612,8 @@ export class NetworkErrorFactory {
       {
         category: ERROR_CATEGORIES.EXTERNAL,
         retryable: true,
-        retryAfter: 15
-      }
+        retryAfter: 15,
+      },
     );
   }
 
@@ -625,8 +625,8 @@ export class NetworkErrorFactory {
         category: ERROR_CATEGORIES.SERVICE,
         metadata: { operation, duration },
         retryable: true,
-        retryAfter: 10
-      }
+        retryAfter: 10,
+      },
     );
   }
 
@@ -638,8 +638,8 @@ export class NetworkErrorFactory {
         category: ERROR_CATEGORIES.EXTERNAL,
         metadata: { endpoint },
         retryable: true,
-        retryAfter: 20
-      }
+        retryAfter: 20,
+      },
     );
   }
 }
@@ -649,15 +649,15 @@ export class NetworkErrorFactory {
  * For creating business rule violation errors
  */
 export class BusinessErrorFactory {
-  static ruleViolation(rule: string, details?: any): AppError {
+  static ruleViolation(rule: string, details?: Record<string, unknown>): AppError {
     return new AppError(
       `Business rule violation: ${rule}`,
       ERROR_CODES.BUSINESS_RULE_VIOLATION,
       {
         category: ERROR_CATEGORIES.BUSINESS,
         metadata: { rule, ...details },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -669,8 +669,8 @@ export class BusinessErrorFactory {
         category: ERROR_CATEGORIES.BUSINESS,
         metadata: { requiredInfo },
         retryable: false,
-        userFriendly: true
-      }
+        userFriendly: true,
+      },
     );
   }
 
@@ -680,8 +680,8 @@ export class BusinessErrorFactory {
       ERROR_CODES.USER_INPUT_TIMEOUT,
       {
         category: ERROR_CATEGORIES.BUSINESS,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 }
@@ -702,8 +702,8 @@ export class UtilityErrorFactory {
         category: category as any,
         originalError: error,
         ...context,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -716,8 +716,8 @@ export class UtilityErrorFactory {
       ERROR_CODES.UNKNOWN_ERROR,
       {
         category: ERROR_CATEGORIES.SERVICE,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -731,8 +731,8 @@ export class UtilityErrorFactory {
       {
         category: ERROR_CATEGORIES.SERVICE,
         metadata: { operation, reason },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 }
@@ -749,5 +749,5 @@ export const ErrorFactory = {
   external: ExternalAPIErrorFactory,
   network: NetworkErrorFactory,
   business: BusinessErrorFactory,
-  util: UtilityErrorFactory
+  util: UtilityErrorFactory,
 };

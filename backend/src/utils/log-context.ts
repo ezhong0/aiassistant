@@ -13,18 +13,18 @@ export interface LogContext {
 /**
  * Utility to extract correlation ID from request
  */
-export function getCorrelationId(req: any): string {
+export function getCorrelationId(req: { correlationId?: string; headers?: Record<string, string> }): string {
   return req.correlationId || req.headers['x-correlation-id'] || 'unknown';
 }
 
 /**
  * Utility to create log context from request
  */
-export function createLogContext(req: any, additionalContext: Partial<LogContext> = {}): LogContext {
+export function createLogContext(req: { correlationId?: string; headers?: Record<string, string> }, additionalContext: Partial<LogContext> = {}): LogContext {
   return {
     correlationId: getCorrelationId(req),
     userId: req.user?.userId || req.headers['x-user-id'],
     sessionId: req.sessionId || req.headers['x-session-id'],
-    ...additionalContext
+    ...additionalContext,
   };
 }

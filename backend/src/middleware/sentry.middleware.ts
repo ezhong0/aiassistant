@@ -14,7 +14,7 @@ export function initializeSentryMiddleware(container: AppContainer): void {
  */
 export const sentryMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    if (!sentryServiceInstance || !sentryServiceInstance.isReady()) {
+    if (!sentryServiceInstance?.isReady()) {
       next();
       return;
     }
@@ -29,15 +29,15 @@ export const sentryMiddleware = (req: Request, res: Response, next: NextFunction
         method: req.method,
         url: req.url,
         userAgent: req.get('User-Agent'),
-        ip: req.ip
-      }
+        ip: req.ip,
+      },
     });
 
     // Set request context
     sentryService.setTags({
       method: req.method,
       path: req.path,
-      userAgent: req.get('User-Agent') || 'unknown'
+      userAgent: req.get('User-Agent') || 'unknown',
     });
 
     // Set user context if available
@@ -45,7 +45,7 @@ export const sentryMiddleware = (req: Request, res: Response, next: NextFunction
       sentryService.setUser({
         id: (req as any).user.userId,
         email: (req as any).user.email,
-        username: (req as any).user.email
+        username: (req as any).user.email,
       });
     }
 
@@ -72,13 +72,13 @@ export const sentryMiddleware = (req: Request, res: Response, next: NextFunction
           level: res.statusCode >= 400 ? 'error' : 'info',
           data: {
             statusCode: res.statusCode,
-            contentLength: res.get('Content-Length')
-          }
+            contentLength: res.get('Content-Length'),
+          },
         });
       } catch (error) {
         logger.error('Sentry middleware response handler error', error as Error, {
           correlationId: `sentry-middleware-${Date.now()}`,
-          operation: 'sentry_response_handler'
+          operation: 'sentry_response_handler',
         });
       }
     });
@@ -87,7 +87,7 @@ export const sentryMiddleware = (req: Request, res: Response, next: NextFunction
   } catch (error) {
     logger.error('Sentry middleware error', error as Error, {
       correlationId: `sentry-middleware-${Date.now()}`,
-      operation: 'sentry_middleware_error'
+      operation: 'sentry_middleware_error',
     });
     // Don't block the request on Sentry errors
     next();
@@ -109,12 +109,12 @@ export const sentryErrorHandler = (error: Error, req: Request, res: Response, ne
           headers: req.headers,
           body: req.body,
           query: req.query,
-          params: req.params
+          params: req.params,
         },
         user: (req as any).user ? {
           id: (req as any).user.userId,
-          email: (req as any).user.email
-        } : undefined
+          email: (req as any).user.email,
+        } : undefined,
       });
 
       // Add error breadcrumb
@@ -124,14 +124,14 @@ export const sentryErrorHandler = (error: Error, req: Request, res: Response, ne
         level: 'error',
         data: {
           name: error.name,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
     }
   } catch (sentryError) {
     logger.error('Sentry error handler failed', sentryError as Error, {
       correlationId: `sentry-error-handler-${Date.now()}`,
-      operation: 'sentry_error_handler'
+      operation: 'sentry_error_handler',
     });
   }
 

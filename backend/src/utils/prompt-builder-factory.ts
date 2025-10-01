@@ -5,12 +5,12 @@ import {
   EnvironmentCheckPromptBuilder,
   ActionExecutionPromptBuilder,
   ProgressAssessmentPromptBuilder,
-  FinalResponsePromptBuilder
+  FinalResponsePromptBuilder,
 } from '../services/prompt-builders/main-agent';
 import {
   IntentAssessmentPromptBuilder,
   PlanReviewPromptBuilder,
-  ResponseFormattingPromptBuilder
+  ResponseFormattingPromptBuilder,
 } from '../services/prompt-builders/sub-agent';
 import { PromptBuilderMap } from './builder-guard';
 
@@ -29,7 +29,7 @@ export class PromptBuilderFactory {
       environment: new EnvironmentCheckPromptBuilder(aiService),
       action: new ActionExecutionPromptBuilder(aiService),
       progress: new ProgressAssessmentPromptBuilder(aiService),
-      final: new FinalResponsePromptBuilder(aiService)
+      final: new FinalResponsePromptBuilder(aiService),
     };
   }
 
@@ -38,7 +38,7 @@ export class PromptBuilderFactory {
    */
   static createBuilder<T extends keyof PromptBuilderMap>(
     type: T,
-    aiService: GenericAIService
+    aiService: GenericAIService,
   ): PromptBuilderMap[T] {
     const builders = {
       situation: () => new SituationAnalysisPromptBuilder(aiService),
@@ -46,7 +46,7 @@ export class PromptBuilderFactory {
       environment: () => new EnvironmentCheckPromptBuilder(aiService),
       action: () => new ActionExecutionPromptBuilder(aiService),
       progress: () => new ProgressAssessmentPromptBuilder(aiService),
-      final: () => new FinalResponsePromptBuilder(aiService)
+      final: () => new FinalResponsePromptBuilder(aiService),
     };
 
     return builders[type]() as PromptBuilderMap[T];
@@ -57,7 +57,7 @@ export class PromptBuilderFactory {
    */
   static createBuilders<T extends keyof PromptBuilderMap>(
     types: T[],
-    aiService: GenericAIService
+    aiService: GenericAIService,
   ): Pick<PromptBuilderMap, T> {
     const result = {} as Pick<PromptBuilderMap, T>;
     
@@ -75,7 +75,7 @@ export class PromptBuilderFactory {
     return {
       intent: new IntentAssessmentPromptBuilder(aiService, domain),
       planReview: new PlanReviewPromptBuilder(aiService, domain),
-      responseFormatting: new ResponseFormattingPromptBuilder(aiService, domain)
+      responseFormatting: new ResponseFormattingPromptBuilder(aiService, domain),
     };
   }
 }

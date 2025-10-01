@@ -1,8 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 /**
  * AI-Driven Agent Configuration
  * Replaces hardcoded patterns with intelligent, dynamic configuration
  */
+
+import { ErrorFactory } from '../errors/error-factory';
 
 // Agent configuration without external service dependencies
 
@@ -13,29 +15,29 @@ export const AGENT_CAPABILITIES = {
   email: {
     description: 'Send, reply to, search, and manage emails using Gmail API',
     capabilities: ['send_email', 'reply_email', 'search_email', 'draft_email', 'manage_gmail'],
-    useCases: ['send messages', 'reply to emails', 'search inbox', 'create drafts', 'manage email']
+    useCases: ['send messages', 'reply to emails', 'search inbox', 'create drafts', 'manage email'],
   },
   
   /** Contact agent - contact management */
   contact: {
     description: 'Search and manage contacts from Google Contacts and email history',
     capabilities: ['search_contacts', 'find_people', 'lookup_email', 'contact_management'],
-    useCases: ['find contact info', 'lookup email addresses', 'search people', 'get contact details']
+    useCases: ['find contact info', 'lookup email addresses', 'search people', 'get contact details'],
   },
   
   /** Calendar agent - scheduling and events */
   calendar: {
     description: 'Create, update, and manage calendar events and scheduling',
     capabilities: ['create_events', 'schedule_meetings', 'manage_calendar', 'check_availability'],
-    useCases: ['schedule meetings', 'create events', 'check availability', 'manage calendar']
+    useCases: ['schedule meetings', 'create events', 'check availability', 'manage calendar'],
   },
   
   /** Slack agent - message reading and management */
   slack: {
     description: 'Read Slack message history, manage drafts, and handle confirmations',
     capabilities: ['read_messages', 'detect_drafts', 'manage_confirmations', 'thread_management'],
-    useCases: ['read conversation history', 'check for drafts', 'manage confirmations', 'analyze threads']
-  }
+    useCases: ['read conversation history', 'check for drafts', 'manage confirmations', 'analyze threads'],
+  },
 };
 
 /** AI-Driven Agent Configuration */
@@ -49,7 +51,7 @@ export const AGENT_CONFIG = {
     isCritical: true,
     requiresAuth: true,
     hasExternalEffects: true,
-    isReadOnly: false
+    isReadOnly: false,
   },
   
   contact: {
@@ -60,7 +62,7 @@ export const AGENT_CONFIG = {
     isCritical: true,
     requiresAuth: true,
     hasExternalEffects: false,
-    isReadOnly: true
+    isReadOnly: true,
   },
   
   calendar: {
@@ -71,7 +73,7 @@ export const AGENT_CONFIG = {
     isCritical: true,
     requiresAuth: true,
     hasExternalEffects: true,
-    isReadOnly: false
+    isReadOnly: false,
   },
   
   slack: {
@@ -82,8 +84,8 @@ export const AGENT_CONFIG = {
     isCritical: false,
     requiresAuth: true,
     hasExternalEffects: false,
-    isReadOnly: true
-  }
+    isReadOnly: true,
+  },
 };
 
 /** Agent operation types */
@@ -94,8 +96,8 @@ export const AGENT_OPERATIONS = {
     /** Create new contact (requires additional permissions) */
     create: 'create',
     /** Update existing contact (requires additional permissions) */
-    update: 'update'
-  }
+    update: 'update',
+  },
 };
 
 /** AI-Driven Helper Functions */
@@ -195,7 +197,7 @@ export const AGENT_HELPERS = {
       // No need for redundant AI validation
       return operation;
     } catch (error) {
-      throw new Error(`AI operation detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw ErrorFactory.domain.serviceError('AgentConfig', `AI operation detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -282,5 +284,5 @@ export const AGENT_HELPERS = {
     
     // Check if operation has external effects
     return !agent.hasExternalEffects;
-  }
+  },
 };

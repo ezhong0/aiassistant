@@ -12,7 +12,7 @@ export {
   shutdownAllServices,
   validateContainer,
   type AppContainer,
-  type Cradle
+  type Cradle,
 } from './container';
 
 export { registerAllServices } from './registrations';

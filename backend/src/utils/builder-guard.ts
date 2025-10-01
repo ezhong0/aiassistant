@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 /**
  * BuilderGuard - Safe access utility for prompt builders
  *
@@ -9,7 +9,7 @@
 import { ErrorFactory } from '../errors';
 import {
   BuilderResponseMap,
-  BaseBuilderResponse
+  BaseBuilderResponse,
 } from '../types/workflow/builder-response.types';
 import {
   SituationAnalysisPromptBuilder,
@@ -17,12 +17,12 @@ import {
   EnvironmentCheckPromptBuilder,
   ActionExecutionPromptBuilder,
   ProgressAssessmentPromptBuilder,
-  FinalResponsePromptBuilder
+  FinalResponsePromptBuilder,
 } from '../services/prompt-builders/main-agent';
 import {
   IntentAssessmentPromptBuilder,
   PlanReviewPromptBuilder,
-  ResponseFormattingPromptBuilder
+  ResponseFormattingPromptBuilder,
 } from '../services/prompt-builders/sub-agent';
 
 /**
@@ -55,7 +55,7 @@ export const BUILDER_NAMES: Record<keyof PromptBuilderMap, string> = {
   environment: 'EnvironmentCheckPromptBuilder',
   action: 'ActionExecutionPromptBuilder',
   progress: 'ProgressAssessmentPromptBuilder',
-  final: 'FinalResponsePromptBuilder'
+  final: 'FinalResponsePromptBuilder',
 } as const;
 
 /**
@@ -64,7 +64,7 @@ export const BUILDER_NAMES: Record<keyof PromptBuilderMap, string> = {
 export const SUB_AGENT_BUILDER_NAMES: Record<keyof SubAgentPromptBuilderMap, string> = {
   intent: 'IntentAssessmentPromptBuilder',
   planReview: 'PlanReviewPromptBuilder',
-  responseFormatting: 'ResponseFormattingPromptBuilder'
+  responseFormatting: 'ResponseFormattingPromptBuilder',
 } as const;
 
 /**
@@ -77,14 +77,14 @@ export class BuilderGuard {
   static ensureBuilder<T extends keyof PromptBuilderMap>(
     builder: PromptBuilderMap[T] | null | undefined,
     builderType: T,
-    _context?: Record<string, any>
+    _context?: Record<string, any>,
   ): PromptBuilderMap[T] {
     if (!builder) {
       throw ErrorFactory.domain.serviceUnavailable(BUILDER_NAMES[builderType], {
         component: 'builder-guard',
         operation: 'ensure_builder',
         builderType,
-        builderName: BUILDER_NAMES[builderType]
+        builderName: BUILDER_NAMES[builderType],
       });
     }
     return builder;
@@ -97,7 +97,7 @@ export class BuilderGuard {
     builder: PromptBuilderMap[T] | null | undefined,
     builderType: T,
     input: string,
-    context?: Record<string, any>
+    context?: Record<string, any>,
   ): Promise<BuilderResponseMap[T]> {
     const safeBuilder = this.ensureBuilder(builder, builderType, context);
 
@@ -106,7 +106,7 @@ export class BuilderGuard {
 
       // Validate the response structure
       if (!isValidBuilderResponse(result)) {
-        throw new Error(`Invalid builder response structure from ${BUILDER_NAMES[builderType]}`);
+        throw ErrorFactory.domain.serviceError(`Invalid builder response structure from ${BUILDER_NAMES[builderType]}`);
       }
 
       return result as unknown as BuilderResponseMap[T];
@@ -115,7 +115,7 @@ export class BuilderGuard {
       throw ErrorFactory.workflow.executionFailed(
         `${BUILDER_NAMES[builderType]} execution failed: ${errorMessage}`,
         context?.sessionId,
-        undefined  // iteration not available here
+        undefined,  // iteration not available here
       );
     }
   }
@@ -144,7 +144,7 @@ export class BuilderGuard {
         component: 'builder-guard',
         operation: 'validate_all_builders',
         missingBuilders,
-        totalMissing: missingBuilders.length
+        totalMissing: missingBuilders.length,
       });
     }
   }
@@ -153,7 +153,7 @@ export class BuilderGuard {
    * Check if a builder is initialized without throwing
    */
   static isBuilderInitialized<T extends keyof PromptBuilderMap>(
-    builder: PromptBuilderMap[T] | null | undefined
+    builder: PromptBuilderMap[T] | null | undefined,
   ): builder is PromptBuilderMap[T] {
     return builder !== null && builder !== undefined;
   }
@@ -196,7 +196,7 @@ export class BuilderGuard {
       initializedCount,
       totalCount,
       missingBuilders,
-      status
+      status,
     };
   }
 
@@ -217,7 +217,7 @@ export class BuilderGuard {
         component: 'builder-guard',
         operation: 'validate_sub_agent_builders',
         missingBuilders,
-        totalMissing: missingBuilders.length
+        totalMissing: missingBuilders.length,
       });
     }
   }
@@ -253,7 +253,7 @@ export class BuilderGuard {
       initializedCount,
       totalCount,
       missingBuilders,
-      status
+      status,
     };
   }
 }
@@ -262,16 +262,16 @@ export class BuilderGuard {
  * Decorator for methods that require initialized builders
  */
 export function RequireBuilder<T extends keyof PromptBuilderMap>(builderType: T) {
-  return function(target: any, propertyName: string, descriptor: PropertyDescriptor) {
+  return function(target: unknown, propertyName: string, descriptor: PropertyDescriptor) {
     const method = descriptor.value;
 
-    descriptor.value = function(...args: any[]) {
+    descriptor.value = function(...args: unknown[]) {
       const builderPropertyName = `${builderType}Builder`;
-      const builder = (this as any)[builderPropertyName];
+      const builder = (this as Record<string, unknown>)[builderPropertyName];
 
       BuilderGuard.ensureBuilder(builder, builderType, {
         method: propertyName,
-        class: target.constructor.name
+        class: target.constructor.name,
       });
 
       return method.apply(this, args);
@@ -282,7 +282,7 @@ export function RequireBuilder<T extends keyof PromptBuilderMap>(builderType: T)
 /**
  * Type guard for prompt builder responses
  */
-export function isValidBuilderResponse(response: any): response is BaseBuilderResponse {
+export function isValidBuilderResponse(response: unknown): response is BaseBuilderResponse {
   return (
     response &&
     typeof response === 'object' &&
@@ -301,13 +301,13 @@ export function createBuilderContext(
   sessionId?: string,
   userId?: string,
   operation?: string,
-  additionalContext?: Record<string, any>
+  additionalContext?: Record<string, any>,
 ): Record<string, any> {
   return {
     sessionId,
     userId,
     operation,
     timestamp: new Date().toISOString(),
-    ...additionalContext
+    ...additionalContext,
   };
 }

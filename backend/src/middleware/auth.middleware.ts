@@ -27,7 +27,7 @@ export interface AuthenticatedRequest extends Request {
   /** JWT token used for authentication */
   token?: string;
   /** Validated request body from validation middleware */
-  validatedBody?: any;
+  validatedBody?: Record<string, unknown>;
 }
 
 /**
@@ -64,13 +64,13 @@ export function createAuthenticateToken(authService: AuthService) {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
           path: req.path,
-          reason: 'no_authorization_header'
-        }
+          reason: 'no_authorization_header',
+        },
       });
       
       res.status(401).json({
         error: 'Authentication required',
-        message: 'Authorization header is missing'
+        message: 'Authorization header is missing',
       });
       return;
     }
@@ -84,13 +84,13 @@ export function createAuthenticateToken(authService: AuthService) {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
           path: req.path,
-          reason: 'invalid_header_format'
-        }
+          reason: 'invalid_header_format',
+        },
       });
       
       res.status(401).json({
         error: 'Authentication required',
-        message: 'Authorization header must start with "Bearer "'
+        message: 'Authorization header must start with "Bearer "',
       });
       return;
     }
@@ -106,13 +106,13 @@ export function createAuthenticateToken(authService: AuthService) {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
           path: req.path,
-          reason: 'empty_token'
-        }
+          reason: 'empty_token',
+        },
       });
       
       res.status(401).json({
         error: 'Authentication required',
-        message: 'Token is missing'
+        message: 'Token is missing',
       });
       return;
     }
@@ -132,13 +132,13 @@ export function createAuthenticateToken(authService: AuthService) {
           ip: req.ip,
           userAgent: req.get('User-Agent'),
           path: req.path,
-          reason: 'invalid_token_payload'
-        }
+          reason: 'invalid_token_payload',
+        },
       });
       
       res.status(401).json({
         error: 'Authentication failed',
-        message: 'Invalid token payload'
+        message: 'Invalid token payload',
       });
       return;
     }
@@ -148,7 +148,7 @@ export function createAuthenticateToken(authService: AuthService) {
       userId: payload.sub,
       email: payload.email,
       name: payload.email,
-      picture: undefined as any
+      picture: undefined as any,
     };
     req.token = token;
 
@@ -159,8 +159,8 @@ export function createAuthenticateToken(authService: AuthService) {
       metadata: {
         userId: payload.sub,
         email: payload.email,
-        path: req.path
-      }
+        path: req.path,
+      },
     });
 
     next();
@@ -174,13 +174,13 @@ export function createAuthenticateToken(authService: AuthService) {
         stack: error instanceof Error ? error.stack : undefined,
         ip: req.ip,
         userAgent: req.get('User-Agent'),
-        path: req.path
-      }
+        path: req.path,
+      },
     });
     
     res.status(500).json({
       error: 'Authentication error',
-      message: 'Internal server error during authentication'
+      message: 'Internal server error during authentication',
     });
   }
   };
@@ -199,7 +199,7 @@ export function createOptionalAuth(authService: AuthService) {
   try {
     const authHeader = req.headers.authorization;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader?.startsWith('Bearer ')) {
       // No token provided, continue without authentication
       next();
       return;
@@ -222,7 +222,7 @@ export function createOptionalAuth(authService: AuthService) {
           userId: payload.sub,
           email: payload.email,
           name: payload.email,
-          picture: undefined as any
+          picture: undefined as any,
         };
         req.token = token;
         
@@ -233,8 +233,8 @@ export function createOptionalAuth(authService: AuthService) {
           metadata: {
             userId: payload.sub,
             email: payload.email,
-            path: req.path
-          }
+            path: req.path,
+          },
         });
       }
     } catch (error) {
@@ -243,7 +243,7 @@ export function createOptionalAuth(authService: AuthService) {
       logger.debug('Optional authentication failed', {
         correlationId: logContext.correlationId,
         operation: 'optional_auth_middleware',
-        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+        metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
       });
     }
 
@@ -255,8 +255,8 @@ export function createOptionalAuth(authService: AuthService) {
       operation: 'optional_auth_middleware',
       metadata: {
         error: error instanceof Error ? error.message : 'Unknown error',
-        path: req.path
-      }
+        path: req.path,
+      },
     });
     
     // Don't fail on optional auth errors, just continue
@@ -273,7 +273,7 @@ export const requirePermissions = (permissions: string[]) => {
     if (!req.user) {
       res.status(401).json({
         error: 'Authentication required',
-        message: 'User not authenticated'
+        message: 'User not authenticated',
       });
       return;
     }
@@ -287,8 +287,8 @@ export const requirePermissions = (permissions: string[]) => {
       metadata: {
         userId: req.user.userId,
         requiredPermissions: permissions,
-        path: req.path
-      }
+        path: req.path,
+      },
     });
 
     next();
@@ -298,12 +298,12 @@ export const requirePermissions = (permissions: string[]) => {
 /**
  * Middleware to ensure user can only access their own resources
  */
-export const requireOwnership = (userIdParam: string = 'userId') => {
+export const requireOwnership = (userIdParam = 'userId') => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
       res.status(401).json({
         error: 'Authentication required',
-        message: 'User not authenticated'
+        message: 'User not authenticated',
       });
       return;
     }
@@ -313,7 +313,7 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
     if (!resourceUserId) {
       res.status(400).json({
         error: 'Bad request',
-        message: `Missing ${userIdParam} parameter`
+        message: `Missing ${userIdParam} parameter`,
       });
       return;
     }
@@ -326,13 +326,13 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
         metadata: {
           authenticatedUserId: req.user.userId,
           requestedUserId: resourceUserId,
-          path: req.path
-        }
+          path: req.path,
+        },
       });
       
       res.status(403).json({
         error: 'Forbidden',
-        message: 'You can only access your own resources'
+        message: 'You can only access your own resources',
       });
       return;
     }
@@ -343,8 +343,8 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
       operation: 'ownership_middleware',
       metadata: {
         userId: req.user.userId,
-        path: req.path
-      }
+        path: req.path,
+      },
     });
 
     next();
@@ -354,7 +354,7 @@ export const requireOwnership = (userIdParam: string = 'userId') => {
 /**
  * Middleware to rate limit authenticated users
  */
-export const rateLimitAuth = (maxRequests: number = 100, windowMs: number = 15 * 60 * 1000) => {
+export const rateLimitAuth = (maxRequests = 100, windowMs: number = 15 * 60 * 1000) => {
   const requests = new Map<string, { count: number; resetTime: number }>();
   
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
@@ -370,7 +370,7 @@ export const rateLimitAuth = (maxRequests: number = 100, windowMs: number = 15 *
     if (!userRequests || now > userRequests.resetTime) {
       requests.set(userId, {
         count: 1,
-        resetTime: now + windowMs
+        resetTime: now + windowMs,
       });
       next();
       return;
@@ -385,14 +385,14 @@ export const rateLimitAuth = (maxRequests: number = 100, windowMs: number = 15 *
           userId: req.user.userId,
           count: userRequests.count,
           maxRequests,
-          path: req.path
-        }
+          path: req.path,
+        },
       });
       
       res.status(429).json({
         error: 'Too many requests',
         message: `Rate limit exceeded. Maximum ${maxRequests} requests per ${windowMs / 1000 / 60} minutes.`,
-        retryAfter: Math.ceil((userRequests.resetTime - now) / 1000)
+        retryAfter: Math.ceil((userRequests.resetTime - now) / 1000),
       });
       return;
     }

@@ -6,7 +6,8 @@ import { Request, Response, NextFunction } from 'express';
 // import { createLogContext } from '../utils/log-context';
 import { z, ZodSchema, ZodError } from 'zod';
 import logger from '../utils/logger';
-import { ErrorFactory, createErrorContext } from '../utils/app-error';
+import { createErrorContext } from '../utils/app-error';
+import { ErrorFactory } from '../errors/error-factory';
 
 export interface ValidationOptions {
   body?: ZodSchema;
@@ -113,20 +114,12 @@ export function validateRequest(options: ValidationOptions) {
             query: JSON.stringify(req.query),
             params: JSON.stringify(req.params),
             headers: JSON.stringify(req.headers),
-            timestamp: new Date().toISOString()
-          }
+            timestamp: new Date().toISOString(),
+          },
         });
 
         // Throw AppError instead of sending response directly
-        throw ErrorFactory.validationFailed('request', 'Validation failed').addContext({
-          correlationId: errorContext.correlationId,
-          userId: errorContext.userId,
-          metadata: { 
-            errors: validationResult.errors,
-            path: req.path,
-            method: req.method
-          }
-        });
+        throw ErrorFactory.validation.multipleErrors(validationResult.errors);
       }
 
       next();
@@ -142,8 +135,8 @@ export function validateRequest(options: ValidationOptions) {
           path: req.path,
           method: req.method,
           body: JSON.stringify(req.body),
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
       
       // Throw AppError instead of sending response directly
@@ -153,8 +146,8 @@ export function validateRequest(options: ValidationOptions) {
         originalError: error instanceof Error ? error : new Error(String(error)),
         metadata: {
           path: req.path,
-          method: req.method
-        }
+          method: req.method,
+        },
       });
     }
   };
@@ -232,9 +225,9 @@ export function validateResponse<T>(schema: ZodSchema<T>) {
           metadata: {
             errors: transformZodErrors(error),
             data,
-          }
+          },
         });
-        throw new Error('Response validation failed');
+        throw ErrorFactory.validation.invalidInput('response', data, 'valid response schema');
       }
       throw error;
     }
@@ -245,7 +238,7 @@ export function validateResponse<T>(schema: ZodSchema<T>) {
  * Create a validation middleware factory for common patterns
  */
 export function createValidationMiddleware<T extends ValidationOptions>(
-  schemas: T
+  schemas: T,
 ) {
   return validateRequest(schemas);
 }
@@ -255,7 +248,7 @@ export function createValidationMiddleware<T extends ValidationOptions>(
  */
 export async function validateAsync<T>(
   schema: ZodSchema<T>,
-  data: unknown
+  data: unknown,
 ): Promise<{ success: boolean; data?: T; errors?: ValidationError[] }> {
   try {
     const validatedData = await schema.parseAsync(data);
@@ -279,39 +272,39 @@ export const authSchemas = {
     code: z.string().min(1, 'Authorization code is required'),
     state: z.string().optional(),
     error: z.string().optional(),
-    error_description: z.string().optional()
+    error_description: z.string().optional(),
   }),
   
   tokenRefresh: z.object({
-    refresh_token: z.string().min(1, 'Refresh token is required')
+    refresh_token: z.string().min(1, 'Refresh token is required'),
   }),
   
   mobileTokenExchange: z.object({
     access_token: z.string().min(1, 'Access token is required'),
     refresh_token: z.string().optional(),
     id_token: z.string().optional(),
-    platform: z.enum(['web', 'slack'])
+    platform: z.enum(['web', 'slack']),
   }),
   
   logout: z.object({
     access_token: z.string().optional(),
-    everywhere: z.boolean().optional().default(false)
+    everywhere: z.boolean().optional().default(false),
   }),
   
   userId: z.object({
-    userId: z.string().min(1, 'User ID is required')
+    userId: z.string().min(1, 'User ID is required'),
   }),
   
   profileUpdate: z.object({
     name: z.string().optional(),
     email: z.string().email().optional(),
-    preferences: z.record(z.any()).optional()
+    preferences: z.record(z.any()).optional(),
   }),
   
   pagination: z.object({
     page: z.coerce.number().min(1).default(1),
-    limit: z.coerce.number().min(1).max(100).default(10)
-  })
+    limit: z.coerce.number().min(1).max(100).default(10),
+  }),
 };
 
 /**

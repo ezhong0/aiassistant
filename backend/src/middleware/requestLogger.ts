@@ -16,8 +16,8 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
         status: res.statusCode,
         duration: `${duration}ms`,
         userAgent: req.get('User-Agent'),
-        ip: req.ip
-      }
+        ip: req.ip,
+      },
     });
     return originalSend.call(this, body);
   };

@@ -10,11 +10,11 @@ import { ErrorFactory } from '../errors';
 import { AgentFactory } from '../framework/agent-factory';
 import { TokenManager } from './token-manager';
 import { TokenServiceType } from '../types/workflow/token-service.types';
-import logger from '../utils/logger';
+import { BaseService } from './base-service';
 import {
   EnvironmentCheckPromptBuilder,
   ActionExecutionPromptBuilder,
-  ProgressAssessmentPromptBuilder
+  ProgressAssessmentPromptBuilder,
 } from './prompt-builders/main-agent';
 // import { DomainServiceResolver } from './domain';
 
@@ -46,7 +46,7 @@ export interface ActionExecutionResult {
   hasAgentAction: boolean;
   agentName?: string;
   agentRequest?: string;
-  agentResult?: any;
+  agentResult?: Record<string, unknown>;
   agentError?: Error;
   updatedContext: string;
 }
@@ -75,14 +75,26 @@ export interface WorkflowIterationResult {
 /**
  * WorkflowExecutor - Handles workflow execution with decomposed methods
  */
-export class WorkflowExecutor {
+export class WorkflowExecutor extends BaseService {
   constructor(
     private environmentCheckBuilder: EnvironmentCheckPromptBuilder,
     private actionExecutionBuilder: ActionExecutionPromptBuilder,
     private progressAssessmentBuilder: ProgressAssessmentPromptBuilder,
     private tokenManager?: TokenManager,
-    private maxIterations: number = 10
-  ) {}
+    private maxIterations = 10,
+  ) {
+    super('WorkflowExecutor');
+  }
+
+  protected async onInitialize(): Promise<void> {
+    // No initialization needed for WorkflowExecutor
+    this.logInfo('WorkflowExecutor initialized');
+  }
+
+  protected async onDestroy(): Promise<void> {
+    // No cleanup needed for WorkflowExecutor
+    this.logInfo('WorkflowExecutor destroyed');
+  }
 
   /**
    * Execute complete workflow
@@ -90,9 +102,9 @@ export class WorkflowExecutor {
   async execute(
     initialContext: string,
     sessionId: string,
-    userId?: string
+    userId?: string,
   ): Promise<string> {
-    logger.info('Starting workflow execution', { sessionId, userId });
+    this.logInfo('Starting workflow execution', { sessionId, userId });
 
     let currentContext = initialContext;
     let iteration = 0;
@@ -105,33 +117,33 @@ export class WorkflowExecutor {
         userId,
         iteration,
         currentContext,
-        correlationId: `workflow-${sessionId}-${iteration}`
+        correlationId: `workflow-${sessionId}-${iteration}`,
       });
 
       currentContext = iterationResult.updatedContext;
 
       if (iterationResult.shouldExitForUserInput) {
-        logger.info('Workflow paused for user input', {
+        this.logInfo('Workflow paused for user input', {
           sessionId,
           iteration,
-          reason: 'user_input_required'
+          reason: 'user_input_required',
         });
         break;
       }
 
       if (iterationResult.shouldExitComplete) {
-        logger.info('Workflow completed successfully', {
+        this.logInfo('Workflow completed successfully', {
           sessionId,
           iteration,
-          totalIterations: iteration
+          totalIterations: iteration,
         });
         break;
       }
 
       if (!iterationResult.shouldContinue) {
-        logger.warn('Workflow stopped due to unspecified condition', {
+        this.logWarn('Workflow stopped due to unspecified condition', {
           sessionId,
-          iteration
+          iteration,
         });
         break;
       }
@@ -148,9 +160,9 @@ export class WorkflowExecutor {
    * Execute a single workflow iteration
    */
   private async executeIteration(context: WorkflowExecutionContext): Promise<WorkflowIterationResult> {
-    logger.debug('Executing workflow iteration', {
+    this.logDebug('Executing workflow iteration', {
       sessionId: context.sessionId,
-      iteration: context.iteration
+      iteration: context.iteration,
     });
 
     // Step 1: Environment & Readiness Check
@@ -162,7 +174,7 @@ export class WorkflowExecutor {
         shouldExitForUserInput: true,
         shouldExitComplete: false,
         updatedContext: environmentResult.updatedContext,
-        iteration: context.iteration
+        iteration: context.iteration,
       };
     }
 
@@ -172,20 +184,20 @@ export class WorkflowExecutor {
         shouldExitForUserInput: false,
         shouldExitComplete: false,
         updatedContext: environmentResult.updatedContext,
-        iteration: context.iteration
+        iteration: context.iteration,
       };
     }
 
     // Step 2: Action Execution
     const actionResult = await this.executeActions({
       ...context,
-      currentContext: environmentResult.updatedContext
+      currentContext: environmentResult.updatedContext,
     });
 
     // Step 3: Progress Assessment
     const progressResult = await this.assessProgress({
       ...context,
-      currentContext: actionResult.updatedContext
+      currentContext: actionResult.updatedContext,
     });
 
     return {
@@ -193,7 +205,7 @@ export class WorkflowExecutor {
       shouldExitForUserInput: false,
       shouldExitComplete: progressResult.isComplete,
       updatedContext: progressResult.updatedContext,
-      iteration: context.iteration
+      iteration: context.iteration,
     };
   }
 
@@ -201,9 +213,9 @@ export class WorkflowExecutor {
    * Check environment readiness for workflow execution
    */
   private async checkEnvironmentReadiness(context: WorkflowExecutionContext): Promise<EnvironmentCheckResult> {
-    logger.debug('Checking environment readiness', {
+    this.logDebug('Checking environment readiness', {
       sessionId: context.sessionId,
-      iteration: context.iteration
+      iteration: context.iteration,
     });
 
     try {
@@ -211,14 +223,14 @@ export class WorkflowExecutor {
         context.sessionId,
         context.userId,
         'environment_check',
-        { iteration: context.iteration }
+        { iteration: context.iteration },
       );
 
       const environmentResult = await BuilderGuard.safeExecute(
         this.environmentCheckBuilder,
         'environment',
         context.currentContext,
-        builderContext
+        builderContext,
       );
 
       const needsUserInput = environmentResult.parsed.needsUserInput || false;
@@ -226,10 +238,10 @@ export class WorkflowExecutor {
       const updatedContext = environmentResult.parsed.context;
 
       if (needsUserInput) {
-        logger.info('User input required', {
+        this.logInfo('User input required', {
           sessionId: context.sessionId,
           iteration: context.iteration,
-          requiredInfo
+          requiredInfo,
         });
       }
 
@@ -237,20 +249,20 @@ export class WorkflowExecutor {
         needsUserInput,
         requiredInfo,
         updatedContext,
-        canContinue: !needsUserInput
+        canContinue: !needsUserInput,
       };
 
     } catch (error) {
-      logger.error('Environment check failed', error as Error, {
+      this.logError('Environment check failed', error as Error, {
         sessionId: context.sessionId,
-        iteration: context.iteration
+        iteration: context.iteration,
       });
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw ErrorFactory.workflow.executionFailed(
         `Environment check failed: ${errorMessage}`,
         context.sessionId,
-        context.iteration
+        context.iteration,
       );
     }
   }
@@ -259,9 +271,9 @@ export class WorkflowExecutor {
    * Execute workflow actions including agent delegation
    */
   private async executeActions(context: WorkflowExecutionContext): Promise<ActionExecutionResult> {
-    logger.debug('Executing workflow actions', {
+    this.logDebug('Executing workflow actions', {
       sessionId: context.sessionId,
-      iteration: context.iteration
+      iteration: context.iteration,
     });
 
     try {
@@ -269,14 +281,14 @@ export class WorkflowExecutor {
         context.sessionId,
         context.userId,
         'action_execution',
-        { iteration: context.iteration }
+        { iteration: context.iteration },
       );
 
       const actionResult = await BuilderGuard.safeExecute(
         this.actionExecutionBuilder,
         'action',
         context.currentContext,
-        builderContext
+        builderContext,
       );
 
       let updatedContext = actionResult.parsed.context;
@@ -288,7 +300,7 @@ export class WorkflowExecutor {
         const agentExecutionResult = await this.executeAgentAction(
           agentName,
           agentRequest,
-          context
+          context,
         );
 
         // Update context with agent execution results
@@ -297,7 +309,7 @@ export class WorkflowExecutor {
           agentName,
           agentRequest,
           agentExecutionResult.result,
-          agentExecutionResult.error
+          agentExecutionResult.error,
         );
 
         return {
@@ -306,26 +318,26 @@ export class WorkflowExecutor {
           agentRequest,
           agentResult: agentExecutionResult.result,
           agentError: agentExecutionResult.error,
-          updatedContext
+          updatedContext,
         };
       }
 
       return {
         hasAgentAction: false,
-        updatedContext
+        updatedContext,
       };
 
     } catch (error) {
-      logger.error('Action execution failed', error as Error, {
+      this.logError('Action execution failed', error as Error, {
         sessionId: context.sessionId,
-        iteration: context.iteration
+        iteration: context.iteration,
       });
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw ErrorFactory.workflow.executionFailed(
         `Action execution failed: ${errorMessage}`,
         context.sessionId,
-        context.iteration
+        context.iteration,
       );
     }
   }
@@ -336,8 +348,8 @@ export class WorkflowExecutor {
   private async executeAgentAction(
     agentName: string,
     request: string,
-    context: WorkflowExecutionContext
-  ): Promise<{ result?: any; error?: Error }> {
+    context: WorkflowExecutionContext,
+  ): Promise<{ result?: Record<string, unknown>; error?: Error }> {
     try {
       // Get access token if available
       let accessToken: string | undefined;
@@ -362,10 +374,10 @@ export class WorkflowExecutor {
             }
           }
         } catch (tokenError) {
-          logger.warn('Failed to retrieve access token for agent execution', {
+          this.logWarn('Failed to retrieve access token for agent execution', {
             agentName,
             sessionId: context.sessionId,
-            error: tokenError instanceof Error ? tokenError.message : String(tokenError)
+            error: tokenError instanceof Error ? tokenError.message : String(tokenError),
           });
         }
       }
@@ -377,18 +389,18 @@ export class WorkflowExecutor {
           sessionId: context.sessionId,
           userId: context.userId,
           accessToken,
-          correlationId: context.correlationId || `agent-${Date.now()}`
-        }
+          correlationId: context.correlationId || `agent-${Date.now()}`,
+        },
       );
 
       return { result };
 
     } catch (error) {
-      logger.error('Agent execution failed', error as Error, {
+      this.logError('Agent execution failed', error as Error, {
         agentName,
         request: request.substring(0, 100),
         sessionId: context.sessionId,
-        iteration: context.iteration
+        iteration: context.iteration,
       });
 
       return { error: error instanceof Error ? error : new Error(String(error)) };
@@ -399,9 +411,9 @@ export class WorkflowExecutor {
    * Assess workflow progress and determine next steps
    */
   private async assessProgress(context: WorkflowExecutionContext): Promise<ProgressAssessmentResult> {
-    logger.debug('Assessing workflow progress', {
+    this.logDebug('Assessing workflow progress', {
       sessionId: context.sessionId,
-      iteration: context.iteration
+      iteration: context.iteration,
     });
 
     try {
@@ -409,14 +421,14 @@ export class WorkflowExecutor {
         context.sessionId,
         context.userId,
         'progress_assessment',
-        { iteration: context.iteration }
+        { iteration: context.iteration },
       );
 
       const progressResult = await BuilderGuard.safeExecute(
         this.progressAssessmentBuilder,
         'progress',
         context.currentContext,
-        builderContext
+        builderContext,
       );
 
       const newSteps = progressResult.parsed.newSteps || [];
@@ -427,20 +439,20 @@ export class WorkflowExecutor {
         isComplete,
         newSteps,
         updatedContext,
-        shouldContinue: !isComplete
+        shouldContinue: !isComplete,
       };
 
     } catch (error) {
-      logger.error('Progress assessment failed', error as Error, {
+      this.logError('Progress assessment failed', error as Error, {
         sessionId: context.sessionId,
-        iteration: context.iteration
+        iteration: context.iteration,
       });
 
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw ErrorFactory.workflow.executionFailed(
         `Progress assessment failed: ${errorMessage}`,
         context.sessionId,
-        context.iteration
+        context.iteration,
       );
     }
   }
@@ -452,8 +464,8 @@ export class WorkflowExecutor {
     currentContext: string,
     agentName: string,
     request: string,
-    result?: any,
-    error?: Error
+    result?: Record<string, unknown>,
+    error?: Error,
   ): string {
     if (error) {
       return `${currentContext}\n\nAgent Execution Error:\nAgent: ${agentName}\nRequest: ${request}\nError: ${error.message}`;
@@ -504,7 +516,7 @@ export class WorkflowExecutor {
       'calendar': 'calendarAgent',
       'email': 'emailAgent', 
       'contact': 'contactAgent',
-      'slack': 'slackAgent'
+      'slack': 'slackAgent',
     };
     return mapping[shortName] || shortName;
   }

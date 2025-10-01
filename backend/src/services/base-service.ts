@@ -1,4 +1,4 @@
-import { ServiceState, IService } from "../types/service.types";
+import { ServiceState, IService } from '../types/service.types';
 import { ErrorFactory, AppError, ERROR_CATEGORIES } from '../errors';
 import { retryManager, RetryConfig } from '../errors/retry-manager';
 import logger from '../utils/logger';
@@ -111,7 +111,7 @@ export abstract class BaseService implements IService {
       throw ErrorFactory.domain.serviceError(
         this.name,
         `Cannot initialize destroyed service: ${this.name}`,
-        { operation: 'initialize', serviceState: this._state }
+        { operation: 'initialize', serviceState: this._state },
       );
     }
 
@@ -168,7 +168,7 @@ export abstract class BaseService implements IService {
       state: this._state,
       initialized: this.initialized,
       destroyed: this.destroyed,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     return { healthy, details };
@@ -194,7 +194,7 @@ export abstract class BaseService implements IService {
       throw ErrorFactory.domain.serviceError(
         this.name,
         `Service ${this.name} is not ready. Current state: ${this._state}`,
-        { serviceState: this._state, operation: 'service_check' }
+        { serviceState: this._state, operation: 'service_check' },
       );
     }
   }
@@ -207,7 +207,7 @@ export abstract class BaseService implements IService {
       throw ErrorFactory.domain.serviceError(
         this.name,
         `Service ${this.name} has been destroyed`,
-        { serviceState: this._state, operation: 'service_check' }
+        { serviceState: this._state, operation: 'service_check' },
       );
     }
   }
@@ -221,13 +221,13 @@ export abstract class BaseService implements IService {
     if (error instanceof AppError) {
       appError = error.addContext({
         service: this.name,
-        operation
+        operation,
       });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
       appError = ErrorFactory.util.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
         service: this.name,
-        operation
+        operation,
       });
     }
 
@@ -241,7 +241,7 @@ export abstract class BaseService implements IService {
       operation,
       correlationId: appError.correlationId,
       metadata: appError.metadata,
-      stack: appError.stack
+      stack: appError.stack,
     });
 
     throw appError;
@@ -256,14 +256,14 @@ export abstract class BaseService implements IService {
     if (error instanceof AppError) {
       appError = error.addContext({
         service: this.name,
-        operation
+        operation,
       });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
       appError = ErrorFactory.util.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
         service: this.name,
         operation,
-        severity: 'low'
+        severity: 'low',
       });
     }
 
@@ -276,7 +276,7 @@ export abstract class BaseService implements IService {
       service: this.name,
       operation,
       correlationId: appError.correlationId,
-      metadata: appError.metadata
+      metadata: appError.metadata,
     });
 
     return appError;
@@ -288,12 +288,12 @@ export abstract class BaseService implements IService {
   protected async executeWithRetry<T>(
     operation: () => Promise<T>,
     operationName: string,
-    retryConfig?: Partial<RetryConfig>
+    retryConfig?: Partial<RetryConfig>,
   ): Promise<T> {
     const result = await retryManager.execute(
       operation,
       retryConfig,
-      { service: this.name, operation: operationName }
+      { service: this.name, operation: operationName },
     );
 
     if (!result.success) {
@@ -301,8 +301,8 @@ export abstract class BaseService implements IService {
       error.addContext({
         metadata: {
           attempts: result.attempts,
-          totalTime: result.totalTime
-        }
+          totalTime: result.totalTime,
+        },
       });
       throw error;
     }
@@ -317,13 +317,13 @@ export abstract class BaseService implements IService {
     primaryOperation: () => Promise<T>,
     fallbackOperation: () => Promise<T>,
     operationName: string,
-    retryConfig?: Partial<RetryConfig>
+    retryConfig?: Partial<RetryConfig>,
   ): Promise<T> {
     const result = await retryManager.executeWithFallback(
       primaryOperation,
       fallbackOperation,
       retryConfig,
-      { service: this.name, operation: operationName }
+      { service: this.name, operation: operationName },
     );
 
     if (!result.success) {
@@ -331,8 +331,8 @@ export abstract class BaseService implements IService {
       error.addContext({
         metadata: {
           attempts: result.attempts,
-          totalTime: result.totalTime
-        }
+          totalTime: result.totalTime,
+        },
       });
       throw error;
     }
@@ -349,7 +349,7 @@ export abstract class BaseService implements IService {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       service: this.name,
-      metadata: meta
+      metadata: meta,
     });
   }
 
@@ -368,7 +368,7 @@ export abstract class BaseService implements IService {
   protected logInfo(message: string, meta?: Record<string, unknown>): void {
     logger.info(message, {
       service: this.name,
-      ...meta
+      ...meta,
     });
   }
 
@@ -378,7 +378,7 @@ export abstract class BaseService implements IService {
   protected logDebug(message: string, meta?: Record<string, unknown>): void {
     logger.debug(message, {
       service: this.name,
-      ...meta
+      ...meta,
     });
   }
 
@@ -388,7 +388,7 @@ export abstract class BaseService implements IService {
   protected logWarn(message: string, meta?: Record<string, unknown>): void {
     logger.warn(message, {
       service: this.name,
-      ...meta
+      ...meta,
     });
   }
 

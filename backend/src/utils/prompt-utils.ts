@@ -24,7 +24,7 @@ export class PromptUtils {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     });
 
     return `Current date/time: ${userDateTime}\nTimezone: ${timezone}`;
@@ -34,7 +34,7 @@ export class PromptUtils {
    * Get conversation history context string
    * Shows recent turns for multi-turn understanding
    */
-  static getConversationContext(context: { conversationHistory?: any[] }, maxTurns: number = 3): string {
+  static getConversationContext(context: { conversationHistory?: Array<{ role: string; content: string; timestamp?: Date }> }, maxTurns = 3): string {
     if (!context.conversationHistory || context.conversationHistory.length === 0) {
       return '';
     }
@@ -70,7 +70,7 @@ export class PromptUtils {
     if (prefs.includeMetadata !== undefined) {
       parts.push(prefs.includeMetadata
         ? '- Include relevant IDs, links, and technical details'
-        : '- Hide technical details, focus on user-friendly information'
+        : '- Hide technical details, focus on user-friendly information',
       );
     }
 
@@ -89,7 +89,7 @@ export class PromptUtils {
    * Build complete context block for prompts
    * Combines temporal, conversation, and preference context
    */
-  static buildContextBlock(context: { timezone?: string; locale?: string; conversationHistory?: any[]; userPreferences?: UserPreferences }, options?: {
+  static buildContextBlock(context: { timezone?: string; locale?: string; conversationHistory?: Array<{ role: string; content: string; timestamp?: Date }>; userPreferences?: UserPreferences }, options?: {
     includeTemporal?: boolean;
     includeConversation?: boolean;
     includePreferences?: boolean;
@@ -100,7 +100,7 @@ export class PromptUtils {
       includeConversation: true,
       includePreferences: true,
       maxConversationTurns: 3,
-      ...options
+      ...options,
     };
 
     const parts: string[] = [];
@@ -135,7 +135,7 @@ export class PromptUtils {
     }
 
     const exampleText = examples.map((ex, i) =>
-      `Example ${i + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}`
+      `Example ${i + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}`,
     ).join('\n\n');
 
     return `\nExamples:\n${exampleText}\n`;

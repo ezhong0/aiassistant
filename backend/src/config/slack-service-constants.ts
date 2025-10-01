@@ -77,5 +77,5 @@ export const SLACK_SERVICE_CONSTANTS = {
     MAX_SUMMARY_LENGTH: 200,
     MAX_TOPICS_LENGTH: 10,
     MAX_ACTION_ITEMS_LENGTH: 10,
-  }
+  },
 } as const;

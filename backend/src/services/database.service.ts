@@ -3,6 +3,7 @@ import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from '../types/service.types';
 import { config as appConfig } from '../config';
+import { ErrorFactory } from '../errors/error-factory';
 
 export interface DatabaseConfig {
   host: string;
@@ -28,11 +29,30 @@ export interface SessionData {
   createdAt: Date;
   expiresAt: Date;
   lastActivity: Date;
-  conversationHistory: any[];
-  toolCalls: any[];
-  toolResults: any[];
-  slackContext?: any;
-  pendingActions?: any[];
+  conversationHistory: Array<{
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    timestamp: Date;
+  }>;
+  toolCalls: Array<{
+    id: string;
+    type: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
+  toolResults: Array<{
+    toolCallId: string;
+    content: string;
+    isError: boolean;
+  }>;
+  slackContext?: Record<string, unknown>;
+  pendingActions?: Array<{
+    action: string;
+    parameters: Record<string, unknown>;
+    timestamp: Date;
+  }>;
 }
 
 export interface OAuthTokenData {
@@ -95,7 +115,7 @@ export class DatabaseService extends BaseService {
     totalQueries: 0,
     failedQueries: 0,
     averageQueryTime: 0,
-    lastHealthCheck: new Date()
+    lastHealthCheck: new Date(),
   };
 
   constructor(config: typeof appConfig) {
@@ -127,7 +147,7 @@ export class DatabaseService extends BaseService {
       createTimeoutMillis: isDevelopment ? 5000 : 10000,
       destroyTimeoutMillis: 5000,
       reapIntervalMillis: 1000,
-      createRetryIntervalMillis: 200
+      createRetryIntervalMillis: 200,
     };
   }
 
@@ -139,7 +159,7 @@ export class DatabaseService extends BaseService {
       // Check if database is disabled for testing
       if (process.env.DISABLE_DATABASE === 'true') {
         logger.debug('Database disabled via DISABLE_DATABASE environment variable', {
-          operation: 'database_disabled'
+          operation: 'database_disabled',
         });
         return;
       }
@@ -155,7 +175,7 @@ export class DatabaseService extends BaseService {
           database: url.pathname.slice(1), // Remove leading slash
           user: url.username,
           password: url.password,
-          ssl: url.protocol === 'postgresql:' || url.protocol === 'postgres:' ? { rejectUnauthorized: false } : false
+          ssl: url.protocol === 'postgresql:' || url.protocol === 'postgres:' ? { rejectUnauthorized: false } : false,
         };
       }
 
@@ -165,7 +185,7 @@ export class DatabaseService extends BaseService {
         // Additional optimization settings
         allowExitOnIdle: false, // Keep pool alive
         keepAlive: true,
-        keepAliveInitialDelayMillis: 10000
+        keepAliveInitialDelayMillis: 10000,
       });
 
       // Set up pool event handlers
@@ -185,7 +205,7 @@ export class DatabaseService extends BaseService {
           logger.warn('Database connection failed in development - continuing without database', {
             correlationId: `db-connection-warn-${Date.now()}`,
             operation: 'database_connection_warning',
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
           });
           // Set service state to degraded but functional
           this._state = ServiceState.DEGRADED;
@@ -200,14 +220,14 @@ export class DatabaseService extends BaseService {
           port: this.config.port,
           database: this.config.database,
           maxConnections: this.config.max,
-          minConnections: this.config.min
-        }
+          minConnections: this.config.min,
+        },
       });
 
     } catch (error) {
       logger.error('Failed to initialize DatabaseService', error as Error, {
         correlationId: `db-init-${Date.now()}`,
-        operation: 'database_service_init_error'
+        operation: 'database_service_init_error',
       });
       throw error;
     }
@@ -226,13 +246,13 @@ export class DatabaseService extends BaseService {
         logger.debug('Database connection pool closed', {
           correlationId: `db-destroy-${Date.now()}`,
           operation: 'database_service_destroy',
-          metadata: { phase: 'pool_closed' }
+          metadata: { phase: 'pool_closed' },
         });
       }
     } catch (error) {
       logger.error('Error during database service destruction', error as Error, {
         correlationId: `db-destroy-${Date.now()}`,
-        operation: 'database_service_destroy_error'
+        operation: 'database_service_destroy_error',
       });
       
       // Force cleanup
@@ -245,7 +265,7 @@ export class DatabaseService extends BaseService {
   /**
    * Get service health status
    */
-  getHealth(): { healthy: boolean; details?: any } {
+  getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     const healthy = this.isReady() && this.pool !== null;
     return {
       healthy,
@@ -258,9 +278,9 @@ export class DatabaseService extends BaseService {
           port: this.config.port,
           database: this.config.database,
           maxConnections: this.config.max,
-          minConnections: this.config.min
-        }
-      }
+          minConnections: this.config.min,
+        },
+      },
     };
   }
 
@@ -275,7 +295,7 @@ export class DatabaseService extends BaseService {
       logger.debug('New database connection established', {
         correlationId: `db-connect-${Date.now()}`,
         operation: 'database_connection',
-        metadata: { totalConnections: this.connectionStats.totalConnections }
+        metadata: { totalConnections: this.connectionStats.totalConnections },
       });
     });
 
@@ -284,7 +304,7 @@ export class DatabaseService extends BaseService {
       logger.debug('Database connection acquired', {
         correlationId: `db-acquire-${Date.now()}`,
         operation: 'database_connection_acquire',
-        metadata: { activeConnections: this.connectionStats.activeConnections }
+        metadata: { activeConnections: this.connectionStats.activeConnections },
       });
     });
 
@@ -293,7 +313,7 @@ export class DatabaseService extends BaseService {
       logger.debug('Database connection released', {
         correlationId: `db-release-${Date.now()}`,
         operation: 'database_connection_release',
-        metadata: { activeConnections: this.connectionStats.activeConnections }
+        metadata: { activeConnections: this.connectionStats.activeConnections },
       });
     });
 
@@ -302,7 +322,7 @@ export class DatabaseService extends BaseService {
       logger.debug('Database connection removed', {
         correlationId: `db-remove-${Date.now()}`,
         operation: 'database_connection_remove',
-        metadata: { totalConnections: this.connectionStats.totalConnections }
+        metadata: { totalConnections: this.connectionStats.totalConnections },
       });
     });
 
@@ -311,7 +331,7 @@ export class DatabaseService extends BaseService {
       logger.error('Database pool error', error, {
         correlationId: `db-error-${Date.now()}`,
         operation: 'database_pool_error',
-        metadata: { failedQueries: this.connectionStats.failedQueries }
+        metadata: { failedQueries: this.connectionStats.failedQueries },
       });
     });
   }
@@ -321,7 +341,7 @@ export class DatabaseService extends BaseService {
    */
   private async testConnection(): Promise<void> {
     if (!this.pool) {
-      throw new Error('Database pool not initialized');
+      throw ErrorFactory.domain.serviceError('Database pool not initialized');
     }
 
     const startTime = Date.now();
@@ -332,12 +352,12 @@ export class DatabaseService extends BaseService {
       logger.debug('Database connection test successful', {
         correlationId: `db-test-${Date.now()}`,
         operation: 'database_connection_test',
-        metadata: { queryTime, currentTime: result.rows[0]?.current_time }
+        metadata: { queryTime, currentTime: result.rows[0]?.current_time },
       });
     } catch (error) {
       logger.error('Database connection test failed', error as Error, {
         correlationId: `db-test-${Date.now()}`,
-        operation: 'database_connection_test_error'
+        operation: 'database_connection_test_error',
       });
       throw error;
     }
@@ -360,14 +380,14 @@ export class DatabaseService extends BaseService {
             metadata: {
               activeConnections: this.connectionStats.activeConnections,
               maxConnections: this.config.max,
-              usagePercentage: Math.round((this.connectionStats.activeConnections / (this.config.max || 10)) * 100)
-            }
+              usagePercentage: Math.round((this.connectionStats.activeConnections / (this.config.max || 10)) * 100),
+            },
           });
         }
       } catch (error) {
         logger.error('Database health check failed', error as Error, {
           correlationId: `db-health-${Date.now()}`,
-          operation: 'database_health_check_error'
+          operation: 'database_health_check_error',
         });
       }
     }, 30000); // Check every 30 seconds
@@ -400,7 +420,7 @@ export class DatabaseService extends BaseService {
       logger.debug('Failed to update connection stats', {
         correlationId: `db-stats-${Date.now()}`,
         operation: 'database_stats_update',
-        metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+        metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
       });
     }
   }
@@ -408,9 +428,9 @@ export class DatabaseService extends BaseService {
   /**
    * Execute a query with performance monitoring
    */
-  async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+  async query<T extends QueryResultRow = Record<string, unknown>>(text: string, params?: unknown[]): Promise<QueryResult<T>> {
     if (!this.pool) {
-      throw new Error('Database pool not initialized');
+      throw ErrorFactory.domain.serviceError('Database pool not initialized');
     }
 
     const startTime = Date.now();
@@ -430,7 +450,7 @@ export class DatabaseService extends BaseService {
         logger.warn('Slow database query detected', {
           correlationId: `db-slow-${Date.now()}`,
           operation: 'database_slow_query',
-          metadata: { queryTime, query: text.substring(0, 100) }
+          metadata: { queryTime, query: text.substring(0, 100) },
         });
       }
 
@@ -440,7 +460,7 @@ export class DatabaseService extends BaseService {
       logger.error('Database query failed', error as Error, {
         correlationId: `db-query-${Date.now()}`,
         operation: 'database_query_error',
-        metadata: { query: text.substring(0, 100), params }
+        metadata: { query: text.substring(0, 100), params },
       });
       throw error;
     }
@@ -451,7 +471,7 @@ export class DatabaseService extends BaseService {
    */
   async getClient(): Promise<PoolClient> {
     if (!this.pool) {
-      throw new Error('Database pool not initialized');
+      throw ErrorFactory.domain.serviceError('Database pool not initialized');
     }
 
     try {
@@ -459,7 +479,7 @@ export class DatabaseService extends BaseService {
     } catch (error) {
       logger.error('Failed to get database client', error as Error, {
         correlationId: `db-client-${Date.now()}`,
-        operation: 'database_client_error'
+        operation: 'database_client_error',
       });
       throw error;
     }
@@ -515,7 +535,7 @@ export class DatabaseService extends BaseService {
       JSON.stringify(sessionData.toolCalls),
       JSON.stringify(sessionData.toolResults),
       JSON.stringify(sessionData.slackContext),
-      JSON.stringify(sessionData.pendingActions)
+      JSON.stringify(sessionData.pendingActions),
     ]);
   }
 
@@ -538,7 +558,7 @@ export class DatabaseService extends BaseService {
       toolCalls: JSON.parse(row.tool_calls || '[]'),
       toolResults: JSON.parse(row.tool_results || '[]'),
       slackContext: row.slack_context ? JSON.parse(row.slack_context) : undefined,
-      pendingActions: row.pending_actions ? JSON.parse(row.pending_actions) : undefined
+      pendingActions: row.pending_actions ? JSON.parse(row.pending_actions) : undefined,
     };
   }
 
@@ -557,8 +577,8 @@ export class DatabaseService extends BaseService {
    */
   async storeUserTokens(userTokens: {
     userId: string;
-    googleTokens?: any;
-    slackTokens?: any;
+    googleTokens?: Record<string, unknown>;
+    slackTokens?: Record<string, unknown>;
     createdAt: Date;
     updatedAt: Date;
   }): Promise<void> {
@@ -594,7 +614,7 @@ export class DatabaseService extends BaseService {
       userTokens.slackTokens?.team_id || null,
       userTokens.slackTokens?.user_id || null,
       userTokens.createdAt,
-      userTokens.updatedAt
+      userTokens.updatedAt,
     ]);
   }
 
@@ -603,8 +623,8 @@ export class DatabaseService extends BaseService {
    */
   async getUserTokens(userId: string): Promise<{
     userId: string;
-    googleTokens?: any;
-    slackTokens?: any;
+    googleTokens?: Record<string, unknown>;
+    slackTokens?: Record<string, unknown>;
     createdAt: Date;
     updatedAt: Date;
   } | null> {
@@ -632,15 +652,15 @@ export class DatabaseService extends BaseService {
         refresh_token: row.google_refresh_token,
         expires_at: row.google_expires_at,
         token_type: row.google_token_type,
-        scope: row.google_scope
+        scope: row.google_scope,
       } : undefined,
       slackTokens: row.slack_access_token ? {
         access_token: row.slack_access_token,
         team_id: row.slack_team_id,
-        user_id: row.slack_user_id
+        user_id: row.slack_user_id,
       } : undefined,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     };
   }
 
@@ -661,7 +681,7 @@ export class DatabaseService extends BaseService {
    * Delete user tokens from the database
    */
   async deleteUserTokens(userId: string): Promise<void> {
-    const query = `DELETE FROM user_tokens WHERE user_id = $1`;
+    const query = 'DELETE FROM user_tokens WHERE user_id = $1';
     await this.query(query, [userId]);
   }
 

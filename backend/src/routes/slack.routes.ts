@@ -5,7 +5,7 @@ import { createLogContext } from '../utils/log-context';
 import {
   SlackWebhookEventSchema,
   SlackSlashCommandPayloadSchema,
-  SlackInteractiveComponentPayloadSchema
+  SlackInteractiveComponentPayloadSchema,
 } from '../schemas/slack.schemas';
 import { validateRequest } from '../middleware/validation.middleware';
 import { AppContainer } from '../di';
@@ -13,6 +13,7 @@ import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.
 import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
 import { isAppError } from '../errors';
+import { ErrorFactory } from '../errors/error-factory';
 
 const emptyQuerySchema = z.object({});
 const emptyBodySchema = z.object({});
@@ -41,7 +42,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           error: error as string,
           correlationId: logContext.correlationId,
           operation: 'oauth_callback',
-          metadata: { error }
+          metadata: { error },
         });
         res.status(400).json({ error: 'OAuth authorization failed' });
         return;
@@ -51,7 +52,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         logger.error('No authorization code received', {
           error: 'Missing authorization code',
           correlationId: logContext.correlationId,
-          operation: 'oauth_callback'
+          operation: 'oauth_callback',
         });
         res.status(400).json({ error: 'No authorization code received' });
         return;
@@ -81,13 +82,13 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
       if (isAppError(error)) {
         logger.error('Slack OAuth callback error', error, {
           correlationId: logContext.correlationId,
-          operation: 'oauth_callback_error'
+          operation: 'oauth_callback_error',
         });
         res.status(error.statusCode).json({ error: error.message });
       } else {
         logger.error('Slack OAuth callback unexpected error', error as Error, {
           correlationId: logContext.correlationId,
-          operation: 'oauth_callback_unexpected_error'
+          operation: 'oauth_callback_unexpected_error',
         });
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -115,7 +116,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         'im:write',      // Send messages in direct messages
         'users:read',    // Read user information
         'chat:write',    // Send messages (required for DM responses)
-        'commands'       // Handle slash commands
+        'commands',       // Handle slash commands
       ].join(',');
 
       const slackAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
@@ -146,12 +147,12 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
     } catch (error) {
       if (isAppError(error)) {
         logger.error('Slack install page error', error, {
-          operation: 'install_page_error'
+          operation: 'install_page_error',
         });
         res.status(error.statusCode).json({ error: error.message });
       } else {
         logger.error('Slack install page unexpected error', error as Error, {
-          operation: 'install_page_unexpected_error'
+          operation: 'install_page_unexpected_error',
         });
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -173,7 +174,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
       if (!isSlackConfigured) {
         res.status(503).json({ 
           status: 'error', 
-          message: 'Slack interface not configured' 
+          message: 'Slack interface not configured', 
         });
         return;
       }
@@ -183,8 +184,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         service: 'SlackInterface',
         details: {
           configured: true,
-          message: 'Slack interface is properly configured and ready'
-        }
+          message: 'Slack interface is properly configured and ready',
+        },
       });
 
     } catch (error) {
@@ -198,7 +199,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
    */
   router.get('/test', (req, res) => {
     logger.info('Slack test endpoint reached', {
-      operation: 'slack_test_endpoint'
+      operation: 'slack_test_endpoint',
     });
     res.json({ status: 'ok', message: 'Slack routes are working', timestamp: new Date().toISOString() });
   });
@@ -219,7 +220,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
       if (retryNum && parseInt(retryNum, 10) > 0) {
         logger.debug('Ignoring Slack retry delivery', {
           ...logContext,
-          metadata: { retryNum, reason: req.get('X-Slack-Retry-Reason') }
+          metadata: { retryNum, reason: req.get('X-Slack-Retry-Reason') },
         });
         res.status(200).json({ ok: true, ignored: 'slack_retry' });
         return;
@@ -235,8 +236,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           teamId: team_id,
           eventUser: event?.user,
           eventChannel: event?.channel,
-          eventText: event?.text?.substring(0, 100)
-        }
+          eventText: event?.text?.substring(0, 100),
+        },
       });
 
       // Handle URL verification challenge (required for Slack app setup)
@@ -245,7 +246,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         logger.debug('URL verification challenge received', {
           ...logContext,
           duration: responseTime,
-          metadata: { challengeLength: challenge.length }
+          metadata: { challengeLength: challenge.length },
         });
         
         // Respond with the challenge value to verify the endpoint
@@ -261,8 +262,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             eventType: event.type,
             userId: event.user,
             channelId: event.channel,
-            eventTs: event.ts
-          }
+            eventTs: event.ts,
+          },
         });
 
         // IMMEDIATELY acknowledge to Slack to prevent retries
@@ -270,7 +271,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         logger.debug('Sending acknowledgment to Slack', {
           ...logContext,
           duration: responseTime,
-          metadata: { eventTs: event.ts }
+          metadata: { eventTs: event.ts },
         });
         res.status(200).json({ ok: true });
         
@@ -281,8 +282,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           metadata: {
             eventType: event.type,
             userId: event.user,
-            channelId: event.channel
-          }
+            channelId: event.channel,
+          },
         });
         
         const slackService = container.resolve<ISlackDomainService>('slackDomainService');
@@ -295,8 +296,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             serviceName: 'SlackDomainService',
             eventType: event.type,
             userId: event.user,
-            channelId: event.channel
-          }
+            channelId: event.channel,
+          },
         });
         
         if (slackService) {
@@ -305,7 +306,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             channelId: event.channel,
             teamId: team_id,
             threadTs: event.thread_ts,
-            isDirectMessage: event.channel_type === 'im'
+            isDirectMessage: event.channel_type === 'im',
           };
           
           logger.info('Starting async event processing', {
@@ -316,9 +317,9 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               channelId: event.channel,
               teamId: team_id,
               isDirectMessage: event.channel_type === 'im',
-              eventText: event.text?.substring(0, 50)
+              eventText: event.text?.substring(0, 50),
             },
-            operation: 'async_event_processing_start'
+            operation: 'async_event_processing_start',
           });
           
           logger.info('About to call slackService.processEvent', {
@@ -328,8 +329,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               eventType: event.type,
               userId: event.user,
               channelId: event.channel,
-              slackContextKeys: Object.keys(slackContext)
-            }
+              slackContextKeys: Object.keys(slackContext),
+            },
           });
           
           try {
@@ -341,9 +342,9 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
                 metadata: {
                   eventType: event.type,
                   userId: event.user,
-                  channelId: event.channel
+                  channelId: event.channel,
                 },
-                operation: 'event_processing_error'
+                operation: 'event_processing_error',
               });
             });
             
@@ -353,8 +354,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               metadata: {
                 eventType: event.type,
                 userId: event.user,
-                channelId: event.channel
-              }
+                channelId: event.channel,
+              },
             });
           } catch (syncError) {
             logger.error('Synchronous error in processEvent call', syncError as Error, {
@@ -363,8 +364,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               metadata: {
                 eventType: event.type,
                 userId: event.user,
-                channelId: event.channel
-              }
+                channelId: event.channel,
+              },
             });
           }
         } else {
@@ -374,8 +375,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             metadata: { 
               eventType: event.type,
               userId: event.user,
-              channelId: event.channel
-            }
+              channelId: event.channel,
+            },
           });
         }
         return;
@@ -411,20 +412,20 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         logger.info('/auth command received', {
           correlationId: logContext.correlationId,
           operation: 'auth_command',
-          metadata: { userId: user_id, teamId: team_id }
+          metadata: { userId: user_id, teamId: team_id },
         });
 
         try {
           // Get user connections
           const authStatusService = container.resolve<AuthStatusService>('authStatusService');
           if (!authStatusService) {
-            throw new Error('AuthStatusService not available');
+            throw ErrorFactory.domain.serviceUnavailable('AuthStatusService');
           }
 
           logger.info('Getting user connections', {
             correlationId: logContext.correlationId,
             operation: 'auth_get_connections',
-            metadata: { userId: user_id, teamId: team_id }
+            metadata: { userId: user_id, teamId: team_id },
           });
 
           const connections = await authStatusService.getUserConnections(team_id, user_id);
@@ -438,8 +439,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               teamId: team_id,
               connectionsCount: connections.length,
               blocksCount: blocks.length,
-              hasResponseUrl: !!response_url
-            }
+              hasResponseUrl: !!response_url,
+            },
           });
 
           // Send response via response_url for better UX
@@ -448,18 +449,18 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             logger.info('Sending auth response to Slack', {
               correlationId: logContext.correlationId,
               operation: 'auth_send_response',
-              metadata: { userId: user_id, teamId: team_id, responseUrl: response_url.substring(0, 50) + '...' }
+              metadata: { userId: user_id, teamId: team_id, responseUrl: `${response_url.substring(0, 50)  }...` },
             });
 
             await slackService.sendToResponseUrl(response_url, {
               response_type: 'in_channel',
-              blocks
+              blocks,
             });
 
             logger.info('Auth response sent successfully', {
               correlationId: logContext.correlationId,
               operation: 'auth_response_sent',
-              metadata: { userId: user_id, teamId: team_id }
+              metadata: { userId: user_id, teamId: team_id },
             });
           } else {
             logger.warn('Cannot send auth response via response_url, trying direct message', {
@@ -469,8 +470,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
                 userId: user_id,
                 teamId: team_id,
                 hasSlackDomainService: !!slackService,
-                hasResponseUrl: !!response_url
-              }
+                hasResponseUrl: !!response_url,
+              },
             });
 
             // Fallback: try to send as direct message
@@ -479,18 +480,18 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
                 await slackService.sendMessage(user_id, {
                   channel: user_id,
                   text: '🔐 Your Connections',
-                  blocks
+                  blocks,
                 });
                 logger.info('Auth response sent via direct message', {
                   correlationId: logContext.correlationId,
                   operation: 'auth_dm_sent',
-                  metadata: { userId: user_id, teamId: team_id }
+                  metadata: { userId: user_id, teamId: team_id },
                 });
               } catch (dmError) {
                 logger.error('Failed to send auth response via DM', dmError as Error, {
                   correlationId: logContext.correlationId,
                   operation: 'auth_dm_failed',
-                  metadata: { userId: user_id, teamId: team_id }
+                  metadata: { userId: user_id, teamId: team_id },
                 });
               }
             }
@@ -499,14 +500,14 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           logger.error('/auth command failed', error as Error, {
             correlationId: logContext.correlationId,
             operation: 'auth_command_error',
-            metadata: { userId: user_id, teamId: team_id }
+            metadata: { userId: user_id, teamId: team_id },
           });
 
           const slackService = container.resolve<ISlackDomainService>('slackDomainService');
           if (slackService && response_url) {
             await slackService.sendToResponseUrl(response_url, {
               response_type: 'in_channel',
-              text: '❌ Failed to load connections. Please try again.'
+              text: '❌ Failed to load connections. Please try again.',
             });
           }
         }
@@ -527,7 +528,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
     } catch (error) {
       logger.error('Command handler error', error as Error, {
         correlationId: logContext.correlationId,
-        operation: 'command_handler_error'
+        operation: 'command_handler_error',
       });
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -553,8 +554,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         operation: 'interactive_payload_received',
         metadata: {
           payloadLength: payload.length,
-          payloadPreview: payload.substring(0, 100) + '...'
-        }
+          payloadPreview: `${payload.substring(0, 100)  }...`,
+        },
       });
 
       const parsedPayload = JSON.parse(payload);
@@ -566,8 +567,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           type: parsedPayload.type,
           actionsCount: parsedPayload.actions?.length || 0,
           userId: parsedPayload.user?.id,
-          teamId: parsedPayload.team?.id
-        }
+          teamId: parsedPayload.team?.id,
+        },
       });
 
       // Process button clicks
@@ -586,7 +587,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           logger.info('Auth button clicked', {
             correlationId: createLogContext(req).correlationId,
             operation: 'auth_button_click',
-            metadata: { actionId, provider, userId, teamId }
+            metadata: { actionId, provider, userId, teamId },
           });
 
           // Generate OAuth URL - using domain service instead
@@ -600,8 +601,8 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               hasUserId: !!userId,
               hasTeamId: !!teamId,
               userId,
-              teamId
-            }
+              teamId,
+            },
           });
 
           if (slackService && userId && teamId) {
@@ -609,7 +610,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
               logger.info('Generating OAuth URL', {
                 correlationId: createLogContext(req).correlationId,
                 operation: 'oauth_url_generation_start',
-                metadata: { provider, userId, teamId }
+                metadata: { provider, userId, teamId },
               });
 
               const state = JSON.stringify({
@@ -617,33 +618,33 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
                 teamId,
                 provider,
                 action: actionId.startsWith('refresh_') ? 'refresh' : 'connect',
-                returnTo: 'auth_dashboard'
+                returnTo: 'auth_dashboard',
               });
 
               logger.info('OAuth state created', {
                 correlationId: createLogContext(req).correlationId,
                 operation: 'oauth_state_created',
-                metadata: { state }
+                metadata: { state },
               });
 
               const authResult = await slackService.initializeOAuth(userId, {
                 userId,
                 teamId,
-                channelId: parsedPayload.channel?.id || userId
+                channelId: parsedPayload.channel?.id || userId,
               } as any);
               const authUrl = authResult.authUrl;
 
               logger.info('OAuth URL generated successfully', {
                 correlationId: createLogContext(req).correlationId,
                 operation: 'oauth_url_generated',
-                metadata: { authUrl: authUrl.substring(0, 100) + '...' }
+                metadata: { authUrl: `${authUrl.substring(0, 100)  }...` },
               });
 
               // Send OAuth URL via direct message instead of updating the original message
               logger.info('Sending OAuth URL via direct message', {
                 correlationId: createLogContext(req).correlationId,
                 operation: 'oauth_dm_send',
-                metadata: { userId, authUrl: authUrl.substring(0, 100) + '...' }
+                metadata: { userId, authUrl: `${authUrl.substring(0, 100)  }...` },
               });
 
               // Send a direct message with the OAuth URL
@@ -657,45 +658,45 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
                       type: 'section',
                       text: {
                         type: 'mrkdwn',
-                        text: `🔐 *Google Authorization Required*\n\nTo connect your Google account, please click the link below:`
-                      }
+                        text: '🔐 *Google Authorization Required*\n\nTo connect your Google account, please click the link below:',
+                      },
                     },
                     {
                       type: 'section',
                       text: {
                         type: 'mrkdwn',
-                        text: `<${authUrl}|🔗 Authorize Google Account>`
-                      }
+                        text: `<${authUrl}|🔗 Authorize Google Account>`,
+                      },
                     },
                     {
                       type: 'context',
                       elements: [
                         {
                           type: 'mrkdwn',
-                          text: '💡 This will open in a new window. Return to Slack when complete.'
-                        }
-                      ]
-                    }
-                  ]
+                          text: '💡 This will open in a new window. Return to Slack when complete.',
+                        },
+                      ],
+                    },
+                  ],
                 });
               }
 
               // Acknowledge the button click
               res.status(200).json({
                 text: '✅ Authorization link sent to your direct messages!',
-                replace_original: false
+                replace_original: false,
               });
               return;
             } catch (error) {
               logger.error('Failed to generate auth URL', error as Error, {
                 correlationId: createLogContext(req).correlationId,
                 operation: 'auth_url_generation_error',
-                metadata: { provider, userId, teamId }
+                metadata: { provider, userId, teamId },
               });
 
               res.status(200).json({
                 text: '❌ Failed to generate authorization link. Please try again.',
-                replace_original: false
+                replace_original: false,
               });
               return;
             }
@@ -711,7 +712,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           logger.info('Test connection button clicked', {
             correlationId: createLogContext(req).correlationId,
             operation: 'test_connection_click',
-            metadata: { provider, userId, teamId }
+            metadata: { provider, userId, teamId },
           });
 
           if (userId && teamId) {
@@ -719,7 +720,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             if (!authStatusService) {
               res.status(200).json({
                 text: '❌ Service not available. Please try again.',
-                replace_original: false
+                replace_original: false,
               });
               return;
             }
@@ -729,7 +730,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             res.status(200).json({
               replace_original: false,
               text: result.message,
-              response_type: 'in_channel'
+              response_type: 'in_channel',
             });
             return;
           }
@@ -743,14 +744,14 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           logger.info('View auth dashboard button clicked', {
             correlationId: createLogContext(req).correlationId,
             operation: 'view_auth_dashboard_click',
-            metadata: { userId, teamId }
+            metadata: { userId, teamId },
           });
 
           if (userId && teamId) {
             try {
               const authStatusService = container.resolve<AuthStatusService>('authStatusService');
               if (!authStatusService) {
-                throw new Error('AuthStatusService not available');
+                throw ErrorFactory.domain.serviceUnavailable('AuthStatusService');
               }
 
               const connections = await authStatusService.getUserConnections(teamId, userId);
@@ -758,19 +759,19 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
 
               res.status(200).json({
                 replace_original: true,
-                blocks
+                blocks,
               });
               return;
             } catch (error) {
               logger.error('Failed to load auth dashboard', error as Error, {
                 correlationId: createLogContext(req).correlationId,
                 operation: 'auth_dashboard_load_error',
-                metadata: { userId, teamId }
+                metadata: { userId, teamId },
               });
 
               res.status(200).json({
                 text: '❌ Failed to load connections. Please try again.',
-                replace_original: false
+                replace_original: false,
               });
               return;
             }
@@ -778,7 +779,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         }
 
         // Handle view results buttons
-        if (actionId && actionId.includes('view_') && actionId.includes('_results')) {
+        if (actionId?.includes('view_') && actionId.includes('_results')) {
 
           const toolName = actionId.replace('view_', '').replace('_results', '');
 
@@ -789,19 +790,19 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: `*${toolName} Results*\n\nThis feature shows detailed results from the ${toolName} execution. The email was processed successfully.`
-                }
+                  text: `*${toolName} Results*\n\nThis feature shows detailed results from the ${toolName} execution. The email was processed successfully.`,
+                },
               },
               {
                 type: 'context',
                 elements: [
                   {
                     type: 'mrkdwn',
-                    text: `Action: ${actionId} | User: ${parsedPayload.user?.name || 'Unknown'}`
-                  }
-                ]
-              }
-            ]
+                    text: `Action: ${actionId} | User: ${parsedPayload.user?.name || 'Unknown'}`,
+                  },
+                ],
+              },
+            ],
           };
 
           res.status(200).json(responseMessage);
@@ -812,7 +813,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         
         res.status(200).json({
           text: `Button clicked: ${actionId}`,
-          response_type: 'in_channel'
+          response_type: 'in_channel',
         });
       } else {
         // Acknowledge receipt for other interaction types
@@ -853,7 +854,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
         res.json({ 
           status: 'success', 
           message: 'Slack interface configuration validated',
-          data: { message, channel, configured: true }
+          data: { message, channel, configured: true },
         });
 
       } catch (error) {
@@ -876,7 +877,7 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
           botToken: process.env.SLACK_BOT_TOKEN ? 'configured' : 'missing',
           clientId: process.env.SLACK_CLIENT_ID ? 'configured' : 'missing',
           clientSecret: process.env.SLACK_CLIENT_SECRET ? 'configured' : 'missing',
-          redirectUri: process.env.SLACK_OAUTH_REDIRECT_URI ? 'configured' : 'missing'
+          redirectUri: process.env.SLACK_OAUTH_REDIRECT_URI ? 'configured' : 'missing',
         };
 
         const missingVars = Object.entries(slackConfig)
@@ -893,11 +894,11 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
             interactive: '/slack/interactive',
             boltEvents: '/slack/bolt/events',
             boltCommands: '/slack/bolt/commands',
-            boltInteractive: '/slack/bolt/interactive'
+            boltInteractive: '/slack/bolt/interactive',
           },
           message: missingVars.length === 0 
             ? 'Slack is fully configured and ready to receive events'
-            : `Missing configuration: ${missingVars.join(', ')}`
+            : `Missing configuration: ${missingVars.join(', ')}`,
         });
 
       } catch (error) {

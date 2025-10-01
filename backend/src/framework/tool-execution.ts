@@ -21,7 +21,7 @@ export interface ToolCall {
  */
 export interface ToolResult {
   toolName: string;
-  result?: any;
+  result?: Record<string, unknown>;
   success: boolean;
   error?: string;
   executionTime: number;

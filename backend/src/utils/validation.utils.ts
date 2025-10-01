@@ -5,7 +5,7 @@
 /**
  * Sanitize string input by trimming, limiting length, and removing dangerous characters
  */
-export const sanitizeString = (str: string, maxLength: number = 1000): string => {
+export const sanitizeString = (str: string, maxLength = 1000): string => {
   return str
     .trim()
     .slice(0, maxLength)
@@ -52,6 +52,6 @@ export const validatePasswordStrength = (password: string): { valid: boolean; er
 
   return {
     valid: errors.length === 0,
-    errors
+    errors,
   };
 };

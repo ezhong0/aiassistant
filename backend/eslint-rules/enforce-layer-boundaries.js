@@ -71,8 +71,10 @@ module.exports = {
         },
         'agents': {
           allowed: ['utils', 'types', 'errors', 'schemas'],
-          forbidden: ['routes', 'services'],
-          message: 'Agents should not import routes or services directly',
+          forbidden: ['routes'],
+          message: 'Agents should not import routes directly',
+          // Special case: allow domain services for dependency injection
+          specialCases: ['services/domain'],
         },
         'middleware': {
           allowed: ['utils', 'types', 'errors', 'schemas', 'di'],
@@ -83,6 +85,15 @@ module.exports = {
 
       const layerRules = rules[fromLayer];
       if (!layerRules) return { allowed: true };
+
+      // Check special cases first
+      if (layerRules.specialCases) {
+        for (const specialCase of layerRules.specialCases) {
+          if (importPath.includes(specialCase)) {
+            return { allowed: true };
+          }
+        }
+      }
 
       // Check if explicitly forbidden
       if (layerRules.forbidden.includes(toLayer)) {

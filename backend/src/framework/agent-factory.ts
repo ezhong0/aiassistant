@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 /**
  * AgentFactory - Elegant SubAgent Management
- * 
+ *
  * Simplified, type-safe agent registry focused on:
  * - Natural language processing
- * - Capability discovery  
+ * - Capability discovery
  * - Clean registration
  * - BaseSubAgent architecture
  */
@@ -12,6 +12,7 @@
 import logger from '../utils/logger';
 import { BaseSubAgent, SubAgentResponse, AgentCapabilities } from './base-subagent';
 import { AppContainer } from '../di';
+import { ErrorFactory } from '../errors/error-factory';
 
 /**
  * Agent Registry Entry
@@ -30,7 +31,7 @@ export interface NaturalLanguageExecutionResult {
   success: boolean;
   response?: string;
   reasoning?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   error?: string;
   executionTime?: number;
 }
@@ -55,7 +56,7 @@ export class AgentFactory {
       logger.warn(`Agent ${name} is already registered, replacing with new instance`, {
         correlationId: `agent-register-${Date.now()}`,
         operation: 'agent_registration_warning',
-        metadata: { agentName: name }
+        metadata: { agentName: name },
       });
     }
 
@@ -63,7 +64,7 @@ export class AgentFactory {
       name,
       instance: agent,
       enabled: agent.isEnabled(),
-      registeredAt: new Date()
+      registeredAt: new Date(),
     };
 
     this.agents.set(name, registration);
@@ -74,8 +75,8 @@ export class AgentFactory {
       metadata: {
         agentName: name,
         enabled: registration.enabled,
-        capabilities: agent.getCapabilityDescription().operations.length
-      }
+        capabilities: agent.getCapabilityDescription().operations.length,
+      },
     });
   }
 
@@ -88,7 +89,7 @@ export class AgentFactory {
    */
   static getAgent(name: string): BaseSubAgent | undefined {
     const registration = this.agents.get(name);
-    if (!registration || !registration.enabled) {
+    if (!registration?.enabled) {
       return undefined;
     }
     return registration.instance;
@@ -99,7 +100,7 @@ export class AgentFactory {
    */
   static hasAgent(name: string): boolean {
     const registration = this.agents.get(name);
-    return !!(registration && registration.enabled);
+    return !!(registration?.enabled);
   }
 
   /**
@@ -134,9 +135,9 @@ export class AgentFactory {
       sessionId: string;
       userId?: string;
       accessToken?: string;
-      slackContext?: any;
+      slackContext?: Record<string, unknown>;
       correlationId?: string;
-    }
+    },
   ): Promise<NaturalLanguageExecutionResult> {
     const startTime = Date.now();
     const agent = this.getAgent(agentName);
@@ -145,7 +146,7 @@ export class AgentFactory {
       return {
         success: false,
         error: `Agent ${agentName} not found or disabled`,
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
       };
     }
 
@@ -157,14 +158,14 @@ export class AgentFactory {
         operation: 'natural_language_execution_success',
         agentName,
         success: result.success,
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
       });
 
       return {
         success: result.success,
         response: result.message,
         metadata: result.metadata?.data,
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
       };
 
     } catch (error) {
@@ -172,13 +173,13 @@ export class AgentFactory {
         correlationId: context.correlationId || `agent-${agentName}-${Date.now()}`,
         operation: 'natural_language_execution_error',
         agentName,
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
       });
 
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown execution error',
-        executionTime: Date.now() - startTime
+        executionTime: Date.now() - startTime,
       };
     }
   }
@@ -200,7 +201,7 @@ export class AgentFactory {
         } catch (error) {
           logger.warn(`Failed to get capabilities for agent ${name}`, {
             error: error instanceof Error ? error.message : 'Unknown error',
-            operation: 'get_agent_capabilities'
+            operation: 'get_agent_capabilities',
           });
         }
       }
@@ -221,11 +222,11 @@ export class AgentFactory {
       const searchText = [
         ...agentCaps.operations,
         ...(agentCaps.examples || []),
-        agentCaps.description
+        agentCaps.description,
       ].join(' ').toLowerCase();
 
       const hasMatchingKeywords = requestKeywords.some(keyword => 
-        searchText.includes(keyword.toLowerCase())
+        searchText.includes(keyword.toLowerCase()),
       );
 
       if (hasMatchingKeywords) {
@@ -257,14 +258,14 @@ export class AgentFactory {
     if (this.initialized) {
       logger.debug('AgentFactory already initialized', {
         correlationId: 'factory-init-skip',
-        operation: 'factory_initialization_skip'
+        operation: 'factory_initialization_skip',
       });
       return;
     }
 
     try {
       if (!this.container) {
-        throw new Error('DI Container must be set before initializing agents');
+        throw ErrorFactory.domain.serviceError('AgentFactory', 'DI Container must be set before initializing agents');
       }
 
       // Resolve agents from DI container (already registered with all dependencies)
@@ -285,7 +286,7 @@ export class AgentFactory {
       logger.info('AgentFactory initialization completed', {
         correlationId: 'factory-init-success',
         operation: 'factory_initialization_success',
-        metadata: stats
+        metadata: stats,
       });
 
       // Log capabilities for debugging
@@ -295,16 +296,16 @@ export class AgentFactory {
         operation: 'capabilities_summary',
         metadata: {
           agents: Object.keys(capabilities),
-          totalOperations: Object.values(capabilities).reduce((total, cap) => total + cap.operations.length, 0)
-        }
+          totalOperations: Object.values(capabilities).reduce((total, cap) => total + cap.operations.length, 0),
+        },
       });
 
     } catch (error) {
       logger.error('AgentFactory initialization failed', error as Error, {
         correlationId: 'factory-init-error',
-        operation: 'factory_initialization_error'
+        operation: 'factory_initialization_error',
       });
-      throw new Error(`AgentFactory initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw ErrorFactory.domain.serviceError('AgentFactory', `Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -317,7 +318,7 @@ export class AgentFactory {
 
     logger.debug('AgentFactory reset completed', {
       correlationId: `factory-reset-${Date.now()}`,
-      operation: 'factory_reset'
+      operation: 'factory_reset',
     });
   }
 
@@ -334,7 +335,7 @@ export class AgentFactory {
     logger.info(`Agent ${name} enabled`, {
       correlationId: `agent-enable-${Date.now()}`,
       operation: 'agent_enable',
-      agentName: name
+      agentName: name,
     });
     return true;
   }
@@ -352,7 +353,7 @@ export class AgentFactory {
     logger.info(`Agent ${name} disabled`, {
       correlationId: `agent-disable-${Date.now()}`,
       operation: 'agent_disable',
-      agentName: name
+      agentName: name,
     });
     return true;
   }
@@ -381,14 +382,14 @@ export class AgentFactory {
       disabledAgents: allRegistrations.length - enabledRegistrations.length,
       agentNames: Array.from(this.agents.keys()),
       enabledAgentNames: this.getEnabledAgentNames(),
-      initialized: this.initialized
+      initialized: this.initialized,
     };
   }
 
   /**
    * Get agent health status
    */
-  static getAgentHealth(name: string): { healthy: boolean; details?: any } | null {
+  static getAgentHealth(name: string): { healthy: boolean; details?: Record<string, unknown> } | null {
     const agent = this.getAgent(name);
     if (!agent) {
       return null;
@@ -399,8 +400,8 @@ export class AgentFactory {
   /**
    * Get all agent health statuses
    */
-  static getAllAgentHealth(): Record<string, { healthy: boolean; details?: any }> {
-    const health: Record<string, { healthy: boolean; details?: any }> = {};
+  static getAllAgentHealth(): Record<string, { healthy: boolean; details?: Record<string, unknown> }> {
+    const health: Record<string, { healthy: boolean; details?: Record<string, unknown> }> = {};
 
     for (const [name, registration] of this.agents) {
       if (registration.enabled) {
@@ -458,7 +459,7 @@ export class AgentFactory {
     return {
       valid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     };
   }
 }
@@ -493,7 +494,7 @@ export const executeAgent = async (
     accessToken?: string;
     slackContext?: any;
     correlationId?: string;
-  }
+  },
 ): Promise<NaturalLanguageExecutionResult> => {
   return AgentFactory.executeAgentWithNaturalLanguage(name, request, context);
 };

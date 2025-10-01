@@ -229,7 +229,7 @@ export const SlackWebhookEventSchema = z.object({
       user_id: z.string(),
       is_bot: z.boolean(),
       is_enterprise_install: z.boolean(),
-    }))
+    })),
   ]).transform((auth) => {
     // Convert object format to array format if needed
     if (Array.isArray(auth)) {

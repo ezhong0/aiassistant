@@ -22,7 +22,7 @@ export const ERROR_CATEGORIES = {
   VALIDATION: 'validation',
   AUTH: 'auth',
   EXTERNAL: 'external',
-  BUSINESS: 'business'
+  BUSINESS: 'business',
 } as const;
 
 export type ErrorCategory = typeof ERROR_CATEGORIES[keyof typeof ERROR_CATEGORIES];
@@ -34,7 +34,7 @@ export const ERROR_SEVERITY = {
   LOW: 'low',
   MEDIUM: 'medium', 
   HIGH: 'high',
-  CRITICAL: 'critical'
+  CRITICAL: 'critical',
 } as const;
 
 export type ErrorSeverity = typeof ERROR_SEVERITY[keyof typeof ERROR_SEVERITY];
@@ -88,7 +88,7 @@ export class AppError extends Error {
   constructor(
     message: string,
     code: ErrorCode,
-    options: AppErrorOptions = {}
+    options: AppErrorOptions = {},
   ) {
     super(message);
     this.name = 'AppError';
@@ -179,7 +179,7 @@ export class AppError extends Error {
       [ERROR_CODES.CIRCUIT_BREAKER_OPEN]: 503,
 
       // Gateway Timeout - 504
-      [ERROR_CODES.GATEWAY_TIMEOUT]: 504
+      [ERROR_CODES.GATEWAY_TIMEOUT]: 504,
     };
 
     if (statusCodeMap[code]) {
@@ -263,7 +263,7 @@ export class AppError extends Error {
       userFriendly: context.userFriendly ?? this.userFriendly,
       retryable: context.retryable ?? this.retryable,
       retryAfter: context.retryAfter ?? this.retryAfter,
-      originalError: context.originalError || this.originalError
+      originalError: context.originalError || this.originalError,
     });
   }
 
@@ -287,7 +287,7 @@ export class AppError extends Error {
       userFriendly: this.userFriendly,
       retryable: this.retryable,
       retryAfter: this.retryAfter,
-      stack: this.stack
+      stack: this.stack,
     };
   }
 }
@@ -307,8 +307,8 @@ export class ErrorFactory {
         service,
         metadata: details,
         retryable: true,
-        retryAfter: 30
-      }
+        retryAfter: 30,
+      },
     );
   }
 
@@ -322,8 +322,8 @@ export class ErrorFactory {
         service,
         metadata: { timeout },
         retryable: true,
-        retryAfter: 10
-      }
+        retryAfter: 10,
+      },
     );
   }
 
@@ -336,8 +336,8 @@ export class ErrorFactory {
         severity: ERROR_SEVERITY.MEDIUM,
         service,
         metadata: details,
-        retryable: true
-      }
+        retryable: true,
+      },
     );
   }
 
@@ -350,32 +350,32 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.API,
         severity: ERROR_SEVERITY.LOW,
         metadata: details,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
-  static unauthorized(message: string = 'Authentication required'): AppError {
+  static unauthorized(message = 'Authentication required'): AppError {
     return new AppError(
       message,
       'AUTHENTICATION_FAILED',
       {
         category: ERROR_CATEGORIES.AUTH,
         severity: ERROR_SEVERITY.HIGH,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
-  static forbidden(message: string = 'Access denied'): AppError {
+  static forbidden(message = 'Access denied'): AppError {
     return new AppError(
       message,
       'AUTHORIZATION_DENIED',
       {
         category: ERROR_CATEGORIES.AUTH,
         severity: ERROR_SEVERITY.HIGH,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -387,12 +387,12 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.API,
         severity: ERROR_SEVERITY.LOW,
         metadata: { resource },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
-  static rateLimited(message: string = 'Rate limit exceeded'): AppError {
+  static rateLimited(message = 'Rate limit exceeded'): AppError {
     return new AppError(
       message,
       'RATE_LIMITED',
@@ -400,8 +400,8 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.API,
         severity: ERROR_SEVERITY.MEDIUM,
         retryable: true,
-        retryAfter: 60
-      }
+        retryAfter: 60,
+      },
     );
   }
 
@@ -414,8 +414,8 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.VALIDATION,
         severity: ERROR_SEVERITY.LOW,
         metadata: { field, message },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -427,8 +427,8 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.VALIDATION,
         severity: ERROR_SEVERITY.LOW,
         metadata: { field, value },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -442,8 +442,8 @@ export class ErrorFactory {
         severity: ERROR_SEVERITY.MEDIUM,
         service,
         retryable: true,
-        retryAfter: 30
-      }
+        retryAfter: 30,
+      },
     );
   }
 
@@ -455,8 +455,8 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.EXTERNAL,
         severity: ERROR_SEVERITY.MEDIUM,
         retryable: true,
-        retryAfter: 15
-      }
+        retryAfter: 15,
+      },
     );
   }
 
@@ -469,8 +469,8 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.BUSINESS,
         severity: ERROR_SEVERITY.MEDIUM,
         metadata: { rule, ...details },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -482,8 +482,8 @@ export class ErrorFactory {
         category: ERROR_CATEGORIES.AUTH,
         severity: ERROR_SEVERITY.HIGH,
         metadata: { required },
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 
@@ -497,8 +497,8 @@ export class ErrorFactory {
         severity: ERROR_SEVERITY.MEDIUM,
         originalError: error,
         metadata: context,
-        retryable: false
-      }
+        retryable: false,
+      },
     );
   }
 }
@@ -519,6 +519,6 @@ export function createErrorContext(req: any, additionalContext: Record<string, a
     userId: req.user?.userId || req.headers['x-user-id'],
     service: req.service || 'unknown',
     operation: req.operation || 'unknown',
-    ...additionalContext
+    ...additionalContext,
   };
 }

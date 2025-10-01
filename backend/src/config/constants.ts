@@ -20,7 +20,7 @@ export const APP_CONSTANTS = {
   EVENT_TTL_MS: 3600000,
 
   /** Cache cleanup interval in milliseconds (5 minutes) */
-  CACHE_CLEANUP_INTERVAL_MS: 300000
+  CACHE_CLEANUP_INTERVAL_MS: 300000,
 } as const;
 
 /**
@@ -40,7 +40,7 @@ export const SESSION_CONSTANTS = {
   JWT_EXPIRY: '24h',
   
   /** Refresh token expiration */
-  REFRESH_TOKEN_EXPIRY: '30d'
+  REFRESH_TOKEN_EXPIRY: '30d',
 } as const;
 
 /**
@@ -57,7 +57,7 @@ export const EMAIL_CONSTANTS = {
   MAX_LOG_BODY_LENGTH: 1000,
   
   /** Email thread context limit */
-  THREAD_CONTEXT_LIMIT: 10
+  THREAD_CONTEXT_LIMIT: 10,
 } as const;
 
 /**
@@ -77,7 +77,7 @@ export const CONTACT_CONSTANTS = {
   HIGH_CONFIDENCE_THRESHOLD: 0.8,
   
   /** Maximum contact name length */
-  MAX_NAME_LENGTH: 100
+  MAX_NAME_LENGTH: 100,
 } as const;
 
 /**
@@ -103,7 +103,7 @@ export const API_CONSTANTS = {
   MAX_CONVERSATION_CONTENT_LENGTH: 10000,
   
   /** API version */
-  API_VERSION: '1.0.0'
+  API_VERSION: '1.0.0',
 } as const;
 
 /**
@@ -123,7 +123,7 @@ export const TOOL_CONSTANTS = {
   RESULT_CACHE_DURATION_MS: 300000, // 5 minutes
   
   /** Maximum tool response length for logging */
-  MAX_LOG_RESPONSE_LENGTH: 2000
+  MAX_LOG_RESPONSE_LENGTH: 2000,
 } as const;
 
 /**
@@ -143,7 +143,7 @@ export const AI_CONSTANTS = {
   MAX_CONTEXT_LENGTH: 4000,
   
   /** Response generation timeout */
-  RESPONSE_TIMEOUT_MS: 60000
+  RESPONSE_TIMEOUT_MS: 60000,
 } as const;
 
 /**
@@ -166,7 +166,7 @@ export const PERFORMANCE_CONSTANTS = {
   CLEANUP_INTERVAL_MS: 300000, // 5 minutes
   
   /** Rate limit warning threshold (90% of max) */
-  RATE_LIMIT_WARNING_THRESHOLD: 0.9
+  RATE_LIMIT_WARNING_THRESHOLD: 0.9,
 } as const;
 
 /**
@@ -189,7 +189,7 @@ export const SECURITY_CONSTANTS = {
   DEV_ALLOWED_ORIGINS: ['http://localhost:3000', 'http://127.0.0.1:3000'],
   
   /** Maximum sanitized string length */
-  MAX_SANITIZED_LENGTH: 5000
+  MAX_SANITIZED_LENGTH: 5000,
 } as const;
 
 /**
@@ -224,7 +224,7 @@ export const CALENDAR_CONSTANTS = {
   MAX_EVENT_TITLE_LENGTH: 200,
   
   /** Maximum event description length */
-  MAX_EVENT_DESCRIPTION_LENGTH: 2000
+  MAX_EVENT_DESCRIPTION_LENGTH: 2000,
 } as const;
 
 /**
@@ -244,7 +244,7 @@ export const CONTENT_CONSTANTS = {
   MAX_TAGS: 10,
   
   /** Content generation timeout in milliseconds */
-  GENERATION_TIMEOUT_MS: 120000 // 2 minutes
+  GENERATION_TIMEOUT_MS: 120000, // 2 minutes
 } as const;
 
 /**
@@ -264,7 +264,7 @@ export const SEARCH_CONSTANTS = {
   MAX_QUERY_LENGTH: 500,
   
   /** Result summary max length */
-  MAX_SUMMARY_LENGTH: 1000
+  MAX_SUMMARY_LENGTH: 1000,
 } as const;
 
 /**
@@ -290,7 +290,7 @@ export const SLACK_CONSTANTS = {
   DRAFT_DETECTION_TIMEOUT_MS: 5000,
   
   /** Confirmation workflow timeout in milliseconds */
-  CONFIRMATION_TIMEOUT_MS: 300000 // 5 minutes
+  CONFIRMATION_TIMEOUT_MS: 300000, // 5 minutes
 } as const;
 
 /**
@@ -310,7 +310,7 @@ export const LOGGING_CONSTANTS = {
   EXCLUDED_LOG_FIELDS: ['password', 'accessToken', 'refreshToken', 'authorization'],
   
   /** Maximum error message length */
-  MAX_ERROR_MESSAGE_LENGTH: 2000
+  MAX_ERROR_MESSAGE_LENGTH: 2000,
 } as const;
 
 /**
@@ -330,7 +330,7 @@ export const NETWORK_CONSTANTS = {
   KEEP_ALIVE_TIMEOUT_MS: 5000,
   
   /** Maximum concurrent connections */
-  MAX_CONCURRENT_CONNECTIONS: 100
+  MAX_CONCURRENT_CONNECTIONS: 100,
 } as const;
 
 /**
@@ -347,7 +347,7 @@ export const STORAGE_CONSTANTS = {
   TEMP_FILE_RETENTION_HOURS: 24,
   
   /** Maximum filename length */
-  MAX_FILENAME_LENGTH: 255
+  MAX_FILENAME_LENGTH: 255,
 } as const;
 
 /**
@@ -384,7 +384,7 @@ export const CONSTANTS_HELPERS = {
    */
   isThresholdExceeded: (current: number, max: number, threshold: number): boolean => {
     return (current / max) >= threshold;
-  }
+  },
 } as const;
 
 /**
@@ -401,7 +401,7 @@ export const ENVIRONMENT_CONSTANTS = {
   STAGING: 'staging',
   
   /** Test environment identifier */
-  TEST: 'test'
+  TEST: 'test',
 } as const;
 
 /**
@@ -424,5 +424,5 @@ export const REGEX_CONSTANTS = {
   SESSION_ID: /^session-[a-zA-Z0-9-]+$/,
   
   /** Safe string pattern (alphanumeric, spaces, basic punctuation) */
-  SAFE_STRING: /^[a-zA-Z0-9\s.,!?;:()\-_@#$%&*+=[\]{}'"<>/\\|~`]+$/
+  SAFE_STRING: /^[a-zA-Z0-9\s.,!?;:()\-_@#$%&*+=[\]{}'"<>/\\|~`]+$/,
 } as const;

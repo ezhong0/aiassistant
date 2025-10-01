@@ -14,7 +14,7 @@ export function validateAndSendResponse<T>(
   res: Response,
   schema: z.ZodSchema<T>,
   data: unknown,
-  statusCode: number = 200
+  statusCode = 200,
 ): void {
   try {
     const validatedData = schema.parse(data);
@@ -26,8 +26,8 @@ export function validateAndSendResponse<T>(
         operation: 'response_validation_error',
         metadata: {
           errors: error.errors,
-          data: data
-        }
+          data: data,
+        },
       });
       
       res.status(500).json({
@@ -38,17 +38,17 @@ export function validateAndSendResponse<T>(
           field: err.path.join('.'),
           message: err.message,
           code: err.code,
-        }))
+        })),
       });
     } else {
       logger.error('Unexpected response validation error', error as Error, {
         correlationId: `response-validation-${Date.now()}`,
-        operation: 'response_validation_unexpected_error'
+        operation: 'response_validation_unexpected_error',
       });
       res.status(500).json({
         success: false,
         error: 'Internal server error',
-        code: 'UNKNOWN_ERROR'
+        code: 'UNKNOWN_ERROR',
       });
     }
   }
@@ -61,7 +61,7 @@ export function sendSuccessResponse<T>(
   res: Response,
   schema: z.ZodSchema<T>,
   data: unknown,
-  statusCode: number = 200
+  statusCode = 200,
 ): void {
   validateAndSendResponse(res, schema, data, statusCode);
 }

@@ -19,7 +19,7 @@ export class APIClientError extends AppError {
   public readonly endpoint?: string;
   public readonly method?: string;
   public readonly requestId?: string;
-  public readonly responseData?: any;
+  public readonly responseData?: Record<string, unknown>;
 
   constructor(
     message: string,
@@ -29,12 +29,12 @@ export class APIClientError extends AppError {
       endpoint?: string;
       method?: string;
       requestId?: string;
-      responseData?: any;
-    } = {}
+      responseData?: Record<string, unknown>;
+    } = {},
   ) {
     super(message, code, {
       ...options,
-      category: options.category || ERROR_CATEGORIES.API
+      category: options.category || ERROR_CATEGORIES.API,
     });
 
     this.name = 'APIClientError';
@@ -58,7 +58,7 @@ export class APIClientError extends AppError {
       endpoint: this.endpoint,
       method: this.method,
       requestId: this.requestId,
-      responseData: this.responseData
+      responseData: this.responseData,
     };
   }
 }
@@ -85,11 +85,11 @@ export class WorkflowError extends AppError {
       maxIterations?: number;
       workflowState?: string;
       stepName?: string;
-    } = {}
+    } = {},
   ) {
     super(message, code, {
       ...options,
-      category: options.category || ERROR_CATEGORIES.SERVICE
+      category: options.category || ERROR_CATEGORIES.SERVICE,
     });
 
     this.name = 'WorkflowError';
@@ -113,7 +113,7 @@ export class WorkflowError extends AppError {
       iteration: this.iteration,
       maxIterations: this.maxIterations,
       workflowState: this.workflowState,
-      stepName: this.stepName
+      stepName: this.stepName,
     };
   }
 }
@@ -138,11 +138,11 @@ export class DomainError extends AppError {
       resourceId?: string;
       resourceType?: string;
       action?: string;
-    } = {}
+    } = {},
   ) {
     super(message, code, {
       ...options,
-      category: options.category || ERROR_CATEGORIES.SERVICE
+      category: options.category || ERROR_CATEGORIES.SERVICE,
     });
 
     this.name = 'DomainError';
@@ -164,7 +164,7 @@ export class DomainError extends AppError {
       domainName: this.domainName,
       resourceId: this.resourceId,
       resourceType: this.resourceType,
-      action: this.action
+      action: this.action,
     };
   }
 }
@@ -177,22 +177,22 @@ export class DomainError extends AppError {
  */
 export class ValidationError extends AppError {
   public readonly field?: string;
-  public readonly value?: any;
+  public readonly value?: unknown;
   public readonly rule?: string;
-  public readonly constraints?: Record<string, any>;
+  public readonly constraints?: Record<string, unknown>;
 
   constructor(
     message: string,
     options: AppErrorOptions & {
       field?: string;
-      value?: any;
+      value?: unknown;
       rule?: string;
-      constraints?: Record<string, any>;
-    } = {}
+      constraints?: Record<string, unknown>;
+    } = {},
   ) {
     super(message, ERROR_CODES.VALIDATION_FAILED, {
       ...options,
-      category: ERROR_CATEGORIES.VALIDATION
+      category: ERROR_CATEGORIES.VALIDATION,
     });
 
     this.name = 'ValidationError';
@@ -214,7 +214,7 @@ export class ValidationError extends AppError {
       field: this.field,
       value: this.value,
       rule: this.rule,
-      constraints: this.constraints
+      constraints: this.constraints,
     };
   }
 }
@@ -237,11 +237,11 @@ export class AuthenticationError extends AppError {
       authType?: string;
       provider?: string;
       reason?: string;
-    } = {}
+    } = {},
   ) {
     super(message, code, {
       ...options,
-      category: ERROR_CATEGORIES.AUTH
+      category: ERROR_CATEGORIES.AUTH,
     });
 
     this.name = 'AuthenticationError';
@@ -261,7 +261,7 @@ export class AuthenticationError extends AppError {
       ...super.toJSON(),
       authType: this.authType,
       provider: this.provider,
-      reason: this.reason
+      reason: this.reason,
     };
   }
 }

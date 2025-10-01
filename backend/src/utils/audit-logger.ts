@@ -5,7 +5,7 @@ export interface AuditEvent {
   userId?: string | undefined;
   sessionId?: string | undefined;
   teamId?: string | undefined;
-  details?: Record<string, any> | undefined;
+  details?: Record<string, unknown> | undefined;
   timestamp?: Date | undefined;
   ipAddress?: string | undefined;
   userAgent?: string | undefined;
@@ -37,7 +37,7 @@ export class AuditLogger {
     // Cache events
     CACHE_INVALIDATION: 'cache_invalidation',
     CACHE_MISS: 'cache_miss',
-    CACHE_HIT: 'cache_hit'
+    CACHE_HIT: 'cache_hit',
   } as const;
 
   /**
@@ -48,7 +48,7 @@ export class AuditLogger {
       ...event,
       timestamp: event.timestamp || new Date(),
       service: 'session-oauth-service',
-      level: 'audit'
+      level: 'audit',
     };
     
     // Sanitize sensitive data before logging
@@ -59,7 +59,7 @@ export class AuditLogger {
     logger.info('AUDIT_EVENT', {
       correlationId: `audit-${Date.now()}`,
       operation: 'audit_event',
-      ...auditData
+      ...auditData,
     });
   }
 
@@ -69,12 +69,12 @@ export class AuditLogger {
   static logSessionEvent(
     event: keyof typeof AuditLogger.AUDIT_EVENTS,
     sessionId: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): void {
     this.logSecurityEvent({
       event: this.AUDIT_EVENTS[event],
       sessionId,
-      details
+      details,
     });
   }
 
@@ -86,14 +86,14 @@ export class AuditLogger {
     sessionId: string,
     userId?: string,
     teamId?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): void {
     this.logSecurityEvent({
       event: this.AUDIT_EVENTS[event],
       sessionId,
       userId,
       teamId,
-      details
+      details,
     });
   }
 
@@ -103,14 +103,14 @@ export class AuditLogger {
   static logCacheEvent(
     event: keyof typeof AuditLogger.AUDIT_EVENTS,
     cacheKey: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): void {
     this.logSecurityEvent({
       event: this.AUDIT_EVENTS[event],
       details: {
         cacheKey,
-        ...details
-      }
+        ...details,
+      },
     });
   }
 
@@ -122,12 +122,12 @@ export class AuditLogger {
     userId: string,
     teamId: string,
     success: boolean,
-    reason?: string
+    reason?: string,
   ): void {
     this.logOAuthEvent('OAUTH_TOKENS_REFRESHED', sessionId, userId, teamId, {
       success,
       reason,
-      refreshTimestamp: new Date().toISOString()
+      refreshTimestamp: new Date().toISOString(),
     });
   }
 
@@ -137,28 +137,28 @@ export class AuditLogger {
   static logSuspiciousActivity(
     event: string,
     sessionId?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): void {
     this.logSecurityEvent({
       event: `suspicious_${event}`,
       sessionId,
       details: {
         ...details,
-        severity: 'high'
-      }
+        severity: 'high',
+      },
     });
   }
 
   /**
    * Sanitize sensitive data from audit logs
    */
-  private static sanitizeAuditDetails(details: Record<string, any>): Record<string, any> {
+  private static sanitizeAuditDetails(details: Record<string, unknown>): Record<string, unknown> {
     const sanitized = { ...details };
     
     // Sanitize common sensitive fields
     const sensitiveFields = [
       'access_token', 'refresh_token', 'password', 'secret', 'key',
-      'authorization', 'cookie', 'session_token'
+      'authorization', 'cookie', 'session_token',
     ];
     
     for (const field of sensitiveFields) {

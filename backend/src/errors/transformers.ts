@@ -26,7 +26,7 @@ export class GoogleErrorTransformer {
   /**
    * Transform Google API error to APIClientError
    */
-  static transform(error: any, context: TransformContext): APIClientError {
+  static transform(error: unknown, context: TransformContext): APIClientError {
     const status = error?.response?.status || error?.status;
     const errorData = error?.response?.data || error?.data;
     let message = error?.message || 'Google API error';
@@ -67,8 +67,8 @@ export class GoogleErrorTransformer {
         responseData: errorData,
         originalError: error,
         retryable,
-        retryAfter
-      }
+        retryAfter,
+      },
     );
   }
 }
@@ -80,7 +80,7 @@ export class OpenAIErrorTransformer {
   /**
    * Transform OpenAI API error to APIClientError
    */
-  static transform(error: any, context: TransformContext): APIClientError {
+  static transform(error: unknown, context: TransformContext): APIClientError {
     const status = error?.response?.status || error?.status || error?.statusCode;
     const errorData = error?.response?.data || error?.data;
     const errorMessage = error?.error?.message || error?.message || 'OpenAI API error';
@@ -135,9 +135,9 @@ export class OpenAIErrorTransformer {
         retryAfter,
         metadata: {
           errorType,
-          openaiRequestId: error?.response?.headers?.['openai-request-id']
-        }
-      }
+          openaiRequestId: error?.response?.headers?.['openai-request-id'],
+        },
+      },
     );
   }
 }
@@ -149,7 +149,7 @@ export class SlackErrorTransformer {
   /**
    * Transform Slack API error to APIClientError
    */
-  static transform(error: any, context: TransformContext): APIClientError {
+  static transform(error: unknown, context: TransformContext): APIClientError {
     const status = error?.response?.status || error?.status;
     const errorData = error?.response?.data || error?.data;
     const slackError = errorData?.error;
@@ -194,9 +194,9 @@ export class SlackErrorTransformer {
         retryable,
         retryAfter,
         metadata: {
-          slackError
-        }
-      }
+          slackError,
+        },
+      },
     );
   }
 }
@@ -209,7 +209,7 @@ export class HTTPErrorTransformer {
   /**
    * Transform generic HTTP error to APIClientError
    */
-  static transform(error: any, context: TransformContext): APIClientError {
+  static transform(error: unknown, context: TransformContext): APIClientError {
     const status = error?.response?.status || error?.status || error?.statusCode || 500;
     const errorData = error?.response?.data || error?.data;
     const message = error?.message || `${context.serviceName} API error`;
@@ -258,8 +258,8 @@ export class HTTPErrorTransformer {
         responseData: errorData,
         originalError: error,
         retryable,
-        retryAfter
-      }
+        retryAfter,
+      },
     );
   }
 }
@@ -272,7 +272,7 @@ export class ErrorTransformer {
   /**
    * Transform external API error to unified AppError
    */
-  static transform(error: any, context: TransformContext): APIClientError {
+  static transform(error: unknown, context: TransformContext): APIClientError {
     const serviceName = context.serviceName.toLowerCase();
 
     if (serviceName.includes('google') || serviceName.includes('gmail') || serviceName.includes('calendar')) {

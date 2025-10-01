@@ -27,7 +27,7 @@ export const corsMiddleware = cors({
       logger.error('CORS configuration missing in production', {
         correlationId: `cors-config-missing-${Date.now()}`,
         operation: 'cors_config_error',
-        metadata: { origin, nodeEnv: process.env.NODE_ENV }
+        metadata: { origin, nodeEnv: process.env.NODE_ENV },
       });
       callback(new Error('CORS configuration required in production'), false);
       return;
@@ -41,7 +41,7 @@ export const corsMiddleware = cors({
     logger.warn('CORS origin blocked', {
       correlationId: `cors-blocked-${Date.now()}`,
       operation: 'cors_blocked',
-      metadata: { origin, allowedOrigins, nodeEnv: process.env.NODE_ENV }
+      metadata: { origin, allowedOrigins, nodeEnv: process.env.NODE_ENV },
     });
     callback(new Error('Not allowed by CORS'), false);
   },
@@ -54,14 +54,14 @@ export const corsMiddleware = cors({
     'Accept',
     'Authorization',
     'Cache-Control',
-    'Pragma'
+    'Pragma',
   ],
   exposedHeaders: [
     'RateLimit-Limit',
     'RateLimit-Remaining',
-    'RateLimit-Reset'
+    'RateLimit-Reset',
   ],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400, // 24 hours
 });
 
 /**
@@ -79,21 +79,21 @@ export const securityHeaders = helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     },
-    reportOnly: process.env.NODE_ENV === 'development'
+    reportOnly: process.env.NODE_ENV === 'development',
   },
   crossOriginEmbedderPolicy: false, // Disabled for API
   hsts: {
     maxAge: 31536000, // 1 year
     includeSubDomains: true,
-    preload: true
+    preload: true,
   },
   noSniff: true,
   frameguard: { action: 'deny' },
   // xssFilter removed: deprecated in Helmet v5+
   crossOriginResourcePolicy: { policy: 'same-origin' },
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 });
 
 /**
@@ -109,7 +109,7 @@ export const compressionMiddleware = compression({
     return compression.filter(req, res);
   },
   level: process.env.NODE_ENV === 'production' ? 6 : 1, // Higher compression in production
-  threshold: 1024 // Only compress if response is larger than 1KB
+  threshold: 1024, // Only compress if response is larger than 1KB
 });
 
 /**
@@ -127,16 +127,16 @@ export const requestSizeLimiter = (req: Request, res: Response, next: NextFuncti
         contentLength,
         maxSize,
         path: req.path,
-        ip: req.ip
-      }
+        ip: req.ip,
+      },
     });
     
     res.status(413).json({
       success: false,
       error: {
         code: 'PAYLOAD_TOO_LARGE',
-        message: 'Request payload too large'
-      }
+        message: 'Request payload too large',
+      },
     });
     return;
   }
@@ -158,7 +158,7 @@ export const apiSecurityHeaders = (req: Request, res: Response, next: NextFuncti
     // X-XSS-Protection deprecated; modern browsers ignore it
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   });
   
   next();
@@ -181,8 +181,8 @@ export const validateContentType = (allowedTypes: string[] = ['application/json'
         success: false,
         error: {
           code: 'MISSING_CONTENT_TYPE',
-          message: 'Content-Type header is required'
-        }
+          message: 'Content-Type header is required',
+        },
       });
       return;
     }
@@ -197,16 +197,16 @@ export const validateContentType = (allowedTypes: string[] = ['application/json'
           contentType,
           allowedTypes,
           path: req.path,
-          ip: req.ip
-        }
+          ip: req.ip,
+        },
       });
       
       res.status(415).json({
         success: false,
         error: {
           code: 'UNSUPPORTED_MEDIA_TYPE',
-          message: `Content-Type must be one of: ${allowedTypes.join(', ')}`
-        }
+          message: `Content-Type must be one of: ${allowedTypes.join(', ')}`,
+        },
       });
       return;
     }
@@ -218,7 +218,7 @@ export const validateContentType = (allowedTypes: string[] = ['application/json'
 /**
  * Request timeout middleware
  */
-export const requestTimeout = (timeoutMs: number = 30000) => {
+export const requestTimeout = (timeoutMs = 30000) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const timeout = (globalThis as any).setTimeout(() => {
       if (!res.headersSent) {
@@ -229,16 +229,16 @@ export const requestTimeout = (timeoutMs: number = 30000) => {
             path: req.path,
             method: req.method,
             timeoutMs,
-            ip: req.ip
-          }
+            ip: req.ip,
+          },
         });
         
         res.status(408).json({
           success: false,
           error: {
             code: 'REQUEST_TIMEOUT',
-            message: 'Request timeout'
-          }
+            message: 'Request timeout',
+          },
         });
       }
     }, timeoutMs);

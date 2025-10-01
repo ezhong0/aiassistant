@@ -9,7 +9,7 @@ export function createErrorHandler(errorHandlingService: ErrorHandlingService) {
     err: Error,
     req: Request,
     res: Response,
-    _next: NextFunction // eslint-disable-line @typescript-eslint/no-unused-vars
+    _next: NextFunction,  
   ) => {
     // Use the centralized error handling service
     errorHandlingService.handleError(err, req, res);

@@ -34,7 +34,7 @@ export class SentryService extends BaseService {
 
       if (!sentryDsn) {
         this.logWarn('SENTRY_DSN not provided, Sentry will be disabled', {
-          operation: 'sentry_initialization'
+          operation: 'sentry_initialization',
         });
         return;
       }
@@ -90,8 +90,8 @@ export class SentryService extends BaseService {
         operation: 'sentry_initialization',
         metadata: {
           environment: process.env.NODE_ENV || 'development',
-          dsn: sentryDsn.substring(0, 20) + '...' // Log partial DSN for verification
-        }
+          dsn: `${sentryDsn.substring(0, 20)  }...`, // Log partial DSN for verification
+        },
       });
 
     } catch (error) {
@@ -121,7 +121,7 @@ export class SentryService extends BaseService {
     } catch (sentryError) {
       this.logError('Failed to capture exception in Sentry', { 
         originalError: error,
-        sentryError 
+        sentryError, 
       });
     }
   }
@@ -147,7 +147,7 @@ export class SentryService extends BaseService {
     } catch (sentryError) {
       this.logError('Failed to capture message in Sentry', { 
         message,
-        sentryError 
+        sentryError, 
       });
     }
   }
@@ -165,7 +165,7 @@ export class SentryService extends BaseService {
     } catch (sentryError) {
       this.logError('Failed to add breadcrumb in Sentry', { 
         breadcrumb,
-        sentryError 
+        sentryError, 
       });
     }
   }
@@ -183,7 +183,7 @@ export class SentryService extends BaseService {
     } catch (sentryError) {
       this.logError('Failed to set user in Sentry', { 
         user,
-        sentryError 
+        sentryError, 
       });
     }
   }
@@ -201,7 +201,7 @@ export class SentryService extends BaseService {
     } catch (sentryError) {
       this.logError('Failed to set tags in Sentry', { 
         tags,
-        sentryError 
+        sentryError, 
       });
     }
   }
@@ -220,7 +220,7 @@ export class SentryService extends BaseService {
       this.logError('Failed to set extra in Sentry', { 
         key,
         value,
-        sentryError 
+        sentryError, 
       });
     }
   }
@@ -239,7 +239,7 @@ export class SentryService extends BaseService {
       this.logError('Failed to start transaction in Sentry', { 
         name,
         op,
-        sentryError 
+        sentryError, 
       });
       return undefined;
     }
@@ -254,8 +254,8 @@ export class SentryService extends BaseService {
       details: {
         state: this._state,
         isInitialized: this.isInitialized,
-        hasDsn: !!process.env.SENTRY_DSN
-      }
+        hasDsn: !!process.env.SENTRY_DSN,
+      },
     };
   }
 
@@ -265,7 +265,7 @@ export class SentryService extends BaseService {
   public getStats(): { isInitialized: boolean; hasDsn: boolean } {
     return {
       isInitialized: this.isInitialized,
-      hasDsn: !!process.env.SENTRY_DSN
+      hasDsn: !!process.env.SENTRY_DSN,
     };
   }
 }

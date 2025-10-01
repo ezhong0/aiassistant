@@ -3,32 +3,33 @@
 ## Table of Contents
 1. [Overview](#overview)
 2. [System Architecture](#system-architecture)
-3. [Service Layer](#service-layer)
-4. [Agent Architecture](#agent-architecture)
-5. [Workflow Execution](#workflow-execution)
-6. [Tool Registry System](#tool-registry-system)
-7. [Data Flow](#data-flow)
-8. [Authentication & Authorization](#authentication--authorization)
-9. [Key Design Patterns](#key-design-patterns)
-10. [Recent Refactoring](#recent-refactoring)
+3. [Dependency Injection System](#dependency-injection-system)
+4. [Service Layer](#service-layer)
+5. [Agent Architecture](#agent-architecture)
+6. [Workflow Execution](#workflow-execution)
+7. [Tool Registry System](#tool-registry-system)
+8. [Domain Services](#domain-services)
+9. [Authentication & Authorization](#authentication--authorization)
+10. [Security & Middleware](#security--middleware)
+11. [AI-Powered Testing System](#ai-powered-testing-system)
+12. [Key Design Patterns](#key-design-patterns)
+13. [Performance & Scalability](#performance--scalability)
 
 ---
 
 ## Overview
 
-This is an AI-powered assistant application that orchestrates multiple domain-specific services (Email, Calendar, Contacts, Slack) through an intelligent agent system. The architecture follows clean separation of concerns with three distinct layers:
-
-- **Presentation Layer**: Express routes, middleware
-- **Business Logic Layer**: Agents, workflow execution
-- **Data Layer**: Domain services, API clients, database
+This is an AI-powered assistant application that orchestrates multiple domain-specific services (Email, Calendar, Contacts, Slack) through an intelligent agent system. The architecture follows clean separation of concerns with dependency injection, comprehensive testing, and enterprise-grade security.
 
 ### Core Technologies
-- **Runtime**: Node.js with TypeScript
-- **Framework**: Express.js
+- **Runtime**: Node.js 20+ with TypeScript 5.9
+- **Framework**: Express.js 5.1
 - **AI**: OpenAI GPT-4 (via GenericAIService)
 - **Database**: PostgreSQL (via DatabaseService)
 - **Cache**: Redis (via CacheService)
-- **External APIs**: Gmail, Google Calendar, Slack
+- **External APIs**: Gmail, Google Calendar, Google Contacts, Slack
+- **Dependency Injection**: Awilix
+- **Testing**: Jest with AI-powered E2E testing
 
 ---
 
@@ -41,6 +42,17 @@ This is an AI-powered assistant application that orchestrates multiple domain-sp
 │  │ Auth Routes  │  │ Slack Routes │  │ Protected Routes   │   │
 │  │ (OAuth flow) │  │ (Events/Bot) │  │ (API endpoints)    │   │
 │  └──────────────┘  └──────────────┘  └────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    DEPENDENCY INJECTION LAYER                    │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │                Awilix Container                       │    │
+│  │  • Constructor-based dependency injection             │    │
+│  │  • Type-safe service resolution                       │    │
+│  │  • Lifetime management (singleton/scoped/transient)   │    │
+│  │  • Service registration and discovery                 │    │
+│  └────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -97,109 +109,120 @@ This is an AI-powered assistant application that orchestrates multiple domain-sp
 
 ---
 
-## Service Layer
+## Dependency Injection System
 
-### Three Service Management Systems
+### Awilix Container Architecture
 
-The application uses **three distinct service management systems**, each with a specific purpose:
+The application uses **Awilix** for clean constructor-based dependency injection with type safety and explicit lifetime management.
 
-#### 1. **ServiceManager** (Core Infrastructure)
-Location: `src/services/service-manager.ts`
+**Location**: `src/di/container.ts`
 
-**Purpose**: Manages core infrastructure services
+**Key Features**:
+- **Constructor-based injection**: All dependencies injected via constructor parameters
+- **Type-safe resolution**: Full TypeScript support with interface-based contracts
+- **Lifetime management**: Singleton, scoped, and transient service lifetimes
+- **No service locator pattern**: Dependencies are explicit and testable
+- **Easy testing**: Container scopes for isolated test environments
 
-**Services**:
-- DatabaseService
-- CacheService
-- OAuthStateService
-- TokenStorageService
-- AuthStatusService
-- AuthService
-- TokenManager
-- GenericAIService
-- AIServiceCircuitBreaker
-- GoogleOAuthManager
-- SlackOAuthManager
-- ContextManager
-
-**Features**:
-- Dependency tracking
-- Initialization ordering
-- Singleton pattern
-- Health checking
-
-#### 2. **DomainServiceContainer** (Domain Services)
-Location: `src/services/domain/dependency-injection/domain-service-container.ts`
-
-**Purpose**: Manages domain-specific business logic services
-
-**Services**:
-- EmailDomainService (Gmail operations)
-- CalendarDomainService (Google Calendar operations)
-- ContactsDomainService (Google Contacts operations)
-- SlackDomainService (Slack API operations)
-- AIDomainService (AI/OpenAI operations)
-
-**Features**:
-- Lazy initialization
-- Service resolution
-- Dependency injection
-- Health monitoring
-
-#### 3. **AgentFactory** (Agent Management)
-Location: `src/framework/agent-factory.ts`
-
-**Purpose**: Manages SubAgent lifecycle and discovery
-
-**Agents**:
-- EmailAgent
-- CalendarAgent
-- ContactAgent
-- SlackAgent
-
-**Features**:
-- Agent registration
-- Capability discovery
-- Natural language execution
-- Agent health checking
-- Enable/disable agents
-
-### Service Initialization Flow
-
-**Order of Initialization** (from `service-initialization.ts`):
+**Container Structure**:
 
 ```typescript
-1. Config Validation (UnifiedConfig singleton)
-2. Domain Services Initialization
-   ↓
-3. Core Infrastructure Services:
-   - DatabaseService (no dependencies)
-   - CacheService (no dependencies)
-   - OAuthStateService (→ cacheService)
-   - TokenStorageService (→ databaseService)
-   - AuthStatusService (→ tokenStorageService)
-   - AuthService (no dependencies)
-   - TokenManager (→ tokenStorageService, authService)
-   - GenericAIService (no dependencies)
-   - AIServiceCircuitBreaker (no dependencies)
-   - GoogleOAuthManager (→ authService, tokenManager, oauthStateService)
-   - SlackOAuthManager (→ tokenManager, oauthStateService)
-   - ContextManager (→ cacheService)
-   ↓
-4. Agent Factory Initialization
-   ↓
-5. Circuit Breaker Connections
+export interface Cradle {
+  // Configuration and logging
+  config: typeof unifiedConfig;
+  logger: typeof logger;
+
+  // Core Infrastructure Services
+  databaseService: DatabaseService;
+  cacheService: CacheService;
+  encryptionService: EncryptionService;
+  sentryService: SentryService;
+  errorHandlingService: ErrorHandlingService;
+
+  // Auth Services
+  authService: AuthService;
+  tokenStorageService: TokenStorageService;
+  tokenManager: TokenManager;
+  authStatusService: AuthStatusService;
+  oauthStateService: OAuthStateService;
+
+  // OAuth Managers
+  googleOAuthManager: GoogleOAuthManager;
+  slackOAuthManager: SlackOAuthManager;
+
+  // Domain Services
+  emailDomainService: EmailDomainService;
+  calendarDomainService: CalendarDomainService;
+  contactsDomainService: ContactsDomainService;
+  slackDomainService: SlackDomainService;
+  aiDomainService: AIDomainService;
+
+  // AI Services
+  genericAIService: GenericAIService;
+  aiServiceCircuitBreaker: AIServiceCircuitBreaker;
+
+  // Workflow Services
+  contextManager: ContextManager;
+  workflowExecutor: WorkflowExecutor;
+
+  // Agent Services
+  masterAgent: MasterAgent;
+  emailAgent: EmailAgent;
+  calendarAgent: CalendarAgent;
+  contactAgent: ContactAgent;
+  slackAgent: SlackAgent;
+
+  // Middleware
+  errorHandler: ErrorHandlerMiddleware;
+  notFoundHandler: NotFoundHandlerMiddleware;
+}
 ```
 
-**Key Points**:
-- Services declare dependencies explicitly
-- ServiceManager initializes in dependency order
-- Circular dependencies are not allowed
-- Failed services are logged but don't crash app
+### Service Registration
+
+**Location**: `src/di/registrations/`
+
+Services are registered in dependency order across multiple registration modules:
+
+1. **Core Services** (`core-services.ts`): Database, cache, encryption, error handling
+2. **Auth Services** (`auth-services.ts`): OAuth, tokens, authentication
+3. **Domain Services** (`domain-services.ts`): Email, calendar, contacts, Slack, AI
+4. **AI Services** (`ai-services.ts`): OpenAI integration, circuit breaker
+5. **Workflow Services** (`workflow-services.ts`): Context management, workflow execution
+6. **Agent Services** (`agent-services.ts`): Master agent, sub-agents
+7. **Middleware Services** (`middleware-services.ts`): Error handling, validation
+
+**Registration Pattern**:
+
+```typescript
+export function registerCoreServices(container: AppContainer): void {
+  container.register({
+    // Core infrastructure services
+    databaseService: asClass(DatabaseService).singleton(),
+    cacheService: asClass(CacheService).singleton(),
+    encryptionService: asClass(EncryptionService).singleton(),
+    sentryService: asClass(SentryService).singleton(),
+    errorHandlingService: asClass(ErrorHandlingService).singleton(),
+  });
+}
+```
+
+**Benefits**:
+- **Explicit dependencies**: All dependencies declared in constructor
+- **Testability**: Easy to mock dependencies for unit tests
+- **Lifetime control**: Singleton services for shared resources
+- **Type safety**: Full TypeScript support with interface contracts
+- **Circular dependency prevention**: Awilix detects and prevents cycles
+
+---
+
+## Service Layer
 
 ### BaseService Pattern
 
-All services extend `BaseService` which provides:
+All services extend `BaseService` which provides consistent lifecycle management, health checking, and logging.
+
+**Location**: `src/services/base-service.ts`
 
 ```typescript
 abstract class BaseService {
@@ -226,10 +249,45 @@ abstract class BaseService {
 ```
 
 **Benefits**:
-- Consistent lifecycle management
-- Health checking
-- Logging
-- Ready-state assertions
+- **Consistent lifecycle**: All services follow the same initialization pattern
+- **Health monitoring**: Built-in health checks for all services
+- **Error handling**: Standardized error logging and handling
+- **Ready-state assertions**: Prevents operations on uninitialized services
+
+### Service Categories
+
+#### 1. **Infrastructure Services**
+- **DatabaseService**: PostgreSQL connection and query management
+- **CacheService**: Redis caching with TTL management
+- **EncryptionService**: AES-256-GCM encryption for sensitive data
+- **SentryService**: Error tracking and performance monitoring
+- **ErrorHandlingService**: Centralized error handling and reporting
+
+#### 2. **Authentication Services**
+- **AuthService**: JWT token generation and validation
+- **TokenStorageService**: Encrypted token storage in database
+- **TokenManager**: OAuth token refresh and validation
+- **AuthStatusService**: User authentication status tracking
+- **OAuthStateService**: OAuth state management with HMAC signing
+
+#### 3. **OAuth Managers**
+- **GoogleOAuthManager**: Google OAuth 2.0 flow management
+- **SlackOAuthManager**: Slack OAuth 2.0 flow management
+
+#### 4. **Domain Services**
+- **EmailDomainService**: Gmail API operations
+- **CalendarDomainService**: Google Calendar API operations
+- **ContactsDomainService**: Google Contacts API operations
+- **SlackDomainService**: Slack API operations
+- **AIDomainService**: OpenAI API operations
+
+#### 5. **AI Services**
+- **GenericAIService**: OpenAI API wrapper with retry logic
+- **AIServiceCircuitBreaker**: Circuit breaker for AI service resilience
+
+#### 6. **Workflow Services**
+- **ContextManager**: Conversation context and session management
+- **WorkflowExecutor**: Multi-step workflow orchestration
 
 ---
 
@@ -237,12 +295,14 @@ abstract class BaseService {
 
 ### Master Agent
 
-Location: `src/agents/master.agent.ts`
+**Location**: `src/agents/master.agent.ts`
 
-**Responsibilities**:
-1. **Understanding & Planning**: Analyze user request and create workflow plan
-2. **Execution Loop**: Coordinate SubAgents via WorkflowExecutor
-3. **Final Output**: Generate human-readable response
+The Master Agent orchestrates the entire workflow through a 4-phase process:
+
+1. **Message History Building**: Gather conversation context
+2. **Analysis & Planning**: Understand intent and create workflow plan
+3. **Workflow Execution**: Coordinate SubAgents via WorkflowExecutor
+4. **Final Response Generation**: Generate human-readable response
 
 **Processing Flow**:
 
@@ -264,11 +324,17 @@ async processUserInput(userInput, sessionId, userId, slackContext) {
 }
 ```
 
+**Key Features**:
+- **Context awareness**: Maintains conversation history and user context
+- **Workflow orchestration**: Coordinates multiple SubAgents
+- **Progress tracking**: Real-time progress updates via Slack
+- **Error handling**: Comprehensive error recovery and user feedback
+
 ### SubAgent Architecture
 
-Location: `src/framework/base-subagent.ts`
+**Location**: `src/framework/base-subagent.ts`
 
-All SubAgents (EmailAgent, CalendarAgent, etc.) extend `BaseSubAgent` and implement a **3-phase workflow**:
+All SubAgents extend `BaseSubAgent` and implement a **3-phase workflow**:
 
 #### **Phase 1: Intent Assessment**
 - Understand what the user wants to do
@@ -312,35 +378,11 @@ const result = await this.getService()[serviceMethod](userId, params)
 }
 ```
 
-### Agent-to-Service Mapping
-
-Each SubAgent:
-1. Gets its domain service from `DomainServiceResolver`
-2. Uses `ToolRegistry` to discover available tools
-3. Maps tool names to service methods
-4. Executes tool calls by invoking service methods
-
-**Example (EmailAgent)**:
-
-```typescript
-class EmailAgent extends BaseSubAgent {
-  private emailService: IEmailDomainService
-
-  constructor() {
-    super('email', {...})
-    this.emailService = DomainServiceResolver.getEmailService()
-  }
-
-  protected getAvailableTools(): string[] {
-    return ToolRegistry.getToolNamesForDomain('email')
-  }
-
-  protected async executeToolCall(toolName, params) {
-    const serviceMethod = this.getToolToServiceMap()[toolName]
-    return await this.emailService[serviceMethod](userId, params)
-  }
-}
-```
+**Available SubAgents**:
+- **EmailAgent**: Gmail operations (send, search, retrieve)
+- **CalendarAgent**: Google Calendar operations (schedule, check availability)
+- **ContactAgent**: Google Contacts operations (search, create, update)
+- **SlackAgent**: Slack operations (send messages, handle events)
 
 ---
 
@@ -348,9 +390,9 @@ class EmailAgent extends BaseSubAgent {
 
 ### WorkflowExecutor
 
-Location: `src/services/workflow-executor.service.ts`
+**Location**: `src/services/workflow-executor.service.ts`
 
-**Purpose**: Orchestrate multi-step workflows with iterative execution
+The WorkflowExecutor orchestrates multi-step workflows with iterative execution and context management.
 
 **Algorithm**:
 
@@ -403,9 +445,9 @@ while (iteration < maxIterations) {
 
 ### ToolRegistry
 
-Location: `src/framework/tool-registry.ts`
+**Location**: `src/framework/tool-registry.ts`
 
-**Purpose**: Single source of truth for all tool definitions
+The ToolRegistry serves as the single source of truth for all tool definitions, enabling AI agents to discover and execute available operations.
 
 **Tool Definition**:
 
@@ -465,96 +507,99 @@ const toolDefs = ToolRegistry.generateToolDefinitionsForDomain('email')
 ```
 
 **Benefits**:
-- **Single source of truth**: No duplication
-- **Type safety**: Parameter validation
+- **Single source of truth**: No duplication across agents
+- **Type safety**: Parameter validation with Zod schemas
 - **AI-friendly**: Generate definitions for prompts
 - **Discoverability**: Easy to find available tools
 - **Maintainability**: Change once, update everywhere
 
 ---
 
-## Data Flow
+## Domain Services
 
-### End-to-End Request Flow
+### Email Domain Service
 
-**Example: User asks "Send email to John"**
+**Location**: `src/services/domain/email-domain.service.ts`
 
-```
-1. Slack Event → SlackRoutes
-   ↓
-2. SlackRoutes → MasterAgent.processUserInput()
-   ↓
-3. MasterAgent:
-   a. Build message history (ContextManager)
-   b. Analyze & Plan: "Need to send email to John"
-   c. WorkflowExecutor.execute()
-   ↓
-4. WorkflowExecutor (Iteration 1):
-   a. Environment Check: ✓ Have all info
-   b. Action Execution: "Execute EmailAgent with 'send email to John'"
-   c. Delegate to EmailAgent
-   ↓
-5. EmailAgent (3-phase):
-   a. Intent Assessment: Need tool 'send_email', params {to: 'john@...', body: '...'}
-   b. Tool Execution:
-      - ToolRegistry: send_email → EmailDomainService.sendEmail()
-      - EmailDomainService.sendEmail(userId, params)
-      - GoogleAPIClient.makeRequest('/gmail/send', ...)
-      - OAuth token via TokenManager
-      - API call to Gmail
-   c. Response Formatting: "Sent email to John successfully"
-   ↓
-6. WorkflowExecutor (Iteration 1 continued):
-   c. Progress Assessment: ✓ Complete
-   d. Return final context
-   ↓
-7. MasterAgent:
-   d. Generate final response: "I've sent the email to John for you"
-   ↓
-8. SlackRoutes → Slack API
-   ↓
-9. User sees: "I've sent the email to John for you"
-```
+High-level email operations using the Gmail API with OAuth2 authentication.
 
-### Context Management
+**Key Features**:
+- **Email sending**: Rich formatting, attachments, threading
+- **Email search**: Advanced query capabilities with filters
+- **Thread management**: Conversation thread handling
+- **Draft management**: Create, update, and send drafts
+- **Attachment handling**: File upload and download
 
-**ContextManager** tracks conversation history:
+**OAuth Integration**:
+- **Automatic token refresh**: Handles expired tokens transparently
+- **Scope management**: Gmail readonly and send permissions
+- **Error handling**: Comprehensive error recovery
 
-```typescript
-class ContextManager {
-  // Store conversation history
-  async saveContext(sessionId, context): Promise<void>
+### Calendar Domain Service
 
-  // Retrieve conversation history
-  async getContext(sessionId): Promise<string | null>
+**Location**: `src/services/domain/calendar-domain.service.ts`
 
-  // Clear old contexts
-  async clearContext(sessionId): Promise<void>
-}
-```
+Google Calendar API operations for scheduling and availability management.
 
-**Context Format** (SimpleContext pattern):
+**Key Features**:
+- **Event creation**: Create events with attendees and video links
+- **Availability checking**: Free/busy time analysis
+- **Event management**: Update, delete, and reschedule events
+- **Recurring events**: Handle recurring meeting patterns
+- **Time zone handling**: Multi-timezone support
 
-```
-User Request: "Send email to John about meeting"
+### Contacts Domain Service
 
-Previous Context:
-- User is named Alice
-- John's email is john@example.com
-- Meeting is tomorrow at 2pm
+**Location**: `src/services/domain/contacts-domain.service.ts`
 
-Current Step:
-Executing EmailAgent to send email
+Google Contacts API operations for contact management and search.
 
-Results:
-✓ Email sent successfully (ID: msg_123)
-```
+**Key Features**:
+- **Contact search**: Advanced search with filters
+- **Contact management**: Create, update, and delete contacts
+- **Group management**: Contact group and label handling
+- **Photo management**: Contact photo upload and retrieval
+- **Metadata handling**: Custom contact fields and properties
+
+### Slack Domain Service
+
+**Location**: `src/services/domain/slack-domain.service.ts`
+
+Comprehensive Slack API wrapper with 20+ methods for workspace integration.
+
+**Key Features**:
+- **Message sending**: Rich text, blocks, and interactive components
+- **Event handling**: Real-time event processing
+- **User management**: User information and presence
+- **Channel management**: Channel operations and permissions
+- **File operations**: File upload and sharing
+
+### AI Domain Service
+
+**Location**: `src/services/domain/ai-domain.service.ts`
+
+OpenAI API wrapper with advanced features and error handling.
+
+**Key Features**:
+- **Chat completions**: GPT-4 and GPT-3.5-turbo support
+- **Text generation**: Custom prompts and parameters
+- **Embeddings**: Semantic search and similarity
+- **Image generation**: DALL-E integration
+- **Audio processing**: Transcription and translation
+- **Function calling**: Structured output with function definitions
+
+**Lazy Initialization Pattern**:
+Unlike other services, this uses lazy initialization in `onInitialize()` because:
+- API clients are obtained via factory (`getAPIClient()`)
+- Authentication requires environment variables at runtime
+- Client initialization may fail and needs proper error handling
+- Allows service to exist before external API is ready
 
 ---
 
 ## Authentication & Authorization
 
-### OAuth Flow
+### OAuth Flow Architecture
 
 **Three OAuth Managers**:
 1. **GoogleOAuthManager**: Gmail, Calendar, Contacts
@@ -586,7 +631,7 @@ Results:
 
 ### Token Management
 
-**TokenManager** (src/services/token-manager.ts):
+**TokenManager** (`src/services/token-manager.ts`):
 
 ```typescript
 class TokenManager {
@@ -606,7 +651,7 @@ class TokenManager {
 
 **Token Storage**:
 - Stored in PostgreSQL via DatabaseService
-- Encrypted at rest
+- Encrypted at rest using AES-256-GCM
 - Associated with userId (format: `teamId:slackUserId`)
 - Includes expiry time for proactive refresh
 
@@ -617,26 +662,271 @@ class TokenManager {
 4. If refresh fails, require re-auth
 5. Return valid token to caller
 
+### Route Protection
+
+**Location**: `src/routes/auth/`
+
+**Environment-Gated Debug Routes**:
+```typescript
+// routes/auth/index.ts
+if (process.env.NODE_ENV !== 'production') {
+  router.use('/debug', debugRoutes)
+}
+```
+
+**Benefits**:
+- Debug endpoints never accessible in production
+- Security improvement
+- Cleaner production build
+
+---
+
+## Security & Middleware
+
+### Security Middleware
+
+**Location**: `src/middleware/security.middleware.ts`
+
+**CORS Configuration**:
+```typescript
+export const corsMiddleware = cors({
+  origin: (origin, callback) => {
+    const allowedOrigins = corsOrigin ? corsOrigin.split(',').map(o => o.trim()) : [];
+    
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    // In development, allow all origins if no explicit config
+    if (process.env.NODE_ENV === 'development' && allowedOrigins.length === 0) {
+      return callback(null, true);
+    }
+    
+    // In production, require explicit allowlist
+    if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+      callback(new Error('CORS configuration required in production'), false);
+      return;
+    }
+    
+    // Check if origin is allowed
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'), false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Authorization', 'X-Session-Id'],
+  maxAge: 86400 // 24 hours
+});
+```
+
+**Security Headers**:
+```typescript
+export const securityHeaders = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+    },
+    reportOnly: process.env.NODE_ENV === 'development'
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  frameguard: { action: 'deny' },
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+});
+```
+
+### Rate Limiting
+
+**Location**: `src/middleware/rate-limiting.middleware.ts`
+
+**Features**:
+- **Per-user rate limiting**: Different limits for different user types
+- **Endpoint-specific limits**: Custom limits for different operations
+- **Exponential backoff**: Automatic retry with increasing delays
+- **Redis-backed**: Distributed rate limiting across multiple instances
+
+### Input Validation
+
+**Location**: `src/middleware/validation.middleware.ts`
+
+**Zod Schema Validation**:
+```typescript
+export function validateRequest(options: ValidationOptions) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      // Validate query parameters
+      if (options.query) {
+        req.validatedQuery = options.query.parse(req.query);
+      }
+
+      // Validate request body
+      if (options.body) {
+        req.validatedBody = options.body.parse(req.body);
+      }
+
+      // Validate path parameters
+      if (options.params) {
+        req.validatedParams = options.params.parse(req.params);
+      }
+
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const validationErrors = transformZodErrors(error);
+        return res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: validationErrors
+        });
+      }
+      next(error);
+    }
+  };
+}
+```
+
+### API Logging
+
+**Location**: `src/middleware/api-logging.middleware.ts`
+
+**Features**:
+- **Request/response logging**: Complete API interaction tracking
+- **Sensitive data filtering**: Automatic filtering of passwords, tokens
+- **Performance metrics**: Request duration and response size
+- **Correlation IDs**: Request tracing across services
+- **Configurable verbosity**: Different log levels for different environments
+
+---
+
+## AI-Powered Testing System
+
+### Overview
+
+**Location**: `backend/tests/e2e/`
+
+This is an advanced E2E testing system that uses AI to generate test scenarios, execute them through the MasterAgent, and evaluate the results using AI scoring. The system provides comprehensive testing of the entire workflow while maintaining realistic AI interactions.
+
+### Core Components
+
+#### 1. **AI Test Scenario Generator** (`tests/e2e/ai/scenario-generator.ts`)
+- Generates realistic user inputs using AI
+- Creates diverse scenarios across categories (email, calendar, Slack, contacts, multi-domain)
+- Supports different complexity levels (simple, medium, complex)
+- Includes edge case generation
+- Provides expected actions and API calls for each scenario
+
+#### 2. **AI Response Evaluator** (`tests/e2e/ai/response-evaluator.ts`)
+- Analyzes complete execution traces using AI
+- Scores response quality, tool completeness, workflow efficiency, and error handling
+- Answers critical questions:
+  - "Does the response look appropriate for the given request?"
+  - "Were all the tools (API calls) that should've happened actually called?"
+- Provides detailed findings, strengths, weaknesses, and recommendations
+- Generates comprehensive evaluation reports
+
+#### 3. **Master Agent Executor** (`tests/e2e/framework/master-agent-executor.ts`)
+- Complete workflow execution tracing
+- Captures all API calls, timing, and performance metrics
+- Service initialization for E2E testing environment
+- Comprehensive logging and monitoring
+
+#### 4. **API Mock Manager** (`tests/e2e/framework/api-mock-manager.ts`)
+- Single-point API interception at BaseAPIClient level
+- Realistic mock responses for Google APIs and Slack
+- **OpenAI calls use the REAL API** for authentic AI responses
+- Performance simulation with realistic delays
+- Complete request/response logging and analytics
+
+### Key Design Principles
+
+- **Real OpenAI API Calls**: All OpenAI/LLM calls flow through the real OpenAI API to generate authentic responses
+- **AI-Generated API Mocks**: External API calls (Google, Slack, etc.) are intercepted and mocked using AI-generated responses
+- **AI-Powered Evaluation**: Each step is evaluated by AI to determine quality, completeness, and appropriateness
+- **Comprehensive Coverage**: Tests cover the entire workflow from input to final response
+
+### Workflow
+
+#### 1. Scenario Generation
+```
+AI Test Scenario Generator → OpenAI API → Diverse test scenarios
+```
+
+The system generates realistic test scenarios using AI, ensuring:
+- Variety in request types (email, calendar, Slack, etc.)
+- Realistic user inputs and contexts
+- Edge cases and error conditions
+- Different complexity levels
+
+#### 2. Execution
+```
+Test Scenario → MasterAgent → Real OpenAI API calls + Mocked external APIs → Execution Trace
+```
+
+During execution:
+- **OpenAI API calls are REAL** - All LLM interactions use the actual OpenAI API
+- **External APIs are MOCKED** - Google, Slack, and other external services return AI-generated mock responses
+- **Complete tracing** - Every API call, prompt, and response is captured
+
+#### 3. Evaluation
+```
+Execution Trace → AI Response Evaluator → Quality Scores & Recommendations
+```
+
+The AI evaluator analyzes:
+- Response appropriateness for the given request
+- Tool completeness (expected API calls made)
+- Workflow efficiency and error handling
+- Overall quality and user experience
+
+### Usage
+
+**Run AI-Powered E2E Tests**:
+```bash
+# Run the complete AI-powered E2E testing system
+npm run test:ai-e2e
+
+# Run basic E2E tests (without AI generation/evaluation)
+npm run test:e2e
+```
+
+**Test Flow**:
+1. **AI generates test scenarios** based on your requirements
+2. **Each scenario is executed** through the MasterAgent workflow
+3. **All API calls are intercepted and mocked** realistically
+4. **AI evaluates the execution** for quality and completeness
+5. **Comprehensive reports** are generated with scores and insights
+
 ---
 
 ## Key Design Patterns
 
 ### 1. **Dependency Injection**
 - Services don't create dependencies
-- Dependencies injected via ServiceManager
+- Dependencies injected via Awilix container
 - Testable and flexible
 
 ```typescript
-// Bad
-class EmailAgent {
-  private service = new EmailDomainService() // Hard-coded!
-}
-
 // Good
 class EmailAgent {
   private service: IEmailDomainService
-  constructor() {
-    this.service = DomainServiceResolver.getEmailService()
+  constructor(service: IEmailDomainService) {
+    this.service = service
   }
 }
 ```
@@ -720,112 +1010,60 @@ const tool = ToolRegistry.getTool('send_email')
 
 ---
 
-## Recent Refactoring
+## Performance & Scalability
 
-### **Phase 1: Route Handler Extraction** ✅
+### Caching Strategy
+- **Redis**: Conversation context, OAuth state
+- **In-memory**: Tool definitions, agent capabilities
+- **Database**: User tokens, persistent data
 
-**Before**: `auth.routes.ts` (1,249 lines)
-- OAuth flows, token management, debug endpoints, business logic all mixed
+### Optimization Opportunities
+1. **Prompt caching**: Cache frequently-used prompts
+2. **Batch operations**: Group multiple API calls
+3. **Streaming**: Use streaming for long AI responses
+4. **Connection pooling**: Reuse database/API connections
+5. **Rate limiting**: Prevent API exhaustion
 
-**After**: Modular structure
-```
-routes/auth/
-├── index.ts              (router with environment gating)
-├── oauth.routes.ts       (OAuth flows)
-├── token.routes.ts       (token management)
-└── debug/                (debug endpoints - dev only)
-    ├── index.ts
-    ├── test-oauth.routes.ts
-    └── config.routes.ts
-```
+### Scalability Considerations
+1. **Horizontal scaling**: Stateless design
+2. **Queue system**: Background job processing
+3. **Microservices**: Split into smaller services
+4. **Database sharding**: Scale data layer
+5. **CDN**: Static asset delivery
 
-**Benefits**:
-- Files now 150-450 lines (manageable)
-- Debug routes only in development
-- Clear separation of concerns
-- Easier testing
+### Performance Targets
+- **Search/Retrieval**: <2 seconds
+- **Email Drafting**: <5 seconds
+- **Calendar Operations**: <3 seconds
+- **Workflow Execution**: <10 seconds
+- **Bulk Operations**: <30 seconds (50 emails)
 
-**Location**: `src/routes/auth/`
-
----
-
-### **Phase 2: Environment-Gated Debug Router** ✅
-
-**Implementation**:
-```typescript
-// routes/auth/index.ts
-if (process.env.NODE_ENV !== 'production') {
-  router.use('/debug', debugRoutes)
-}
-```
-
-**Benefits**:
-- Debug endpoints never accessible in production
-- Security improvement
-- Cleaner production build
-
----
-
-### **Phase 3: Bug Fixes** ✅
-
-**Bug**: Execution time always 0
-
-**Before**:
-```typescript
-executionTime: Date.now() - Date.now()  // Always 0!
-```
-
-**After**:
-```typescript
-const startTime = Date.now()
-// ... operation ...
-executionTime: Date.now() - startTime  // Accurate!
-```
-
-**Fixed in**: `ai-domain.service.ts` (3 methods)
-- `generateChatCompletion`
-- `generateTextCompletion`
-- `generateEmbeddings`
-
----
-
-### **Phase 4: Architectural Analysis** ✅
-
-**Decision**: Keep `slack-domain.service.ts` as-is (1,253 lines)
-
-**Reasoning**:
-- Comprehensive Slack API wrapper (intentional design)
-- 20 methods, all following consistent patterns
-- No code duplication
-- Splitting would add coordination overhead
-- Already well-organized by functionality
+### Scalability Requirements
+- **1,000 users** at launch (MVP)
+- **10,000 users** at 12 months
+- **100,000 users** at 24 months
+- **1,000 concurrent users** executing commands
 
 ---
 
 ## Architecture Decisions Records (ADRs)
 
-### ADR-001: Three Service Management Systems
+### ADR-001: Awilix Dependency Injection
 
-**Decision**: Use three separate service management systems
+**Decision**: Use Awilix for dependency injection
 
 **Context**:
-- ServiceManager: Infrastructure (DB, cache, auth)
-- DomainServiceContainer: Business logic (email, calendar)
-- AgentFactory: Agents
+- Need type-safe dependency injection
+- Constructor-based injection preferred
+- Easy testing with container scopes
 
 **Reasoning**:
-- Different lifecycles
-- Different concerns
-- Clear boundaries
-- Independent evolution
-
-**Alternatives Considered**:
-- Single unified manager: Too complex, mixed concerns
-- No management: Chaos, circular dependencies
+- Type-safe service resolution
+- Explicit lifetime management
+- No service locator anti-pattern
+- Easy mocking for tests
 
 **Status**: Accepted ✅
-
----
 
 ### ADR-002: BaseSubAgent 3-Phase Workflow
 
@@ -842,13 +1080,7 @@ executionTime: Date.now() - startTime  // Accurate!
 - Easy to understand and debug
 - Testable at each phase
 
-**Alternatives Considered**:
-- Single-phase: Less structured, harder to debug
-- Custom workflows per agent: Inconsistent, hard to maintain
-
 **Status**: Accepted ✅
-
----
 
 ### ADR-003: ToolRegistry as Single Source of Truth
 
@@ -864,13 +1096,7 @@ executionTime: Date.now() - startTime  // Accurate!
 - Easy discovery
 - AI prompt generation
 
-**Alternatives Considered**:
-- Tool definitions in agents: Duplication
-- Tool definitions in services: Mixed concerns
-
 **Status**: Accepted ✅
-
----
 
 ### ADR-004: Context as String (SimpleContext)
 
@@ -885,10 +1111,6 @@ executionTime: Date.now() - startTime  // Accurate!
 - Easy to read and debug
 - Flexible schema
 - Natural language processing
-
-**Alternatives Considered**:
-- Structured JSON: Rigid schema, harder for AI
-- Database storage: Complexity, performance
 
 **Status**: Accepted ✅
 
@@ -913,16 +1135,16 @@ export class NewDomainService extends BaseService implements INewDomainService {
 }
 ```
 
-3. **Register in Container** (`domain/index.ts`):
+3. **Register in Container** (`domain-services.ts`):
 ```typescript
-container.register('newDomainService', () => new NewDomainService())
+container.register({
+  newDomainService: asClass(NewDomainService).singleton()
+})
 ```
 
-4. **Add to Resolver** (`domain-service-container.ts`):
+4. **Add to Cradle Interface** (`container.ts`):
 ```typescript
-static getNewService(): INewDomainService {
-  return container.resolve('newDomainService')
-}
+newDomainService: import('../services/domain/new-domain.service').NewDomainService;
 ```
 
 ### Adding a New SubAgent
@@ -930,9 +1152,9 @@ static getNewService(): INewDomainService {
 1. **Create Agent** (`agents/new.agent.ts`):
 ```typescript
 export class NewAgent extends BaseSubAgent {
-  constructor() {
+  constructor(service: INewDomainService) {
     super('new', { name: 'NewAgent', ... })
-    this.service = DomainServiceResolver.getNewService()
+    this.service = service
   }
 
   protected getAvailableTools() {
@@ -956,23 +1178,27 @@ ToolRegistry.registerTool({
 })
 ```
 
-3. **Register Agent** (`agent-factory.ts`):
+3. **Register Agent** (`agent-services.ts`):
 ```typescript
-this.registerAgentClass('newAgent', NewAgent)
+container.register({
+  newAgent: asClass(NewAgent).singleton()
+})
 ```
 
 ### Adding a New Route
 
 1. **Create Route File** (`routes/new.routes.ts`):
 ```typescript
+export function createNewRoutes(container: AppContainer) {
 const router = express.Router()
 router.get('/endpoint', middleware, handler)
-export default router
+  return router
+}
 ```
 
 2. **Mount in App** (`index.ts`):
 ```typescript
-app.use('/api/new', newRoutes)
+app.use('/api/new', createNewRoutes(container))
 ```
 
 3. **Add Middleware**: Rate limiting, auth, validation
@@ -985,12 +1211,12 @@ app.use('/api/new', newRoutes)
 
 **Issue**: Agent not found
 ```
-Solution: Check AgentFactory registration in agent-factory.ts
+Solution: Check agent registration in agent-services.ts
 ```
 
 **Issue**: Service not initialized
 ```
-Solution: Check service-initialization.ts dependency order
+Solution: Check service registration in appropriate registration file
 ```
 
 **Issue**: OAuth token expired
@@ -1008,86 +1234,33 @@ Check domain matches (email, calendar, contacts, slack)
 **Issue**: Circular dependency
 ```
 Solution: Services should never import each other directly
-Use DomainServiceResolver or ServiceManager
+Use constructor injection via Awilix container
 ```
-
----
-
-## Performance Considerations
-
-### Caching Strategy
-- **Redis**: Conversation context, OAuth state
-- **In-memory**: Tool definitions, agent capabilities
-- **Database**: User tokens, persistent data
-
-### Optimization Opportunities
-1. **Prompt caching**: Cache frequently-used prompts
-2. **Batch operations**: Group multiple API calls
-3. **Streaming**: Use streaming for long AI responses
-4. **Connection pooling**: Reuse database/API connections
-5. **Rate limiting**: Prevent API exhaustion
-
----
-
-## Security Considerations
-
-### OAuth Security
-- Tokens encrypted at rest
-- State parameter signed (HMAC)
-- CSRF protection
-- Token expiry validation
-
-### API Security
-- Rate limiting per user
-- Input validation (Zod schemas)
-- SQL injection prevention (parameterized queries)
-- XSS protection (sanitized inputs)
-
-### Environment Variables
-- Never commit .env files
-- Use secrets management in production
-- Validate all config at startup
-
----
-
-## Future Improvements
-
-### Potential Enhancements
-1. **Event sourcing**: Track all agent actions
-2. **Audit logging**: Compliance and debugging
-3. **A/B testing**: Test different prompts
-4. **Multi-language**: i18n support
-5. **Real-time updates**: WebSocket for progress
-6. **Analytics**: Track usage patterns
-7. **Testing**: More integration and E2E tests
-
-### Scalability Considerations
-1. **Horizontal scaling**: Stateless design
-2. **Queue system**: Background job processing
-3. **Microservices**: Split into smaller services
-4. **Database sharding**: Scale data layer
-5. **CDN**: Static asset delivery
 
 ---
 
 ## References
 
 ### Key Files
-- **Service Initialization**: `src/services/service-initialization.ts`
+- **Dependency Injection**: `src/di/container.ts`
+- **Service Registration**: `src/di/registrations/`
 - **Master Agent**: `src/agents/master.agent.ts`
 - **Base SubAgent**: `src/framework/base-subagent.ts`
 - **Workflow Executor**: `src/services/workflow-executor.service.ts`
 - **Tool Registry**: `src/framework/tool-registry.ts`
 - **Domain Services**: `src/services/domain/`
 - **Auth Routes**: `src/routes/auth/`
+- **AI Testing**: `backend/tests/e2e/`
 
 ### Related Documentation
 - API Documentation: `/docs/swagger.ts`
 - Environment Setup: `/.env.example`
-- Database Schema: `/prisma/schema.prisma` (if using Prisma)
+- Database Schema: `/migrations/`
+- Testing Framework: `backend/tests/e2e/AI-POWERED-E2E-TESTING-SYSTEM.md`
 
 ---
 
-*Last Updated: September 2025*
-*Architecture Version: 2.0*
-*Refactoring Phase: Completed*
+*Last Updated: January 2025*
+*Architecture Version: 3.0*
+*Dependency Injection: Awilix-based*
+*Testing: AI-Powered E2E System*

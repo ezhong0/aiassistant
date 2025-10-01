@@ -2,12 +2,29 @@ import { BaseService } from './base-service';
 import { SlackContext } from '../types/slack/slack.types';
 import { CacheService } from './cache.service';
 // Context management service types
+interface EmailSummary {
+  id: string;
+  subject: string;
+  from: string;
+  timestamp: Date;
+  isRead: boolean;
+  priority?: 'high' | 'normal' | 'low';
+}
+
+interface CalendarConflict {
+  eventId: string;
+  summary: string;
+  start: Date;
+  end: Date;
+  attendees: string[];
+}
+
 interface EssentialContext {
   userInput: string;
   sessionId: string;
   timestamp: Date;
-  recentEmails?: any[];
-  calendarConflicts?: any[];
+  recentEmails?: EmailSummary[];
+  calendarConflicts?: CalendarConflict[];
   relationshipTone?: string;
   hasUrgentItems?: boolean;
   riskLevel?: string;
@@ -16,7 +33,7 @@ interface EssentialContext {
 interface ActionIntent {
   type: string;
   confidence: number;
-  parameters?: any;
+  parameters?: Record<string, unknown>;
   needsContext?: boolean;
   riskLevel?: string;
   target?: string;
@@ -128,7 +145,7 @@ export class ContextManager extends BaseService {
       conversation: conversationContext,
       analysis: contextAnalysis,
       timestamp: new Date(),
-      sessionId
+      sessionId,
     };
 
     // Cache the result
@@ -145,7 +162,7 @@ export class ContextManager extends BaseService {
       sessionId,
       historyLength: conversationContext.conversationHistory.length,
       recentMessagesCount: conversationContext.recentMessages.length,
-      contextScore: contextAnalysis.contextScore
+      contextScore: contextAnalysis.contextScore,
     });
 
     return gatheredContext;
@@ -181,7 +198,7 @@ export class ContextManager extends BaseService {
         keyEntities,
         conversationTopic,
         userPreferences,
-        contextScore
+        contextScore,
       };
 
       this.logDebug('Context analysis completed', {
@@ -189,7 +206,7 @@ export class ContextManager extends BaseService {
         keyEntitiesCount: keyEntities.length,
         conversationTopic,
         contextScore,
-        relevantHistoryLength: relevantHistory.length
+        relevantHistoryLength: relevantHistory.length,
       });
 
       return analysis;
@@ -202,7 +219,7 @@ export class ContextManager extends BaseService {
         keyEntities: [],
         conversationTopic: 'general',
         userPreferences: {},
-        contextScore: 0.5
+        contextScore: 0.5,
       };
     }
   }
@@ -317,7 +334,7 @@ export class ContextManager extends BaseService {
     try {
       await Promise.all([
         this.cacheService.del(`context:${sessionId}`),
-        this.cacheService.del(`history:${sessionId}`)
+        this.cacheService.del(`history:${sessionId}`),
       ]);
 
       this.logDebug('Cleared context cache', { sessionId });
@@ -343,7 +360,7 @@ export class ContextManager extends BaseService {
       sessionId,
       conversationHistory,
       recentMessages,
-      slackContext
+      slackContext,
     };
   }
 
@@ -458,7 +475,7 @@ export class ContextManager extends BaseService {
    */
   async discoverEssentialContext(
     intent: ActionIntent,
-    sessionId: string
+    sessionId: string,
   ): Promise<EssentialContext> {
     this.assertReady();
 
@@ -469,13 +486,13 @@ export class ContextManager extends BaseService {
     this.logDebug('Gathering essential context', {
       sessionId,
       intentType: intent.type,
-      riskLevel: intent.riskLevel
+      riskLevel: intent.riskLevel,
     });
 
     const context: EssentialContext = {
       userInput: '',
       sessionId: '',
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     try {
@@ -483,7 +500,7 @@ export class ContextManager extends BaseService {
       const discoveries = await Promise.all([
         intent.target ? this.getRecentEmailsFrom(intent.target) : Promise.resolve([]),
         intent.type.includes('schedule') || intent.type.includes('calendar') ? this.getCalendarConflicts() : Promise.resolve([]),
-        intent.target ? this.getBasicTone(intent.target) : Promise.resolve('unknown' as const)
+        intent.target ? this.getBasicTone(intent.target) : Promise.resolve('unknown' as const),
       ]);
 
       context.recentEmails = discoveries[0];
@@ -498,7 +515,7 @@ export class ContextManager extends BaseService {
         emailsFound: context.recentEmails?.length || 0,
         conflictsFound: context.calendarConflicts?.length || 0,
         relationshipTone: context.relationshipTone,
-        hasUrgentItems: context.hasUrgentItems
+        hasUrgentItems: context.hasUrgentItems,
       });
 
       return context;
@@ -527,11 +544,11 @@ export class ContextManager extends BaseService {
       });
       */
 
-      if (result && (result as any)?.emails) {
-        return (result as any).emails.map((email: any) => ({
+      if (result && (result as Record<string, unknown>)?.emails) {
+        return ((result as Record<string, unknown>).emails as EmailSummary[]).map((email: EmailSummary) => ({
           from: email.from || target,
           subject: email.subject || 'No subject',
-          date: new Date(email.date || Date.now())
+          date: new Date(email.date || Date.now()),
         }));
       }
 
@@ -565,10 +582,10 @@ export class ContextManager extends BaseService {
       });
       */
 
-      if (result && (result as any)?.events) {
-        return (result as any).events.slice(0, 3).map((event: any) => ({
+      if (result && (result as Record<string, unknown>)?.events) {
+        return ((result as Record<string, unknown>).events as CalendarConflict[]).slice(0, 3).map((event: CalendarConflict) => ({
           title: event.title || event.summary || 'Untitled event',
-          time: new Date(event.start?.dateTime || event.start?.date || Date.now())
+          time: new Date(event.start?.dateTime || event.start?.date || Date.now()),
         }));
       }
 

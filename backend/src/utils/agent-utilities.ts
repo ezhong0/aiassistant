@@ -9,6 +9,7 @@
  */
 
 import { AgentErrorCode } from '../types/agents/agent-result';
+import { ErrorFactory } from '../errors/error-factory';
 
 
 // ========== Null Safety ==========
@@ -23,7 +24,7 @@ import { AgentErrorCode } from '../types/agents/agent-result';
  */
 export function validateServiceAvailable(
   service: any,
-  serviceName: string
+  serviceName: string,
 ): asserts service is NonNullable<typeof service> {
   if (!service || service === null || service === undefined) {
     throw createServiceUnavailableError(serviceName);
@@ -35,7 +36,7 @@ export function validateServiceAvailable(
  */
 export function createServiceUnavailableError(serviceName: string): Error {
   const error = new Error(
-    `${serviceName} not available. Please check integration setup.`
+    `${serviceName} not available. Please check integration setup.`,
   );
   (error as any).code = AgentErrorCode.SERVICE_UNAVAILABLE;
   (error as any).serviceName = serviceName;
@@ -90,7 +91,7 @@ export function validateAISchema(schema: AISchema): {
     for (const [key, propSchema] of Object.entries(schema.properties)) {
       if (propSchema.type === 'array' && !propSchema.items) {
         errors.push(
-          `Array property '${key}' is missing required 'items' definition`
+          `Array property '${key}' is missing required 'items' definition`,
         );
       }
 
@@ -98,7 +99,7 @@ export function validateAISchema(schema: AISchema): {
       if (propSchema.type === 'object' && propSchema.properties) {
         const nestedResult = validateAISchema(propSchema);
         errors.push(
-          ...nestedResult.errors.map((e) => `${key}.${e}`)
+          ...nestedResult.errors.map((e) => `${key}.${e}`),
         );
       }
     }
@@ -116,8 +117,10 @@ export function validateAISchema(schema: AISchema): {
 export function assertValidAISchema(schema: AISchema): void {
   const result = validateAISchema(schema);
   if (!result.valid) {
-    throw new Error(
-      `Invalid AI schema:\n${result.errors.map((e) => `  - ${e}`).join('\n')}`
+    throw ErrorFactory.validation.invalidInput(
+      'AI schema',
+      schema,
+      `valid schema format:\n${result.errors.map((e) => `  - ${e}`).join('\n')}`,
     );
   }
 }
@@ -132,14 +135,14 @@ export function assertValidAISchema(schema: AISchema): void {
  */
 export async function isErrorResult(result: string, openaiService: any): Promise<boolean> {
   if (!openaiService) {
-    throw new Error('AI service required for error detection - must be provided as parameter');
+    throw ErrorFactory.domain.serviceUnavailable('AIService', { reason: 'AI service required for error detection' });
   }
 
   // Use AI-powered error detection
   try {
     return await detectErrorWithAI(result, openaiService);
   } catch (error) {
-    throw new Error(`Error detection failed: ${error}`);
+    throw ErrorFactory.domain.serviceError('AIService', `Error detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -171,12 +174,12 @@ Be precise - only return "true" for actual errors or failures.`;
     const response = await openaiService.generateText(
       prompt,
       'You detect error messages. Return only "true" or "false".',
-      { temperature: 0.1, maxTokens: 10 }
+      { temperature: 0.1, maxTokens: 10 },
     );
 
     return response.trim().toLowerCase() === 'true';
   } catch (error) {
-    throw new Error(`AI error detection failed: ${error}`);
+    throw ErrorFactory.domain.serviceError('AIService', `AI error detection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

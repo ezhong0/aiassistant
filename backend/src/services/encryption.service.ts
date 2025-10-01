@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { BaseService } from './base-service';
+import { ErrorFactory } from '../errors/error-factory';
 
 /**
  * Encryption service for handling sensitive data encryption/decryption
@@ -54,15 +55,15 @@ export class EncryptionService extends BaseService {
       try {
         this.encryptionKey = Buffer.from(envKey, 'base64');
         if (this.encryptionKey.length !== EncryptionService.KEY_LENGTH) {
-          throw new Error(`Invalid key length: ${this.encryptionKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
+          throw ErrorFactory.domain.serviceError(`Invalid key length: ${this.encryptionKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
         }
         this.logDebug('Using provided token encryption key', {
-          operation: 'encryption_key_initialization'
+          operation: 'encryption_key_initialization',
         });
       } catch (error) {
         this.logWarn('Invalid TOKEN_ENCRYPTION_KEY format, generating new key', {
           operation: 'encryption_key_generation',
-          metadata: { error: error instanceof Error ? error.message : 'Unknown error' }
+          metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
         });
         this.encryptionKey = crypto.randomBytes(EncryptionService.KEY_LENGTH);
       }
@@ -70,8 +71,8 @@ export class EncryptionService extends BaseService {
       // Generate a new key (will be lost on restart - should use env var in production)
       this.encryptionKey = crypto.randomBytes(EncryptionService.KEY_LENGTH);
       const keyBase64 = this.encryptionKey.toString('base64');
-      this.logWarn('No TOKEN_ENCRYPTION_KEY provided, generated temporary key. Set TOKEN_ENCRYPTION_KEY=' + keyBase64 + ' in production', {
-        operation: 'encryption_temp_key_generation'
+      this.logWarn(`No TOKEN_ENCRYPTION_KEY provided, generated temporary key. Set TOKEN_ENCRYPTION_KEY=${  keyBase64  } in production`, {
+        operation: 'encryption_temp_key_generation',
       });
     }
   }
@@ -83,11 +84,11 @@ export class EncryptionService extends BaseService {
     this.assertReady();
     
     if (!plaintext || typeof plaintext !== 'string') {
-      throw new Error('Invalid plaintext for encryption');
+      throw ErrorFactory.api.badRequest('Invalid plaintext for encryption');
     }
     
     if (!this.encryptionKey) {
-      throw new Error('Encryption key not initialized');
+      throw ErrorFactory.domain.serviceError('Encryption key not initialized');
     }
     
     try {
@@ -104,13 +105,13 @@ export class EncryptionService extends BaseService {
       
       this.logDebug('Successfully encrypted sensitive data', {
         operation: 'encryption_success',
-        metadata: { dataLength: plaintext.length }
+        metadata: { dataLength: plaintext.length },
       });
       
       return combined.toString('base64');
     } catch (error) {
       this.logError('Token encryption failed', { error });
-      throw new Error('Failed to encrypt sensitive data');
+      throw ErrorFactory.domain.serviceError('Failed to encrypt sensitive data');
     }
   }
 
@@ -121,18 +122,18 @@ export class EncryptionService extends BaseService {
     this.assertReady();
     
     if (!encryptedData || typeof encryptedData !== 'string') {
-      throw new Error('Invalid encrypted data for decryption');
+      throw ErrorFactory.api.badRequest('Invalid encrypted data for decryption');
     }
     
     if (!this.encryptionKey) {
-      throw new Error('Encryption key not initialized');
+      throw ErrorFactory.domain.serviceError('Encryption key not initialized');
     }
     
     try {
       const combined = Buffer.from(encryptedData, 'base64');
       
       if (combined.length < EncryptionService.IV_LENGTH + EncryptionService.TAG_LENGTH) {
-        throw new Error('Invalid encrypted data format');
+        throw ErrorFactory.api.badRequest('Invalid encrypted data format');
       }
       
       // Extract IV, tag, and encrypted data
@@ -148,13 +149,13 @@ export class EncryptionService extends BaseService {
       
       this.logDebug('Successfully decrypted sensitive data', {
         operation: 'decryption_success',
-        metadata: { dataLength: decrypted.length }
+        metadata: { dataLength: decrypted.length },
       });
       
       return decrypted;
     } catch (error) {
       this.logError('Token decryption failed', { error });
-      throw new Error('Failed to decrypt sensitive data');
+      throw ErrorFactory.domain.serviceError('Failed to decrypt sensitive data');
     }
   }
 
@@ -168,7 +169,7 @@ export class EncryptionService extends BaseService {
     const keyBase64 = newKey.toString('base64');
     
     this.logInfo('Generated new encryption key', {
-      operation: 'encryption_key_generation'
+      operation: 'encryption_key_generation',
     });
     
     return keyBase64;
@@ -183,32 +184,32 @@ export class EncryptionService extends BaseService {
     try {
       const newKey = Buffer.from(newKeyBase64, 'base64');
       if (newKey.length !== EncryptionService.KEY_LENGTH) {
-        throw new Error(`Invalid key length: ${newKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
+        throw ErrorFactory.domain.serviceError(`Invalid key length: ${newKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
       }
       
       this.encryptionKey = newKey;
       
       this.logInfo('Encryption key rotated successfully', {
-        operation: 'encryption_key_rotation'
+        operation: 'encryption_key_rotation',
       });
     } catch (error) {
       this.logError('Failed to rotate encryption key', { error });
-      throw new Error('Failed to rotate encryption key');
+      throw ErrorFactory.domain.serviceError('Failed to rotate encryption key');
     }
   }
 
   /**
    * Get encryption service health status
    */
-  public getHealth(): { healthy: boolean; details?: any } {
+  public getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     return {
       healthy: this.isReady() && !!this.encryptionKey,
       details: {
         state: this._state,
         hasEncryptionKey: !!this.encryptionKey,
         algorithm: EncryptionService.ALGORITHM,
-        keyLength: EncryptionService.KEY_LENGTH
-      }
+        keyLength: EncryptionService.KEY_LENGTH,
+      },
     };
   }
 
@@ -219,7 +220,7 @@ export class EncryptionService extends BaseService {
     return {
       algorithm: EncryptionService.ALGORITHM,
       keyLength: EncryptionService.KEY_LENGTH,
-      hasKey: !!this.encryptionKey
+      hasKey: !!this.encryptionKey,
     };
   }
 }

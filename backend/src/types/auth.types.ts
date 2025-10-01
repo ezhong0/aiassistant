@@ -297,20 +297,20 @@ export interface RateLimitResponse extends ApiErrorResponse {
 
 export const isAuthSuccessResponse = (response: AuthResponse): response is AuthSuccessResponse => {
   return response.success === true;
-}
+};
 
 export const isAuthErrorResponse = (response: AuthResponse): response is AuthErrorResponse => {
   return response.success === false;
-}
+};
 
 export const isAuthError = (error: any): error is AuthError => {
   return error instanceof Error && 'code' in error && 'statusCode' in error;
-}
+};
 
 export const isApiSuccessResponse = <T>(response: ApiResponse<T>): response is ApiSuccessResponse<T> => {
   return response.success === true;
-}
+};
 
 export const isApiErrorResponse = <T>(response: ApiResponse<T>): response is ApiErrorResponse => {
   return response.success === false;
-}
+};

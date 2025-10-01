@@ -15,7 +15,7 @@ export {
   type AuthConfig,
   type ServicesConfig,
   type AIConfig,
-  type SecurityConfig 
+  type SecurityConfig, 
 } from './unified-config';
 
 // Convenience aliases for clean imports

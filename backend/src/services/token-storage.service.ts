@@ -3,6 +3,7 @@ import { DatabaseService } from './database.service';
 import { CacheService } from './cache.service';
 import { EncryptionService } from './encryption.service';
 import { AuditLogger } from '../utils/audit-logger';
+import { ErrorFactory } from '../errors/error-factory';
 
 export interface GoogleTokens {
   access_token: string;
@@ -40,7 +41,7 @@ export class TokenStorageService extends BaseService {
     private readonly databaseService: DatabaseService,
     private readonly cacheService: CacheService,
     private readonly encryptionService: EncryptionService,
-    private readonly config: any
+    private readonly config: Record<string, unknown>,
   ) {
     super('TokenStorageService');
   }
@@ -85,7 +86,7 @@ export class TokenStorageService extends BaseService {
     this.assertReady();
 
     if (!userId) {
-      throw new Error('Valid userId is required');
+      throw ErrorFactory.api.badRequest('Valid userId is required');
     }
 
     // const validatedUserId = validateUserId(userId);
@@ -95,9 +96,9 @@ export class TokenStorageService extends BaseService {
       this.logError('Attempted to store Google tokens without access_token', {
         userId,
         hasGoogle: !!tokens.google,
-        hasAccessToken: !!tokens.google?.access_token
+        hasAccessToken: !!tokens.google?.access_token,
       });
-      throw new Error('Cannot store Google tokens without access_token');
+      throw ErrorFactory.api.badRequest('Cannot store Google tokens without access_token');
     }
 
     let encryptedGoogleRefreshToken: string | undefined;
@@ -118,7 +119,7 @@ export class TokenStorageService extends BaseService {
     if (this.databaseService && this.databaseService.isReady()) {
       try {
         const googleTokens: GoogleTokens = {
-          access_token: tokens.google!.access_token
+          access_token: tokens.google!.access_token,
         };
         
         if (encryptedGoogleRefreshToken) googleTokens.refresh_token = encryptedGoogleRefreshToken;
@@ -131,7 +132,7 @@ export class TokenStorageService extends BaseService {
           googleTokens,
           slackTokens: tokens.slack,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         };
 
         await this.databaseService.storeUserTokens(userTokens);
@@ -145,7 +146,7 @@ export class TokenStorageService extends BaseService {
           userId,
           hasGoogleTokens: !!tokens.google,
           hasSlackTokens: !!tokens.slack,
-          googleTokenType: tokens.google?.token_type
+          googleTokenType: tokens.google?.token_type,
         });
 
         // Audit log token storage
@@ -153,7 +154,7 @@ export class TokenStorageService extends BaseService {
           googleTokens: !!tokens.google,
           slackTokens: !!tokens.slack,
           encrypted: !!encryptedGoogleRefreshToken,
-          storageType: 'database'
+          storageType: 'database',
         });
 
       } catch (error) {
@@ -163,7 +164,7 @@ export class TokenStorageService extends BaseService {
         
         // Store in memory as fallback
         const googleTokens: GoogleTokens = {
-          access_token: tokens.google!.access_token
+          access_token: tokens.google!.access_token,
         };
         
         if (tokens.google!.refresh_token) googleTokens.refresh_token = tokens.google!.refresh_token;
@@ -176,7 +177,7 @@ export class TokenStorageService extends BaseService {
           googleTokens,
           slackTokens: tokens.slack,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         };
 
         this.inMemoryTokens.set(userId, userTokens);
@@ -191,14 +192,14 @@ export class TokenStorageService extends BaseService {
           hasGoogleTokens: !!tokens.google,
           hasSlackTokens: !!tokens.slack,
           googleTokenType: tokens.google?.token_type,
-          storageType: 'memory'
+          storageType: 'memory',
         });
 
         // Audit log token storage
         AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', `tokens:${userId}`, userId, undefined, {
           googleTokens: !!tokens.google,
           slackTokens: !!tokens.slack,
-          storageType: 'memory'
+          storageType: 'memory',
         });
       }
     } else {
@@ -210,11 +211,11 @@ export class TokenStorageService extends BaseService {
           refresh_token: tokens.google.refresh_token || undefined, // Store unencrypted in memory
           expires_at: tokens.google.expires_at || undefined,
           token_type: tokens.google.token_type || undefined,
-          scope: tokens.google.scope || undefined
+          scope: tokens.google.scope || undefined,
         } : undefined,
         slackTokens: tokens.slack,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       this.inMemoryTokens.set(userId, userTokens);
@@ -229,14 +230,14 @@ export class TokenStorageService extends BaseService {
         hasGoogleTokens: !!tokens.google,
         hasSlackTokens: !!tokens.slack,
         googleTokenType: tokens.google?.token_type,
-        storageType: 'memory'
+        storageType: 'memory',
       });
 
       // Audit log token storage
       AuditLogger.logOAuthEvent('OAUTH_TOKENS_STORED', `tokens:${userId}`, userId, undefined, {
         googleTokens: !!tokens.google,
         slackTokens: !!tokens.slack,
-        storageType: 'memory'
+        storageType: 'memory',
       });
     }
   }
@@ -248,7 +249,7 @@ export class TokenStorageService extends BaseService {
     this.assertReady();
     
     if (!userId || typeof userId !== 'string') {
-      throw new Error('Valid userId is required');
+      throw ErrorFactory.api.badRequest('Valid userId is required');
     }
 
     // Try cache first
@@ -271,7 +272,7 @@ export class TokenStorageService extends BaseService {
           userId, 
           userIdType: typeof userId,
           userIdLength: userId?.length,
-          databaseServiceReady: this.databaseService.isReady()
+          databaseServiceReady: this.databaseService.isReady(),
         });
         const tokens = await this.databaseService.getUserTokens(userId);
         this.logInfo('Database query result', { 
@@ -280,7 +281,7 @@ export class TokenStorageService extends BaseService {
           hasGoogleTokens: !!tokens?.googleTokens,
           hasGoogleAccessToken: !!tokens?.googleTokens?.access_token,
           tokensCreatedAt: tokens?.createdAt,
-          tokensUpdatedAt: tokens?.updatedAt
+          tokensUpdatedAt: tokens?.updatedAt,
         });
         if (tokens) {
           // Decrypt Google refresh token if present
@@ -331,7 +332,7 @@ export class TokenStorageService extends BaseService {
         userId, 
         hasDatabaseService: !!this.databaseService,
         databaseReady: this.databaseService?.isReady(),
-        databaseFailed: !!(this.databaseService as any)?._initializationFailed
+        databaseFailed: !!(this.databaseService as any)?._initializationFailed,
       });
     }
 
@@ -405,7 +406,7 @@ export class TokenStorageService extends BaseService {
         this.logError('Failed to refresh Google access token', { 
           userId, 
           status: response.status,
-          error: errorText 
+          error: errorText, 
         });
         return null;
       }
@@ -422,7 +423,7 @@ export class TokenStorageService extends BaseService {
         const updatedGoogleTokens: GoogleTokens = {
           ...currentTokens.googleTokens,
           access_token: tokenData.access_token,
-          expires_at: new Date(Date.now() + (tokenData.expires_in * 1000))
+          expires_at: new Date(Date.now() + (tokenData.expires_in * 1000)),
         };
         
         if (tokenData.refresh_token || currentTokens.googleTokens.refresh_token) {
@@ -433,7 +434,7 @@ export class TokenStorageService extends BaseService {
           google?: GoogleTokens;
           slack?: SlackTokens;
         } = {
-          google: updatedGoogleTokens
+          google: updatedGoogleTokens,
         };
         
         if (currentTokens.slackTokens) {
@@ -445,10 +446,10 @@ export class TokenStorageService extends BaseService {
 
       return {
         access_token: tokenData.access_token,
-        expires_in: tokenData.expires_in
+        expires_in: tokenData.expires_in,
       };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logError('Error refreshing Google access token', { userId, error: error?.message || error });
       
       // If refresh fails with 400 (invalid refresh token), user needs to re-authenticate
@@ -468,7 +469,7 @@ export class TokenStorageService extends BaseService {
     this.assertReady();
     
     if (!userId || typeof userId !== 'string') {
-      throw new Error('Valid userId is required');
+      throw ErrorFactory.api.badRequest('Valid userId is required');
     }
 
     try {
@@ -529,7 +530,7 @@ export class TokenStorageService extends BaseService {
         // Remove from database
         await this.databaseService.query(
           'DELETE FROM user_tokens WHERE user_id = $1',
-          [userId]
+          [userId],
         );
       }
       

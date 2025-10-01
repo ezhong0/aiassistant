@@ -69,7 +69,7 @@ export class RateLimitStore extends BaseService {
       const newData: RateLimitData = {
         count: 1,
         resetTime: now + windowMs,
-        firstRequestTime: now
+        firstRequestTime: now,
       };
       
       // Prevent memory bloat by enforcing max store size
@@ -105,8 +105,8 @@ export class RateLimitStore extends BaseService {
         metadata: { 
           cleanedCount,
           remainingEntries: this.store.size,
-          maxStoreSize: this.maxStoreSize
-        }
+          maxStoreSize: this.maxStoreSize,
+        },
       });
     }
   }
@@ -123,7 +123,7 @@ export class RateLimitStore extends BaseService {
     
     for (let i = 0; i < toRemove && i < entries.length; i++) {
       const entry = entries[i];
-      if (entry && entry[0]) {
+      if (entry?.[0]) {
         this.store.delete(entry[0]);
         removedCount++;
       }
@@ -135,8 +135,8 @@ export class RateLimitStore extends BaseService {
       metadata: { 
         removedCount,
         remainingEntries: this.store.size,
-        maxStoreSize: this.maxStoreSize
-      }
+        maxStoreSize: this.maxStoreSize,
+      },
     });
   }
   
@@ -146,7 +146,7 @@ export class RateLimitStore extends BaseService {
       maxStoreSize: this.maxStoreSize,
       ttlMs: this.ttlMs,
       memoryUsage: process.memoryUsage().heapUsed,
-      isNearCapacity: this.store.size >= this.maxStoreSize * 0.8
+      isNearCapacity: this.store.size >= this.maxStoreSize * 0.8,
     };
   }
   
@@ -170,7 +170,7 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
     keyGenerator = (req: Request) => req.ip || 'unknown',
     message = `Too many requests. Maximum ${maxRequests} requests per ${windowMs / 1000 / 60} minutes.`,
     standardHeaders = true,
-    legacyHeaders = false
+    legacyHeaders = false,
   } = options;
   
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -189,7 +189,7 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
         res.set({
           'RateLimit-Limit': maxRequests.toString(),
           'RateLimit-Remaining': Math.max(0, maxRequests - data.count).toString(),
-          'RateLimit-Reset': Math.ceil(data.resetTime / 1000).toString()
+          'RateLimit-Reset': Math.ceil(data.resetTime / 1000).toString(),
         });
       }
       
@@ -197,7 +197,7 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
         res.set({
           'X-RateLimit-Limit': maxRequests.toString(),
           'X-RateLimit-Remaining': Math.max(0, maxRequests - data.count).toString(),
-          'X-RateLimit-Reset': Math.ceil(data.resetTime / 1000).toString()
+          'X-RateLimit-Reset': Math.ceil(data.resetTime / 1000).toString(),
         });
       }
       
@@ -206,14 +206,14 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
           correlationId: `rate-limit-${Date.now()}`,
           operation: 'rate_limit_exceeded',
           metadata: {
-            key: key.substring(0, 10) + '***', // Partially mask for privacy
+            key: `${key.substring(0, 10)  }***`, // Partially mask for privacy
             count: data.count,
             maxRequests,
             windowMs,
             path: req.path,
             method: req.method,
-            userAgent: req.get('User-Agent')
-          }
+            userAgent: req.get('User-Agent'),
+          },
         });
         
         res.status(429).json({
@@ -221,8 +221,8 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
           error: {
             code: 'RATE_LIMITED',
             message,
-            retryAfter: Math.ceil((data.resetTime - Date.now()) / 1000)
-          }
+            retryAfter: Math.ceil((data.resetTime - Date.now()) / 1000),
+          },
         });
         return;
       }
@@ -233,11 +233,11 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
           correlationId: `rate-limit-warn-${Date.now()}`,
           operation: 'rate_limit_warning',
           metadata: {
-            key: key.substring(0, 10) + '***',
+            key: `${key.substring(0, 10)  }***`,
             count: data.count,
             maxRequests,
-            remainingRequests: maxRequests - data.count
-          }
+            remainingRequests: maxRequests - data.count,
+          },
         });
       }
       
@@ -245,7 +245,7 @@ export function createRateLimit(rateLimitStore: RateLimitStore, options: RateLim
     } catch (error) {
       logger.error('Rate limiting middleware error', error as Error, {
         correlationId: `rate-limit-error-${Date.now()}`,
-        operation: 'rate_limit_middleware_error'
+        operation: 'rate_limit_middleware_error',
       });
       // Don't block requests on rate limiting errors
       next();
@@ -270,7 +270,7 @@ export function createApiRateLimit(rateLimitStore: RateLimitStore) {
     windowMs: 900000, // 15 minutes
     maxRequests: 100,
     message: 'Too many API requests. Please try again later.',
-    keyGenerator: (req: Request) => req.ip || 'unknown'
+    keyGenerator: (req: Request) => req.ip || 'unknown',
   });
 }
 
@@ -282,7 +282,7 @@ export function createAuthRateLimit(rateLimitStore: RateLimitStore) {
     windowMs: config.security.rateLimiting.authWindowMs,
     maxRequests: config.security.rateLimiting.authMaxRequests,
     message: 'Too many authentication attempts. Please try again later.',
-    keyGenerator: (req: Request) => req.ip || 'unknown'
+    keyGenerator: (req: Request) => req.ip || 'unknown',
   });
 }
 
@@ -294,6 +294,6 @@ export function createSensitiveOperationRateLimit(rateLimitStore: RateLimitStore
     windowMs: 60 * 60 * 1000, // 1 hour
     maxRequests: 5,
     message: 'Too many sensitive operations. Please try again later.',
-    keyGenerator: (req: Request) => req.ip || 'unknown'
+    keyGenerator: (req: Request) => req.ip || 'unknown',
   });
 }

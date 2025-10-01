@@ -10,9 +10,9 @@ import {
   WorkflowError,
   DomainError,
   ValidationError,
-  AuthenticationError
+  AuthenticationError,
 } from './specialized-errors';
-import { ERROR_CODES, ERROR_CODE_CATEGORIES } from './error-codes';
+import { ERROR_CODES } from './error-codes';
 import type { ErrorCode } from './error-codes';
 
 /**
@@ -107,7 +107,7 @@ export function isAuthError(error: unknown): boolean {
     ERROR_CODES.NOT_AUTHENTICATED,
     ERROR_CODES.GOOGLE_AUTH_FAILED,
     ERROR_CODES.OPENAI_AUTH_FAILED,
-    ERROR_CODES.SLACK_AUTH_FAILED
+    ERROR_CODES.SLACK_AUTH_FAILED,
   ];
 
   return (authCodes as readonly ErrorCode[]).includes(error.code);
@@ -237,9 +237,9 @@ export function ensureAppError(error: unknown): AppError {
         originalError: error,
         metadata: {
           errorName: error.name,
-          errorStack: error.stack
-        }
-      }
+          errorStack: error.stack,
+        },
+      },
     );
   }
 
@@ -248,9 +248,9 @@ export function ensureAppError(error: unknown): AppError {
     ERROR_CODES.UNKNOWN_ERROR,
     {
       metadata: {
-        originalValue: error
-      }
-    }
+        originalValue: error,
+      },
+    },
   );
 }
 

@@ -14,7 +14,7 @@ export const EMAIL_SERVICE_CONSTANTS = {
     EMAIL_VALIDATOR: 'emailValidator',
     EMAIL_FORMATTER: 'emailFormatter',
     GMAIL_SERVICE: 'gmailService',
-    CONTACT_SERVICE: 'contactService'
+    CONTACT_SERVICE: 'contactService',
   },
 
   // Error Messages
@@ -46,7 +46,7 @@ export const EMAIL_SERVICE_CONSTANTS = {
     MAX_RESULTS_INVALID: 'Max results must be between 1 and 500',
     INVALID_PAGE_TOKEN: 'Invalid page token',
     EXPENSIVE_QUERY_WARNING: 'This search query may take a long time to execute',
-    SPAM_WARNING: 'Email content may be flagged as spam'
+    SPAM_WARNING: 'Email content may be flagged as spam',
   },
 
   // Success Messages
@@ -60,21 +60,21 @@ export const EMAIL_SERVICE_CONSTANTS = {
     CONTACT_RESOLVED_FUZZY: 'Contact resolved by fuzzy match',
     VALIDATION_COMPLETED: 'Validation completed',
     PERMISSIONS_CHECK_COMPLETED: 'Email permissions check completed',
-    DISAMBIGUATION_COMPLETED: 'Contact disambiguation completed'
+    DISAMBIGUATION_COMPLETED: 'Contact disambiguation completed',
   },
 
   // Validation Types
   VALIDATION_TYPES: {
     EMAIL_FORMAT: 'email_format',
     CONTACT_EXISTS: 'contact_exists',
-    INVALID: 'invalid'
+    INVALID: 'invalid',
   },
 
   // Resolution Methods
   RESOLUTION_METHODS: {
     EXACT_MATCH: 'exact_match',
     FUZZY_MATCH: 'fuzzy_match',
-    NOT_FOUND: 'not_found'
+    NOT_FOUND: 'not_found',
   },
 
   // Email Actions
@@ -83,14 +83,14 @@ export const EMAIL_SERVICE_CONSTANTS = {
     SEARCH: 'search',
     REPLY: 'reply',
     DRAFT: 'draft',
-    GET: 'get'
+    GET: 'get',
   },
 
   // OAuth Permissions - Use centralized OAuth scopes
   OAUTH_PERMISSIONS: {
     GMAIL_READONLY: 'gmail.readonly',
     GMAIL_SEND: 'gmail.send', 
-    GMAIL_COMPOSE: 'gmail.compose'
+    GMAIL_COMPOSE: 'gmail.compose',
   },
 
   // Default Values - Removed hardcoded fallbacks
@@ -98,7 +98,7 @@ export const EMAIL_SERVICE_CONSTANTS = {
     NO_SUBJECT: 'No Subject',
     UNKNOWN_SENDER: 'Unknown Sender',
     UNKNOWN_DATE: 'Unknown Date',
-    EMAIL_OPERATION_COMPLETED: 'Email operation completed'
+    EMAIL_OPERATION_COMPLETED: 'Email operation completed',
   },
 
   // Formatting
@@ -118,7 +118,7 @@ export const EMAIL_SERVICE_CONSTANTS = {
     EMAIL_TO_LABEL: '📧 **To:**',
     EMAIL_MESSAGE_ID_LABEL: '🆔 **Message ID:**',
     EMAIL_THREAD_ID_LABEL: '🧵 **Thread ID:**',
-    EMAIL_DRAFT_ID_LABEL: '🆔 **Draft ID:**'
+    EMAIL_DRAFT_ID_LABEL: '🆔 **Draft ID:**',
   },
 
   // Limits
@@ -129,8 +129,8 @@ export const EMAIL_SERVICE_CONSTANTS = {
     MIN_SEARCH_RESULTS: 1,
     DEFAULT_SEARCH_RESULTS: 10,
     MAX_DISPLAY_EMAILS: 5,
-    MAX_TEXT_TRUNCATE: 500
-  }
+    MAX_TEXT_TRUNCATE: 500,
+  },
 } as const;
 
 export type EmailServiceConstants = typeof EMAIL_SERVICE_CONSTANTS;

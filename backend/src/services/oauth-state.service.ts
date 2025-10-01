@@ -24,7 +24,7 @@ export class OAuthStateService extends BaseService {
       if (!hasCacheService) {
         logger.warn('OAuthStateService initialized without CacheService - falling back to stateless behavior', {
           correlationId: `oauth-state-init-${Date.now()}`,
-          operation: 'oauth_state_init'
+          operation: 'oauth_state_init',
         });
       }
     } catch (error) {
@@ -44,7 +44,7 @@ export class OAuthStateService extends BaseService {
       teamId: context.teamId,
       channelId: context.channelId,
       ts: Date.now(),
-      n: nonce
+      n: nonce,
     };
     const payload = JSON.stringify(payloadObj);
     const sig = this.sign(payload);
@@ -83,7 +83,7 @@ export class OAuthStateService extends BaseService {
         userId: obj.userId,
         channelId: obj.channelId,
         teamId: '',
-        isDirectMessage: true
+        isDirectMessage: true,
       };
     } catch {
       return null;

@@ -46,7 +46,7 @@ export const apiLoggingMiddleware = (options: {
     logQuery = true,
     logParams = true,
     maxBodyLength = 10000,
-    sensitiveFields = ['password', 'token', 'authorization', 'cookie', 'access_token', 'refresh_token']
+    sensitiveFields = ['password', 'token', 'authorization', 'cookie', 'access_token', 'refresh_token'],
   } = options;
 
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -66,7 +66,7 @@ export const apiLoggingMiddleware = (options: {
       ip: req.ip || req.connection.remoteAddress || 'unknown',
       userAgent: req.get('User-Agent'),
       userId: (req as AuthenticatedRequest).user?.userId || undefined,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     // Add optional data based on configuration
@@ -125,7 +125,7 @@ export const apiLoggingMiddleware = (options: {
         requestId,
         statusCode: res.statusCode,
         responseTime,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       // Add response content length if available
@@ -158,8 +158,8 @@ export const apiLoggingMiddleware = (options: {
           operation: 'api_response_error',
           metadata: {
             ...responseLogData,
-            responseBody: logBody ? sanitizeObject(responseData, sensitiveFields, maxBodyLength) : undefined
-          }
+            responseBody: logBody ? sanitizeObject(responseData, sensitiveFields, maxBodyLength) : undefined,
+          },
         });
       }
       // Disabled: warn and info logging
@@ -212,11 +212,11 @@ export const apiLoggingMiddleware = (options: {
 const sanitizeObject = (
   obj: unknown, 
   sensitiveFields: string[], 
-  maxLength?: number
+  maxLength?: number,
 ): unknown => {
   if (!obj || typeof obj !== 'object') {
     if (typeof obj === 'string' && maxLength && obj.length > maxLength) {
-      return obj.substring(0, maxLength) + '... [truncated]';
+      return `${obj.substring(0, maxLength)  }... [truncated]`;
     }
     return obj;
   }
@@ -235,21 +235,21 @@ const sanitizeObject = (
     } else if (typeof value === 'object') {
       sanitized[key] = sanitizeObject(value, sensitiveFields, maxLength);
     } else if (typeof value === 'string' && maxLength && value.length > maxLength) {
-      sanitized[key] = value.substring(0, maxLength) + '... [truncated]';
+      sanitized[key] = `${value.substring(0, maxLength)  }... [truncated]`;
     } else {
       sanitized[key] = value;
     }
   }
 
   return sanitized;
-}
+};
 
 /**
  * Sanitize headers by removing sensitive information
  */
 const sanitizeHeaders = (
   headers: Record<string, unknown>, 
-  sensitiveFields: string[]
+  sensitiveFields: string[],
 ): Record<string, string> => {
   const sanitized: Record<string, string> = {};
   
@@ -264,7 +264,7 @@ const sanitizeHeaders = (
   }
 
   return sanitized;
-}
+};
 
 /**
  * Determine log level based on status code and response time
@@ -279,7 +279,7 @@ const getLogLevel = (statusCode: number, responseTime: number): 'info' | 'warn' 
   }
   
   return 'info';
-}
+};
 
 
 

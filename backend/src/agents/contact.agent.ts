@@ -12,6 +12,7 @@ import { BaseSubAgent, AgentCapabilities } from '../framework/base-subagent';
 import { ToolRegistry } from '../framework/tool-registry';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContactsDomainService } from '../services/domain/contacts-domain.service';
+import { ErrorFactory } from '../errors/error-factory';
 
 export class ContactAgent extends BaseSubAgent {
   private contactsService: ContactsDomainService;
@@ -22,7 +23,7 @@ export class ContactAgent extends BaseSubAgent {
       description: 'Contact management sub-agent for searching, creating, and managing contacts',
       enabled: true,
       timeout: 30000,
-      retryCount: 3
+      retryCount: 3,
     });
 
     // Store injected domain service
@@ -60,35 +61,40 @@ export class ContactAgent extends BaseSubAgent {
   /**
    * Execute tool call by mapping to contacts service method
    */
-  protected async executeToolCall(toolName: string, params: any): Promise<any> {
+  protected async executeToolCall(toolName: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const serviceMethod = this.getToolToServiceMap()[toolName];
     if (!serviceMethod) {
-      throw new Error(`Unknown contact tool: ${toolName}`);
+      throw ErrorFactory.domain.serviceError('ContactAgent', `Unknown contact tool: ${toolName}`);
     }
 
     const { userId, ...serviceParams } = params;
     if (!userId) {
-      throw new Error('userId is required for contact operations');
+      throw ErrorFactory.api.badRequest('userId is required for contact operations');
     }
 
     // TypeScript will enforce that service[serviceMethod] exists
     const service = this.getService();
-    
+
     try {
       // Handle different method signatures
       switch (toolName) {
         case 'create_contact':
           // createContact needs userId as first parameter
-          return await service.createContact(userId, serviceParams);
+          return await service.createContact(userId as string, serviceParams) as unknown as Record<string, unknown>;
         case 'update_contact':
           // updateContact needs contactId as first parameter
-          return await service.updateContact(serviceParams.contactId || serviceParams.resourceName, serviceParams);
-        default:
+          return await service.updateContact(serviceParams.contactId as string || serviceParams.resourceName as string, serviceParams) as unknown as Record<string, unknown>;
+        default: {
           // Most methods follow the pattern: method(userId, params)
-          return await (service as any)[serviceMethod](userId, serviceParams);
+          const method = (service as unknown as Record<string, (userId: string, params: Record<string, unknown>) => Promise<unknown>>)[serviceMethod];
+          if (!method) {
+            throw ErrorFactory.domain.serviceError('ContactAgent', `Method ${serviceMethod} not found on ContactsDomainService`);
+          }
+          return await method(userId as string, serviceParams) as Record<string, unknown>;
+        }
       }
     } catch (error) {
-      throw new Error(`Contact ${toolName} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw ErrorFactory.domain.serviceError('ContactAgent', `Contact ${toolName} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -106,7 +112,7 @@ export class ContactAgent extends BaseSubAgent {
       requiresAuth: true,
       requiresConfirmation: tools.some(tool => tool.requiresConfirmation),
       isCritical: tools.some(tool => tool.isCritical),
-      examples: examples.slice(0, 6) // Limit to 6 examples
+      examples: examples.slice(0, 6), // Limit to 6 examples
     };
   }
 

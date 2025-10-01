@@ -32,7 +32,7 @@ export class AuthStatusService extends BaseService {
     private readonly tokenStorageService: TokenStorageService,
     private readonly tokenManager: TokenManager,
     private readonly googleOAuthManager: GoogleOAuthManager,
-    private readonly slackOAuthManager: SlackOAuthManager
+    private readonly slackOAuthManager: SlackOAuthManager,
   ) {
     super('AuthStatusService');
   }
@@ -71,7 +71,7 @@ export class AuthStatusService extends BaseService {
           services: ['Gmail', 'Calendar', 'Contacts'],
           status: 'disconnected',
           hasAccessToken: false,
-          hasRefreshToken: false
+          hasRefreshToken: false,
         }];
       }
 
@@ -79,7 +79,7 @@ export class AuthStatusService extends BaseService {
     } catch (error) {
       this.logError('Failed to get user connections', error as Error, {
         operation: 'getUserConnections_error',
-        metadata: { teamId, userId }
+        metadata: { teamId, userId },
       });
 
       // Return disconnected status on any error
@@ -90,7 +90,7 @@ export class AuthStatusService extends BaseService {
         services: ['Gmail', 'Calendar', 'Contacts'],
         status: 'disconnected',
         hasAccessToken: false,
-        hasRefreshToken: false
+        hasRefreshToken: false,
       }];
     }
   }
@@ -113,7 +113,7 @@ export class AuthStatusService extends BaseService {
         hasAccessToken: !!tokens,
         hasRefreshToken: false, // Google refresh tokens are handled internally
         expiresAt: undefined, // OAuth manager handles expiry
-        expiresIn: undefined
+        expiresIn: undefined,
       };
     } catch (error) {
       this.logError('Failed to get Google connection status', error as Error, { userId });
@@ -139,7 +139,7 @@ export class AuthStatusService extends BaseService {
         hasAccessToken: !!tokens,
         hasRefreshToken: false, // Slack doesn't use refresh tokens
         expiresAt: undefined,
-        expiresIn: undefined
+        expiresIn: undefined,
       };
     } catch (error) {
       this.logError('Failed to get Slack connection status', error as Error, { userId });
@@ -151,7 +151,7 @@ export class AuthStatusService extends BaseService {
     provider: string,
     providerName: string,
     emoji: string,
-    services: string[]
+    services: string[],
   ): ServiceConnection {
     return {
       provider,
@@ -160,13 +160,13 @@ export class AuthStatusService extends BaseService {
       services,
       status: 'disconnected',
       hasAccessToken: false,
-      hasRefreshToken: false
+      hasRefreshToken: false,
     };
   }
 
   private determineStatus(
     accessToken?: string,
-    expiryDate?: number
+    expiryDate?: number,
   ): 'connected' | 'disconnected' | 'expired' | 'expiring' {
     if (!accessToken) return 'disconnected';
 
@@ -215,7 +215,7 @@ export class AuthStatusService extends BaseService {
       connected: '✅',
       disconnected: '❌',
       expired: '⚠️',
-      expiring: '⏰'
+      expiring: '⏰',
     };
     return emojis[status] || '⚪';
   }
@@ -226,10 +226,10 @@ export class AuthStatusService extends BaseService {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: '🔐 Your Connections'
-        }
+          text: '🔐 Your Connections',
+        },
       },
-      { type: 'divider' }
+      { type: 'divider' },
     ];
 
     for (const conn of connections) {
@@ -245,8 +245,8 @@ export class AuthStatusService extends BaseService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: statusText
-        }
+          text: statusText,
+        },
       });
 
       const buttons: any[] = [];
@@ -256,36 +256,36 @@ export class AuthStatusService extends BaseService {
           type: 'button',
           text: {
             type: 'plain_text',
-            text: '🔄 Refresh'
+            text: '🔄 Refresh',
           },
           action_id: `refresh_${conn.provider}`,
-          value: JSON.stringify({ provider: conn.provider })
+          value: JSON.stringify({ provider: conn.provider }),
         });
         buttons.push({
           type: 'button',
           text: {
             type: 'plain_text',
-            text: '🧪 Test'
+            text: '🧪 Test',
           },
           action_id: `test_${conn.provider}`,
-          value: JSON.stringify({ provider: conn.provider })
+          value: JSON.stringify({ provider: conn.provider }),
         });
       } else {
         buttons.push({
           type: 'button',
           text: {
             type: 'plain_text',
-            text: '🔗 Connect'
+            text: '🔗 Connect',
           },
           action_id: `connect_${conn.provider}`,
           value: JSON.stringify({ provider: conn.provider }),
-          style: 'primary'
+          style: 'primary',
         });
       }
 
       blocks.push({
         type: 'actions',
-        elements: buttons
+        elements: buttons,
       });
 
       blocks.push({ type: 'divider' });
@@ -296,9 +296,9 @@ export class AuthStatusService extends BaseService {
       elements: [
         {
           type: 'mrkdwn',
-          text: '💡 Tip: Connections refresh automatically, but you can manually refresh anytime.'
-        }
-      ]
+          text: '💡 Tip: Connections refresh automatically, but you can manually refresh anytime.',
+        },
+      ],
     });
 
     return blocks;
@@ -319,7 +319,7 @@ export class AuthStatusService extends BaseService {
         if (!this.googleOAuthManager) {
           return {
             success: false,
-            message: 'Google OAuth manager not available.'
+            message: 'Google OAuth manager not available.',
           };
         }
 
@@ -327,13 +327,13 @@ export class AuthStatusService extends BaseService {
         if (!validation.isValid) {
           return {
             success: false,
-            message: 'Google connection is not valid. Please reconnect your account.'
+            message: 'Google connection is not valid. Please reconnect your account.',
           };
         }
 
         return {
           success: true,
-          message: 'Google connection is working! ✅'
+          message: 'Google connection is working! ✅',
         };
       }
 
@@ -341,7 +341,7 @@ export class AuthStatusService extends BaseService {
         if (!this.slackOAuthManager) {
           return {
             success: false,
-            message: 'Slack OAuth manager not available.'
+            message: 'Slack OAuth manager not available.',
           };
         }
 
@@ -349,31 +349,31 @@ export class AuthStatusService extends BaseService {
         if (!validation.isValid) {
           return {
             success: false,
-            message: 'Slack connection is not valid. Please reconnect your account.'
+            message: 'Slack connection is not valid. Please reconnect your account.',
           };
         }
 
         return {
           success: true,
-          message: 'Slack connection is working! ✅'
+          message: 'Slack connection is working! ✅',
         };
       }
 
       return {
         success: false,
-        message: `Provider ${provider} is not yet supported for testing.`
+        message: `Provider ${provider} is not yet supported for testing.`,
       };
     } catch (error) {
       this.logError('Connection test failed', error as Error, {
         teamId,
         userId,
         provider,
-        operation: 'test_connection'
+        operation: 'test_connection',
       });
 
       return {
         success: false,
-        message: `Connection test failed: ${(error as Error).message}`
+        message: `Connection test failed: ${(error as Error).message}`,
       };
     }
   }
