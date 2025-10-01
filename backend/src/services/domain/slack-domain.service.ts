@@ -3,7 +3,7 @@ import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { SlackAPIClient } from '../api/clients/slack-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors';
+import { APIClientError } from '../../errors';
 import { ValidationHelper, SlackValidationSchemas } from '../../validation/api-client.validation';
 import { ISlackDomainService } from './interfaces/slack-domain.interface';
 import { SlackOAuthManager } from '../oauth/slack-oauth-manager';

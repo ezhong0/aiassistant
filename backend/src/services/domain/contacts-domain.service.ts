@@ -3,7 +3,7 @@ import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors';
+import { APIClientError } from '../../errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';

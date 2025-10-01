@@ -12,7 +12,7 @@ import { ERROR_CATEGORIES } from '../utils/app-error';
 /**
  * Context for error transformation
  */
-interface TransformContext {
+export interface TransformContext {
   serviceName: string;
   endpoint?: string;
   method?: string;
@@ -292,8 +292,5 @@ export class ErrorTransformer {
   }
 }
 
-// Export individual transformers for direct use
-export {
-  ErrorTransformer as default,
-  type TransformContext
-};
+// Export as default
+export { ErrorTransformer as default };

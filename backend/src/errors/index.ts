@@ -81,15 +81,3 @@ export {
 } from './transformers';
 
 export type { TransformContext } from './transformers';
-
-// Legacy compatibility (deprecated - use new ErrorFactory and error codes)
-import { ErrorFactory as EF } from './error-factory';
-import { ERROR_CODES as EC, ERROR_CODE_CATEGORIES as ECC } from './error-codes';
-import type { ErrorCode as ECT } from './error-codes';
-
-export const UnifiedErrorFactory = EF;
-export const ErrorContextBuilder = {
-  create: (metadata: Record<string, any>) => metadata
-};
-export type APIClientErrorCode = ECT;
-export const APIClientErrorCategory = ECC;

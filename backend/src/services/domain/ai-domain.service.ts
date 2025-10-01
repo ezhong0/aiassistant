@@ -3,7 +3,7 @@ import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { OpenAIClient } from '../api/clients/openai-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors';
+import { APIClientError } from '../../errors';
 import { ValidationHelper, AIValidationSchemas } from '../../validation/api-client.validation';
 import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.interface';
 
