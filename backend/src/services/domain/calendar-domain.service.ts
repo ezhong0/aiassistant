@@ -223,7 +223,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
       
       // Authenticate with valid token
@@ -324,14 +324,17 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
       
       // Authenticate with valid token
@@ -434,7 +437,10 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
@@ -563,14 +569,17 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
       
       // Authenticate with valid token
@@ -641,7 +650,10 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
@@ -681,14 +693,17 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
       
       // Authenticate with valid token
@@ -750,14 +765,17 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
       
       // Authenticate with valid token
@@ -866,14 +884,17 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'CalendarDomainService',
+        operation: 'calendar-operation'
+      });
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
       
       // Authenticate with valid token

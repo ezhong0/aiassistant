@@ -79,13 +79,16 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
   private async initializeBotUserId(): Promise<void> {
     try {
       if (!this.slackClient) {
-        throw new Error('Slack client not available');
+        throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
       }
 
       // Use bot token for authentication
       const botToken = process.env.SLACK_BOT_TOKEN;
       if (!botToken) {
-        throw new Error('Slack bot token not configured');
+        throw ErrorFactory.domain.serviceError('SlackDomainService', 'Slack bot token not configured. Please set SLACK_BOT_TOKEN environment variable.');
       }
 
       const credentials = {
@@ -120,7 +123,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackOAuthManager) {
-      throw new Error('SlackOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('SlackOAuthManager', {
+        service: 'SlackDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const authUrl = await this.slackOAuthManager.generateAuthUrl(context);
@@ -131,12 +137,15 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackOAuthManager) {
-      throw new Error('SlackOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('SlackOAuthManager', {
+        service: 'SlackDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const result = await this.slackOAuthManager.exchangeCodeForTokens(code, state);
     if (!result.success) {
-      throw new Error(result.error || 'OAuth completion failed');
+      throw ErrorFactory.domain.serviceError('SlackOAuthManager', result.error || 'OAuth completion failed');
     }
   }
 
@@ -144,13 +153,16 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackOAuthManager) {
-      throw new Error('SlackOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('SlackOAuthManager', {
+        service: 'SlackDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     // Slack doesn't typically use refresh tokens, but we can implement token validation
     const isValid = await this.slackOAuthManager.validateTokens(userId);
     if (!isValid.isValid) {
-      throw new Error('Token validation failed');
+      throw ErrorFactory.api.unauthorized('Slack token validation failed. Re-authentication required.');
     }
   }
 
@@ -158,12 +170,15 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackOAuthManager) {
-      throw new Error('SlackOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('SlackOAuthManager', {
+        service: 'SlackDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const success = await this.slackOAuthManager.revokeTokens(userId);
     if (!success) {
-      throw new Error('Token revocation failed');
+      throw ErrorFactory.domain.serviceError('SlackOAuthManager', 'Token revocation failed');
     }
   }
 
@@ -213,7 +228,7 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       // Use bot token for sending messages (not user OAuth tokens)
       const botToken = process.env.SLACK_BOT_TOKEN;
       if (!botToken) {
-        throw new Error('Slack bot token not configured');
+        throw ErrorFactory.domain.serviceError('SlackDomainService', 'Slack bot token not configured. Please set SLACK_BOT_TOKEN environment variable.');
       }
 
       // Authenticate with bot token
@@ -303,7 +318,7 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       // Use bot token for sending ephemeral messages
       const botToken = process.env.SLACK_BOT_TOKEN;
       if (!botToken) {
-        throw new Error('Slack bot token not configured');
+        throw ErrorFactory.domain.serviceError('SlackDomainService', 'Slack bot token not configured. Please set SLACK_BOT_TOKEN environment variable.');
       }
 
       // Authenticate with bot token
@@ -374,14 +389,17 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
       // Use bot token for updating messages (same as sendMessage)
       const botToken = process.env.SLACK_BOT_TOKEN;
       if (!botToken) {
-        throw new Error('Slack bot token not configured');
+        throw ErrorFactory.domain.serviceError('SlackDomainService', 'Slack bot token not configured. Please set SLACK_BOT_TOKEN environment variable.');
       }
 
       // Authenticate with bot token
@@ -445,7 +463,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -511,7 +532,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -587,7 +611,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -685,7 +712,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -796,7 +826,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -903,7 +936,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -993,7 +1029,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     this.assertReady();
     
     if (!this.slackClient) {
-      throw new Error('Slack client not available');
+      throw ErrorFactory.domain.serviceUnavailable('slack-api-client', {
+        service: 'SlackDomainService',
+        operation: 'slack-operation'
+      });
     }
 
     try {
@@ -1209,7 +1248,10 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       });
 
       if (!response.ok) {
-        throw new Error(`Response URL request failed: ${response.statusText}`);
+        throw ErrorFactory.domain.serviceError('SlackDomainService', `Response URL request failed: ${response.statusText}`, {
+          statusCode: response.status,
+          operation: 'sendToResponseUrl'
+        });
       }
 
       this.logInfo('Sent response via response_url successfully', {

@@ -6,6 +6,7 @@ import { GoogleTokens } from '../types/auth.types';
 // import { SlackTokens } from './token-storage.service';
 import { BaseService } from './base-service';
 import { AuditLogger } from '../utils/audit-logger';
+import { ErrorFactory } from '../errors';
 
 export interface OAuthTokens {
   google?: GoogleTokens | undefined;
@@ -62,7 +63,10 @@ export class TokenManager extends BaseService {
         operation: 'token_manager_init',
         metadata: errorDetails
       });
-      throw new Error(`TokenManager dependencies not initialized: ${JSON.stringify(errorDetails)}`);
+      throw ErrorFactory.domain.serviceError('TokenManager', 'Dependencies not initialized', {
+        details: errorDetails,
+        operation: 'getValidTokens'
+      });
     }
     
     logger.debug(`Getting valid tokens for teamId="${teamId}", userId="${userId}"`, {
@@ -640,7 +644,10 @@ export class TokenManager extends BaseService {
     this.assertReady();
     
     if (!this.tokenStorageService) {
-      throw new Error('TokenStorageService not available');
+      throw ErrorFactory.domain.serviceUnavailable('TokenStorageService', {
+        service: 'TokenManager',
+        operation: 'tokenStorageService'
+      });
     }
 
     try {
@@ -666,7 +673,10 @@ export class TokenManager extends BaseService {
     this.assertReady();
     
     if (!this.tokenStorageService) {
-      throw new Error('TokenStorageService not available');
+      throw ErrorFactory.domain.serviceUnavailable('TokenStorageService', {
+        service: 'TokenManager',
+        operation: 'tokenStorageService'
+      });
     }
 
     try {
@@ -684,7 +694,10 @@ export class TokenManager extends BaseService {
     this.assertReady();
     
     if (!this.tokenStorageService) {
-      throw new Error('TokenStorageService not available');
+      throw ErrorFactory.domain.serviceUnavailable('TokenStorageService', {
+        service: 'TokenManager',
+        operation: 'tokenStorageService'
+      });
     }
 
     try {

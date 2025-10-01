@@ -12,6 +12,7 @@ import { AppContainer } from '../di';
 import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
 import { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
+import { isAppError } from '../errors';
 
 const emptyQuerySchema = z.object({});
 const emptyBodySchema = z.object({});
@@ -77,8 +78,19 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
       `);
 
     } catch (error) {
-      
-      res.status(500).json({ error: 'Internal server error' });
+      if (isAppError(error)) {
+        logger.error('Slack OAuth callback error', error, {
+          correlationId: logContext.correlationId,
+          operation: 'oauth_callback_error'
+        });
+        res.status(error.statusCode).json({ error: error.message });
+      } else {
+        logger.error('Slack OAuth callback unexpected error', error as Error, {
+          correlationId: logContext.correlationId,
+          operation: 'oauth_callback_unexpected_error'
+        });
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   });
 
@@ -132,8 +144,17 @@ export function createSlackRoutes(container: AppContainer, getInterfaces?: () =>
       `);
 
     } catch (error) {
-      
-      res.status(500).json({ error: 'Internal server error' });
+      if (isAppError(error)) {
+        logger.error('Slack install page error', error, {
+          operation: 'install_page_error'
+        });
+        res.status(error.statusCode).json({ error: error.message });
+      } else {
+        logger.error('Slack install page unexpected error', error as Error, {
+          operation: 'install_page_unexpected_error'
+        });
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   });
 

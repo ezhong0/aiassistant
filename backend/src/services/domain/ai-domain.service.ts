@@ -57,7 +57,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       // Authenticate with OpenAI API key (skip assertReady check during init)
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        throw new Error('OPENAI_API_KEY environment variable is required');
+        throw ErrorFactory.domain.serviceError('AIDomainService', 'OPENAI_API_KEY environment variable is required for AI operations');
       }
 
       this.logInfo('Authenticating with OpenAI API', {
@@ -67,7 +67,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
 
       // Authenticate directly without assertReady check during initialization
       if (!this.openaiClient) {
-        throw new Error('OpenAI client not available');
+        throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
       }
 
       const credentials = {
@@ -291,7 +294,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw new Error('OpenAI client not available');
+      throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
     }
 
     try {
@@ -366,7 +372,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw new Error('OpenAI client not available');
+      throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
     }
 
     try {
@@ -429,7 +438,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw new Error('OpenAI client not available');
+      throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
     }
 
     try {
@@ -484,7 +496,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw new Error('OpenAI client not available');
+      throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
     }
 
     try {
@@ -537,7 +552,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw new Error('OpenAI client not available');
+      throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
     }
 
     try {
@@ -590,7 +608,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw new Error('OpenAI client not available');
+      throw ErrorFactory.domain.serviceUnavailable('openai-client', {
+        service: 'AIDomainService',
+        operation: 'ai-operation'
+      });
     }
 
     try {
@@ -666,7 +687,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
 
       const functionCall = response.data.choices[0]?.message?.function_call;
       if (!functionCall || !functionCall.arguments) {
-        throw new Error('No structured response received');
+        throw ErrorFactory.domain.serviceError('AIDomainService', 'No structured response received from OpenAI', {
+          operation: 'generateStructuredData',
+          hasFunctionCall: !!functionCall
+        });
       }
 
       const result = JSON.parse(functionCall.arguments);

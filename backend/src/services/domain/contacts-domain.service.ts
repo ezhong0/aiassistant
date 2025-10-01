@@ -66,7 +66,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
+        service: 'ContactsDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
@@ -77,12 +80,15 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
+        service: 'ContactsDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
     if (!result.success) {
-      throw new Error(result.error || 'OAuth completion failed');
+      throw ErrorFactory.domain.serviceError('GoogleOAuthManager', result.error || 'OAuth completion failed');
     }
   }
 
@@ -90,12 +96,15 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
+        service: 'ContactsDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const success = await this.googleOAuthManager.refreshTokens(userId);
     if (!success) {
-      throw new Error('Token refresh failed');
+      throw ErrorFactory.api.unauthorized('Google token refresh failed. Re-authentication required.');
     }
   }
 
@@ -103,12 +112,15 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
+        service: 'ContactsDomainService',
+        operation: 'oauth-operation'
+      });
     }
     
     const success = await this.googleOAuthManager.revokeTokens(userId);
     if (!success) {
-      throw new Error('Token revocation failed');
+      throw ErrorFactory.domain.serviceError('GoogleOAuthManager', 'Token revocation failed');
     }
   }
 
@@ -269,7 +281,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
     }
 
     try {
@@ -326,7 +341,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
     }
 
     try {
@@ -374,7 +392,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
     }
 
     try {
@@ -431,7 +452,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
     }
 
     try {
@@ -540,7 +564,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
     }
 
     try {
