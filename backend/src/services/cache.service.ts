@@ -16,7 +16,7 @@ export class CacheService extends BaseService {
   private memoryUsage: { used: number; peak: number; timestamp: number } = { used: 0, peak: 0, timestamp: Date.now() };
   private connectionPool: Map<string, RedisClientType> = new Map();
 
-  constructor(private readonly appConfig: typeof config) {
+  constructor(private readonly config: typeof import('../config').config) {
     super('cacheService');
     
     // Use environment variables directly to avoid Awilix proxy property resolution

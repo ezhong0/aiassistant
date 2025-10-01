@@ -32,7 +32,7 @@ export interface ProcessingResult {
 
 /**
  * Master Agent following the redesigned architecture
- * 
+ *
  * 1. Understanding & Planning
  * 2. Execution Loop (Max 10 Iterations)
  * 3. Final Output Generation
@@ -41,75 +41,65 @@ export class MasterAgent {
   private aiService: GenericAIService;
   private contextManager: ContextManager;
   private tokenManager: TokenManager;
-  private workflowExecutor: WorkflowExecutor | null = null;
+  private workflowExecutor: WorkflowExecutor;
   private isInitialized = false;
 
   // Prompt builders - single object instead of individual properties
-  private builders: PromptBuilderMap | null = null;
+  private builders: PromptBuilderMap;
 
   constructor(
     aiService: GenericAIService,
     contextManager: ContextManager,
-    tokenManager: TokenManager
+    tokenManager: TokenManager,
+    workflowExecutor: WorkflowExecutor,
+    builders: PromptBuilderMap
   ) {
     this.aiService = aiService;
     this.contextManager = contextManager;
     this.tokenManager = tokenManager;
+    this.workflowExecutor = workflowExecutor;
+    this.builders = builders;
+    this.isInitialized = true; // Already initialized when created via DI
   }
 
   /**
    * Initialize the new Master Agent
+   * @deprecated No longer needed - initialization happens in constructor via DI
    */
   async initialize(): Promise<void> {
+    // No-op: Everything is initialized in the constructor when created via DI
     if (this.isInitialized) {
       return;
     }
 
-    try {
-      // Validate injected services
-      if (!this.aiService) {
-        throw new Error('GenericAIService not provided to MasterAgent');
-      }
-
-      if (!this.contextManager) {
-        throw new Error('ContextManager not provided to MasterAgent');
-      }
-
-      if (!this.tokenManager) {
-        throw new Error('TokenManager not provided to MasterAgent');
-      }
-
-      // Initialize all prompt builders using factory
-      this.builders = PromptBuilderFactory.createAllBuilders(this.aiService);
-
-      // Validate all builders are properly initialized
-      BuilderGuard.validateAllBuilders(this.builders);
-
-      // Initialize workflow executor with required builders
-      this.workflowExecutor = new WorkflowExecutor(
-        this.builders.environment,
-        this.builders.action,
-        this.builders.progress,
-        this.tokenManager,
-        10 // maxIterations
-      );
-
-      this.isInitialized = true;
-
-      const initStatus = BuilderGuard.getInitializationStatus(this.builders);
-
-      logger.info('MasterAgent initialized successfully', {
-        operation: 'master_agent_init',
-        buildersInitialized: initStatus.initializedCount,
-        totalBuilders: initStatus.totalCount
-      });
-
-    } catch (error) {
-      logger.error('MasterAgent initialization failed', error as Error, {
-        operation: 'master_agent_init_error'
-      });
-      throw error;
+    // Validate injected dependencies
+    if (!this.aiService) {
+      throw new Error('GenericAIService not provided to MasterAgent');
     }
+
+    if (!this.contextManager) {
+      throw new Error('ContextManager not provided to MasterAgent');
+    }
+
+    if (!this.tokenManager) {
+      throw new Error('TokenManager not provided to MasterAgent');
+    }
+
+    if (!this.workflowExecutor) {
+      throw new Error('WorkflowExecutor not provided to MasterAgent');
+    }
+
+    if (!this.builders) {
+      throw new Error('Builders not provided to MasterAgent');
+    }
+
+    BuilderGuard.validateAllBuilders(this.builders);
+
+    this.isInitialized = true;
+
+    logger.info('MasterAgent initialized successfully', {
+      operation: 'master_agent_init'
+    });
   }
 
   /**

@@ -2,7 +2,7 @@ import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { ServiceState } from '../types/service.types';
-import { config } from '../config';
+import { config as appConfig } from '../config';
 
 export interface DatabaseConfig {
   host: string;
@@ -77,7 +77,7 @@ export interface SlackUserData {
 export class DatabaseService extends BaseService {
   private pool: Pool | null = null;
   private config: DatabaseConfig;
-  private readonly appConfig: typeof config;
+  private readonly appConfig: typeof appConfig;
   private connectionStats: {
     totalConnections: number;
     activeConnections: number;
@@ -98,11 +98,11 @@ export class DatabaseService extends BaseService {
     lastHealthCheck: new Date()
   };
 
-  constructor(appConfig: typeof config) {
+  constructor(config: typeof appConfig) {
     super('databaseService');
-    
+
     // Store config reference
-    this.appConfig = appConfig;
+    this.appConfig = config;
     
     // Use environment directly to avoid Awilix proxy property access issues
     const isDevelopment = process.env.NODE_ENV === 'development';
@@ -179,7 +179,7 @@ export class DatabaseService extends BaseService {
         this.startHealthMonitoring();
       } catch (error) {
         // In non-production environments, allow graceful degradation
-        if (config.isProduction) {
+        if (this.appConfig.isProduction) {
           throw error;
         } else {
           logger.warn('Database connection failed in development - continuing without database', {

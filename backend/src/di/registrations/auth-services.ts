@@ -31,34 +31,39 @@ export function registerAuthServices(container: AppContainer): void {
     // Auth status service (depends on tokenStorageService, tokenManager)
     authStatusService: asClass(AuthStatusService).singleton(),
 
-    // OAuth managers - Awilix auto-resolves services by constructor parameter names
-    // Only inject configuration primitives, not services
+    // OAuth managers - Configuration primitives injected via factory, services auto-resolved
+    // Note: Using .inject() for configuration primitives is a valid DI pattern
+    // Services (authService, tokenManager, oauthStateService) are auto-injected by Awilix
     googleOAuthManager: asClass(GoogleOAuthManager)
       .singleton()
-      .inject(() => ({
-        clientId: process.env.GOOGLE_CLIENT_ID || '',
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirectUri: process.env.GOOGLE_REDIRECT_URI || '',
-        scopes: [
-          'openid',
-          'email',
-          'profile',
-          'https://www.googleapis.com/auth/gmail.readonly',
-          'https://www.googleapis.com/auth/gmail.send',
-          'https://www.googleapis.com/auth/calendar',
-          'https://www.googleapis.com/auth/contacts.readonly'
-        ]
-        // authService, tokenManager, oauthStateService auto-injected by Awilix
-      })),
+      .inject(() => {
+        const config = container.cradle.config;
+        return {
+          clientId: config.auth?.google?.clientId || '',
+          clientSecret: config.auth?.google?.clientSecret || '',
+          redirectUri: config.auth?.google?.redirectUri || '',
+          scopes: [
+            'openid',
+            'email',
+            'profile',
+            'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.send',
+            'https://www.googleapis.com/auth/calendar',
+            'https://www.googleapis.com/auth/contacts.readonly'
+          ]
+        };
+      }),
 
     slackOAuthManager: asClass(SlackOAuthManager)
       .singleton()
-      .inject(() => ({
-        clientId: process.env.SLACK_CLIENT_ID || '',
-        clientSecret: process.env.SLACK_CLIENT_SECRET || '',
-        redirectUri: process.env.SLACK_REDIRECT_URI || '',
-        scopes: ['chat:write', 'channels:read', 'users:read']
-        // tokenManager, oauthStateService auto-injected by Awilix
-      })),
+      .inject(() => {
+        const config = container.cradle.config;
+        return {
+          clientId: config.auth?.slack?.clientId || '',
+          clientSecret: config.auth?.slack?.clientSecret || '',
+          redirectUri: config.auth?.slack?.redirectUri || '',
+          scopes: ['chat:write', 'channels:read', 'users:read']
+        };
+      }),
   });
 }

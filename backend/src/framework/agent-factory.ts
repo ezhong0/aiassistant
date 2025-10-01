@@ -267,31 +267,17 @@ export class AgentFactory {
         throw new Error('DI Container must be set before initializing agents');
       }
 
-      // Import all SubAgent classes
-      const [
-        { CalendarAgent },
-        { EmailAgent },
-        { ContactAgent },
-        { SlackAgent }
-      ] = await Promise.all([
-        import('../agents/calendar.agent'),
-        import('../agents/email.agent'),
-        import('../agents/contact.agent'),
-        import('../agents/slack.agent')
-      ]);
+      // Resolve agents from DI container (already registered with all dependencies)
+      const calendarAgent = this.container.resolve('calendarAgent');
+      const emailAgent = this.container.resolve('emailAgent');
+      const contactAgent = this.container.resolve('contactAgent');
+      const slackAgent = this.container.resolve('slackAgent');
 
-      // Resolve services from container
-      const calendarService = this.container.resolve('calendarDomainService');
-      const emailService = this.container.resolve('emailDomainService');
-      const contactsService = this.container.resolve('contactsDomainService');
-      const slackService = this.container.resolve('slackDomainService');
-      const aiService = this.container.resolve('genericAIService');
-
-      // Register all core SubAgents with injected dependencies
-      this.registerAgent('calendarAgent', new CalendarAgent(calendarService, aiService));
-      this.registerAgent('emailAgent', new EmailAgent(emailService, aiService));
-      this.registerAgent('contactAgent', new ContactAgent(contactsService, aiService));
-      this.registerAgent('slackAgent', new SlackAgent(slackService, aiService));
+      // Register all core SubAgents (already instantiated via DI)
+      this.registerAgent('calendarAgent', calendarAgent);
+      this.registerAgent('emailAgent', emailAgent);
+      this.registerAgent('contactAgent', contactAgent);
+      this.registerAgent('slackAgent', slackAgent);
 
       this.initialized = true;
 

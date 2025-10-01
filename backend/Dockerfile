@@ -1,5 +1,5 @@
-# Use Node.js 18 Alpine for smaller size
-FROM node:18-alpine AS base
+# Use Node.js 20 Alpine for smaller size
+FROM node:20-alpine AS base
 
 # Install build dependencies
 RUN apk add --no-cache libc6-compat
@@ -13,7 +13,7 @@ COPY package*.json ./
 RUN npm ci --only=production --no-audit --no-fund && npm cache clean --force
 
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 

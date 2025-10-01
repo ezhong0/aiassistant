@@ -108,9 +108,9 @@ export class MasterAgentExecutor {
     const aiService = container.resolve('genericAIService');
     const contextManager = container.resolve('contextManager');
     const tokenManager = container.resolve('tokenManager');
-    
-    // Instantiate MasterAgent with injected dependencies
-    this.masterAgent = new MasterAgent(aiService, contextManager, tokenManager);
+
+    // Resolve MasterAgent from DI container (already configured with all dependencies)
+    this.masterAgent = container.resolve('masterAgent');
     this.detailedLogger = new DetailedExecutionLogger();
   }
 

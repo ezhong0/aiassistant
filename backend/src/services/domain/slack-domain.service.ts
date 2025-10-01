@@ -34,7 +34,8 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     private readonly slackOAuthManager: SlackOAuthManager,
     private readonly aiService: GenericAIService,
     private readonly contextManager: ContextManager,
-    private readonly tokenManager: TokenManager
+    private readonly tokenManager: TokenManager,
+    private readonly masterAgent: import('../../agents/master.agent').MasterAgent
   ) {
     super('SlackDomainService');
   }
@@ -1102,9 +1103,6 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
 
       // Process the message with MasterAgent (orchestrator only)
       try {
-        const { MasterAgent } = await import('../../agents/master.agent');
-        const masterAgent = new MasterAgent(this.aiService, this.contextManager, this.tokenManager);
-
         // Create progress updater function
         const updateProgress = async (step: string) => {
           try {
@@ -1131,9 +1129,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
           userId: context.userId
         });
 
-
+        // Use injected MasterAgent from DI container
         // MasterAgent orchestrates subagents - doesn't do direct processing
-        const result = await masterAgent.processUserInput(
+        const result = await this.masterAgent.processUserInput(
           messageText,
           context.channelId, // Use channel as session ID
           combinedUserId,

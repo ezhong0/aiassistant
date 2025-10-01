@@ -67,10 +67,25 @@ export interface Cradle {
   // Middleware Services
   rateLimitStore: import('../middleware/rate-limiting.middleware').RateLimitStore;
 
-  // Prompt Builders (will be added as needed)
-  environmentCheckBuilder: any;
-  actionExecutionBuilder: any;
-  progressAssessmentBuilder: any;
+  // Prompt Builders
+  situationAnalysisPromptBuilder: import('../services/prompt-builders/main-agent').SituationAnalysisPromptBuilder;
+  workflowPlanningPromptBuilder: import('../services/prompt-builders/main-agent').WorkflowPlanningPromptBuilder;
+  environmentCheckPromptBuilder: import('../services/prompt-builders/main-agent').EnvironmentCheckPromptBuilder;
+  actionExecutionPromptBuilder: import('../services/prompt-builders/main-agent').ActionExecutionPromptBuilder;
+  progressAssessmentPromptBuilder: import('../services/prompt-builders/main-agent').ProgressAssessmentPromptBuilder;
+  finalResponsePromptBuilder: import('../services/prompt-builders/main-agent').FinalResponsePromptBuilder;
+
+  // Workflow Executor
+  workflowExecutor: import('../services/workflow-executor.service').WorkflowExecutor;
+
+  // Master Agent
+  masterAgent: import('../agents/master.agent').MasterAgent;
+
+  // Sub-Agents
+  calendarAgent: import('../agents/calendar.agent').CalendarAgent;
+  emailAgent: import('../agents/email.agent').EmailAgent;
+  contactAgent: import('../agents/contact.agent').ContactAgent;
+  slackAgent: import('../agents/slack.agent').SlackAgent;
 }
 
 export type AppContainer = AwilixContainer<Cradle>;

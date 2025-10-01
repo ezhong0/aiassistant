@@ -23,7 +23,7 @@
     "test:ai-e2e": "E2E_TESTING=true node --max-old-space-size=2048 --expose-gc node_modules/.bin/jest tests/e2e/ai-powered-e2e.test.ts --runInBand --testTimeout=180000",
     "test:fast": "node --max-old-space-size=256 --expose-gc node_modules/.bin/jest tests/unit/simple.test.ts --runInBand",
     "railway:deploy": "railway up",
-    "prepare": "node -e \"if (!process.env.RAILWAY_ENVIRONMENT) require('husky')\"",
+    "prepare": "node -e \"if (!process.env.RAILWAY_ENVIRONMENT) import('husky')\"",
     "railway:build": "rm -rf dist && tsc --project tsconfig.prod.json",
     "railway:start": "node --max-old-space-size=1024 --expose-gc dist/index.js",
     "db:setup": "npx ts-node scripts/setup-database.ts",
@@ -47,6 +47,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "dependencies": {
     "@sentry/node": "^8.45.0",
     "@sentry/profiling-node": "^8.45.0",

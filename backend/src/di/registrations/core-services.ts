@@ -8,35 +8,27 @@ import { ErrorHandlingService } from '../../services/error-handling.service';
 
 /**
  * Register core infrastructure services
- * 
+ *
  * These are foundational services with minimal dependencies
  * that other services depend on.
+ *
+ * All services use Awilix auto-resolution based on constructor parameter names.
  */
 export function registerCoreServices(container: AppContainer): void {
   container.register({
-    // Database service - persistent storage (requires config)
-    databaseService: asClass(DatabaseService)
-      .singleton()
-      .inject(() => ({ appConfig: container.resolve('config') })),
+    // Database service - persistent storage (auto-resolves 'config' parameter)
+    databaseService: asClass(DatabaseService).singleton(),
 
-    // Cache service - Redis-based caching (requires config)
-    cacheService: asClass(CacheService)
-      .singleton()
-      .inject(() => ({ appConfig: container.resolve('config') })),
+    // Cache service - Redis-based caching (auto-resolves 'config' parameter)
+    cacheService: asClass(CacheService).singleton(),
 
-    // Sentry service - error tracking
-    sentryService: asClass(SentryService)
-      .singleton()
-      .inject(() => ({ appConfig: container.resolve('config') })),
-      
-    
-    // Error handling service - centralized error handling
-    errorHandlingService: asClass(ErrorHandlingService)
-      .singleton()
-      .inject(() => ({
-        logger: container.resolve('logger'),
-        sentryService: container.resolve('sentryService'),
-        config: container.resolve('config')
-      })),
+    // Encryption service - data encryption/decryption
+    encryptionService: asClass(EncryptionService).singleton(),
+
+    // Sentry service - error tracking (no constructor parameters)
+    sentryService: asClass(SentryService).singleton(),
+
+    // Error handling service - centralized error handling (no constructor parameters)
+    errorHandlingService: asClass(ErrorHandlingService).singleton(),
   });
 }
