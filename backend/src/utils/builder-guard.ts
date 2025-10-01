@@ -6,7 +6,7 @@
  * Eliminates the need for dangerous non-null assertion operators (!).
  */
 
-import { UnifiedErrorFactory, ErrorContextBuilder } from '../types/workflow/unified-errors';
+import { ErrorFactory } from '../errors';
 import {
   BuilderResponseMap,
   BaseBuilderResponse
@@ -80,14 +80,12 @@ export class BuilderGuard {
     _context?: Record<string, any>
   ): PromptBuilderMap[T] {
     if (!builder) {
-      const errorContext = ErrorContextBuilder.create()
-        .component('builder-guard')
-        .operation('ensure_builder')
-        .metadata('builderType', builderType)
-        .metadata('builderName', BUILDER_NAMES[builderType])
-        .build();
-
-      throw UnifiedErrorFactory.serviceUnavailable(BUILDER_NAMES[builderType], errorContext);
+      throw ErrorFactory.domain.serviceUnavailable(BUILDER_NAMES[builderType], {
+        component: 'builder-guard',
+        operation: 'ensure_builder',
+        builderType,
+        builderName: BUILDER_NAMES[builderType]
+      });
     }
     return builder;
   }
@@ -113,20 +111,11 @@ export class BuilderGuard {
 
       return result as unknown as BuilderResponseMap[T];
     } catch (error) {
-      const errorContext = ErrorContextBuilder.create()
-        .component('builder-guard')
-        .operation('safe_execute')
-        .metadata('builderType', builderType)
-        .metadata('builderName', BUILDER_NAMES[builderType])
-        .metadata('inputLength', input.length)
-        .sessionId(context?.sessionId)
-        .userId(context?.userId)
-        .build();
-
-      throw UnifiedErrorFactory.builderError(
-        BUILDER_NAMES[builderType],
-        error instanceof Error ? error : new Error(String(error)),
-        errorContext
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw ErrorFactory.workflow.executionFailed(
+        `${BUILDER_NAMES[builderType]} execution failed: ${errorMessage}`,
+        context?.sessionId,
+        undefined  // iteration not available here
       );
     }
   }
@@ -151,14 +140,12 @@ export class BuilderGuard {
     });
 
     if (missingBuilders.length > 0) {
-      const errorContext = ErrorContextBuilder.create()
-        .component('builder-guard')
-        .operation('validate_all_builders')
-        .metadata('missingBuilders', missingBuilders)
-        .metadata('totalMissing', missingBuilders.length)
-        .build();
-
-      throw UnifiedErrorFactory.serviceUnavailable(`Multiple builders: ${missingBuilders.join(', ')}`, errorContext);
+      throw ErrorFactory.domain.serviceUnavailable(`Multiple builders: ${missingBuilders.join(', ')}`, {
+        component: 'builder-guard',
+        operation: 'validate_all_builders',
+        missingBuilders,
+        totalMissing: missingBuilders.length
+      });
     }
   }
 
@@ -226,14 +213,12 @@ export class BuilderGuard {
     });
 
     if (missingBuilders.length > 0) {
-      const errorContext = ErrorContextBuilder.create()
-        .component('builder-guard')
-        .operation('validate_sub_agent_builders')
-        .metadata('missingBuilders', missingBuilders)
-        .metadata('totalMissing', missingBuilders.length)
-        .build();
-
-      throw UnifiedErrorFactory.serviceUnavailable(`Sub-agent builders: ${missingBuilders.join(', ')}`, errorContext);
+      throw ErrorFactory.domain.serviceUnavailable(`Sub-agent builders: ${missingBuilders.join(', ')}`, {
+        component: 'builder-guard',
+        operation: 'validate_sub_agent_builders',
+        missingBuilders,
+        totalMissing: missingBuilders.length
+      });
     }
   }
 

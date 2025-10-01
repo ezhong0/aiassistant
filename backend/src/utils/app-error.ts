@@ -1,18 +1,24 @@
 /**
- * Streamlined Error Handling System
- * 
- * A single error class that handles all error cases with automatic context injection,
- * proper HTTP status codes, and Winston logging integration.
+ * Unified Error Handling System
+ *
+ * Base error class that handles all error cases with automatic context injection,
+ * proper HTTP status codes, and comprehensive error tracking.
+ *
+ * This is the foundation for all errors in the application. Specialized error
+ * types (APIClientError, WorkflowError, etc.) extend from this base class.
  */
 
-// import logger from './logger';
+import { ERROR_CODES, type ErrorCode, getErrorCategory } from '../errors/error-codes';
+
+// Re-export for backward compatibility
+export { ERROR_CODES, type ErrorCode };
 
 /**
  * Error categories for classification
  */
 export const ERROR_CATEGORIES = {
   SERVICE: 'service',
-  API: 'api', 
+  API: 'api',
   VALIDATION: 'validation',
   AUTH: 'auth',
   EXTERNAL: 'external',
@@ -34,14 +40,35 @@ export const ERROR_SEVERITY = {
 export type ErrorSeverity = typeof ERROR_SEVERITY[keyof typeof ERROR_SEVERITY];
 
 /**
+ * Options for creating an AppError
+ */
+export interface AppErrorOptions {
+  statusCode?: number;
+  severity?: ErrorSeverity;
+  category?: ErrorCategory;
+  correlationId?: string;
+  userId?: string;
+  service?: string;
+  operation?: string;
+  metadata?: Record<string, any>;
+  userFriendly?: boolean;
+  retryable?: boolean;
+  retryAfter?: number;
+  originalError?: Error;
+}
+
+/**
  * Main error class that handles all error cases
+ *
+ * This is the base error class for the entire application. All errors
+ * should either be instances of AppError or extend from it.
  */
 export class AppError extends Error {
-  public readonly code: string;
+  public readonly code: ErrorCode;
   public readonly statusCode: number;
   public readonly severity: ErrorSeverity;
   public readonly category: ErrorCategory;
-  
+
   // Context & tracing (auto-populated)
   public readonly correlationId?: string;
   public readonly userId?: string;
@@ -49,42 +76,29 @@ export class AppError extends Error {
   public readonly operation?: string;
   public readonly metadata?: Record<string, any>;
   public readonly timestamp: Date;
-  
+
   // User experience
   public readonly userFriendly: boolean;
   public readonly retryable: boolean;
   public readonly retryAfter?: number;
-  
+
   // Original error for debugging
   public readonly originalError?: Error;
 
   constructor(
     message: string,
-    code: string,
-    options: {
-      statusCode?: number;
-      severity?: ErrorSeverity;
-      category?: ErrorCategory;
-      correlationId?: string;
-      userId?: string;
-      service?: string;
-      operation?: string;
-      metadata?: Record<string, any>;
-      userFriendly?: boolean;
-      retryable?: boolean;
-      retryAfter?: number;
-      originalError?: Error;
-    } = {}
+    code: ErrorCode,
+    options: AppErrorOptions = {}
   ) {
     super(message);
     this.name = 'AppError';
-    
+
     // Core properties
     this.code = code;
     this.statusCode = options.statusCode || this.getDefaultStatusCode(code, options.category);
     this.severity = options.severity || this.getDefaultSeverity(options.category);
     this.category = options.category || ERROR_CATEGORIES.SERVICE;
-    
+
     // Context & tracing
     this.correlationId = options.correlationId;
     this.userId = options.userId;
@@ -92,15 +106,15 @@ export class AppError extends Error {
     this.operation = options.operation;
     this.metadata = options.metadata;
     this.timestamp = new Date();
-    
+
     // User experience
     this.userFriendly = options.userFriendly ?? true;
     this.retryable = options.retryable ?? this.isRetryableByDefault(options.category);
     this.retryAfter = options.retryAfter;
-    
+
     // Original error
     this.originalError = options.originalError;
-    
+
     // Ensure proper prototype chain
     Object.setPrototypeOf(this, AppError.prototype);
   }
@@ -108,27 +122,68 @@ export class AppError extends Error {
   /**
    * Get default HTTP status code based on error code and category
    */
-  private getDefaultStatusCode(code: string, category?: ErrorCategory): number {
+  private getDefaultStatusCode(code: ErrorCode, category?: ErrorCategory): number {
     // Check for specific error codes first
-    const statusCodeMap: Record<string, number> = {
-      'AUTHENTICATION_FAILED': 401,
-      'TOKEN_EXPIRED': 401,
-      'AUTHORIZATION_DENIED': 403,
-      'INSUFFICIENT_PERMISSIONS': 403,
-      'VALIDATION_FAILED': 400,
-      'INVALID_INPUT': 400,
-      'BAD_REQUEST': 400,
-      'NOT_FOUND': 404,
-      'RATE_LIMITED': 429,
-      'SERVICE_UNAVAILABLE': 503,
-      'EXTERNAL_SERVICE_ERROR': 503,
-      'NETWORK_ERROR': 503,
-      'TIMEOUT': 408,
-      'CONFIGURATION_ERROR': 500
+    const statusCodeMap: Partial<Record<ErrorCode, number>> = {
+      // Auth errors - 401
+      [ERROR_CODES.AUTH_REQUIRED]: 401,
+      [ERROR_CODES.AUTH_FAILED]: 401,
+      [ERROR_CODES.AUTH_EXPIRED]: 401,
+      [ERROR_CODES.AUTH_INVALID_CREDENTIALS]: 401,
+      [ERROR_CODES.AUTHENTICATION_FAILED]: 401,
+      [ERROR_CODES.TOKEN_EXPIRED]: 401,
+      [ERROR_CODES.TOKEN_INVALID]: 401,
+      [ERROR_CODES.TOKEN_UNAVAILABLE]: 401,
+      [ERROR_CODES.TOKEN_AUTHENTICATION_FAILED]: 401,
+      [ERROR_CODES.UNAUTHORIZED]: 401,
+      [ERROR_CODES.NOT_AUTHENTICATED]: 401,
+
+      // Permission errors - 403
+      [ERROR_CODES.AUTHORIZATION_DENIED]: 403,
+      [ERROR_CODES.INSUFFICIENT_PERMISSIONS]: 403,
+      [ERROR_CODES.FORBIDDEN]: 403,
+
+      // Validation errors - 400
+      [ERROR_CODES.VALIDATION_FAILED]: 400,
+      [ERROR_CODES.VALIDATION_ERROR]: 400,
+      [ERROR_CODES.INVALID_INPUT]: 400,
+      [ERROR_CODES.BAD_REQUEST]: 400,
+      [ERROR_CODES.USER_INPUT_INVALID]: 400,
+
+      // Not found - 404
+      [ERROR_CODES.NOT_FOUND]: 404,
+
+      // Timeout - 408
+      [ERROR_CODES.TIMEOUT]: 408,
+      [ERROR_CODES.NETWORK_TIMEOUT]: 408,
+      [ERROR_CODES.USER_INPUT_TIMEOUT]: 408,
+
+      // Conflict - 409
+      [ERROR_CODES.CONFLICT]: 409,
+
+      // Rate limiting - 429
+      [ERROR_CODES.RATE_LIMITED]: 429,
+      [ERROR_CODES.RATE_LIMIT_EXCEEDED]: 429,
+      [ERROR_CODES.RATE_LIMIT_QUOTA_EXCEEDED]: 429,
+
+      // Internal Server Error - 500
+      [ERROR_CODES.INTERNAL_SERVER_ERROR]: 500,
+      [ERROR_CODES.CONFIGURATION_ERROR]: 500,
+      [ERROR_CODES.CONFIG_ERROR]: 500,
+
+      // Service Unavailable - 503
+      [ERROR_CODES.SERVICE_UNAVAILABLE]: 503,
+      [ERROR_CODES.EXTERNAL_SERVICE_ERROR]: 503,
+      [ERROR_CODES.NETWORK_ERROR]: 503,
+      [ERROR_CODES.NETWORK_CONNECTION_FAILED]: 503,
+      [ERROR_CODES.CIRCUIT_BREAKER_OPEN]: 503,
+
+      // Gateway Timeout - 504
+      [ERROR_CODES.GATEWAY_TIMEOUT]: 504
     };
 
     if (statusCodeMap[code]) {
-      return statusCodeMap[code];
+      return statusCodeMap[code]!;
     }
 
     // Fallback to category-based mapping
@@ -190,16 +245,13 @@ export class AppError extends Error {
   }
 
   /**
-   * Add context to error
+   * Add context to error (creates a new error with merged context)
    */
-  public addContext(context: {
-    correlationId?: string;
-    userId?: string;
-    service?: string;
-    operation?: string;
-    metadata?: Record<string, any>;
-  }): AppError {
-    return new AppError(this.message, this.code, {
+  public addContext(context: Partial<AppErrorOptions>): AppError {
+    // Use the current class constructor (supports inheritance)
+    const ErrorClass = this.constructor as typeof AppError;
+
+    return new ErrorClass(this.message, this.code, {
       statusCode: this.statusCode,
       severity: this.severity,
       category: this.category,
@@ -208,10 +260,10 @@ export class AppError extends Error {
       service: context.service || this.service,
       operation: context.operation || this.operation,
       metadata: { ...this.metadata, ...context.metadata },
-      userFriendly: this.userFriendly,
-      retryable: this.retryable,
-      retryAfter: this.retryAfter,
-      originalError: this.originalError
+      userFriendly: context.userFriendly ?? this.userFriendly,
+      retryable: context.retryable ?? this.retryable,
+      retryAfter: context.retryAfter ?? this.retryAfter,
+      originalError: context.originalError || this.originalError
     });
   }
 

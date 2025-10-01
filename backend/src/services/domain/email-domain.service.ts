@@ -1,8 +1,8 @@
+import { ErrorFactory, ERROR_CATEGORIES, APIClientError } from '../../errors';
 import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
 import { IEmailDomainService, EmailThread } from './interfaces/email-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
@@ -66,7 +66,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
     
     const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
@@ -77,12 +77,12 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
     
     const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
     if (!result.success) {
-      throw new Error(result.error || 'OAuth completion failed');
+      throw ErrorFactory.external.google.authFailed(result.error || 'OAuth completion failed');
     }
   }
 
@@ -90,12 +90,12 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
     
     const success = await this.googleOAuthManager.refreshTokens(userId);
     if (!success) {
-      throw new Error('Token refresh failed');
+      throw ErrorFactory.external.google.authFailed('Token refresh failed');
     }
   }
 
@@ -103,12 +103,12 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     this.assertReady();
     
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
     
     const success = await this.googleOAuthManager.revokeTokens(userId);
     if (!success) {
-      throw new Error('Token revocation failed');
+      throw ErrorFactory.external.google.authFailed('Token revocation failed');
     }
   }
 
@@ -141,20 +141,16 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }>;
   }): Promise<{ messageId: string; threadId: string }> {
     this.assertReady();
-    
+
     if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'EmailDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('EmailDomainService', 'Google client not available');
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
       }
       
       // Authenticate with valid token
@@ -193,10 +189,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       if (error instanceof APIClientError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'EmailDomainService',
-        endpoint: 'sendEmail',
-        method: 'POST'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'EmailDomainService',
+        metadata: { endpoint: 'sendEmail', method: 'POST' }
       });
     }
   }
@@ -221,22 +216,18 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     hasAttachments: boolean;
   }>> {
     this.assertReady();
-    
+
     if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'EmailDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('EmailDomainService', 'Google client not available');
     }
 
     try {
       // Get valid tokens for user
       const token = await this.googleOAuthManager!.getValidTokens(userId);
       if (!token) {
-        throw new Error('OAuth required - call initializeOAuth first');
+        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
       }
-      
+
       // Authenticate with valid token
       // Authentication handled automatically by OAuth manager
       
@@ -314,10 +305,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       if (error instanceof APIClientError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'EmailDomainService',
-        endpoint: 'searchEmails',
-        method: 'GET'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'EmailDomainService',
+        metadata: { endpoint: 'searchEmails', method: 'GET' }
       });
     }
   }
@@ -348,13 +338,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }>;
   }> {
     this.assertReady();
-    
+
     if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'EmailDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('EmailDomainService', 'Google client not available');
     }
 
     try {
@@ -420,11 +406,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       if (error instanceof APIClientError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'EmailDomainService',
-        endpoint: 'getEmail',
-        method: 'GET',
-        context: { messageId }
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'EmailDomainService',
+        metadata: { endpoint: 'getEmail', method: 'GET', messageId }
       });
     }
   }
@@ -444,7 +428,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
@@ -499,7 +483,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     this.assertReady();
     
     if (!this.googleClient) {
-      throw new Error('Google client not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {

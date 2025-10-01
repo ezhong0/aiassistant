@@ -1,6 +1,7 @@
 // Circuit breaker for AI services
 // Uses BaseService for service lifecycle management
 import { BaseService } from './base-service';
+import { ErrorFactory } from '../errors';
 
 export enum CircuitState {
   CLOSED = 'closed',
@@ -88,15 +89,14 @@ export class AIServiceCircuitBreaker extends BaseService {
     // Check if circuit is open
     if (this.circuitState === CircuitState.OPEN) {
       if (Date.now() - this.lastFailureTime < this.config.recoveryTimeout) {
-        throw new AIServiceUnavailableError(
-          '🤖 AI service is temporarily unavailable. Please try again in a few moments.',
-          'CIRCUIT_OPEN'
+        throw ErrorFactory.domain.serviceUnavailable(
+          'ai-service',
+          { message: '🤖 AI service is temporarily unavailable. Please try again in a few moments.' }
         );
       } else {
         // Move to half-open state
         this.circuitState = CircuitState.HALF_OPEN;
         this.successCount = 0;
-        
       }
     }
 
@@ -115,16 +115,16 @@ export class AIServiceCircuitBreaker extends BaseService {
       return result;
     } catch (error) {
       this.recordFailure();
-      
-      if (error instanceof AIServiceUnavailableError) {
+
+      // If already an AppError, just throw it
+      if (error instanceof Error && error.name === 'AppError') {
         throw error;
       }
-      
+
       // Convert other errors to user-friendly messages
-      throw new AIServiceUnavailableError(
-        '🤖 I\'m having trouble processing your request right now. Please try again.',
-        'AI_SERVICE_ERROR',
-        error instanceof Error ? error : new Error(String(error))
+      throw ErrorFactory.domain.serviceUnavailable(
+        'ai-service',
+        { message: '🤖 I\'m having trouble processing your request right now. Please try again.' }
       );
     }
   }
@@ -183,10 +183,7 @@ export class AIServiceCircuitBreaker extends BaseService {
 
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutHandle = globalThis.setTimeout(() => {
-        reject(new AIServiceUnavailableError(
-          '🤖 Request timed out. Please try again.',
-          'TIMEOUT'
-        ));
+        reject(ErrorFactory.domain.serviceTimeout('ai-service', timeoutMs));
       }, timeoutMs);
     });
 
@@ -239,21 +236,4 @@ export class AIServiceCircuitBreaker extends BaseService {
   }
 }
 
-/**
- * Custom error for AI service unavailability
- */
-export class AIServiceUnavailableError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly originalError?: Error
-  ) {
-    super(message);
-    this.name = 'AIServiceUnavailableError';
-    
-    // Maintain stack trace
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, AIServiceUnavailableError);
-    }
-  }
-}
+// AIServiceUnavailableError removed - now using unified error system

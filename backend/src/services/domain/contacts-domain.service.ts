@@ -1,8 +1,9 @@
+import { ErrorFactory, ERROR_CATEGORIES } from '../../errors';
 import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
+import { APIClientError, APIClientErrorCode } from '../../errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
@@ -211,13 +212,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     totalItems?: number;
   }> {
     this.assertReady();
-    
+
     if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'ContactsDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('ContactsDomainService', 'Google client not available');
     }
 
     try {
@@ -258,10 +255,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
       if (error instanceof APIClientError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'ContactsDomainService',
-        endpoint: 'listContacts',
-        method: 'GET'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'ContactsDomainService',
+        metadata: { endpoint: 'listContacts', method: 'GET' }
       });
     }
   }

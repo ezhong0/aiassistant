@@ -6,7 +6,7 @@
  */
 
 import { BuilderGuard, createBuilderContext } from '../utils/builder-guard';
-import { UnifiedErrorFactory, ErrorContextBuilder } from '../types/workflow/unified-errors';
+import { ErrorFactory } from '../errors';
 import { AgentFactory } from '../framework/agent-factory';
 import { TokenManager } from './token-manager';
 import { TokenServiceType } from '../types/workflow/token-service.types';
@@ -138,15 +138,7 @@ export class WorkflowExecutor {
     }
 
     if (iteration >= this.maxIterations) {
-      const errorContext = ErrorContextBuilder.create()
-        .sessionId(sessionId)
-        .userId(userId)
-        .component('workflow-executor')
-        .operation('execute')
-        .iteration(iteration)
-        .build();
-
-      throw UnifiedErrorFactory.iterationLimit(iteration, this.maxIterations, errorContext);
+      throw ErrorFactory.workflow.iterationLimit(iteration, this.maxIterations, sessionId);
     }
 
     return currentContext;
@@ -254,18 +246,11 @@ export class WorkflowExecutor {
         iteration: context.iteration
       });
 
-      const errorContext = ErrorContextBuilder.create()
-        .sessionId(context.sessionId)
-        .userId(context.userId)
-        .component('workflow-executor')
-        .operation('check_environment_readiness')
-        .iteration(context.iteration)
-        .build();
-
-      throw UnifiedErrorFactory.builderError(
-        'EnvironmentCheckPromptBuilder',
-        error instanceof Error ? error : new Error(String(error)),
-        errorContext
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw ErrorFactory.workflow.executionFailed(
+        `Environment check failed: ${errorMessage}`,
+        context.sessionId,
+        context.iteration
       );
     }
   }
@@ -336,18 +321,11 @@ export class WorkflowExecutor {
         iteration: context.iteration
       });
 
-      const errorContext = ErrorContextBuilder.create()
-        .sessionId(context.sessionId)
-        .userId(context.userId)
-        .component('workflow-executor')
-        .operation('execute_actions')
-        .iteration(context.iteration)
-        .build();
-
-      throw UnifiedErrorFactory.builderError(
-        'ActionExecutionPromptBuilder',
-        error instanceof Error ? error : new Error(String(error)),
-        errorContext
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw ErrorFactory.workflow.executionFailed(
+        `Action execution failed: ${errorMessage}`,
+        context.sessionId,
+        context.iteration
       );
     }
   }
@@ -458,18 +436,11 @@ export class WorkflowExecutor {
         iteration: context.iteration
       });
 
-      const errorContext = ErrorContextBuilder.create()
-        .sessionId(context.sessionId)
-        .userId(context.userId)
-        .component('workflow-executor')
-        .operation('assess_progress')
-        .iteration(context.iteration)
-        .build();
-
-      throw UnifiedErrorFactory.builderError(
-        'ProgressAssessmentPromptBuilder',
-        error instanceof Error ? error : new Error(String(error)),
-        errorContext
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw ErrorFactory.workflow.executionFailed(
+        `Progress assessment failed: ${errorMessage}`,
+        context.sessionId,
+        context.iteration
       );
     }
   }

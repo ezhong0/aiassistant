@@ -1,8 +1,9 @@
+import { ErrorFactory, ERROR_CATEGORIES } from '../../errors';
 import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { OpenAIClient } from '../api/clients/openai-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
+import { APIClientError, APIClientErrorCode } from '../../errors';
 import { ValidationHelper, AIValidationSchemas } from '../../validation/api-client.validation';
 import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.interface';
 
@@ -103,11 +104,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     this.assertReady();
     
     if (!this.openaiClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'OpenAI client not available',
-        { serviceName: 'AIDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('AIDomainService', 'OpenAI client not available');
     }
 
     try {
@@ -119,9 +116,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       await this.openaiClient.authenticate(credentials);
       this.logInfo('AI service authenticated successfully');
     } catch (error) {
-      throw APIClientError.fromError(error, {
-        serviceName: 'AIDomainService',
-        endpoint: 'authenticate'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'AIDomainService',
+        metadata: { endpoint: 'authenticate' }
       });
     }
   }
@@ -177,13 +174,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     };
   }> {
     this.assertReady();
-    
+
     if (!this.openaiClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'OpenAI client not available',
-        { serviceName: 'AIDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('AIDomainService', 'OpenAI client not available');
     }
 
     try {
@@ -259,10 +252,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       if (error instanceof APIClientError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'AIDomainService',
-        endpoint: 'generateChatCompletion',
-        method: 'POST'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'AIDomainService',
+        metadata: { endpoint: 'generateChatCompletion', method: 'POST' }
       });
     }
   }
@@ -634,13 +626,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
    */
   async generateStructuredData<T = any>(params: StructuredDataParams): Promise<T> {
     this.assertReady();
-    
+
     if (!this.openaiClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'OpenAI client not available',
-        { serviceName: 'AIDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('AIDomainService', 'OpenAI client not available');
     }
 
     try {
@@ -690,10 +678,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
 
       return result;
     } catch (error) {
-      throw APIClientError.fromError(error, {
-        serviceName: 'AIDomainService',
-        endpoint: 'generateStructuredData',
-        method: 'POST'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'AIDomainService',
+        metadata: { endpoint: 'generateStructuredData', method: 'POST' }
       });
     }
   }

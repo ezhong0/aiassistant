@@ -1,8 +1,9 @@
+import { ErrorFactory, ERROR_CATEGORIES } from '../../errors';
 import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { SlackAPIClient } from '../api/clients/slack-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
+import { APIClientError, APIClientErrorCode } from '../../errors';
 import { ValidationHelper, SlackValidationSchemas } from '../../validation/api-client.validation';
 import { ISlackDomainService } from './interfaces/slack-domain.interface';
 import { SlackOAuthManager } from '../oauth/slack-oauth-manager';
@@ -202,13 +203,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     };
   }> {
     this.assertReady();
-    
+
     if (!this.slackClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Slack client not available',
-        { serviceName: 'SlackDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('SlackDomainService', 'Slack client not available');
     }
 
     try {
@@ -274,10 +271,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
       if (error instanceof APIClientError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'SlackDomainService',
-        endpoint: 'sendMessage',
-        method: 'POST'
+      throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
+        service: 'SlackDomainService',
+        metadata: { endpoint: 'sendMessage', method: 'POST' }
       });
     }
   }
@@ -297,13 +293,9 @@ export class SlackDomainService extends BaseService implements Partial<ISlackDom
     messageTs: string;
   }> {
     this.assertReady();
-    
+
     if (!this.slackClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Slack client not available',
-        { serviceName: 'SlackDomainService' }
-      );
+      throw ErrorFactory.domain.serviceError('SlackDomainService', 'Slack client not available');
     }
 
     try {

@@ -1,5 +1,5 @@
 import { ServiceState, IService } from "../types/service.types";
-import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
+import { ErrorFactory, AppError, ERROR_CATEGORIES } from '../errors';
 import { retryManager, RetryConfig } from '../errors/retry-manager';
 import logger from '../utils/logger';
 
@@ -108,10 +108,11 @@ export abstract class BaseService implements IService {
     }
 
     if (this.destroyed) {
-      throw ErrorFactory.serviceError(this.name, `Cannot initialize destroyed service: ${this.name}`, {
-        operation: 'initialize',
-        metadata: { serviceState: this._state }
-      });
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        `Cannot initialize destroyed service: ${this.name}`,
+        { operation: 'initialize', serviceState: this._state }
+      );
     }
 
     try {
@@ -190,10 +191,11 @@ export abstract class BaseService implements IService {
    */
   protected assertReady(): void {
     if (!this.isReady()) {
-      throw ErrorFactory.serviceError(this.name, `Service ${this.name} is not ready. Current state: ${this._state}`, {
-        operation: 'service_check',
-        metadata: { serviceState: this._state }
-      });
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        `Service ${this.name} is not ready. Current state: ${this._state}`,
+        { serviceState: this._state, operation: 'service_check' }
+      );
     }
   }
 
@@ -202,10 +204,11 @@ export abstract class BaseService implements IService {
    */
   protected assertNotDestroyed(): void {
     if (this.destroyed) {
-      throw ErrorFactory.serviceError(this.name, `Service ${this.name} has been destroyed`, {
-        operation: 'service_check',
-        metadata: { serviceState: this._state }
-      });
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        `Service ${this.name} has been destroyed`,
+        { serviceState: this._state, operation: 'service_check' }
+      );
     }
   }
 
@@ -222,7 +225,7 @@ export abstract class BaseService implements IService {
       });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
-      appError = ErrorFactory.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
+      appError = ErrorFactory.util.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
         service: this.name,
         operation
       });
@@ -257,7 +260,7 @@ export abstract class BaseService implements IService {
       });
     } else {
       const errorInstance = error instanceof Error ? error : new Error(String(error));
-      appError = ErrorFactory.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
+      appError = ErrorFactory.util.wrapError(errorInstance, ERROR_CATEGORIES.SERVICE, {
         service: this.name,
         operation,
         severity: 'low'

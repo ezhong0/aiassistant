@@ -37,11 +37,8 @@ export type {
  */
 
 // Export error handling
-export {
-  APIClientError,
-  APIClientErrorCode,
-  APIClientErrorCategory
-} from '../../errors/api-client.errors';
+export { APIClientError } from '../../errors';
+export type { APIClientErrorCode, APIClientErrorCategory } from '../../errors';
 
 // Export validation
 export {

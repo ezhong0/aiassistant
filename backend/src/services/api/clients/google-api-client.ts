@@ -1,12 +1,13 @@
 import { google } from 'googleapis';
 import { BaseAPIClient } from '../base-api-client';
-import { 
-  APIClientConfig, 
-  APIRequest, 
-  APIResponse, 
-  APIError, 
-  AuthCredentials 
+import {
+  APIClientConfig,
+  APIRequest,
+  APIResponse,
+  AuthCredentials
 } from '../../../types/api/api-client.types';
+import { APIClientError } from '../../../errors';
+import { GoogleErrorTransformer } from '../../../errors/transformers';
 
 /**
  * Google API Client - Handles all Google services (Gmail, Calendar, Contacts)
@@ -69,11 +70,17 @@ export class GoogleAPIClient extends BaseAPIClient {
    */
   protected async performAuthentication(credentials: AuthCredentials): Promise<void> {
     if (credentials.type !== 'oauth2') {
-      throw new Error('Google API requires OAuth2 authentication');
+      throw GoogleErrorTransformer.transform(
+        new Error('Google API requires OAuth2 authentication'),
+        { serviceName: this.name }
+      );
     }
 
     if (!credentials.accessToken) {
-      throw new Error('Access token is required for Google API authentication');
+      throw GoogleErrorTransformer.transform(
+        new Error('Access token is required for Google API authentication'),
+        { serviceName: this.name }
+      );
     }
 
     try {
@@ -86,7 +93,7 @@ export class GoogleAPIClient extends BaseAPIClient {
       this.logInfo('Google OAuth2 authentication successful');
     } catch (error) {
       this.logError('Google OAuth2 authentication failed', error);
-      throw error;
+      throw GoogleErrorTransformer.transform(error, { serviceName: this.name });
     }
   }
 
@@ -144,48 +151,14 @@ export class GoogleAPIClient extends BaseAPIClient {
   }
 
   /**
-   * Handle Google API errors
+   * Handle Google API errors using Google-specific transformer
    */
-  protected handleAPIError(error: unknown, request?: APIRequest): APIError {
-    const apiError = this.createAPIError('GOOGLE_API_ERROR', 'Google API request failed', error);
-    
-    if (error && typeof error === 'object' && 'response' in error) {
-      const googleError = error as any;
-      const status = googleError.response?.status;
-      const data = googleError.response?.data;
-      
-      // Map Google API error codes
-      if (status === 401) {
-        apiError.code = 'GOOGLE_AUTH_FAILED';
-        apiError.message = 'Google authentication failed - please reconnect your account';
-        apiError.category = 'authentication';
-      } else if (status === 403) {
-        apiError.code = 'GOOGLE_PERMISSION_DENIED';
-        apiError.message = 'Insufficient permissions for Google API access';
-        apiError.category = 'client_error';
-      } else if (status === 404) {
-        apiError.code = 'GOOGLE_NOT_FOUND';
-        apiError.message = 'Google resource not found';
-        apiError.category = 'client_error';
-      } else if (status === 429) {
-        apiError.code = 'GOOGLE_RATE_LIMIT';
-        apiError.message = 'Google API rate limit exceeded - please try again later';
-        apiError.category = 'rate_limit';
-      } else if (status >= 500) {
-        apiError.code = 'GOOGLE_SERVER_ERROR';
-        apiError.message = 'Google API server error - please try again later';
-        apiError.category = 'server_error';
-      }
-      
-      apiError.statusCode = status;
-      apiError.context = {
-        endpoint: request?.endpoint,
-        method: request?.method,
-        errorData: data
-      };
-    }
-    
-    return apiError;
+  protected handleAPIError(error: unknown, request?: APIRequest): APIClientError {
+    return GoogleErrorTransformer.transform(error, {
+      serviceName: this.name,
+      endpoint: request?.endpoint,
+      method: request?.method
+    });
   }
 
   /**

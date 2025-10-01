@@ -7,7 +7,7 @@ import { ContextManager } from '../services/context-manager.service';
 // Utilities and error handling
 import { BuilderGuard, createBuilderContext, PromptBuilderMap } from '../utils/builder-guard';
 import { PromptBuilderFactory } from '../utils/prompt-builder-factory';
-import { UnifiedErrorFactory, ErrorContextBuilder } from '../types/workflow/unified-errors';
+import { ErrorFactory } from '../errors';
 
 import { TokenManager } from '../services/token-manager';
 import { WorkflowExecutor } from '../services/workflow-executor.service';
@@ -257,14 +257,12 @@ export class MasterAgent {
     userId?: string
   ): Promise<string> {
     if (!this.workflowExecutor) {
-      const errorContext = ErrorContextBuilder.create()
-        .component('master-agent')
-        .operation('execute_workflow')
-        .sessionId(sessionId)
-        .userId(userId)
-        .build();
-
-      throw UnifiedErrorFactory.serviceUnavailable('WorkflowExecutor', errorContext);
+      throw ErrorFactory.domain.serviceUnavailable('WorkflowExecutor', {
+        component: 'master-agent',
+        operation: 'execute_workflow',
+        sessionId,
+        userId
+      });
     }
 
     logger.info('Executing workflow with WorkflowExecutor', { sessionId, userId });

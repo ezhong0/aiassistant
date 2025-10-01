@@ -1,15 +1,16 @@
 import { BaseService } from '../base-service';
 import { retryManager, RetryConfig, RetryStrategy } from '../../errors/retry-manager';
 import { AIServiceCircuitBreaker } from '../ai-circuit-breaker.service';
-import { 
-  APIClientConfig, 
-  APIRequest, 
-  APIResponse, 
-  APIError, 
+import {
+  APIClientConfig,
+  APIRequest,
+  APIResponse,
   AuthCredentials,
   RequestOptions,
   ResponseMetadata
 } from '../../types/api/api-client.types';
+import { APIClientError, ErrorFactory, ERROR_CODES } from '../../errors';
+import { ErrorTransformer } from '../../errors/transformers';
 import logger from '../../utils/logger';
 
 /**
@@ -123,7 +124,7 @@ export abstract class BaseAPIClient extends BaseService {
    */
   async authenticate(credentials: AuthCredentials): Promise<void> {
     this.assertReady();
-    
+
     try {
       this.logDebug('Authenticating with API', {
         serviceName: this.name,
@@ -131,17 +132,17 @@ export abstract class BaseAPIClient extends BaseService {
       });
 
       await this.performAuthentication(credentials);
-      
+
       this.authenticated = true;
       this.authCredentials = credentials;
-      
+
       this.logInfo('API authentication successful', {
         serviceName: this.name,
         credentialType: credentials.type
       });
     } catch (error) {
       this.logError('API authentication failed', error);
-      throw this.createAPIError('AUTHENTICATION_FAILED', 'Authentication failed', error);
+      throw ErrorFactory.external.generic(this.name, 'Authentication failed');
     }
   }
 
@@ -182,9 +183,9 @@ export abstract class BaseAPIClient extends BaseService {
     }
 
     this.assertReady();
-    
+
     if (!this.authenticated && request.requiresAuth !== false) {
-      throw this.createAPIError('NOT_AUTHENTICATED', 'Client not authenticated');
+      throw ErrorFactory.api.unauthorized('Client not authenticated');
     }
 
     const startTime = Date.now();
@@ -353,7 +354,7 @@ export abstract class BaseAPIClient extends BaseService {
    * Perform the actual API request (to be implemented by subclasses)
    */
   protected abstract performRequest<T>(
-    request: APIRequest, 
+    request: APIRequest,
     requestId: string
   ): Promise<APIResponse<T>>;
 
@@ -363,37 +364,16 @@ export abstract class BaseAPIClient extends BaseService {
   protected abstract performAuthentication(credentials: AuthCredentials): Promise<void>;
 
   /**
-   * Handle and standardize errors (to be implemented by subclasses)
+   * Handle and standardize errors using error transformers
+   * Subclasses can override this for service-specific handling
    */
-  protected abstract handleAPIError(error: unknown, request?: APIRequest): APIError;
-
-  /**
-   * Create a standardized API error
-   */
-  protected createAPIError(
-    code: string, 
-    message: string, 
-    originalError?: unknown
-  ): APIError {
-    const error = new Error(message) as APIError;
-    error.code = code;
-    error.serviceName = this.name;
-    error.timestamp = new Date().toISOString();
-    error.originalError = originalError instanceof Error ? originalError.message : String(originalError);
-    error.category = this.categorizeError(code);
-    return error;
-  }
-
-  /**
-   * Categorize error codes for consistent handling
-   */
-  private categorizeError(code: string): string {
-    if (code.includes('AUTH') || code.includes('TOKEN')) return 'authentication';
-    if (code.includes('RATE_LIMIT') || code.includes('QUOTA')) return 'rate_limit';
-    if (code.includes('TIMEOUT') || code.includes('NETWORK')) return 'network';
-    if (code.includes('NOT_FOUND') || code.includes('INVALID')) return 'client_error';
-    if (code.includes('SERVER') || code.includes('INTERNAL')) return 'server_error';
-    return 'unknown';
+  protected handleAPIError(error: unknown, request?: APIRequest): APIClientError {
+    // Use error transformer to convert external errors to our unified system
+    return ErrorTransformer.transform(error, {
+      serviceName: this.name,
+      endpoint: request?.endpoint,
+      method: request?.method
+    });
   }
 
   /**

@@ -5,7 +5,7 @@
  * injection and loose coupling between components.
  */
 
-import { APIClientError } from '../../../errors/api-client.errors';
+import { APIClientError } from '../../../errors';
 import { SlackContext } from '../../../types/slack/slack.types';
 
 // Base domain service interface

@@ -1,12 +1,13 @@
 import { WebClient } from '@slack/web-api';
 import { BaseAPIClient } from '../base-api-client';
-import { 
-  APIClientConfig, 
-  APIRequest, 
-  APIResponse, 
-  APIError, 
-  AuthCredentials 
+import {
+  APIClientConfig,
+  APIRequest,
+  APIResponse,
+  AuthCredentials
 } from '../../../types/api/api-client.types';
+import { APIClientError } from '../../../errors';
+import { SlackErrorTransformer } from '../../../errors/transformers';
 
 /**
  * Slack API Client - Handles all Slack Web API interactions
@@ -132,63 +133,14 @@ export class SlackAPIClient extends BaseAPIClient {
   }
 
   /**
-   * Handle Slack API errors
+   * Handle Slack API errors using Slack-specific transformer
    */
-  protected handleAPIError(error: unknown, request?: APIRequest): APIError {
-    const apiError = this.createAPIError('SLACK_API_ERROR', 'Slack API request failed', error);
-    
-    if (error && typeof error === 'object' && 'data' in error) {
-      const slackError = error as any;
-      const errorData = slackError.data;
-      
-      // Map Slack API error codes
-      if (errorData?.error === 'invalid_auth') {
-        apiError.code = 'SLACK_AUTH_FAILED';
-        apiError.message = 'Slack authentication failed - please check your token';
-        apiError.category = 'authentication';
-      } else if (errorData?.error === 'account_inactive') {
-        apiError.code = 'SLACK_ACCOUNT_INACTIVE';
-        apiError.message = 'Slack account is inactive';
-        apiError.category = 'authentication';
-      } else if (errorData?.error === 'token_revoked') {
-        apiError.code = 'SLACK_TOKEN_REVOKED';
-        apiError.message = 'Slack token has been revoked';
-        apiError.category = 'authentication';
-      } else if (errorData?.error === 'not_authed') {
-        apiError.code = 'SLACK_NOT_AUTHENTICATED';
-        apiError.message = 'Slack authentication required';
-        apiError.category = 'authentication';
-      } else if (errorData?.error === 'channel_not_found') {
-        apiError.code = 'SLACK_CHANNEL_NOT_FOUND';
-        apiError.message = 'Slack channel not found';
-        apiError.category = 'client_error';
-      } else if (errorData?.error === 'user_not_found') {
-        apiError.code = 'SLACK_USER_NOT_FOUND';
-        apiError.message = 'Slack user not found';
-        apiError.category = 'client_error';
-      } else if (errorData?.error === 'rate_limited') {
-        apiError.code = 'SLACK_RATE_LIMITED';
-        apiError.message = 'Slack API rate limit exceeded - please try again later';
-        apiError.category = 'rate_limit';
-      } else if (errorData?.error === 'method_deprecated') {
-        apiError.code = 'SLACK_METHOD_DEPRECATED';
-        apiError.message = 'Slack API method is deprecated';
-        apiError.category = 'client_error';
-      } else if (errorData?.error === 'missing_scope') {
-        apiError.code = 'SLACK_MISSING_SCOPE';
-        apiError.message = 'Missing required Slack API scope';
-        apiError.category = 'client_error';
-      }
-      
-      apiError.context = {
-        endpoint: request?.endpoint,
-        method: request?.method,
-        slackError: errorData?.error,
-        slackErrorData: errorData
-      };
-    }
-    
-    return apiError;
+  protected handleAPIError(error: unknown, request?: APIRequest): APIClientError {
+    return SlackErrorTransformer.transform(error, {
+      serviceName: this.name,
+      endpoint: request?.endpoint,
+      method: request?.method
+    });
   }
 
   /**

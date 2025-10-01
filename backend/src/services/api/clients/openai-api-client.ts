@@ -1,12 +1,13 @@
 import OpenAI from 'openai';
 import { BaseAPIClient } from '../base-api-client';
-import { 
-  APIClientConfig, 
-  APIRequest, 
-  APIResponse, 
-  APIError, 
-  AuthCredentials 
+import {
+  APIClientConfig,
+  APIRequest,
+  APIResponse,
+  AuthCredentials
 } from '../../../types/api/api-client.types';
+import { APIClientError } from '../../../errors';
+import { OpenAIErrorTransformer } from '../../../errors/transformers';
 
 /**
  * OpenAI API Client - Handles all OpenAI API interactions
@@ -126,63 +127,14 @@ export class OpenAIClient extends BaseAPIClient {
   }
 
   /**
-   * Handle OpenAI API errors
+   * Handle OpenAI API errors using OpenAI-specific transformer
    */
-  protected handleAPIError(error: unknown, request?: APIRequest): APIError {
-    const apiError = this.createAPIError('OPENAI_API_ERROR', 'OpenAI API request failed', error);
-    
-    if (error && typeof error === 'object' && 'status' in error) {
-      const openaiError = error as any;
-      const status = openaiError.status;
-      const code = openaiError.code;
-      const type = openaiError.type;
-      
-      // Map OpenAI API error codes
-      if (status === 401) {
-        apiError.code = 'OPENAI_AUTH_FAILED';
-        apiError.message = 'OpenAI API key is invalid or expired';
-        apiError.category = 'authentication';
-      } else if (status === 403) {
-        apiError.code = 'OPENAI_PERMISSION_DENIED';
-        apiError.message = 'OpenAI API access forbidden - check your API key permissions';
-        apiError.category = 'authentication';
-      } else if (status === 404) {
-        apiError.code = 'OPENAI_NOT_FOUND';
-        apiError.message = 'OpenAI API endpoint not found';
-        apiError.category = 'client_error';
-      } else if (status === 429) {
-        apiError.code = 'OPENAI_RATE_LIMIT';
-        apiError.message = 'OpenAI API rate limit exceeded - please try again later';
-        apiError.category = 'rate_limit';
-      } else if (status === 500) {
-        apiError.code = 'OPENAI_SERVER_ERROR';
-        apiError.message = 'OpenAI API server error - please try again later';
-        apiError.category = 'server_error';
-      } else if (code === 'insufficient_quota') {
-        apiError.code = 'OPENAI_QUOTA_EXCEEDED';
-        apiError.message = 'OpenAI API quota exceeded - please check your billing';
-        apiError.category = 'rate_limit';
-      } else if (code === 'invalid_request_error') {
-        apiError.code = 'OPENAI_INVALID_REQUEST';
-        apiError.message = 'OpenAI API request is invalid';
-        apiError.category = 'client_error';
-      } else if (type === 'invalid_request_error') {
-        apiError.code = 'OPENAI_INVALID_REQUEST';
-        apiError.message = 'OpenAI API request parameters are invalid';
-        apiError.category = 'client_error';
-      }
-      
-      apiError.statusCode = status;
-      apiError.context = {
-        endpoint: request?.endpoint,
-        method: request?.method,
-        openaiCode: code,
-        openaiType: type,
-        openaiMessage: openaiError.message
-      };
-    }
-    
-    return apiError;
+  protected handleAPIError(error: unknown, request?: APIRequest): APIClientError {
+    return OpenAIErrorTransformer.transform(error, {
+      serviceName: this.name,
+      endpoint: request?.endpoint,
+      method: request?.method
+    });
   }
 
   /**

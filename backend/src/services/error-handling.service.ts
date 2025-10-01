@@ -1,39 +1,34 @@
+/**
+ * Error Handling Service
+ *
+ * Centralized error handling service that processes errors, logs them,
+ * and sends standardized responses to clients.
+ */
+
 import { Request, Response } from 'express';
-import { AppError, ErrorFactory, ERROR_CATEGORIES } from '../utils/app-error';
-import { CorrelatedRequest } from '../middleware/error-correlation.middleware';
-import { Logger } from 'winston';
-import { SentryService } from './sentry.service';
-import { UnifiedConfig } from '../config/unified-config';
+import logger from '../utils/logger';
+import { AppError, ERROR_CATEGORIES, ERROR_SEVERITY } from '../utils/app-error';
+import { ErrorFactory, ensureAppError } from '../errors';
 
 /**
- * Centralized Error Handling Service
- * 
- * This service provides standardized error handling across the application,
- * ensuring consistent error responses, proper logging, and error correlation.
+ * Request with correlation ID
  */
-interface ErrorHandlingServiceDependencies {
-  logger: Logger;
-  sentryService: SentryService;
-  config: UnifiedConfig;
+interface CorrelatedRequest extends Request {
+  correlationId?: string;
 }
 
+/**
+ * Error Handling Service
+ */
 export class ErrorHandlingService {
-  private errorCounts: Map<string, number> = new Map();
-  private errorThresholds: Map<string, number> = new Map();
-  private logger: Logger;
-  private sentryService: SentryService;
-  private config: UnifiedConfig;
+  private errorCounts = new Map<string, number>();
+  private errorThresholds = new Map<string, number>();
+  private logger = logger;
 
-  constructor(dependencies: ErrorHandlingServiceDependencies) {
-    this.logger = dependencies.logger;
-    this.sentryService = dependencies.sentryService;
-    this.config = dependencies.config;
-    // Set default error thresholds
-    this.errorThresholds.set('RATE_LIMIT_EXCEEDED', 100);
-    this.errorThresholds.set('VALIDATION_ERROR', 50);
-    this.errorThresholds.set('AUTHENTICATION_ERROR', 20);
-    this.errorThresholds.set('DATABASE_ERROR', 10);
-    this.errorThresholds.set('EXTERNAL_API_ERROR', 30);
+  constructor() {
+    // Set default thresholds
+    this.errorThresholds.set('RATE_LIMITED', 100);
+    this.errorThresholds.set('SERVICE_UNAVAILABLE', 50);
   }
 
   /**
@@ -44,139 +39,142 @@ export class ErrorHandlingService {
     req: Request,
     res: Response,
     context?: Record<string, unknown>
+  ): void {
     const correlatedReq = req as CorrelatedRequest;
-    let appError: AppError;
 
     // Convert to AppError if needed
-    if (err instanceof AppError) {
-      this.logger.error('Error in error handler', err, {
-        correlationId: correlatedReq.correlationId,
-        originalError: err instanceof Error ? err.message : String(err),
-        service: 'error_handling_service',
-        ...context
-      });
-    } else {
-      // Wrap regular Error as AppError
-      appError = ErrorFactory.wrapError(err, ERROR_CATEGORIES.SERVICE, {
-{{ ... }}
+    const appError = ensureAppError(err);
+
+    // Add correlation ID if available
+    const enrichedError = appError.correlationId
+      ? appError
+      : appError.addContext({ correlationId: correlatedReq.correlationId });
+
+    // Log the error
+    this.logError(enrichedError, context);
+
+    // Track error counts
+    this.trackError(enrichedError);
+
+    // Send response to client
+    this.sendErrorResponse(res, enrichedError);
+  }
+
+  /**
+   * Log error with appropriate level based on severity
+   */
+  private logError(appError: AppError, context?: Record<string, unknown>): void {
+    const logData = {
+      error: appError.code,
+      statusCode: appError.statusCode,
+      severity: appError.severity,
+      category: appError.category,
+      correlationId: appError.correlationId,
+      userId: appError.userId,
+      service: appError.service,
+      operation: appError.operation,
+      metadata: appError.metadata,
+      stack: appError.stack,
+      ...context
+    };
+
+    // Log based on severity
+    switch (appError.severity) {
+      case ERROR_SEVERITY.CRITICAL:
+        this.logger.error(appError.message, appError, logData);
+        break;
+      case ERROR_SEVERITY.HIGH:
+        this.logger.error(appError.message, appError, logData);
+        break;
+      case ERROR_SEVERITY.MEDIUM:
+        this.logger.warn(appError.message, appError, logData);
+        break;
+      case ERROR_SEVERITY.LOW:
+        this.logger.info(appError.message, appError, logData);
+        break;
+      default:
+        this.logger.error(appError.message, appError, logData);
+    }
+  }
+
+  /**
+   * Track error occurrences
+   */
+  private trackError(appError: AppError): void {
+    const errorType = appError.code;
+    const currentCount = this.errorCounts.get(errorType) || 0;
+    this.errorCounts.set(errorType, currentCount + 1);
+
     // Check if error threshold is exceeded
     const threshold = this.errorThresholds.get(appError.code) || 0;
-    if (currentCount + 1 >= threshold) {
-      this.logger.warn(`Rate limit exceeded for error type: ${errorType}`, {
-        count,
+    if (threshold > 0 && currentCount + 1 >= threshold) {
+      this.logger.warn(`Error threshold exceeded for error type: ${errorType}`, {
+        count: currentCount + 1,
         threshold,
-        correlationId: appError.context?.correlationId,
+        correlationId: appError.correlationId,
         operation: 'error_threshold_exceeded'
       });
     }
   }
 
   /**
-   * Log error with appropriate level based on severity
-   */
-  private logError(appError: AppError): void {
-    const logData = {
-      error: appError.code,
-      statusCode: appError.statusCode,
-      severity: appError.severity,
-      category: appError.category,
-      correlationId: appError.context?.correlationId,
-      userId: appError.context?.userId,
-      service: appError.service,
-      operation: appError.operation,
-      metadata: appError.metadata,
-      stack: appError.stack
-    };
-
-    // Log the error
-    this.logger.error(appError.message, logData);
-{{ ... }}
-      case 'critical':
-        logger.error(appError.message, logData);
-        break;
-      case 'high':
-        logger.error(appError.message, logData);
-        break;
-      case 'medium':
-        logger.warn(appError.message, logData);
-        break;
-      case 'low':
-        logger.info(appError.message, logData);
-        break;
-      default:
-        logger.error(appError.message, logData);
-    }
-  }
-
-  /**
    * Send standardized error response
    */
-  private sendErrorResponse(res: Response, appError: AppError, retryAfter?: number): void {
+  private sendErrorResponse(res: Response, appError: AppError): void {
     const response: any = {
       success: false,
       error: {
         code: appError.code,
         message: appError.userFriendly ? appError.message : 'Internal server error',
+        category: appError.category,
         ...(appError.correlationId && { correlationId: appError.correlationId })
-      },
-      timestamp: new Date().toISOString()
+      }
     };
 
-    // Add retry-after header for rate limiting
-    if (retryAfter) {
-      res.set('Retry-After', retryAfter.toString());
+    // Add retry-after header if available
+    if (appError.retryable && appError.retryAfter) {
+      res.setHeader('Retry-After', appError.retryAfter.toString());
+      response.error.retryAfter = appError.retryAfter;
     }
 
-    // Add additional headers for debugging in development
-    if (process.env.NODE_ENV === 'development') {
-      response.error.details = {
-        category: appError.category,
-        severity: appError.severity,
-        operation: appError.operation,
-        metadata: appError.metadata
-      };
+    // Add rate limit info if applicable
+    if (appError.statusCode === 429) {
+      res.setHeader('X-RateLimit-Reset', Date.now() + (appError.retryAfter || 60) * 1000);
     }
 
+    // Send response
     res.status(appError.statusCode).json(response);
   }
 
   /**
-   * Get error statistics for monitoring
+   * Handle 404 Not Found errors
    */
-  getErrorStats(): {
-    totalErrors: number;
-    errorCounts: Record<string, number>;
-    errorThresholds: Record<string, number>;
-  } {
-    const totalErrors = Array.from(this.errorCounts.values()).reduce((sum, count) => sum + count, 0);
-    
-    return {
-      totalErrors,
-      errorCounts: Object.fromEntries(this.errorCounts),
-      errorThresholds: Object.fromEntries(this.errorThresholds)
-    };
+  handleNotFound(req: Request, res: Response): void {
+    const notFoundError = ErrorFactory.api.notFound(`Route ${req.path}`);
+    this.handleError(notFoundError, req, res);
   }
 
   /**
-   * Reset error counts (useful for testing or periodic resets)
+   * Get error statistics
+   */
+  getErrorStats(): Record<string, number> {
+    return Object.fromEntries(this.errorCounts);
+  }
+
+  /**
+   * Reset error counts
    */
   resetErrorCounts(): void {
     this.errorCounts.clear();
-    logger.info('Error counts reset', {
-      correlationId: `error-reset-${Date.now()}`,
-      operation: 'error_counts_reset'
-    });
   }
 
   /**
-   * Set custom error threshold for monitoring
+   * Set error threshold
    */
   setErrorThreshold(errorCode: string, threshold: number): void {
     this.errorThresholds.set(errorCode, threshold);
-    logger.debug('Error threshold set', {
-      correlationId: `error-threshold-${Date.now()}`,
-      operation: 'error_threshold_set',
-      metadata: { errorCode, threshold }
-    });
   }
 }
+
+// Export singleton instance
+export const errorHandlingService = new ErrorHandlingService();

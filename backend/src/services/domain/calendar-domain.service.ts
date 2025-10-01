@@ -2,7 +2,7 @@ import { BaseService } from '../base-service';
 import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
-import { APIClientError, APIClientErrorCode } from '../../errors/api-client.errors';
+import { ErrorFactory, DomainError } from '../../errors';
 import { ValidationHelper, CalendarValidationSchemas } from '../../validation/api-client.validation';
 import { ICalendarDomainService } from './interfaces/calendar-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
@@ -64,51 +64,54 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
    */
   async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
     this.assertReady();
-    
+
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        'GoogleOAuthManager not available'
+      );
     }
-    
+
     const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
     return { authUrl, state };
   }
 
   async completeOAuth(userId: string, code: string, state: string): Promise<void> {
     this.assertReady();
-    
+
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
-    
+
     const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
     if (!result.success) {
-      throw new Error(result.error || 'OAuth completion failed');
+      throw ErrorFactory.external.google.authFailed(result.error || 'OAuth completion failed');
     }
   }
 
   async refreshTokens(userId: string): Promise<void> {
     this.assertReady();
-    
+
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
-    
+
     const success = await this.googleOAuthManager.refreshTokens(userId);
     if (!success) {
-      throw new Error('Token refresh failed');
+      throw ErrorFactory.external.google.authFailed('Token refresh failed');
     }
   }
 
   async revokeTokens(userId: string): Promise<void> {
     this.assertReady();
-    
+
     if (!this.googleOAuthManager) {
-      throw new Error('GoogleOAuthManager not available');
+      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
     }
-    
+
     const success = await this.googleOAuthManager.revokeTokens(userId);
     if (!success) {
-      throw new Error('Token revocation failed');
+      throw ErrorFactory.external.google.authFailed('Token revocation failed');
     }
   }
 
@@ -210,10 +213,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     this.assertReady();
     
     if (!this.googleClient) {
-      throw APIClientError.nonRetryable(
-        APIClientErrorCode.CLIENT_NOT_INITIALIZED,
-        'Google client not available',
-        { serviceName: 'CalendarDomainService' }
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        'Google client not available'
       );
     }
 
@@ -286,14 +288,14 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
       return result;
     } catch (error) {
-      if (error instanceof APIClientError) {
+      // Re-throw if already properly formatted
+      if (error instanceof DomainError) {
         throw error;
       }
-      throw APIClientError.fromError(error, {
-        serviceName: 'CalendarDomainService',
-        endpoint: 'createEvent',
-        method: 'POST'
-      });
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        error instanceof Error ? error.message : 'Failed to create calendar event'
+      );
     }
   }
 

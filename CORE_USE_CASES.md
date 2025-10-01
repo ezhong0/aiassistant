@@ -1,407 +1,453 @@
-# Core Use Cases: Independent Consultant Commands
+# Core Use Cases: Executive Assistant Commands
 
-This document contains example natural language commands that independent consultants and freelancers should be able to execute through the AI assistant. All examples focus on client acquisition, project delivery, relationship management, and business operations.
+This document contains example natural language commands that Executive Assistants (EAs) should be able to execute through the AI assistant. All examples focus on managing multiple executives simultaneously, coordinating calendars, triaging communications, and maintaining relationships.
 
-**Key principle:** The AI understands natural language. You don't need formal templates or CSV files (though you can use them if you prefer). Just describe what you want in plain English.
+**Key principle:** The AI understands natural language and executive context. You don't need formal templates or systems. Just describe what you want and which executive you're working for.
 
----
+**Target User:** Executive Assistants at EA/VA agencies who manage 2-4 executives simultaneously
 
-## Lead Response & Follow-Up ⚡ (HIGHEST PRIORITY)
-
-### Immediate Inquiry Response
-- "New inquiry from Sarah about marketing strategy - respond within 5 minutes and offer discovery call times"
-- "Respond to this LinkedIn lead asking about my consulting services"
-- "Reply to contact form submission about growth strategy, I'm available Wednesday and Thursday"
-- "New referral from John - follow up and see if they want to schedule a call"
-- "Respond to cold outreach asking about fractional CMO services"
-
-### Proposal Follow-Up
-- "Follow up with all proposals sent in the last 2 weeks that haven't gotten responses"
-- "Send gentle reminder to leads who received proposals 5+ days ago"
-- "Check in with clients who have open proposals asking if they have questions"
-- "Follow up on the $50K strategy proposal I sent last week"
-- "Re-engage with proposal recipients from last month who went quiet"
-
-### Discovery Call Follow-Up
-- "Follow up with everyone I had discovery calls with this week asking about next steps"
-- "Send recap email to Tuesday's discovery call with project scope and pricing"
-- "Thank everyone from last week's discovery calls and see if they're ready to move forward"
-- "Follow up on discovery call with TechCo asking if they received my proposal"
-
-### Lead Nurturing
-- "Send valuable content to warm leads who aren't ready to hire yet"
-- "Check in with prospects I talked to 60 days ago to see if timing is better"
-- "Share relevant case study with leads in the e-commerce space"
-- "Send industry insights to prospects showing I understand their challenges"
-- "Re-engage cold leads with new offer: free consultation"
-
-### Multi-Lead Segmentation
-- "Send different follow-ups: tell hot leads about availability, ask warm leads about timeline, share content with cold leads"
-- "Update all SaaS leads about my new pricing strategy workshop"
-- "Tell all marketing leads about the growth framework case study"
-- "Segment leads: immediate responders get proposal, slow responders get value content"
+**Core Value:** Handle 3-4 executives with the same quality and responsiveness as handling 1-2 executives manually
 
 ---
 
-## Client Meeting Coordination 📅
+## Multi-Executive Context Switching 🔄 (FOUNDATIONAL)
 
-### Discovery Call Scheduling
-- "Schedule discovery call with Sarah Johnson tomorrow afternoon"
-- "Book 30-minute intro call with new lead, send confirmation and Zoom link"
-- "Coordinate discovery call with prospect - find time this week that works for both of us"
-- "Schedule discovery calls with these 5 leads this week"
+### Executive Profile Management
 
-### Client Meeting Management
-- "Schedule weekly check-in with Acme Corp for every Monday at 2pm"
-- "Book project kickoff meeting with new client next week"
-- "Coordinate quarterly business review with top 3 clients this month"
-- "Reschedule Tuesday's client meeting - conflict came up, find new time"
-- "Set up monthly strategy session with all active retainer clients"
+**The capability:**
+The AI remembers each executive's communication style, preferences, priorities, and constraints. It switches context seamlessly when you say "for Mark" vs "for Jessica."
 
-### Multi-Stakeholder Meetings
-- "Schedule workshop with client team - need CEO, CMO, and Product Lead all there"
-- "Coordinate project review meeting with client and their dev team"
-- "Book presentation meeting with decision-maker panel at enterprise client"
+**Example profiles:**
+- "Mark (CEO): Formal tone, hates small talk, morning meetings preferred, never before 9am, immediate response to board members"
+- "Jessica (CMO): Warm and conversational, loves speaking opportunities, afternoon meetings preferred, can handle evening events"
+- "David (CFO): Brief and direct, numbers-focused, no meetings during market hours (9:30am-4pm), hates evening commitments"
 
-### Meeting Follow-Up
-- "Send meeting recap from today's strategy session to client"
-- "Follow up on yesterday's kickoff meeting with action items and timeline"
-- "Send notes from this week's check-ins to all clients"
-- "Thank clients for quarterly review meetings and confirm next steps"
+**Example commands:**
+- "I'm handling emails for 3 executives today: Mark (CEO, formal tone), Jessica (CMO, warm/casual), David (CFO, brief/direct). Remember these profiles."
+- "Mark prefers morning meetings, Jessica prefers afternoons, David needs open mornings for market analysis. Use this when scheduling."
+- "Update Jessica's profile: she now wants all speaking opportunities flagged immediately"
+- "David's project 'Phoenix' is confidential M&A. Jessica's project 'Lighthouse' is product launch. Mark oversees both. Remember for context."
 
-### Meeting Preparation
-- "Send agenda for tomorrow's strategy session to Acme Corp"
-- "Remind client about Monday's workshop and what to prepare"
-- "Send pre-meeting questionnaire to new client before kickoff"
+### Context-Aware Response Generation
 
----
+- "Draft response to this meeting request for Mark" (AI uses Mark's formal tone)
+- "Jessica just got an inquiry about speaking at a conference. She loves speaking gigs. Respond enthusiastically and check her calendar for June."
+- "David got invited to an investor dinner but he hates evening events. Politely decline."
+- "Switch context: now handling emails for Sarah (startup founder, moves fast, conversational). Respond to this investor update request."
 
-## Proposal & Deal Management 💼
+### Multi-Executive Same-Event Handling
 
-### Proposal Delivery
-- "Send proposal to Sarah at TechCo with 2-week timeline and $30K budget"
-- "Email proposal to lead from discovery call, highlight ROI and timeline"
-- "Send custom proposal to enterprise lead with tiered pricing options"
-- "Deliver SOW to client for Phase 2 of our engagement"
-
-### Proposal Status Tracking
-- "Show me all outstanding proposals waiting for decision"
-- "Which proposals are most likely to close based on follow-up conversations?"
-- "List all proposals sent in Q1 and their current status"
-- "Identify proposals that need immediate follow-up"
-
-### Deal Closing
-- "Client accepted proposal - send contract and onboarding steps"
-- "Send thank you and next steps to client who just signed"
-- "Client wants to move forward - send contract, schedule kickoff, request deposit"
-- "Negotiate proposal terms with client who wants monthly payment plan"
-
-### Pricing & Scoping Discussions
-- "Client asking about pricing - explain value and ROI"
-- "Prospect wants to reduce scope - suggest alternatives that fit budget"
-- "Send pricing breakdown showing deliverables for each tier"
-- "Client wants to extend engagement - send proposal for additional 3 months"
+- "Mark, Jessica, and David all got the same partnership proposal email. Draft different responses based on their roles and communication styles."
+- "All three executives got invited to the same industry conference. Recommend who should go based on their priorities and schedules."
+- "This vendor sent meeting requests to Mark and Jessica separately. Coordinate a single meeting with both."
+- "Board presentation needs input from all three executives. Coordinate who provides what and by when."
 
 ---
 
-## Project Communication & Status Updates 📊
+## Email Triage & Prioritization 📨 (HIGHEST IMPACT)
 
-### Regular Project Updates
-- "Send weekly status update to all active project clients"
-- "Update Acme Corp on project progress, milestones hit, next steps"
-- "Tell all clients in delivery phase what we accomplished this week"
-- "Send bi-weekly progress report to retainer clients"
+### Urgent vs Important Filtering
 
-### Milestone Communications
-- "Tell client we completed Phase 1, ready to start Phase 2"
-- "Update client that discovery phase is done, share insights"
-- "Notify client we hit the Q1 goal ahead of schedule"
-- "Tell client about roadblock in implementation, propose solution"
+**The workflow:**
+EAs drown in executive inbox volume (50-200 emails/day per executive). The AI must filter noise, surface urgency, and route appropriately.
 
-### Deliverable Sharing
-- "Send final report to client with executive summary"
-- "Deliver strategy document to client, schedule presentation meeting"
-- "Share workshop materials and recordings with client team"
-- "Send completed analysis to client with recommendations"
+**Priority levels:**
+1. **URGENT (immediate attention):** Board members, investors, top clients, family emergencies, PR crises
+2. **IMPORTANT (today):** Direct reports, key partners, time-sensitive decisions, meeting prep
+3. **ROUTINE (batch process):** Newsletters, FYIs, vendor updates, low-priority requests
+4. **NOISE (auto-handle):** Sales pitches, spam, misdirected emails, irrelevant CC's
 
-### Project Check-Ins
-- "Check in with all active projects to see if clients need anything"
-- "Ask clients if they're happy with progress so far"
-- "See if clients have questions about last week's deliverables"
-- "Check if any active projects are at risk of delays"
+**Example commands:**
+- "Mark got 47 emails overnight. Show me the 5 that need his attention today."
+- "This email looks like a sales pitch pretending to be personal. Archive it."
+- "This is from a board member - needs Mark's attention within 2 hours. Flag as urgent."
+- "Jessica got an angry client email. This needs careful handling - draft response but flag for her review before sending."
+- "Routine vendor invoice email for David - forward to accounting, confirm receipt."
+- "Mark's college roommate emailed - personal, not business. Flag for evening review."
+- "Someone wants to 'pick Mark's brain' - this is a disguised sales call. Politely decline."
 
-### Issue Management
-- "Tell client about delay in Phase 2, explain why and new timeline"
-- "Update client that third-party dependency is causing slowdown"
-- "Notify client about scope creep and suggest change order"
-- "Alert client that their team hasn't provided inputs needed to proceed"
+### Relationship-Based Prioritization
 
----
+- "This person is Mark's top investor. Any email from them is priority."
+- "Jessica's direct reports always get same-day response. This is from one of them."
+- "David hasn't responded to this key vendor in 3 emails. They're getting frustrated - handle tactfully and get David's attention."
+- "This is Jessica's former boss who helped her career. Personal relationship - treat with care."
 
-## Client Relationship Management 🤝
+### Contextual Email Summarization
 
-### Past Client Re-Engagement
-- "Check in with past clients I haven't talked to in 6 months"
-- "Send 'thinking of you' emails to clients from last year"
-- "Ask past clients how their business is going since our engagement"
-- "Re-engage clients from 2023 asking if they need help with new initiatives"
+- "Mark wants all emails summarized in 2 sentences max. Condense this long email."
+- "Jessica wants context on who people are when they email. Add background: 'This is John from Acme, you met at TechCrunch last year.'"
+- "David only wants numbers and action items. Strip out the fluff from this update."
+- "This email chain has 47 messages. Summarize the key decision needed from Mark."
 
-### Relationship Nurturing
-- "Send valuable industry article to top 10 clients with personal note"
-- "Share relevant case study with clients in similar industries"
-- "Check in with clients on quarterly basis asking about business goals"
-- "Send holiday greetings to all current and past clients"
+### Auto-Handle Common Patterns
 
-### Referral Requests
-- "Ask satisfied clients if they know anyone who could use my services"
-- "Send referral request to clients whose projects had great results"
-- "Thank clients for successful engagement and request introductions"
-- "Check in with happy clients and ask for LinkedIn recommendations"
-
-### Success Celebration
-- "Congratulate clients who hit major milestones using our work"
-- "Thank client for trusting me with their project and share impact"
-- "Celebrate project completion with client and share case study"
-
-### Client Feedback
-- "Send end-of-project survey to completed clients"
-- "Ask for feedback on how engagement went"
-- "Request testimonial from happy clients"
-- "Check in mid-project to see if client is satisfied so far"
+- "This is a meeting request with no context. Reply asking for agenda, objective, and proposed attendees before presenting to Mark."
+- "Another recruiter trying to poach Jessica's team. Standard 'not interested' response."
+- "Vendor asking for payment update. Check with accounting, reply with status."
+- "Someone asking if David is speaking at an event. Check his calendar, confirm or decline."
 
 ---
 
-## Pipeline & Opportunity Management 🎯
+## Calendar Coordination & Scheduling 📅 (EA'S CORE JOB)
 
-### Lead Qualification & Tracking
-- "Show me all leads from the past month and their status"
-- "Which leads are hot and need immediate attention?"
-- "List all discovery calls scheduled for next week"
-- "Track which inquiries came from LinkedIn vs referrals vs website"
+### Multi-Party Complex Scheduling
 
-### Opportunity Pipeline
-- "Show me all open opportunities and their deal value"
-- "Which proposals are most likely to close this month?"
-- "List all leads in negotiation stage"
-- "Report on pipeline value for Q2"
+**The workflow:**
+Coordinating 5+ people across different organizations, time zones, and availability constraints is EA's highest-value skill. AI must actually solve this, not just suggest times.
 
-### Activity Tracking
-- "Show me all follow-ups I need to do this week"
-- "List clients I haven't contacted in 30+ days"
-- "Which leads have I had multiple conversations with?"
-- "Track response rates from cold outreach last month"
+**Example commands:**
+- "Mark needs to meet with his leadership team (5 people) for 90 minutes this week. Find a time that works for everyone."
+- "Book Mark's quarterly board meeting: need all 6 board members, 3-hour block, next month. Start with 3 proposed times."
+- "Jessica wants weekly 1-on-1s with her 8 direct reports. Set up recurring meetings distributed across the week."
+- "This meeting requires coordinating 4 different executives from 4 companies. Get their EAs' emails and start coordinating."
+- "Mark needs to meet with another CEO whose EA is Sarah at sarah@company.com. Coordinate with Sarah to find time."
+- "Jessica is speaking on a panel with 3 other executives. Get all their EAs on email to coordinate logistics."
 
-### Revenue Forecasting
-- "Calculate potential revenue from all active proposals"
-- "Show me deal values by stage: discovery, proposal, negotiation"
-- "Which opportunities will likely close this quarter?"
-- "Track monthly revenue from retainer clients"
+### Schedule Optimization & Conflict Resolution
 
-### Lead Source Analysis
-- "Which lead sources generate the best clients?"
-- "Compare conversion rates: referrals vs cold outreach vs content marketing"
-- "Which networking events led to actual projects?"
-- "Analyze which types of initial inquiries close at highest rates"
+- "Jessica has back-to-back meetings all day. Someone wants 15 minutes urgent - find where we can squeeze it in."
+- "David's morning meeting ran over, push all afternoon meetings back 30 minutes and notify everyone."
+- "Mark has 8 meetings tomorrow. That's too many. Which 2-3 can be rescheduled or delegated?"
+- "Jessica accepted a speaking engagement that conflicts with client meeting. Which is higher priority? Reschedule the other."
+- "David double-booked himself. Investor meeting vs team offsite. Move the team offsite."
 
----
+### Calendar Blocking & Protection
 
-## Content & Thought Leadership 📝
+- "Find 2 hours this week for David to do deep work - no meetings, no interruptions. Block as 'Focus Time.'"
+- "Mark travels every Tuesday-Thursday next month. Block travel days, mark as 'Remote/Limited Availability.'"
+- "Jessica needs prep time before her board presentation Friday. Block Thursday afternoon, label 'Prep - Do Not Schedule.'"
+- "David wants lunch blocked 12-1pm every day. Make recurring block, decline lunch meeting requests."
+- "Mark's assistant noticed he's burned out. Block Friday afternoons for rest of quarter, label 'Personal Time.'"
 
-### Industry Insights Sharing
-- "Send market trend analysis to clients in fintech space"
-- "Share recent regulatory changes affecting SaaS companies with relevant clients"
-- "Tell clients about industry shift I noticed working across companies"
-- "Send quarterly insights newsletter to entire contact list"
+### Travel Coordination & Logistics
 
-### Case Study Distribution
-- "Share new case study with leads in similar situations"
-- "Send relevant success story to prospects in discovery stage"
-- "Tell past clients about similar project I just completed"
-- "Distribute case study to LinkedIn connections in target market"
+- "Mark is traveling to NYC next Tuesday-Thursday. Block travel time, notify team he's remote, reschedule anything needing in-person."
+- "Jessica's speaking at a conference next week. Book flights, hotel, ground transportation. Send itinerary by EOD."
+- "David's flight was canceled, he has a client meeting in 4 hours in another city. Find alternatives immediately."
+- "Mark has back-to-back travel: SF Monday-Tuesday, NYC Wednesday-Thursday, London Friday-Sunday. Map this out with buffer time."
 
-### Value-Add Communication
-- "Send helpful resource to leads not ready to hire yet"
-- "Share framework I use with prospects to build credibility"
-- "Send recorded webinar to prospects who couldn't attend live"
-- "Give away valuable template to warm leads to stay top-of-mind"
+### Recurring Meeting Management
 
-### Positioning & Expertise
-- "Announce new service offering to all contacts"
-- "Tell clients about speaking engagement at industry conference"
-- "Share published article with relevant prospects and clients"
-- "Update network about new certification or expertise area"
+- "Set up Mark's weekly leadership meeting: Mondays 9am, 90 minutes, all VPs, recurring indefinitely."
+- "Jessica's monthly board meeting needs scheduling 6 months in advance. Book all 6 dates now."
+- "David's quarterly investor updates: last Thursday of each quarter, 2-hour blocks, send calendar holds."
+- "Mark's 1-on-1s with direct reports are too infrequent. Set up bi-weekly recurring meetings with all 6."
 
 ---
 
-## Practice Management & Operations 🏢
+## Meeting Preparation & Follow-Up 📋 (EA LEVERAGE)
 
-### Capacity Management
-- "Check my availability for taking on new projects this month"
-- "See when current projects end and new capacity opens up"
-- "Calculate how many client hours I have available next quarter"
-- "Block out vacation time and notify clients of unavailability"
+### Pre-Meeting Preparation
 
-### Client Onboarding
-- "Send onboarding packet to new client: contract, questionnaire, kickoff details"
-- "Welcome new client and explain how we'll work together"
-- "Send new client all the information they need to get started"
-- "Schedule onboarding call and send preparation materials"
+**The workflow:**
+Executives show up to meetings prepared because EAs proactively send materials, context, and reminders at the right time.
 
-### Invoicing & Payment
-- "Remind clients about outstanding invoices over 30 days"
-- "Send invoice for April retainer to all monthly clients"
-- "Follow up on payment for completed project"
-- "Thank clients for prompt payment and send receipt"
+**Example commands:**
+- "Mark has a board meeting tomorrow at 2pm. Send him the materials, agenda, and pre-read by 6pm today."
+- "Jessica's client call is in 30 minutes. Remind her, send Zoom link, attach the project brief."
+- "David's investor meeting is next week. Prepare briefing doc: company metrics, investment thesis, Q&A prep."
+- "Mark's speaking at a conference Thursday. Prepare: speech notes, company bio, travel itinerary, contact info for organizers."
+- "Jessica meeting with potential acquisition target tomorrow. Send her: their financials, competitive analysis, our offer terms."
 
-### Contract & Agreement Management
-- "Send contract renewal to retainer clients 30 days before expiration"
-- "Notify clients that engagement is ending next month"
-- "Follow up on unsigned contracts sent 2 weeks ago"
-- "Send updated MSA to client for additional scope"
+### Day-Of Reminders & Support
 
-### Professional Network Maintenance
-- "Check in with referral partners quarterly"
-- "Thank people who sent me referrals this year"
-- "Reconnect with former colleagues who might need consulting"
-- "Nurture relationships with complementary service providers"
+- "Mark's 9am meeting starts in 15 minutes. Send reminder with Zoom link and agenda."
+- "Jessica's in back-to-back calls all morning. Send her the lunch meeting location 30 minutes before."
+- "David needs his slides for 2pm presentation. He's in meetings until 1:45pm. Send at 1:30pm."
+- "Mark's meeting with difficult board member in 1 hour. Send him the prep notes and last quarter's discussion summary."
 
----
+### Post-Meeting Follow-Up
 
-## Information Retrieval & Analysis 📊
+- "After today's leadership meeting, send recap to all attendees with action items and owners."
+- "Mark just finished investor pitch. Send thank you email within 2 hours while we're top of mind."
+- "Jessica's client call wrapped up. Draft follow-up email: recap agreements, confirm next steps, attach proposal."
+- "David's board meeting ended. Circulate approved minutes, action items with deadlines, next meeting date."
+- "Mark made 3 commitments in that meeting. Create reminders to follow up on each before the deadline."
 
-### Contact Lookups
-- "Find phone number for Sarah Johnson at TechCo"
-- "Show me all contacts at enterprise client organizations"
-- "Get email addresses for all clients I worked with in 2024"
-- "Find contact info for referral partners I want to check in with"
+### Meeting Decline & Alternative Handling
 
-### Communication Search
-- "Find all emails about the TechCo strategy project"
-- "Show me recent conversations with Sarah Johnson"
-- "Search emails about pricing discussions from last month"
-- "Find all proposals sent in Q1"
-
-### Calendar Analysis
-- "Show me all client meetings scheduled next week"
-- "Find available time slots for 5 discovery calls this week"
-- "List all project deadlines this month"
-- "Show me my billable hours last month"
-
-### Client & Project Analysis
-- "Summarize all new inquiries from past week"
-- "Show me clients that haven't responded to follow-ups in 5+ days"
-- "List all active projects and their status"
-- "Report on client engagement levels over past quarter"
-
-### Business Intelligence
-- "Which clients generate the most revenue?"
-- "What's my average deal size and sales cycle length?"
-- "Track client retention rate over past year"
-- "Analyze which services have highest conversion rates"
+- "Mark got invited to low-priority industry panel. Decline gracefully, offer to send VP of Product instead."
+- "Jessica wants to attend this conference but can't justify the time. Decline, ask for recordings or key takeaways."
+- "David's calendar is full. This meeting request is 8th priority. Decline and suggest they work with his VP of Finance."
+- "When declining meetings, Mark wants simple 'calendar conflict.' Jessica wants warm explanation. David wants nothing, just decline."
 
 ---
 
-## Multi-Step Workflows 🔄
+## Delegation & Workflow Management 🔀 (EA INTELLIGENCE)
 
-### Complete Lead-to-Client Flow
-- "Handle new inquiry: respond immediately, qualify, schedule discovery call, send confirmation"
-- "Process referral: thank referrer, reach out to lead within 1 hour, offer discovery call times"
-- "Full sales workflow: respond, discovery call, send proposal, follow up, close deal"
+### Appropriate Routing & Delegation
 
-### Proposal-to-Kickoff Sequence
-- "Handle accepted proposal: send contract, request deposit, schedule kickoff, send onboarding materials"
-- "Process signed contract: thank client, schedule kickoff, send prep materials, add recurring meetings to calendar"
-- "Project start sequence: kickoff call, send project plan, schedule check-ins, send first status update"
+**The workflow:**
+80% of requests to executives should be handled by someone else. EAs must know the org structure and route appropriately.
 
-### Project Delivery Workflow
-- "Weekly project flow: send status update, check for client questions, update deliverable timeline"
-- "Milestone sequence: complete phase, notify client, send deliverables, get feedback, plan next phase"
-- "Project completion: deliver final work, send satisfaction survey, request testimonial, ask for referrals"
+**Example commands:**
+- "This request for Mark should actually go to his VP of Product. Forward appropriately with context."
+- "Jessica got invited to a podcast but she's too busy. Offer to send her VP of Marketing instead."
+- "David needs expense reports from last quarter. Route to his finance manager Sarah, CC David for visibility."
+- "This partnership inquiry is interesting but premature. Route to BD team to evaluate first before bringing to Mark."
+- "Mark's getting CCed on implementation details. This should go to engineering lead, not CEO. Redirect and ask to remove Mark from future emails."
 
-### Client Retention Campaign
-- "Quarterly touchpoint: check in on business goals, share relevant insight, look for new opportunities"
-- "Past client re-engagement: send valuable content, ask how they're doing, offer help"
-- "Retainer renewal: send renewal offer 45 days early, highlight value delivered, schedule review call"
+### EA-to-EA Coordination
 
-### Cold Outreach Sequence
-- "Outreach campaign: personalized intro, wait 5 days, send value-add follow-up, wait 7 days, final check-in"
-- "LinkedIn outreach: connect, wait for acceptance, send intro message, offer free consultation"
+- "Mark needs to meet with another CEO whose EA is Sarah. Coordinate with Sarah to find time."
+- "Jessica is speaking on a panel with 3 other executives. Get all their EAs on email to coordinate logistics."
+- "This meeting requires coordinating 4 different executives from 4 companies. Start EA coordination thread."
+- "Mark's old EA handed off 20 pending items. Prioritize and execute on the most important 5 this week."
+- "David's EA is out sick, I'm covering for both. Triage both inboxes, handle urgent items only."
 
----
+### Team Coordination & Communication
 
-## Bulk Operations 📨
-
-### Mass Communication with Personalization
-- "Send quarterly update to all clients mentioning their specific industry"
-- "Email all past clients about new service offering relevant to their business"
-- "Send holiday greetings to everyone mentioning our work together"
-- "Tell all leads in discovery stage about limited availability opening up"
-- **Or with structured data:** "Send personalized emails to these 50 leads using this template [paste] and data [attach spreadsheet]"
-
-### Bulk Scheduling
-- "Schedule discovery calls with all hot leads this week"
-- "Book quarterly reviews with all retainer clients this month"
-- "Coordinate check-in calls with all active projects"
-
-### Group Notifications
-- "Tell all active clients about vacation/unavailability next month"
-- "Notify all prospects about new availability for March projects"
-- "Announce speaking engagement to all contacts"
-- "Update all clients about new pricing effective next quarter"
-
-### Segmented Communications
-- "Send different messages: hot leads get pricing, warm leads get case study, cold leads get value content"
-- "Update clients differently: active projects get status, retainers get monthly recap, past clients get check-in"
-- "Segment by industry: send SaaS clients relevant insight, tell e-commerce clients about retail trends"
+- "Mark decided to cancel Friday's all-hands. Notify entire company, explain briefly, offer Q&A session instead."
+- "Jessica's team needs her decision on the rebrand. She's traveling all week. Get the 3 options, summarize for her, get decision by EOD."
+- "David's direct report sent a good idea email that got buried. Resurface it to David with your recommendation."
+- "Mark's leadership team has a conflict about budget allocation. Schedule 30-minute decision meeting with key stakeholders."
 
 ---
 
-## Conversational Template Generation 💬
+## Relationship Management & Follow-Through 🤝 (EA SECRET SAUCE)
 
-### Generate Then Use
-- "Draft a new inquiry response template" → "Send that to Sarah Johnson"
-- "Write a discovery call confirmation message" → "Send that to all calls scheduled tomorrow"
-- "Create a project kickoff email" → "Send that to new client at Acme Corp"
-- "Draft proposal follow-up message" → "Send to all open proposals from last 2 weeks"
+### Relationship Maintenance & Tracking
 
-### Provide Template Then Execute
-- "Here's my inquiry response template [paste] - send it to all new leads from today"
-- "Use this discovery call confirmation [paste] and send to tomorrow's calls"
-- "Send this monthly update [paste] to all retainer clients"
-- "Here's my follow-up template [paste] and lead data [attach] - send personalized messages"
+**The workflow:**
+EAs track promises, obligations, and relationship health that executives don't have time to monitor. This is where great EAs shine.
 
-### Multi-Template Workflows
-- "Draft templates for: hot leads, warm leads, cold re-engagement" → "Send appropriate one to each group"
-- "Create different updates for: active projects, retainers, past clients" → "Send to appropriate groups"
-- "Write templates for: accepted proposal, project kickoff, Phase 1 complete" → "Use for project communications"
+**Example commands:**
+- "Mark hasn't talked to his top investor in 6 weeks. Suggest scheduling a check-in call."
+- "Jessica promised to intro this person to someone in her network 2 weeks ago. Follow up on that intro."
+- "David mentioned wanting to grab coffee with this advisor 3 months ago. Make it happen now."
+- "This person has emailed Mark 3 times with no response. They're getting frustrated - handle tactfully with apology and response."
+- "Important client's birthday is next week. Remind Jessica to send a personal note."
+
+### Stakeholder Relationship Health
+
+- "Mark's direct reports haven't had 1-on-1s in 6 weeks. That's too long - schedule catch-ups."
+- "Jessica hasn't responded to this key partner in 2 weeks. They're important - prioritize response."
+- "David's investor asked for quarterly update 10 days ago, still waiting. This is urgent."
+- "Mark's mentor who helped him start the company emailed last week. Personal relationship - ensure response today."
+
+### Gift & Appreciation Management
+
+- "Holiday season - send appropriate gifts to each executive's key relationships. Mark: 10 investors, Jessica: 15 industry partners, David: 5 board members."
+- "Mark's top customer's company just hit a milestone. Send congratulations with personal note."
+- "Jessica's former assistant is getting married. Remind Jessica to send gift and note."
+- "David's long-time accountant is retiring. Arrange farewell lunch and gift."
+
+### Promise & Commitment Tracking
+
+- "Mark said he'd get back to this person 'next week' (3 weeks ago). Follow up now."
+- "Jessica committed to reviewing this proposal by Friday. It's Thursday - remind her."
+- "David promised to intro this person to his CFO network. Make it happen."
+- "In the board meeting, Mark committed to 3 deliverables by month-end. Track progress and remind him."
 
 ---
 
-## Schedule & Availability Management 📆
+## Crisis Management & Urgent Escalation 🚨 (EA JUDGMENT)
 
-### Availability Checks
-- "Check my availability this week for discovery calls"
-- "Find times next week when I'm free for client meetings"
-- "Show me my schedule for next month"
-- "Block out deep work time every morning 9-11am"
+### True Emergency Recognition
 
-### Calendar Coordination
-- "Add project deadline to calendar: TechCo strategy due March 15"
-- "Schedule recurring weekly check-ins with all active clients"
-- "Block calendar for conference next month"
-- "Add all project milestones to calendar with reminders"
+**The workflow:**
+EAs must distinguish between "urgent" (can wait 1 hour) and "emergency" (interrupt immediately). Wrong judgment = fired.
 
-### Meeting Management
-- "Reschedule this week's meetings - need to push everything by one day"
-- "Find time for 5 discovery calls this week"
-- "Coordinate availability with client for workshop - need 3-hour block"
-- "Cancel Friday's meetings and notify all attendees"
+**Example commands:**
+- "Mark is in a meeting but his biggest customer just emailed saying they're canceling. Get his attention NOW - text him."
+- "Press inquiry about sensitive acquisition rumor just came in. Don't respond - escalate to Mark and PR team immediately."
+- "Mark's wife just called - family emergency. Clear his calendar for today, reschedule everything, notify his team (no details)."
+- "David's laptop died right before board presentation. He needs slides on his phone NOW."
+- "Jessica's keynote speech is in 2 hours, she's stuck in traffic 1 hour away. Find alternative: video call-in or reschedule."
 
-### Time Blocking
-- "Block Fridays for deep work and proposal writing"
-- "Reserve Monday mornings for client check-ins only"
-- "Protect 2pm-5pm daily for project delivery work"
-- "Set up focus time blocks around existing meetings"
+### Rapid Response Coordination
+
+- "Major client issue escalating. Mark needs to call the CEO immediately. Find their EA, get CEO on phone in 15 minutes."
+- "Product launch has critical bug. Jessica (CMO) and David (CFO) need to loop in Mark (CEO) now. Set up emergency call."
+- "Negative press article just published. Mark needs to see it immediately, loop in PR team, prepare response."
+- "Investor threatening to pull funding. David needs Mark on the phone with investor in next 30 minutes."
+
+### Sensitive Situation Handling
+
+- "This email contains confidential M&A information. Never mention this to anyone. Mark's 'Phoenix' project."
+- "Someone is asking about Mark's availability next month - but you know he's negotiating acquisition. Give vague availability, don't reveal why."
+- "Recruiter asking if Jessica is happy in her role. Shut this down professionally without creating drama."
+- "Mark's personal assistant CC'd you on something about his divorce. Pretend you didn't see it, handle with extreme discretion."
+
+---
+
+## Bulk Operations Across Multiple Executives 📊 (SCALE EFFICIENCY)
+
+### Weekly/Monthly Recurring Communications
+
+**Example commands:**
+- "Send weekly schedule summary to Mark, Jessica, and David every Sunday evening - personalized for each."
+- "Quarter end coming up - remind all executives about their board reporting deadlines (different dates for each)."
+- "Schedule monthly EA sync meeting with all three executives to review priorities and upcoming travel."
+- "Send monthly 'things falling through cracks' report to each executive with items needing their attention."
+
+### Coordinated Event Management
+
+- "All three executives got invited to the same industry conference. Coordinate who should go based on priorities, book travel."
+- "Annual team offsite next month. Get availability from all 3 executives, propose dates to team leads."
+- "Company holiday party planning. Get input from all executives on budget, date, venue preferences."
+- "Board meeting requires all 3 executives presenting. Coordinate prep timeline, assign sections, schedule rehearsal."
+
+### Cross-Executive Information Sharing
+
+- "This industry trend affects both Jessica (CMO) and David (CFO). Send summary to both with different framing."
+- "Mark made a strategic decision that impacts Jessica's marketing plans. Notify her with context."
+- "David's budget cuts affect Mark's hiring plans. Schedule brief sync meeting."
+- "All three executives need to see this competitive analysis. Send with executive summary tailored to their roles."
+
+---
+
+## Executive Preference Learning & Adaptation 🧠 (CONTINUOUS IMPROVEMENT)
+
+### Communication Style Preferences
+
+**The workflow:**
+Great EAs learn each executive's style and adapt. The AI must do the same.
+
+**Example commands:**
+- "Mark prefers morning meetings, Jessica prefers afternoons. Remember this for future scheduling."
+- "David always wants financial emails forwarded immediately. Jessica can wait until evening. Different urgency rules."
+- "When Mark says 'sometime next week' he means schedule it. When Jessica says it, she means she'll get to it eventually. Different follow-up approaches."
+- "Mark hates phone calls, Jessica loves them, David doesn't care. Handle meeting requests accordingly."
+
+### Decision-Making Pattern Recognition
+
+- "Mark needs 3 options with pros/cons before deciding. Jessica decides fast with gut. David needs data. Adjust presentation accordingly."
+- "Jessica always says yes to speaking opportunities then regrets it. Start filtering - only bring her top-tier events."
+- "David rejects 90% of networking requests. Only bring him investor/board-level intros."
+- "Mark hates surprise meetings. Always ask before accepting on his behalf. Jessica trusts you to decide."
+
+### Working Style & Energy Patterns
+
+- "Mark is most productive 6am-9am. Protect that time for deep work, no meetings."
+- "Jessica crashes after lunch. Schedule important meetings in mornings or late afternoons."
+- "David needs decompression time after intense meetings. Don't schedule back-to-back board meetings and investor calls."
+- "Mark travels every other week. On travel weeks, keep meetings light. On home weeks, pack the calendar."
+
+### Historical Context & Project Memory
+
+- "Mark's 'Phoenix' project = confidential acquisition of CompetitorCo. 'Lighthouse' = new product launch Q3. Use these code names."
+- "Jessica had a bad experience with EventCorp as a vendor. Never book them for her speaking engagements."
+- "David worked with this investment bank on last fundraise. Good relationship - prioritize their outreach."
+- "Mark's board member Sarah always asks tough questions about burn rate. Prep extra detail when she's in meetings."
+
+---
+
+## Email Response Templates by Situation 📝 (EA EFFICIENCY)
+
+### Meeting Request Responses
+
+**For different scenarios:**
+
+**Accept (available):**
+- "Mark: 'Confirmed. See you Thursday 2pm. Please send agenda in advance.'"
+- "Jessica: 'Happy to meet! Thursday 2pm works great. Looking forward to it.'"
+- "David: 'Thursday 2pm confirmed.'"
+
+**Decline (busy):**
+- "Mark: 'Calendar conflict. Please propose alternative times.'"
+- "Jessica: 'So sorry, I'm booked solid this week! Can we find time next week? I'd love to connect.'"
+- "David: 'Not available.'"
+
+**Decline (low priority):**
+- "Mark: 'Unfortunately Mark's schedule is fully committed for the foreseeable future. If there's something urgent, please let me know.'"
+- "Jessica: 'Jessica's traveling extensively over the next few months. If this is time-sensitive, perhaps someone on her team could help?'"
+- "David: 'David's not available for this. Please reach out to [appropriate person].'"
+
+**Delegate to someone else:**
+- "This is a great fit for Jessica's VP of Marketing. Looping in Sarah (cc'd) who can take this meeting. Thanks!"
+
+### Request for Information Responses
+
+- "Mark: 'See attached. Let me know if you need anything else.'"
+- "Jessica: 'Absolutely! Here's what you need. Happy to jump on a quick call if helpful!'"
+- "David: 'Attached.'"
+
+### Intro Request Responses
+
+**Accept intro:**
+- "Mark: 'Happy to connect you with [person]. I'll make the intro via email this week.'"
+- "Jessica: 'Yes! [Person] is great. Let me intro you two - will send email shortly!'"
+
+**Decline intro:**
+- "Mark: 'Unfortunately I don't have a strong enough relationship with [person] to make that introduction.'"
+- "Jessica: 'I don't think I'm the right person to make this intro, but you might try reaching out to [alternative].'"
+
+### Sales/Pitch Responses
+
+**Polite decline:**
+- "Thanks for reaching out. Unfortunately this isn't a fit right now. Best of luck!"
+- "Mark's calendar is fully committed. If you'd like to send information via email, I'll make sure he sees it."
+
+**Interested but not now:**
+- "Interesting! Not the right time for a conversation, but feel free to follow up in Q3 when we're looking at new vendors."
+
+---
+
+## Analysis & Reporting Capabilities 📈 (EA INSIGHTS)
+
+### Email Volume & Pattern Analysis
+
+**Example commands:**
+- "How many emails did Mark get last week? What percentage were actually important?"
+- "Show me Jessica's email response time trends. Is she falling behind?"
+- "David's inbox has 147 unread emails. Which 10 need his attention this week?"
+- "Who are Mark's most frequent correspondents? Are these the right people?"
+
+### Calendar & Time Analysis
+
+- "Mark had 32 meetings last week. That's too many. Analyze which could have been emails or delegated."
+- "Show me Jessica's meeting breakdown: internal vs external, 1-on-1 vs group."
+- "David's spending 60% of time in meetings, only 40% on deep work. That's out of balance."
+- "All three executives have travel conflicts with Q2 board meeting. Find alternative dates."
+
+### Relationship & Follow-Up Tracking
+
+- "Show me all open commitments Mark has made in the last 30 days. Which are overdue?"
+- "List all people Jessica promised to intro to someone else. Status on each?"
+- "Who has emailed Mark 2+ times with no response? Priority order."
+- "Which key relationships (investors, board, top clients) haven't been contacted in 60+ days?"
+
+### Priority & Urgency Insights
+
+- "What's truly urgent for Mark this week vs what can wait until next week?"
+- "Jessica has 15 'urgent' requests. Rank them by actual urgency."
+- "David's team is waiting on decisions from him. What's blocking them?"
+- "Show me all time-sensitive deadlines across all three executives this month."
+
+---
+
+## EA-Specific Workflow Shortcuts ⚡ (SPEED COMMANDS)
+
+### Quick Actions (No Explanation Needed)
+
+- "Mark confirm" (accept meeting request in Mark's style)
+- "Jessica decline busy" (decline meeting, she's booked)
+- "David forward finance" (forward to David's finance team)
+- "Mark urgent flag" (mark email as needing immediate attention)
+- "Jessica remind tomorrow" (set reminder to follow up tomorrow)
+- "David archive" (archive this email for David)
+- "Mark schedule next week" (find time next week and propose)
+- "Jessica send itinerary" (send her travel itinerary)
+- "David numbers only" (summarize email with just key numbers)
+- "All three exec summary" (send executive summary to all three)
+
+### Batch Processing Commands
+
+- "Triage Mark's inbox: urgent, important, routine, archive"
+- "Accept all of Jessica's recurring meetings for next month"
+- "Decline all Mark's networking requests this week unless they're investor/board level"
+- "Reschedule all of David's meetings on Friday to next week (he's taking PTO)"
+- "Send 'thank you for meeting' follow-ups to all of Jessica's meetings from yesterday"
+
+### Context Loading Commands
+
+- "Load Mark context" (load Mark's preferences, projects, priorities)
+- "Switch to Jessica" (switch active executive context)
+- "Show me David's week" (calendar, priorities, urgent items)
+- "What's Mark's top priority right now?" (pull from context/notes)
+- "Remind me about Jessica's Phoenix project details" (retrieve project context)
 
 ---
 
@@ -410,69 +456,61 @@ This document contains example natural language commands that independent consul
 ### ✅ **SUPPORTED Requests** (MVP: Gmail, Google Calendar, Google Contacts)
 
 **Core Capabilities:**
-- **Email Operations**: Search, draft, send, organize emails using Gmail API
-- **Calendar Management**: Schedule meetings, check availability, manage appointments using Google Calendar
-- **Contact Management**: Look up, organize, and manage leads/clients/partners using Google Contacts
-- **Bulk Operations**: Send mass emails and schedule multiple appointments
-- **Natural Language Understanding**: Parse any input - lists, descriptions, templates, or data
-- **Data Analysis**: Analyze emails, calendar data, contact history for insights
-- **Complex Workflows**: Multi-step processes coordinating communication and scheduling
+- **Email Operations**: Search, triage, draft, send, organize emails using Gmail API
+- **Calendar Management**: Check availability, schedule meetings, coordinate multi-party events, handle conflicts
+- **Contact Management**: Look up contacts, track relationships, segment by importance
+- **Multi-Executive Context**: Switch between executives, remember preferences, adapt communication style
+- **Natural Language Understanding**: Parse complex commands, understand urgency, route appropriately
+- **Bulk Operations**: Handle multiple executives simultaneously, batch operations
+- **Relationship Tracking**: Monitor communication frequency, surface falling-through-cracks items
+- **Priority & Urgency Analysis**: Filter noise, surface what needs immediate attention
 
 **What Makes Requests Supported:**
 - **API-Feasible**: Can be accomplished using Gmail, Google Calendar, and Google Contacts APIs
-- **Data Available**: Information exists in your communication history or you provide it
-- **No External Dependencies**: Doesn't require CRM, project management tools, or accounting software (MVP)
-- **Flexible Input**: Works with natural language, lists, templates, or structured data
+- **Data Available**: Information exists in email/calendar history or EA provides context
+- **No External Dependencies**: Doesn't require CRM, project management tools, or company-specific systems (MVP)
+- **Executive Context**: Works with EA-provided profiles and learned preferences
 
 **Examples of Supported Requests:**
-- "New inquiry about marketing strategy - respond and offer discovery call times this week"
-- "Follow up with all proposals sent in last 2 weeks that haven't gotten responses"
-- "Schedule quarterly reviews with all retainer clients this month"
-- "Send weekly status updates to all active project clients"
-- "Check in with past clients I haven't contacted in 6 months"
-- **Or with data:** "Send personalized follow-ups to these 50 leads using this template [paste] and info [attach CSV]"
+- "Mark got 47 emails overnight. Show me the 5 that need his attention today."
+- "Schedule Mark's leadership team meeting (5 people) for 90 minutes this week"
+- "Jessica loves speaking opportunities - respond enthusiastically and check her June calendar"
+- "David hates evening events - politely decline this dinner invitation"
+- "All three executives got invited to same conference - coordinate who should go"
+- "Mark hasn't talked to his top investor in 6 weeks - suggest scheduling check-in"
 
 ---
 
 ### ❌ **UNSUPPORTED Requests** (Require External Systems)
 
-**CRM & Pipeline Management:**
-- Updating deal stages in HubSpot, Pipedrive, Close
-- Logging activities in CRM database
-- Accessing pipeline reports and analytics from CRM
-- Syncing data between multiple systems
+**Company-Specific Systems:**
+- Slack/Teams integration (internal messaging)
+- Project management tools (Asana, Monday, Jira)
+- CRM systems (Salesforce, HubSpot)
+- File storage access (Dropbox, Google Drive file management)
+- Expense/invoice systems (Concur, Expensify)
+- HR systems (BambooHR, Workday)
 
-**Project Management Systems:**
-- Managing tasks in Asana, Trello, ClickUp
-- Tracking project milestones in Monday.com
-- Updating deliverable status in project management software
-- Time tracking in Harvest, Toggl
+**Advanced Communication:**
+- LinkedIn direct messages
+- WhatsApp Business
+- SMS/text messaging
+- Social media management
+- Video recording/editing
 
-**Document Management Systems:**
-- Storing files in Notion, Dropbox, Box
-- Managing contracts in PandaDoc, DocuSign
-- Accessing shared documents in client workspaces
-- Version control for deliverables
-
-**Accounting & Invoicing:**
-- Creating invoices in QuickBooks, FreshBooks
-- Processing payments through Stripe, PayPal
-- Tracking expenses and receipts
-- Generating financial reports
-
-**Specialized Business Tools:**
-- Updating LinkedIn company research
-- Pulling data from industry databases
-- Accessing market research platforms
-- Video conferencing setup (can send Zoom links you create)
+**Document Creation:**
+- PowerPoint/Keynote slide creation
+- Excel/Sheets data analysis
+- Word/Docs document drafting (beyond email)
+- PDF editing or form filling
 
 **Examples of Unsupported Requests:**
-- "Update deal stage to 'Proposal Sent' in HubSpot" ❌ (requires CRM integration)
-- "Create invoice for April retainer in QuickBooks" ❌ (requires accounting software)
-- "Mark deliverable complete in Asana" ❌ (requires project management integration)
-- "Upload final report to client's Dropbox" ❌ (requires file storage integration)
-- "Update time tracking in Harvest" ❌ (requires time tracking software)
-- "Research company background in Crunchbase" ❌ (requires external data source)
+- "Update Mark's Salesforce with meeting notes" ❌ (requires CRM integration)
+- "Share this doc in the company Slack" ❌ (requires Slack integration)
+- "Create presentation slides for David's board meeting" ❌ (requires PowerPoint/Slides)
+- "Book Mark's flight and hotel for NYC trip" ❌ (requires travel booking integration)
+- "Submit Jessica's expenses in Concur" ❌ (requires expense system)
+- "Post this announcement to LinkedIn for Mark" ❌ (requires social media integration)
 
 ---
 
@@ -482,105 +520,131 @@ This document contains example natural language commands that independent consul
 
 | ❌ Won't Work | ✅ Will Work |
 |---------------|-------------|
-| "Update deal stage in CRM" | "Follow up with all open proposals asking about decision timeline" |
-| "Create invoice in QuickBooks" | "Send invoice [attach PDF] to client with payment instructions" |
-| "Log activity in CRM" | "Email myself summary of client meeting for records" |
-| "Pull data from project management tool" | "Send project status update based on this info [paste details]" |
-| "Update time tracking" | "Email myself today's billable hours by client" |
-| "Research company in LinkedIn Sales Nav" | "Send personalized outreach to lead at [Company Name] mentioning [insight you found]" |
-| "Generate contract in DocuSign" | "Email contract [attach PDF you created] to client for signature" |
+| "Update Salesforce with meeting notes" | "Email Mark's CRM manager with meeting notes to log in Salesforce" |
+| "Create slides for presentation" | "Email Mark the key points for his presentation, format as bullets" |
+| "Book flight for NYC trip" | "Email Mark's travel coordinator: need flights to NYC March 15-17, morning departure preferred" |
+| "Submit expense report" | "Forward receipts to accounting, CC David, ask them to process expense report" |
+| "Share document in Slack" | "Email document to Mark's team with note to share in their Slack channel" |
+| "Update task in Asana" | "Email project manager: task X is complete, please update Asana" |
+| "Post to LinkedIn" | "Draft LinkedIn post for Mark, send to him for review and posting" |
 
 **Key Principles:**
 1. **Communication-Focused**: Gmail, Google Calendar, Google Contacts only (MVP)
-2. **User-Initiated**: You trigger actions, no automated systems running 24/7
-3. **Flexible Input**: Natural language, templates, or data files - whatever you have
-4. **No External Integrations (MVP)**: No CRM, project management, or accounting software for MVP - you provide data as needed
-5. **You Provide Context**: Paste client details, project info, or proposal status in your commands
-6. **Context from Conversation History**: AI learns from your communication patterns
+2. **EA-Initiated**: EA triggers actions, system doesn't run autonomously
+3. **Executive Context-Aware**: Remembers preferences, adapts style, switches context
+4. **No External Integrations (MVP)**: No Slack, CRM, project management, or travel systems - EA provides data/context as needed
+5. **EA Provides Context**: Paste executive preferences, priorities, confidential project names in commands
+6. **Learn from Patterns**: AI learns from EA's edits and adaptations over time
 
 **Post-MVP Additions:**
-- CRM integration (HubSpot, Pipedrive - read/write)
-- Project management tools (Asana, ClickUp - read-only)
-- Invoicing (QuickBooks, FreshBooks - invoice generation)
-- Document storage (Notion, Dropbox - file attachments)
-- Calendar integrations (Calendly booking links)
+- Slack/Teams integration (coordinate with teams)
+- CRM integration (log meetings, update contact info)
+- Travel booking tools (Concur, TripActions)
+- Expense management (Expensify, Concur)
+- Document collaboration (Google Docs, Notion)
 
 ---
 
 ### **Workflow Patterns That Work**
 
-**✅ Lead-to-Client Workflows:**
-- "New inquiry workflow: immediate response → schedule discovery call → send confirmation and prep materials"
-- "Proposal sequence: send proposal → follow up day 3 → follow up day 7 → closing conversation"
-- "Discovery call flow: schedule call → send confirmation → post-call recap → proposal delivery"
+**✅ Morning Inbox Triage (All Executives):**
+- "Triage overnight emails for Mark, Jessica, and David. Show urgent items for each."
+- "Mark: 47 emails → 5 need attention. Jessica: 32 emails → 3 need attention. David: 18 emails → 2 need attention."
+- "Auto-respond to routine requests, flag urgent items, draft responses for important emails."
 
-**✅ Client Onboarding:**
-- "New client sequence: send contract → request deposit → schedule kickoff → send onboarding materials"
-- "Kickoff flow: send agenda → conduct call → send recap and timeline → schedule check-ins"
+**✅ Multi-Executive Coordination:**
+- "All three got invited to same event - recommend who goes based on priorities and calendars"
+- "This decision needs input from Mark (CEO), Jessica (CMO), and David (CFO) - coordinate quick sync meeting"
+- "Board meeting next month - coordinate all 3 executives' prep, assign sections, schedule rehearsal"
 
-**✅ Project Delivery:**
-- "Weekly updates: status email → check for questions → update timeline → confirm next steps"
-- "Milestone communication: complete phase → notify client → deliver work → get feedback → plan next phase"
-- "Project completion: final delivery → satisfaction survey → request testimonial → ask for referrals"
+**✅ Complex Calendar Coordination:**
+- "Schedule Mark's leadership team meeting: 5 people, 90 minutes, this week - find time that works for all"
+- "Mark needs to meet with CEO whose EA is Sarah - coordinate with Sarah to find time"
+- "Jessica speaking on panel with 3 other executives - coordinate with their EAs on logistics"
 
-**✅ Relationship Management:**
-- "Quarterly touchpoint: check in on goals → share relevant insight → explore new opportunities"
-- "Past client re-engagement: send valuable content → ask how they're doing → offer to help"
-- "Retainer renewal: send renewal offer 45 days early → highlight value → schedule review call"
+**✅ Relationship Maintenance:**
+- "Mark hasn't contacted his top investor in 6 weeks - suggest scheduling check-in"
+- "Jessica promised intro 2 weeks ago, still pending - follow up and make it happen"
+- "Important client's birthday next week - remind Jessica to send personal note"
+- "Show me all commitments Mark made in last 30 days that haven't been followed up"
+
+**✅ Crisis Response:**
+- "Mark is in meeting but biggest customer just canceled - get his attention NOW"
+- "Jessica's flight canceled, client meeting in 4 hours in another city - find alternatives immediately"
+- "Press inquiry about sensitive topic - escalate to Mark and PR team, do not respond"
+
+**✅ Meeting Prep & Follow-Up:**
+- "Mark's board meeting tomorrow 2pm - send materials, agenda, pre-read by 6pm today"
+- "Jessica's client call in 30 minutes - remind her, send Zoom link, attach brief"
+- "After leadership meeting, send recap to all attendees with action items and owners"
 
 **✅ Bulk Operations:**
-- "Send quarterly update to all clients personalizing by industry"
-- "Follow up with all open proposals from last 2 weeks"
-- "Schedule quarterly reviews with all retainer clients this month"
-- **Or with data:** "Send 50 personalized emails using template [paste] and spreadsheet [attach]"
-
-**✅ Analysis & Insights:**
-- "Analyze inquiry response rates from last quarter and identify patterns"
-- "Review which lead sources convert to actual projects"
-- "Identify clients who haven't had check-ins in 90+ days"
+- "Send weekly schedule summary to all three executives every Sunday evening - personalized for each"
+- "Quarter end - remind all executives about board reporting deadlines (different dates)"
+- "Holiday gifts: Mark's 10 investors, Jessica's 15 partners, David's 5 board members"
 
 ---
 
-## Consultant-Specific Intelligence
+## Executive Assistant-Specific Intelligence
 
-**Client Context:**
-When you mention clients or projects, the AI understands:
-- Company names and contact details
-- Project stages (inquiry, discovery, proposal, active, completed)
-- Engagement types (one-time project, retainer, workshop)
-- Multiple stakeholders (decision maker, project lead, end users)
+**Executive Context:**
+When you mention executives, the AI understands:
+- Communication style (formal vs casual, brief vs detailed)
+- Meeting preferences (morning vs afternoon, phone vs video, duration)
+- Priorities (what gets immediate attention vs what can wait)
+- Relationships (who's important, who to prioritize, who to filter)
+- Confidential projects (code names, need-to-know basis)
 
-**Relationship Context:**
-The AI tracks:
-- Lead temperature (hot, warm, cold based on communication patterns)
-- Client stage (lead, prospect, active, past client)
-- Communication history and conversation context
-- Project history and outcomes
-
-**Timing Intelligence:**
+**Urgency Intelligence:**
 The AI understands:
-- Speed-to-lead urgency (inquiries need same-day response)
-- Sales cycle timing (discovery → proposal → decision typically 1-3 weeks)
-- Follow-up cadence (proposals need follow-up every 3-5 days)
-- Project timelines and milestone deadlines
-- Client meeting rhythms (weekly check-ins, monthly reviews)
+- True emergency vs "urgent" (interrupt vs handle quickly)
+- Relationship importance (board member > vendor, top client > random inquiry)
+- Time sensitivity (response deadline, meeting prep time needed)
+- Executive capacity (if calendar is full, default to decline/delegate)
 
-**Communication Style:**
-The AI matches tone to situation:
-- Professional and responsive for new inquiries
-- Consultative and value-focused for proposals
-- Clear and proactive for project updates
-- Warm and relationship-focused for past client nurture
-- Strategic and insight-driven for thought leadership
+**Communication Style Matching:**
+The AI matches tone to executive:
+- Mark (CEO): Formal, brief, no small talk - "Confirmed. Thursday 2pm."
+- Jessica (CMO): Warm, enthusiastic, relationship-focused - "Happy to meet! Looking forward to it!"
+- David (CFO): Direct, numbers-focused, minimal words - "Thursday 2pm confirmed."
 
-**Business Context:**
-The AI understands:
-- Consulting terminology (discovery, scope, deliverables, retainer)
-- Revenue models (hourly, project-based, retainer, value-based)
-- Service offerings and expertise areas
-- Client industries and business challenges
-- Capacity and availability constraints
+**Context Switching:**
+The AI switches seamlessly:
+- "For Mark..." (loads Mark's preferences, style, priorities, calendar)
+- "Now switch to Jessica..." (loads Jessica's context)
+- "All three executives..." (coordinates across all three)
+
+**Learning & Adaptation:**
+The AI learns from patterns:
+- If EA always changes X in drafts, AI starts including X
+- If EA always declines Y type of meeting, AI proactively declines
+- If EA always flags Z type of email as urgent, AI learns that pattern
 
 ---
 
-This framework ensures the AI assistant is highly effective for independent consultants while working within the realistic constraints of email, calendar, and contacts APIs - no CRM, project management, or accounting integrations required for MVP.
+## EA Agency-Specific Features
+
+### Multi-EA Collaboration
+- "I'm covering for Sarah's executives while she's out. Load her clients: Tom, Amanda, Robert."
+- "Coordinate with David's other EA on overlapping meetings this week."
+- "EA team meeting prep: compile status updates for all our executives."
+
+### Client Handoff & Onboarding
+- "New executive client: Mark (CEO, Series B startup, formal, morning meetings). Set up profile."
+- "Sarah's old EA handed off 20 pending items. Show me highest priority 5."
+- "Offboarding executive client Jessica next month. Archive all context, prepare handoff notes."
+
+### Agency Reporting & Metrics
+- "How many hours did I save across all 3 executives this week?"
+- "Which executive needs the most attention this week?"
+- "Email volume trends for all my executives: increasing or decreasing?"
+- "Meeting load balance: is anyone overbooked compared to others?"
+
+---
+
+This framework ensures the AI assistant is highly effective for Executive Assistants managing multiple executives while working within the realistic constraints of email, calendar, and contacts APIs - no Slack, CRM, or project management integrations required for MVP.
+
+**Target:** EA/VA agencies with 10-50 clients
+**Pricing:** $500/month per EA (not per executive)
+**Value:** EA can handle 3-4 executives instead of 1-2, maintaining same quality
+**ROI for agency:** Higher margins or serve more clients with same team size
