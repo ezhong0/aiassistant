@@ -1,0 +1,31 @@
+# Gitleaks configuration for assistantapp
+# This file configures gitleaks to ignore test files and mock credentials
+
+[allowlist]
+  description = "Allow test environment files with mock credentials"
+  files = [
+    '''\.env\.test$''',
+    '''\.env\.example$''',
+    '''test/.*\.env$''',
+    '''tests/.*\.env$'''
+  ]
+  
+  # Allow specific test patterns
+  regexes = [
+    '''test_.*_key''',
+    '''mock_.*_secret''',
+    '''placeholder_.*_token'''
+  ]
+
+# Override default rules for test files
+[[rules]]
+  description = "Test environment files"
+  regex = '''TOKEN_ENCRYPTION_KEY=.*'''
+  file = '''\.env\.test$'''
+  allowlist = true
+
+[[rules]]
+  description = "Example environment files"
+  regex = '''.*'''
+  file = '''\.env\.example$'''
+  allowlist = true
