@@ -1,0 +1,95 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  # Fast checks that fail quickly
+  quick-checks:
+    name: Quick Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint (errors only)
+        run: npm run lint:errors
+
+      - name: Run security lint
+        run: npm run lint:security
+
+      - name: Run architecture lint
+        run: npm run lint:architecture
+
+      - name: Quick type check
+        run: npm run typecheck
+
+  # PR size check
+  pr-size:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        run: |
+          FILES_CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | wc -l)
+          LINES_CHANGED=$(git diff --stat origin/${{ github.base_ref }}...HEAD | tail -n1 | awk '{print $4 + $6}')
+
+          echo "Files changed: $FILES_CHANGED"
+          echo "Lines changed: $LINES_CHANGED"
+
+          if [ "$FILES_CHANGED" -gt 50 ]; then
+            echo "::warning::Large PR: $FILES_CHANGED files changed. Consider splitting into smaller PRs."
+          fi
+
+          if [ "$LINES_CHANGED" -gt 1000 ]; then
+            echo "::warning::Large PR: $LINES_CHANGED lines changed. Consider splitting into smaller PRs."
+          fi
+
+  # Comment PR with test results
+  comment-results:
+    name: Comment Test Results
+    runs-on: ubuntu-latest
+    needs: [quick-checks]
+    if: always()
+
+    steps:
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const quickChecks = '${{ needs.quick-checks.result }}';
+
+            let message = '## CI Check Results\n\n';
+
+            if (quickChecks === 'success') {
+              message += '✅ Quick checks passed!\n';
+            } else {
+              message += '❌ Quick checks failed. Please review the logs.\n';
+            }
+
+            message += '\nFull CI pipeline results will be available shortly.';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });

@@ -1,0 +1,51 @@
+# Gitleaks Configuration for assistantapp backend
+# https://github.com/gitleaks/gitleaks
+
+title = "Gitleaks Configuration"
+
+# Extend the default gitleaks configuration
+# useDefault = true will use built-in rules for common secrets
+
+[extend]
+useDefault = true
+
+# Allow specific test files with mock credentials
+[[allowlist]]
+description = "Allowlist .env.test with test-only mock credentials"
+paths = [
+  '''\.env\.test$''',
+]
+
+[[allowlist]]
+description = "Allowlist test fixtures and mocks"
+paths = [
+  '''tests/.*fixtures/.*''',
+  '''tests/.*mocks/.*''',
+  '''__mocks__/.*''',
+]
+
+[[allowlist]]
+description = "Ignore common false positives"
+regexes = [
+  # Test placeholders
+  '''test_[a-zA-Z0-9_]+_placeholder''',
+  '''mock_[a-zA-Z0-9_]+''',
+  '''fake_[a-zA-Z0-9_]+''',
+  # Example/demo strings
+  '''example\.com''',
+  '''localhost''',
+]
+
+# Custom rules for additional security scanning
+[[rules]]
+id = "production-env-file"
+description = "Detect production .env files that should never be committed"
+regex = '''\.env\.production'''
+path = '''\.env\.production$'''
+
+[[rules]]
+id = "real-api-keys-pattern"
+description = "Detect potentially real API keys (not test patterns)"
+regex = '''(?i)(sk-[a-zA-Z0-9]{20,}|AIza[a-zA-Z0-9]{35}|xox[baprs]-[a-zA-Z0-9-]{10,})'''
+[rules.allowlist]
+paths = ['''\.env\.test$''', '''tests/''']

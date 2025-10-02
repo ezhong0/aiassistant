@@ -23,8 +23,7 @@ module.exports = {
     '\\.broken\\.'
   ],
   
-  // setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'], // Removed
-  // globalSetup: '<rootDir>/tests/test-setup.ts', // Removed
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'], // Global test setup and cleanup
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
@@ -37,12 +36,12 @@ module.exports = {
   
   // Memory and performance optimization
   maxWorkers: 1,
-  workerIdleMemoryLimit: '64MB',
+  workerIdleMemoryLimit: '128MB',
   logHeapUsage: false,
-  detectOpenHandles: false, // Disabled to reduce noise
-  forceExit: true,
+  detectOpenHandles: true, // Enable to identify async leaks
+  forceExit: false, // Disable to ensure proper cleanup
   maxConcurrency: 1,
-  cache: false,
+  cache: true, // Enable cache for faster runs
   collectCoverage: false,
   
   // Error handling
