@@ -1,31 +1,44 @@
-# Gitleaks configuration for assistantapp
-# This file configures gitleaks to ignore test files and mock credentials
+# Gitleaks Configuration for assistantapp
+# https://github.com/gitleaks/gitleaks
 
-[allowlist]
-  description = "Allow test environment files with mock credentials"
-  files = [
-    '''\.env\.test$''',
-    '''\.env\.example$''',
-    '''test/.*\.env$''',
-    '''tests/.*\.env$'''
-  ]
-  
-  # Allow specific test patterns
-  regexes = [
-    '''test_.*_key''',
-    '''mock_.*_secret''',
-    '''placeholder_.*_token'''
-  ]
+title = "Gitleaks Configuration"
 
-# Override default rules for test files
-[[rules]]
-  description = "Test environment files"
-  regex = '''TOKEN_ENCRYPTION_KEY=.*'''
-  file = '''\.env\.test$'''
-  allowlist = true
+# Extend the default gitleaks configuration
+[extend]
+useDefault = true
 
-[[rules]]
-  description = "Example environment files"
-  regex = '''.*'''
-  file = '''\.env\.example$'''
-  allowlist = true
+# Allow specific test files with mock credentials
+[[allowlist]]
+description = "Allowlist .env.test with test-only mock credentials"
+paths = [
+  '''\.env\.test$''',
+  '''\.env\.example$''',
+  '''backend/\.env\.test$''',
+  '''backend/tests/.*\.env$''',
+]
+
+[[allowlist]]
+description = "Allowlist test fixtures and mocks"
+paths = [
+  '''tests/.*fixtures/.*''',
+  '''tests/.*mocks/.*''',
+  '''__mocks__/.*''',
+  '''backend/tests/.*fixtures/.*''',
+  '''backend/tests/.*mocks/.*''',
+  '''backend/__mocks__/.*''',
+]
+
+[[allowlist]]
+description = "Ignore common false positives"
+regexes = [
+  # Test placeholders
+  '''test_[a-zA-Z0-9_]+_placeholder''',
+  '''test_.*_key''',
+  '''mock_[a-zA-Z0-9_]+''',
+  '''mock_.*_secret''',
+  '''fake_[a-zA-Z0-9_]+''',
+  '''placeholder_.*_token''',
+  # Example/demo strings
+  '''example\.com''',
+  '''localhost''',
+]

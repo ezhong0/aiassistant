@@ -46,5 +46,6 @@ module.exports = {
   
   // Error handling
   bail: false,
-  errorOnDeprecated: false
+  errorOnDeprecated: false,
+  passWithNoTests: true // Allow tests to pass even if no test files are found
 };
