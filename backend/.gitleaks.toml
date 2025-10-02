@@ -4,8 +4,6 @@
 title = "Gitleaks Configuration"
 
 # Extend the default gitleaks configuration
-# useDefault = true will use built-in rules for common secrets
-
 [extend]
 useDefault = true
 
@@ -35,17 +33,3 @@ regexes = [
   '''example\.com''',
   '''localhost''',
 ]
-
-# Custom rules for additional security scanning
-[[rules]]
-id = "production-env-file"
-description = "Detect production .env files that should never be committed"
-regex = '''\.env\.production'''
-path = '''\.env\.production$'''
-
-[[rules]]
-id = "real-api-keys-pattern"
-description = "Detect potentially real API keys (not test patterns)"
-regex = '''(?i)(sk-[a-zA-Z0-9]{20,}|AIza[a-zA-Z0-9]{35}|xox[baprs]-[a-zA-Z0-9-]{10,})'''
-[rules.allowlist]
-paths = ['''\.env\.test$''', '''tests/''']

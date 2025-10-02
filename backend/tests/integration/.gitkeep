@@ -1,0 +1,6 @@
+# Integration tests directory
+#
+# Integration tests test the interaction between multiple services
+# with real dependencies (PostgreSQL, Redis, etc.)
+#
+# Run integration tests with: npm run test:integration
