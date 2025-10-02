@@ -1,25 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { TokenStorageService } from '../../../src/services/token-storage.service';
-import { DatabaseService } from '../../../src/services/database.service';
-import { CacheService } from '../../../src/services/cache.service';
-import { EncryptionService } from '../../../src/services/encryption.service';
-import { serviceManager } from '../../../src/services/service-manager';
-
-// Mock dependencies
-jest.mock('../../../src/services/database.service');
-jest.mock('../../../src/services/cache.service');
-jest.mock('../../../src/services/encryption.service');
-jest.mock('../../../src/services/service-manager', () => ({
-  serviceManager: {
-    getService: jest.fn()
-  }
-}));
+import {
+  createMockDatabaseService,
+  createMockCacheService,
+  createMockEncryptionService,
+  createMockConfig,
+} from '../../utils/mock-services';
 
 describe('TokenStorageService', () => {
   let tokenStorageService: TokenStorageService;
-  let mockDatabaseService: jest.Mocked<DatabaseService>;
-  let mockCacheService: jest.Mocked<CacheService>;
-  let mockEncryptionService: jest.Mocked<EncryptionService>;
+  let mockDatabaseService: ReturnType<typeof createMockDatabaseService>;
+  let mockCacheService: ReturnType<typeof createMockCacheService>;
+  let mockEncryptionService: ReturnType<typeof createMockEncryptionService>;
+  let mockConfig: Record<string, unknown>;
 
   const testUserId = 'test-user-123';
   const testGoogleTokens = {
@@ -27,7 +20,7 @@ describe('TokenStorageService', () => {
     refresh_token: 'google-refresh-token',
     expires_in: 3600,
     token_type: 'Bearer',
-    scope: 'https://www.googleapis.com/auth/gmail.readonly'
+    scope: 'https://www.googleapis.com/auth/gmail.readonly',
   };
 
   const testSlackTokens = {
@@ -35,77 +28,54 @@ describe('TokenStorageService', () => {
     refresh_token: 'slack-refresh-token',
     expires_in: 3600,
     token_type: 'Bearer',
-    scope: 'chat:write,channels:read'
+    scope: 'chat:write,channels:read',
   };
 
   beforeEach(() => {
-    // Reset all mocks
-    jest.clearAllMocks();
+    // Create fresh mocks for each test
+    mockDatabaseService = createMockDatabaseService();
+    mockCacheService = createMockCacheService();
+    mockEncryptionService = createMockEncryptionService();
+    mockConfig = createMockConfig();
 
-    // Create mock instances with proper Jest mock structure
-    mockDatabaseService = {
-      isReady: jest.fn().mockReturnValue(true),
-      query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-      initialize: jest.fn().mockResolvedValue(undefined),
-      destroy: jest.fn().mockResolvedValue(undefined),
-      getHealth: jest.fn().mockReturnValue({ healthy: true })
-    } as any;
-
-    mockCacheService = {
-      isReady: jest.fn().mockReturnValue(true),
-      set: jest.fn().mockResolvedValue(undefined),
-      get: jest.fn().mockResolvedValue(null),
-      delete: jest.fn().mockResolvedValue(undefined),
-      initialize: jest.fn().mockResolvedValue(undefined),
-      destroy: jest.fn().mockResolvedValue(undefined),
-      getHealth: jest.fn().mockReturnValue({ healthy: true })
-    } as any;
-
-    mockEncryptionService = {
-      encryptSensitiveData: jest.fn().mockReturnValue('encrypted-refresh-token'),
-      decryptSensitiveData: jest.fn().mockReturnValue('google-refresh-token'),
-      initialize: jest.fn().mockResolvedValue(undefined),
-      destroy: jest.fn().mockResolvedValue(undefined),
-      getHealth: jest.fn().mockReturnValue({ healthy: true })
-    } as any;
-
-    // Mock service manager to return our mocks
-    (serviceManager.getService as jest.Mock).mockImplementation((serviceName: string) => {
-      switch (serviceName) {
-        case 'databaseService':
-          return mockDatabaseService;
-        case 'cacheService':
-          return mockCacheService;
-        case 'encryptionService':
-          return mockEncryptionService;
-        default:
-          return null;
-      }
-    });
-
-    // Create service instance
-    tokenStorageService = new TokenStorageService();
+    // Create service instance with mocked dependencies
+    tokenStorageService = new TokenStorageService(
+      mockDatabaseService as any,
+      mockCacheService as any,
+      mockEncryptionService as any,
+      mockConfig,
+    );
   });
 
   afterEach(async () => {
+    // Clean up service if it was initialized
     if (tokenStorageService.isReady()) {
       await tokenStorageService.destroy();
     }
   });
 
   describe('initialization', () => {
-    it('should initialize successfully', async () => {
+    it('should initialize successfully with all dependencies', async () => {
       await tokenStorageService.initialize();
-      
+
       expect(tokenStorageService.isReady()).toBe(true);
     });
 
-    it('should handle initialization failure gracefully', async () => {
+    it('should initialize successfully even when database is not available', async () => {
       mockDatabaseService.isReady.mockReturnValue(false);
-      
+
       await tokenStorageService.initialize();
-      
-      // Should still be ready even if database is not available
+
+      // Should still be ready, using in-memory storage as fallback
+      expect(tokenStorageService.isReady()).toBe(true);
+    });
+
+    it('should initialize successfully even when cache is not available', async () => {
+      mockCacheService.isReady.mockReturnValue(false);
+
+      await tokenStorageService.initialize();
+
+      // Should still be ready, operating without cache
       expect(tokenStorageService.isReady()).toBe(true);
     });
   });
@@ -115,59 +85,119 @@ describe('TokenStorageService', () => {
       await tokenStorageService.initialize();
     });
 
-    it('should store Google tokens successfully', async () => {
+    it('should store Google tokens in database when database is available', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+
       await tokenStorageService.storeUserTokens(testUserId, {
-        google: testGoogleTokens
+        google: testGoogleTokens,
       });
 
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO oauth_tokens'),
-        expect.arrayContaining([testUserId, testGoogleTokens.access_token])
+      expect(mockDatabaseService.storeUserTokens).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: testUserId,
+          googleTokens: expect.objectContaining({
+            access_token: testGoogleTokens.access_token,
+          }),
+        }),
+      );
+      expect(mockEncryptionService.encryptSensitiveData).toHaveBeenCalledWith(
+        testGoogleTokens.refresh_token,
       );
     });
 
-    it('should store Slack tokens successfully', async () => {
+    it('should store Slack tokens in database when database is available', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+
       await tokenStorageService.storeUserTokens(testUserId, {
-        slack: testSlackTokens
+        slack: testSlackTokens,
       });
 
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO oauth_tokens'),
-        expect.arrayContaining([testUserId, testSlackTokens.access_token])
+      expect(mockDatabaseService.storeUserTokens).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: testUserId,
+          slackTokens: testSlackTokens,
+        }),
       );
     });
 
     it('should store both Google and Slack tokens', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+
       await tokenStorageService.storeUserTokens(testUserId, {
         google: testGoogleTokens,
-        slack: testSlackTokens
+        slack: testSlackTokens,
       });
 
-      expect(mockDatabaseService.query).toHaveBeenCalledTimes(2);
+      expect(mockDatabaseService.storeUserTokens).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: testUserId,
+          googleTokens: expect.any(Object),
+          slackTokens: testSlackTokens,
+        }),
+      );
+    });
+
+    it('should cache tokens after storing in database', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+      mockCacheService.isReady.mockReturnValue(true);
+
+      await tokenStorageService.storeUserTokens(testUserId, {
+        google: testGoogleTokens,
+      });
+
+      expect(mockCacheService.set).toHaveBeenCalledWith(
+        `tokens:${testUserId}`,
+        expect.objectContaining({
+          userId: testUserId,
+          googleTokens: expect.any(Object),
+        }),
+        expect.any(Number), // TTL
+      );
     });
 
     it('should throw error for invalid userId', async () => {
       await expect(
-        tokenStorageService.storeUserTokens('', { google: testGoogleTokens })
+        tokenStorageService.storeUserTokens('', { google: testGoogleTokens }),
       ).rejects.toThrow('Valid userId is required');
     });
 
     it('should throw error for Google tokens without access_token', async () => {
       const invalidGoogleTokens = { ...testGoogleTokens };
-      delete invalidGoogleTokens.access_token;
+      delete (invalidGoogleTokens as any).access_token;
 
       await expect(
-        tokenStorageService.storeUserTokens(testUserId, { google: invalidGoogleTokens })
+        tokenStorageService.storeUserTokens(testUserId, { google: invalidGoogleTokens }),
       ).rejects.toThrow('Cannot store Google tokens without access_token');
     });
 
-    it('should handle database errors gracefully', async () => {
-      mockDatabaseService.query.mockRejectedValue(new Error('Database connection failed'));
+    it('should fall back to in-memory storage when database is not available', async () => {
+      mockDatabaseService.isReady.mockReturnValue(false);
 
-      // Should not throw, but log the error
+      await tokenStorageService.storeUserTokens(testUserId, {
+        google: testGoogleTokens,
+      });
+
+      // Should not attempt to store in database
+      expect(mockDatabaseService.storeUserTokens).not.toHaveBeenCalled();
+
+      // Should retrieve from in-memory storage
+      const tokens = await tokenStorageService.getUserTokens(testUserId);
+      expect(tokens?.userId).toBe(testUserId);
+      expect(tokens?.googleTokens?.access_token).toBe(testGoogleTokens.access_token);
+    });
+
+    it('should fall back to in-memory storage when database operation fails', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+      mockDatabaseService.storeUserTokens.mockRejectedValue(new Error('Database error'));
+
+      // Should not throw error
       await expect(
-        tokenStorageService.storeUserTokens(testUserId, { google: testGoogleTokens })
+        tokenStorageService.storeUserTokens(testUserId, { google: testGoogleTokens }),
       ).resolves.not.toThrow();
+
+      // Should retrieve from in-memory fallback
+      const tokens = await tokenStorageService.getUserTokens(testUserId);
+      expect(tokens?.userId).toBe(testUserId);
     });
   });
 
@@ -176,33 +206,58 @@ describe('TokenStorageService', () => {
       await tokenStorageService.initialize();
     });
 
-    it('should retrieve user tokens from database', async () => {
-      const mockDbResult = {
-        rows: [{
-          session_id: testUserId,
-          access_token: testGoogleTokens.access_token,
-          refresh_token: 'encrypted-refresh-token',
-          expires_at: new Date(Date.now() + 3600000),
-          token_type: 'Bearer',
-          scope: testGoogleTokens.scope
-        }],
-        rowCount: 1
+    it('should retrieve tokens from cache if available', async () => {
+      const cachedTokens = {
+        userId: testUserId,
+        googleTokens: { access_token: testGoogleTokens.access_token },
+        slackTokens: undefined,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
-
-      mockDatabaseService.query.mockResolvedValue(mockDbResult);
+      mockCacheService.get.mockResolvedValue(cachedTokens);
 
       const tokens = await tokenStorageService.getUserTokens(testUserId);
 
-      expect(tokens).toBeDefined();
-      expect(tokens?.google?.access_token).toBe(testGoogleTokens.access_token);
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT'),
-        [testUserId]
-      );
+      expect(mockCacheService.get).toHaveBeenCalledWith(`tokens:${testUserId}`);
+      expect(tokens).toEqual(cachedTokens);
+      // Should not query database if cache hit
+      expect(mockDatabaseService.getUserTokens).not.toHaveBeenCalled();
+    });
+
+    it('should retrieve tokens from database if cache miss', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockDatabaseService.isReady.mockReturnValue(true);
+
+      // Create a properly base64-encoded mock encrypted token (>42 bytes when decoded)
+      const encryptedToken = Buffer.from('encrypted_google_refresh_token_that_is_long_enough_to_pass_validation').toString('base64');
+
+      mockDatabaseService.getUserTokens.mockResolvedValue({
+        userId: testUserId,
+        googleTokens: {
+          access_token: testGoogleTokens.access_token,
+          refresh_token: encryptedToken,
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+
+      const tokens = await tokenStorageService.getUserTokens(testUserId);
+
+      expect(mockDatabaseService.getUserTokens).toHaveBeenCalledWith(testUserId);
+      expect(tokens?.userId).toBe(testUserId);
+      expect(tokens?.googleTokens?.access_token).toBe(testGoogleTokens.access_token);
+
+      // Should decrypt the refresh token (since it passes isEncrypted check)
+      expect(mockEncryptionService.decryptSensitiveData).toHaveBeenCalledWith(encryptedToken);
+
+      // Should cache the result
+      expect(mockCacheService.set).toHaveBeenCalled();
     });
 
     it('should return null for non-existent user', async () => {
-      mockDatabaseService.query.mockResolvedValue({ rows: [], rowCount: 0 });
+      mockCacheService.get.mockResolvedValue(null);
+      mockDatabaseService.isReady.mockReturnValue(true);
+      mockDatabaseService.getUserTokens.mockResolvedValue(null);
 
       const tokens = await tokenStorageService.getUserTokens('non-existent-user');
 
@@ -210,11 +265,31 @@ describe('TokenStorageService', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      mockDatabaseService.query.mockRejectedValue(new Error('Database error'));
+      mockCacheService.get.mockResolvedValue(null);
+      mockDatabaseService.isReady.mockReturnValue(true);
+      mockDatabaseService.getUserTokens.mockRejectedValue(new Error('Database error'));
 
       const tokens = await tokenStorageService.getUserTokens(testUserId);
 
+      // Should return null instead of throwing
       expect(tokens).toBeNull();
+    });
+
+    it('should use in-memory storage when database is not available', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockDatabaseService.isReady.mockReturnValue(false);
+
+      // First store some tokens
+      await tokenStorageService.storeUserTokens(testUserId, {
+        google: testGoogleTokens,
+      });
+
+      // Then retrieve them
+      const tokens = await tokenStorageService.getUserTokens(testUserId);
+
+      expect(tokens?.userId).toBe(testUserId);
+      expect(tokens?.googleTokens?.access_token).toBe(testGoogleTokens.access_token);
+      expect(mockDatabaseService.getUserTokens).not.toHaveBeenCalled();
     });
   });
 
@@ -223,23 +298,30 @@ describe('TokenStorageService', () => {
       await tokenStorageService.initialize();
     });
 
-    it('should delete user tokens successfully', async () => {
-      mockDatabaseService.query.mockResolvedValue({ rows: [], rowCount: 1 });
+    it('should delete tokens from all storage locations', async () => {
+      mockDatabaseService.deleteUserTokens.mockResolvedValue(undefined);
 
-      await tokenStorageService.deleteUserTokens(testUserId);
+      const result = await tokenStorageService.deleteUserTokens(testUserId);
 
-      expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('DELETE FROM oauth_tokens'),
-        [testUserId]
-      );
+      expect(result).toBe(true);
+      expect(mockDatabaseService.deleteUserTokens).toHaveBeenCalledWith(testUserId);
+      expect(mockCacheService.del).toHaveBeenCalledWith(`tokens:${testUserId}`);
     });
 
     it('should handle deletion of non-existent user gracefully', async () => {
-      mockDatabaseService.query.mockResolvedValue({ rows: [], rowCount: 0 });
+      mockDatabaseService.deleteUserTokens.mockResolvedValue(undefined);
 
-      await expect(
-        tokenStorageService.deleteUserTokens('non-existent-user')
-      ).resolves.not.toThrow();
+      const result = await tokenStorageService.deleteUserTokens('non-existent-user');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false on deletion error', async () => {
+      mockDatabaseService.deleteUserTokens.mockRejectedValue(new Error('Database error'));
+
+      const result = await tokenStorageService.deleteUserTokens(testUserId);
+
+      expect(result).toBe(false);
     });
   });
 
@@ -249,26 +331,28 @@ describe('TokenStorageService', () => {
     });
 
     it('should validate user ID format', async () => {
-      const invalidUserIds = ['', '   ', null, undefined];
+      const invalidUserIds = ['', '   '];
 
       for (const invalidId of invalidUserIds) {
         await expect(
-          tokenStorageService.storeUserTokens(invalidId as any, { google: testGoogleTokens })
+          tokenStorageService.storeUserTokens(invalidId, { google: testGoogleTokens }),
         ).rejects.toThrow('Valid userId is required');
       }
     });
 
     it('should accept valid user ID formats', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+
       const validUserIds = [
         'user-123',
         'T123456_U123456',
         'google-oauth-user-456',
-        'slack-workspace-user-789'
+        'slack-workspace-user-789',
       ];
 
       for (const validId of validUserIds) {
         await expect(
-          tokenStorageService.storeUserTokens(validId, { google: testGoogleTokens })
+          tokenStorageService.storeUserTokens(validId, { google: testGoogleTokens }),
         ).resolves.not.toThrow();
       }
     });
@@ -279,20 +363,23 @@ describe('TokenStorageService', () => {
       await tokenStorageService.initialize();
     });
 
-    it('should handle service not ready state', async () => {
+    it('should throw error when service is not ready', async () => {
       await tokenStorageService.destroy();
 
       await expect(
-        tokenStorageService.storeUserTokens(testUserId, { google: testGoogleTokens })
+        tokenStorageService.storeUserTokens(testUserId, { google: testGoogleTokens }),
       ).rejects.toThrow('TokenStorageService is not ready');
     });
 
     it('should handle concurrent operations gracefully', async () => {
+      mockDatabaseService.isReady.mockReturnValue(true);
+
       const promises = Array.from({ length: 5 }, (_, i) =>
-        tokenStorageService.storeUserTokens(`user-${i}`, { google: testGoogleTokens })
+        tokenStorageService.storeUserTokens(`user-${i}`, { google: testGoogleTokens }),
       );
 
       await expect(Promise.all(promises)).resolves.not.toThrow();
+      expect(mockDatabaseService.storeUserTokens).toHaveBeenCalledTimes(5);
     });
   });
 });

@@ -85,7 +85,7 @@ export class TokenStorageService extends BaseService {
   async storeUserTokens(userId: string, tokens: { google?: GoogleTokens; slack?: SlackTokens }): Promise<void> {
     this.assertReady();
 
-    if (!userId) {
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
       throw ErrorFactory.api.badRequest('Valid userId is required');
     }
 
@@ -118,15 +118,20 @@ export class TokenStorageService extends BaseService {
     // Store in database if available
     if (this.databaseService && this.databaseService.isReady()) {
       try {
-        const googleTokens: GoogleTokens = {
-          access_token: tokens.google!.access_token,
-        };
-        
-        if (encryptedGoogleRefreshToken) googleTokens.refresh_token = encryptedGoogleRefreshToken;
-        if (tokens.google!.expires_at) googleTokens.expires_at = tokens.google!.expires_at;
-        if (tokens.google!.token_type) googleTokens.token_type = tokens.google!.token_type;
-        if (tokens.google!.scope) googleTokens.scope = tokens.google!.scope;
-        
+        let googleTokens: GoogleTokens | undefined;
+
+        // Only build googleTokens if Google tokens are provided
+        if (tokens.google) {
+          googleTokens = {
+            access_token: tokens.google.access_token,
+          };
+
+          if (encryptedGoogleRefreshToken) googleTokens.refresh_token = encryptedGoogleRefreshToken;
+          if (tokens.google.expires_at) googleTokens.expires_at = tokens.google.expires_at;
+          if (tokens.google.token_type) googleTokens.token_type = tokens.google.token_type;
+          if (tokens.google.scope) googleTokens.scope = tokens.google.scope;
+        }
+
         const userTokens: UserTokens = {
           userId,
           googleTokens,
@@ -161,17 +166,21 @@ export class TokenStorageService extends BaseService {
         this.logError('Failed to store user tokens in database', { userId, error });
         // Fall back to in-memory storage
         this.logWarn('Falling back to in-memory storage', { userId });
-        
-        // Store in memory as fallback
-        const googleTokens: GoogleTokens = {
-          access_token: tokens.google!.access_token,
-        };
-        
-        if (tokens.google!.refresh_token) googleTokens.refresh_token = tokens.google!.refresh_token;
-        if (tokens.google!.expires_at) googleTokens.expires_at = tokens.google!.expires_at;
-        if (tokens.google!.token_type) googleTokens.token_type = tokens.google!.token_type;
-        if (tokens.google!.scope) googleTokens.scope = tokens.google!.scope;
-        
+
+        let googleTokens: GoogleTokens | undefined;
+
+        // Only build googleTokens if Google tokens are provided
+        if (tokens.google) {
+          googleTokens = {
+            access_token: tokens.google.access_token,
+          };
+
+          if (tokens.google.refresh_token) googleTokens.refresh_token = tokens.google.refresh_token;
+          if (tokens.google.expires_at) googleTokens.expires_at = tokens.google.expires_at;
+          if (tokens.google.token_type) googleTokens.token_type = tokens.google.token_type;
+          if (tokens.google.scope) googleTokens.scope = tokens.google.scope;
+        }
+
         const userTokens: UserTokens = {
           userId,
           googleTokens,

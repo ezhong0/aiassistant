@@ -98,6 +98,7 @@ export class DatabaseService extends BaseService {
   private pool: Pool | null = null;
   private config: DatabaseConfig;
   private readonly appConfig: typeof appConfig;
+  private healthMonitoringInterval: NodeJS.Timeout | null = null;
   private connectionStats: {
     totalConnections: number;
     activeConnections: number;
@@ -238,11 +239,23 @@ export class DatabaseService extends BaseService {
    */
   protected async onDestroy(): Promise<void> {
     try {
+      // Stop health monitoring
+      if (this.healthMonitoringInterval) {
+        globalThis.clearInterval(this.healthMonitoringInterval);
+        this.healthMonitoringInterval = null;
+
+        logger.debug('Database health monitoring stopped', {
+          correlationId: `db-destroy-${Date.now()}`,
+          operation: 'database_service_destroy',
+          metadata: { phase: 'health_monitoring_stopped' },
+        });
+      }
+
       if (this.pool) {
         // Gracefully close all connections
         await this.pool.end();
         this.pool = null;
-        
+
         logger.debug('Database connection pool closed', {
           correlationId: `db-destroy-${Date.now()}`,
           operation: 'database_service_destroy',
@@ -367,7 +380,12 @@ export class DatabaseService extends BaseService {
    * Start health monitoring
    */
   private startHealthMonitoring(): void {
-    globalThis.setInterval(() => {
+    // Clear any existing interval
+    if (this.healthMonitoringInterval) {
+      globalThis.clearInterval(this.healthMonitoringInterval);
+    }
+
+    this.healthMonitoringInterval = globalThis.setInterval(() => {
       void (async () => {
         try {
           await this.updateConnectionStats();

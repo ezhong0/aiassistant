@@ -155,10 +155,18 @@ export class CacheService extends BaseService {
 
       // Connect to Redis with timeout
       const connectPromise = this.client.connect();
-      const timeoutPromise = new Promise((_, reject) => 
-        globalThis.setTimeout(() => reject(new Error('Connection timeout')), 15000));
-      
-      await Promise.race([connectPromise, timeoutPromise]);
+      let timeoutHandle: NodeJS.Timeout;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = globalThis.setTimeout(() => reject(new Error('Connection timeout')), 15000);
+      });
+
+      try {
+        await Promise.race([connectPromise, timeoutPromise]);
+        globalThis.clearTimeout(timeoutHandle!);
+      } catch (error) {
+        globalThis.clearTimeout(timeoutHandle!);
+        throw error;
+      }
       
       // Test the connection
       await this.client.ping();
