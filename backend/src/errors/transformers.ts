@@ -27,9 +27,10 @@ export class GoogleErrorTransformer {
    * Transform Google API error to APIClientError
    */
   static transform(error: unknown, context: TransformContext): APIClientError {
-    const status = error?.response?.status || error?.status;
-    const errorData = error?.response?.data || error?.data;
-    let message = error?.message || 'Google API error';
+    const err = error as any;
+    const status = err?.response?.status || err?.status;
+    const errorData = err?.response?.data || err?.data;
+    let message = err?.message || 'Google API error';
 
     // Map status codes to specific error codes
     let errorCode: typeof ERROR_CODES[keyof typeof ERROR_CODES] = ERROR_CODES.GOOGLE_API_ERROR;
@@ -81,9 +82,10 @@ export class OpenAIErrorTransformer {
    * Transform OpenAI API error to APIClientError
    */
   static transform(error: unknown, context: TransformContext): APIClientError {
-    const status = error?.response?.status || error?.status || error?.statusCode;
-    const errorData = error?.response?.data || error?.data;
-    const errorMessage = error?.error?.message || error?.message || 'OpenAI API error';
+    const err = error as any;
+    const status = err?.response?.status || err?.status || err?.statusCode;
+    const errorData = err?.response?.data || err?.data;
+    const errorMessage = err?.error?.message || err?.message || 'OpenAI API error';
 
     // Map OpenAI error types
     let errorCode: typeof ERROR_CODES[keyof typeof ERROR_CODES] = ERROR_CODES.OPENAI_API_ERROR;
@@ -92,7 +94,7 @@ export class OpenAIErrorTransformer {
     let message = errorMessage;
 
     // OpenAI-specific error codes
-    const errorType = error?.error?.type || error?.type;
+    const errorType = err?.error?.type || err?.type;
 
     if (status === 401 || errorType === 'invalid_api_key' || errorType === 'authentication_error') {
       errorCode = ERROR_CODES.OPENAI_AUTH_FAILED;
