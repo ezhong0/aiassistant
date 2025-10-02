@@ -9,6 +9,7 @@
 
 import { createAppContainer, type Cradle } from '../di/container';
 import { registerAllServices } from '../di/registrations';
+import { ErrorFactory } from '../errors/error-factory';
 
 class ServiceManager {
   private container: ReturnType<typeof createAppContainer> | null = null;
@@ -16,10 +17,10 @@ class ServiceManager {
   /**
    * Initialize the service container
    */
-  async initialize(): Promise<void> {
+  initialize(): void {
     if (!this.container) {
       this.container = createAppContainer();
-      await registerAllServices(this.container);
+      registerAllServices(this.container);
     }
   }
 
@@ -28,7 +29,7 @@ class ServiceManager {
    */
   getService<K extends keyof Cradle>(serviceName: K): Cradle[K] | undefined {
     if (!this.container) {
-      throw new Error('ServiceManager not initialized. Call initialize() first.');
+      throw ErrorFactory.domain.serviceError('ServiceManager', 'ServiceManager not initialized. Call initialize() first.');
     }
 
     try {
@@ -66,11 +67,12 @@ class ServiceManager {
    */
   reset(): void {
     if (this.container) {
-      this.container.dispose();
+      void this.container.dispose();
       this.container = null;
     }
   }
 }
 
 // Export singleton instance
+// eslint-disable-next-line custom-rules/enforce-dependency-injection
 export const serviceManager = new ServiceManager();

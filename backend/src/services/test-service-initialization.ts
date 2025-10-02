@@ -9,14 +9,14 @@ import { serviceManager } from './service-manager';
 /**
  * Initialize test services with mocked dependencies where appropriate
  */
-export async function initializeTestServices(): Promise<void> {
+export function initializeTestServices(): void {
   // Ensure test environment
   if (process.env.NODE_ENV !== 'test' && process.env.E2E_TESTING !== 'true') {
     console.warn('initializeTestServices called outside test environment');
   }
 
   // Initialize the service manager
-  await serviceManager.initialize();
+  serviceManager.initialize();
 
   console.log('Test services initialized successfully');
 }
@@ -24,7 +24,7 @@ export async function initializeTestServices(): Promise<void> {
 /**
  * Clean up test services
  */
-export async function cleanupTestServices(): Promise<void> {
+export function cleanupTestServices(): void {
   serviceManager.reset();
   console.log('Test services cleaned up');
 }
