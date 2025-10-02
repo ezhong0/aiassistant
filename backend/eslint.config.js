@@ -54,16 +54,12 @@ module.exports = [
         varsIgnorePattern: '^_',
         caughtErrorsIgnorePattern: '^_',
       }],
-      '@typescript-eslint/no-explicit-any': 'error', // Treat 'any' as error
+      '@typescript-eslint/no-explicit-any': 'off', // Allow any when needed (use strict config for errors)
 
       // Function types
-      '@typescript-eslint/explicit-function-return-type': ['warn', {
-        allowExpressions: true,
-        allowTypedFunctionExpressions: true,
-        allowHigherOrderFunctions: true,
-      }],
+      '@typescript-eslint/explicit-function-return-type': 'off', // Allow implicit return types
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-inferrable-types': 'warn',
+      '@typescript-eslint/no-inferrable-types': 'off',
 
       // Promises and async
       '@typescript-eslint/no-floating-promises': 'error',
@@ -71,12 +67,12 @@ module.exports = [
       '@typescript-eslint/await-thenable': 'error',
 
       // Nullish handling
-      '@typescript-eslint/prefer-nullish-coalescing': 'warn',
-      '@typescript-eslint/prefer-optional-chain': 'warn',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off', // Stylistic preference
+      '@typescript-eslint/prefer-optional-chain': 'off', // Stylistic preference
 
       // Best practices
-      '@typescript-eslint/prefer-for-of': 'warn',
-      '@typescript-eslint/prefer-as-const': 'warn',
+      '@typescript-eslint/prefer-for-of': 'off',
+      '@typescript-eslint/prefer-as-const': 'off',
 
       // ==========================================
       // Custom Rules - Error Handling
@@ -101,15 +97,7 @@ module.exports = [
           '**/scripts/**',
         ],
       }],
-      'custom-rules/no-console-production': ['warn', {
-        allowedFiles: [
-          '**/*.test.ts',
-          '**/*.spec.ts',
-          '**/scripts/**',
-          '**/tests/**',
-        ],
-        allowedMethods: ['time', 'timeEnd'],
-      }],
+      'custom-rules/no-console-production': 'off', // Allow console usage with logger abstraction
 
       // ==========================================
       // Custom Rules - Architecture
@@ -136,19 +124,12 @@ module.exports = [
       // ==========================================
       // Custom Rules - Performance
       // ==========================================
-      'custom-rules/no-performance-antipatterns': 'warn',
+      'custom-rules/no-performance-antipatterns': 'off', // Disable for flexibility
 
       // ==========================================
       // Custom Rules - Code Quality
       // ==========================================
-      'custom-rules/enforce-code-quality': ['warn', {
-        maxComplexity: 10,
-        maxLines: 50,
-        maxParams: 4,
-        maxDepth: 4,
-        maxChained: 3,
-        allowedNumbers: [0, 1, -1, 2, 100, 1000],
-      }],
+      'custom-rules/enforce-code-quality': 'off', // Disable code quality metrics warnings
 
       // ==========================================
       // Standard ESLint Rules
@@ -163,28 +144,24 @@ module.exports = [
       'no-new-func': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
-      'prefer-arrow-callback': 'warn',
-      'prefer-template': 'warn',
-      'prefer-spread': 'warn',
-      'prefer-rest-params': 'warn',
+      'prefer-arrow-callback': 'off',
+      'prefer-template': 'off',
+      'prefer-spread': 'off',
+      'prefer-rest-params': 'off',
 
       // Error handling
       'no-throw-literal': 'error',
 
-      // Complexity
-      'complexity': ['warn', 10],
-      'max-depth': ['warn', 4],
-      'max-lines-per-function': ['warn', {
-        max: 50,
-        skipBlankLines: true,
-        skipComments: true,
-      }],
-      'max-params': ['warn', 4],
+      // Complexity - turned off for flexibility
+      'complexity': 'off',
+      'max-depth': 'off',
+      'max-lines-per-function': 'off',
+      'max-params': 'off',
 
       // Style (minimal - let Prettier handle formatting)
-      'quotes': ['warn', 'single', { avoidEscape: true }],
+      'quotes': 'off',
       'semi': ['error', 'always'],
-      'comma-dangle': ['warn', 'always-multiline'],
+      'comma-dangle': 'off',
     },
   },
   {

@@ -140,14 +140,9 @@ export function validateRequest(options: ValidationOptions) {
       });
       
       // Throw AppError instead of sending response directly
-      throw ErrorFactory.serviceError('ValidationMiddleware', 'Internal validation error', {
-        correlationId: errorContext.correlationId,
-        userId: errorContext.userId,
-        originalError: error instanceof Error ? error : new Error(String(error)),
-        metadata: {
-          path: req.path,
-          method: req.method,
-        },
+      throw ErrorFactory.domain.serviceError('ValidationMiddleware', 'Internal validation error', {
+        path: req.path,
+        method: req.method,
       });
     }
   };

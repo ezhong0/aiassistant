@@ -243,7 +243,7 @@ export class CacheService extends BaseService {
       // Force cleanup even if quit() fails
       if (this.client) {
         try {
-          this.client.disconnect();
+          await this.client.disconnect();
         } catch (disconnectError) {
           logger.warn('Error during forced disconnect', {
             correlationId: `cache-destroy-${Date.now()}`,

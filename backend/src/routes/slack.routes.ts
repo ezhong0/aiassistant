@@ -9,8 +9,8 @@ import {
 } from '../schemas/slack.schemas';
 import { validateRequest } from '../middleware/validation.middleware';
 import { AppContainer } from '../di';
-import { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
-import { AuthStatusService } from '../services/auth-status.service';
+import type { ISlackDomainService } from '../services/domain/interfaces/slack-domain.interface';
+import type { AuthStatusService } from '../services/auth-status.service';
 import logger from '../utils/logger';
 import { isAppError } from '../errors';
 import { ErrorFactory } from '../errors/error-factory';

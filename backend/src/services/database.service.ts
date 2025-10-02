@@ -326,7 +326,7 @@ export class DatabaseService extends BaseService {
       });
     });
 
-    this.pool.on('error', (error: Error, client: PoolClient) => {
+    this.pool.on('error', (error: Error, _client: PoolClient) => {
       this.connectionStats.failedQueries++;
       logger.error('Database pool error', error, {
         correlationId: `db-error-${Date.now()}`,
@@ -367,29 +367,31 @@ export class DatabaseService extends BaseService {
    * Start health monitoring
    */
   private startHealthMonitoring(): void {
-    globalThis.setInterval(async () => {
-      try {
-        await this.updateConnectionStats();
-        this.connectionStats.lastHealthCheck = new Date();
-        
-        // Log warnings if connection usage is high
-        if (this.connectionStats.activeConnections > (this.config.max || 10) * 0.8) {
-          logger.warn('High database connection usage', {
+    globalThis.setInterval(() => {
+      void (async () => {
+        try {
+          await this.updateConnectionStats();
+          this.connectionStats.lastHealthCheck = new Date();
+
+          // Log warnings if connection usage is high
+          if (this.connectionStats.activeConnections > (this.config.max || 10) * 0.8) {
+            logger.warn('High database connection usage', {
+              correlationId: `db-health-${Date.now()}`,
+              operation: 'database_health_check',
+              metadata: {
+                activeConnections: this.connectionStats.activeConnections,
+                maxConnections: this.config.max,
+                usagePercentage: Math.round((this.connectionStats.activeConnections / (this.config.max || 10)) * 100),
+              },
+            });
+          }
+        } catch (error) {
+          logger.error('Database health check failed', error as Error, {
             correlationId: `db-health-${Date.now()}`,
-            operation: 'database_health_check',
-            metadata: {
-              activeConnections: this.connectionStats.activeConnections,
-              maxConnections: this.config.max,
-              usagePercentage: Math.round((this.connectionStats.activeConnections / (this.config.max || 10)) * 100),
-            },
+            operation: 'database_health_check_error',
           });
         }
-      } catch (error) {
-        logger.error('Database health check failed', error as Error, {
-          correlationId: `db-health-${Date.now()}`,
-          operation: 'database_health_check_error',
-        });
-      }
+      })();
     }, 30000); // Check every 30 seconds
   }
 

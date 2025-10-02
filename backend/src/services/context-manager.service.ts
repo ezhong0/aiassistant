@@ -230,29 +230,23 @@ export class ContextManager extends BaseService {
    * @param slackContext - Slack context information
    * @returns Promise resolving to recent messages
    */
-  async getRecentSlackMessages(slackContext: SlackContext): Promise<Array<{
+  async getRecentSlackMessages(_slackContext: SlackContext): Promise<Array<{
     text: string;
     user: string;
     timestamp: string;
   }>> {
     this.assertReady();
 
-    try {
-      // TODO: Inject SlackService if needed for Slack context
-      // const slackService = this.slackService;
-      // if (!slackService) {
-      //   this.logWarn('Slack service not available for message context');
-      //   return [];
-      // }
+    // TODO: Inject SlackService if needed for Slack context
+    // const slackService = this.slackService;
+    // if (!slackService) {
+    //   this.logWarn('Slack service not available for message context');
+    //   return [];
+    // }
 
-      // This would integrate with Slack service to get recent messages
-      // For now, return empty array as placeholder
-      return [];
-
-    } catch (error) {
-      this.logError('Failed to get recent Slack messages', { error, slackContext });
-      return [];
-    }
+    // This would integrate with Slack service to get recent messages
+    // For now, return empty array as placeholder
+    return [];
   }
 
   /**

@@ -642,5 +642,7 @@ export class UnifiedConfigService extends BaseService {
 }
 
 // Export singleton instances for easy access
+// Config service is a special case - it has no dependencies and is needed everywhere
+// eslint-disable-next-line custom-rules/enforce-dependency-injection
 export const config = new UnifiedConfigService();
 export const unifiedConfig = config;

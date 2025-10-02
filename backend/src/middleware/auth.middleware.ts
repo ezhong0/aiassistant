@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import logger from '../utils/logger';
 import { AuthService } from '../services/auth.service';
 import { createLogContext } from '../utils/log-context';
-import type { AppContainer } from '../di';
 
 /**
  * Authenticated user interface for request context

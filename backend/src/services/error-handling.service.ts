@@ -6,7 +6,6 @@
  */
 
 import { Request, Response } from 'express';
-import logger from '../utils/logger';
 import { AppError, ERROR_SEVERITY } from '../utils/app-error';
 import { ErrorFactory, ensureAppError } from '../errors';
 import { BaseService } from './base-service';
@@ -30,6 +29,14 @@ export class ErrorHandlingService extends BaseService {
     // Set default thresholds
     this.errorThresholds.set('RATE_LIMITED', 100);
     this.errorThresholds.set('SERVICE_UNAVAILABLE', 50);
+  }
+
+  protected async onInitialize(): Promise<void> {
+    this.logInfo('ErrorHandlingService initialized');
+  }
+
+  protected async onDestroy(): Promise<void> {
+    this.logInfo('ErrorHandlingService destroyed');
   }
 
   /**
@@ -177,5 +184,6 @@ export class ErrorHandlingService extends BaseService {
   }
 }
 
-// Export singleton instance
+// Export singleton instance for Express middleware use
+// eslint-disable-next-line custom-rules/enforce-dependency-injection
 export const errorHandlingService = new ErrorHandlingService();

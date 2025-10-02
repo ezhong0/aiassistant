@@ -502,5 +502,7 @@ export class RetryManager {
 
 /**
  * Singleton instance
+ * Retry manager is a utility class without dependencies, safe to instantiate directly
  */
+// eslint-disable-next-line custom-rules/enforce-dependency-injection
 export const retryManager = new RetryManager();

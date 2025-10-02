@@ -124,6 +124,11 @@ module.exports = {
       ImportDeclaration(node) {
         const importPath = node.source.value;
 
+        // Skip type-only imports - these are safe for layer boundaries
+        if (node.importKind === 'type') {
+          return;
+        }
+
         // Skip external packages and relative parent imports
         if (!importPath.startsWith('.') && !importPath.startsWith('@/')) {
           return;

@@ -172,7 +172,7 @@ export class AuthService extends BaseService {
         errorDetails: error.response?.data,
         status: error.response?.status,
         clientConfig: {
-          clientId: `${this.config.googleAuth?.clientId?.substring(0, 20)  }...` || 'unknown',
+          clientId: this.config.googleAuth?.clientId ? `${this.config.googleAuth.clientId.substring(0, 20)}...` : 'unknown',
           redirectUri: this.config.googleAuth?.redirectUri || 'unknown',
         },
       });

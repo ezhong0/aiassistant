@@ -8,7 +8,7 @@
  * types (APIClientError, WorkflowError, etc.) extend from this base class.
  */
 
-import { ERROR_CODES, type ErrorCode, getErrorCategory } from '../errors/error-codes';
+import { ERROR_CODES, type ErrorCode } from '../errors/error-codes';
 
 // Re-export for backward compatibility
 export { ERROR_CODES, type ErrorCode };
