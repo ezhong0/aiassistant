@@ -96,7 +96,7 @@ export type AppContainer = AwilixContainer<Cradle>;
  */
 export function createAppContainer(): AppContainer {
   const container = createContainer<Cradle>({
-    injectionMode: InjectionMode.PROXY,
+    injectionMode: InjectionMode.CLASSIC,
     strict: true, // Fail fast on missing dependencies
   });
 

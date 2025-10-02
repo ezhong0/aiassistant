@@ -8,6 +8,7 @@
 import { APIClientError } from './specialized-errors';
 import { ERROR_CODES } from './error-codes';
 import { ERROR_CATEGORIES } from '../utils/app-error';
+import type { GoogleAPIError, OpenAIError, SlackAPIError, HTTPErrorResponse } from './external-api-error-types';
 
 /**
  * Context for error transformation
@@ -27,7 +28,7 @@ export class GoogleErrorTransformer {
    * Transform Google API error to APIClientError
    */
   static transform(error: unknown, context: TransformContext): APIClientError {
-    const err = error as any;
+    const err = error as GoogleAPIError;
     const status = err?.response?.status || err?.status;
     const errorData = err?.response?.data || err?.data;
     let message = err?.message || 'Google API error';
@@ -65,8 +66,8 @@ export class GoogleErrorTransformer {
         requestId: context.requestId,
         category: ERROR_CATEGORIES.EXTERNAL,
         statusCode: status,
-        responseData: errorData,
-        originalError: error,
+        responseData: errorData as Record<string, unknown>,
+        originalError: err as Error,
         retryable,
         retryAfter,
       },
@@ -82,7 +83,7 @@ export class OpenAIErrorTransformer {
    * Transform OpenAI API error to APIClientError
    */
   static transform(error: unknown, context: TransformContext): APIClientError {
-    const err = error as any;
+    const err = error as OpenAIError;
     const status = err?.response?.status || err?.status || err?.statusCode;
     const errorData = err?.response?.data || err?.data;
     const errorMessage = err?.error?.message || err?.message || 'OpenAI API error';
@@ -104,7 +105,8 @@ export class OpenAIErrorTransformer {
       errorCode = ERROR_CODES.OPENAI_RATE_LIMIT;
       message = 'OpenAI API rate limit exceeded';
       retryable = true;
-      retryAfter = parseInt(error?.response?.headers?.['retry-after']) || 20;
+      const retryHeader = err?.response?.headers?.['retry-after'];
+      retryAfter = parseInt(typeof retryHeader === 'string' ? retryHeader : (retryHeader?.[0] || '20')) || 20;
     } else if (errorType === 'timeout' || message.toLowerCase().includes('timeout')) {
       errorCode = ERROR_CODES.OPENAI_TIMEOUT;
       message = 'OpenAI API request timed out';
@@ -131,13 +133,16 @@ export class OpenAIErrorTransformer {
         requestId: context.requestId,
         category: ERROR_CATEGORIES.EXTERNAL,
         statusCode: status,
-        responseData: errorData,
-        originalError: error,
+        responseData: errorData as Record<string, unknown>,
+        originalError: err as Error,
         retryable,
         retryAfter,
         metadata: {
           errorType,
-          openaiRequestId: error?.response?.headers?.['openai-request-id'],
+          openaiRequestId: (() => {
+            const reqId = err?.response?.headers?.['openai-request-id'];
+            return typeof reqId === 'string' ? reqId : reqId?.[0];
+          })(),
         },
       },
     );
@@ -152,10 +157,11 @@ export class SlackErrorTransformer {
    * Transform Slack API error to APIClientError
    */
   static transform(error: unknown, context: TransformContext): APIClientError {
-    const status = error?.response?.status || error?.status;
-    const errorData = error?.response?.data || error?.data;
-    const slackError = errorData?.error;
-    const message = error?.message || slackError || 'Slack API error';
+    const err = error as SlackAPIError;
+    const status = err?.response?.status || err?.status;
+    const errorData = err?.response?.data || err?.data;
+    const slackError = (errorData as { error?: string })?.error;
+    const message = err?.message || slackError || 'Slack API error';
 
     // Map Slack error codes
     let errorCode: typeof ERROR_CODES[keyof typeof ERROR_CODES] = ERROR_CODES.SLACK_API_ERROR;
@@ -169,7 +175,8 @@ export class SlackErrorTransformer {
     } else if (slackError === 'rate_limited' || status === 429) {
       errorCode = ERROR_CODES.SLACK_RATE_LIMIT;
       retryable = true;
-      retryAfter = parseInt(error?.response?.headers?.['retry-after']) || 60;
+      const retryHeader = err?.response?.headers?.['retry-after'];
+      retryAfter = parseInt(typeof retryHeader === 'string' ? retryHeader : (retryHeader?.[0] || '60')) || 60;
     } else if (slackError === 'channel_not_found') {
       errorCode = ERROR_CODES.SLACK_CHANNEL_NOT_FOUND;
       retryable = false;
@@ -191,8 +198,8 @@ export class SlackErrorTransformer {
         requestId: context.requestId,
         category: ERROR_CATEGORIES.EXTERNAL,
         statusCode: status,
-        responseData: errorData,
-        originalError: error,
+        responseData: errorData as Record<string, unknown>,
+        originalError: err as Error,
         retryable,
         retryAfter,
         metadata: {
@@ -212,9 +219,10 @@ export class HTTPErrorTransformer {
    * Transform generic HTTP error to APIClientError
    */
   static transform(error: unknown, context: TransformContext): APIClientError {
-    const status = error?.response?.status || error?.status || error?.statusCode || 500;
-    const errorData = error?.response?.data || error?.data;
-    const message = error?.message || `${context.serviceName} API error`;
+    const err = error as HTTPErrorResponse;
+    const status = err?.response?.status || err?.status || err?.statusCode || 500;
+    const errorData = err?.response?.data || err?.data;
+    const message = err?.message || `${context.serviceName} API error`;
 
     // Determine error code based on HTTP status
     let errorCode: typeof ERROR_CODES[keyof typeof ERROR_CODES] = ERROR_CODES.EXTERNAL_SERVICE_ERROR;
@@ -257,8 +265,8 @@ export class HTTPErrorTransformer {
         requestId: context.requestId,
         category: ERROR_CATEGORIES.EXTERNAL,
         statusCode: status,
-        responseData: errorData,
-        originalError: error,
+        responseData: errorData as Record<string, unknown>,
+        originalError: err as Error,
         retryable,
         retryAfter,
       },

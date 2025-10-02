@@ -34,7 +34,7 @@ export class PromptUtils {
    * Get conversation history context string
    * Shows recent turns for multi-turn understanding
    */
-  static getConversationContext(context: { conversationHistory?: Array<{ role: string; content: string; timestamp?: Date }> }, maxTurns = 3): string {
+  static getConversationContext(context: { conversationHistory?: Array<{ role: string; content: string; timestamp?: Date; agentName?: string }> }, maxTurns = 3): string {
     if (!context.conversationHistory || context.conversationHistory.length === 0) {
       return '';
     }
@@ -42,7 +42,7 @@ export class PromptUtils {
     const recentTurns = context.conversationHistory.slice(-maxTurns);
     const historyText = recentTurns.map(turn => {
       const role = turn.role === 'user' ? 'User' : `Assistant${turn.agentName ? ` (${turn.agentName})` : ''}`;
-      return `${role}: ${turn.message}`;
+      return `${role}: ${turn.content}`;
     }).join('\n');
 
     return `\nRecent conversation:\n${historyText}\n`;

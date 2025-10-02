@@ -9,10 +9,10 @@ export function createErrorHandler(errorHandlingService: ErrorHandlingService) {
     err: Error,
     req: Request,
     res: Response,
-    _next: NextFunction,  
+    _next: NextFunction,
   ) => {
     // Use the centralized error handling service
-    errorHandlingService.handleError(err, req, res);
+    errorHandlingService.handleAppError(err, req, res);
   };
 }
 

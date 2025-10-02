@@ -1,7 +1,9 @@
+import { IncomingHttpHeaders } from 'http';
+
 /**
  * Log context interface for structured logging
  */
-export interface LogContext {
+export interface LogContext extends Record<string, unknown> {
   correlationId?: string;
   userId?: string;
   sessionId?: string;
@@ -13,18 +15,22 @@ export interface LogContext {
 /**
  * Utility to extract correlation ID from request
  */
-export function getCorrelationId(req: { correlationId?: string; headers?: Record<string, string> }): string {
-  return req.correlationId || req.headers['x-correlation-id'] || 'unknown';
+export function getCorrelationId(req: { correlationId?: string; headers?: IncomingHttpHeaders }): string {
+  const headerValue = req.headers?.['x-correlation-id'];
+  return req.correlationId || (typeof headerValue === 'string' ? headerValue : 'unknown') || 'unknown';
 }
 
 /**
  * Utility to create log context from request
  */
-export function createLogContext(req: { correlationId?: string; headers?: Record<string, string> }, additionalContext: Partial<LogContext> = {}): LogContext {
+export function createLogContext(req: { correlationId?: string; headers?: IncomingHttpHeaders; user?: any; sessionId?: string }, additionalContext: Partial<LogContext> = {}): LogContext {
+  const userIdHeader = req.headers?.['x-user-id'];
+  const sessionIdHeader = req.headers?.['x-session-id'];
+
   return {
     correlationId: getCorrelationId(req),
-    userId: req.user?.userId || req.headers['x-user-id'],
-    sessionId: req.sessionId || req.headers['x-session-id'],
+    userId: req.user?.userId || (typeof userIdHeader === 'string' ? userIdHeader : undefined),
+    sessionId: req.sessionId || (typeof sessionIdHeader === 'string' ? sessionIdHeader : undefined),
     ...additionalContext,
   };
 }

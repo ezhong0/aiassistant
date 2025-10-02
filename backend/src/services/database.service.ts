@@ -341,7 +341,7 @@ export class DatabaseService extends BaseService {
    */
   private async testConnection(): Promise<void> {
     if (!this.pool) {
-      throw ErrorFactory.domain.serviceError('Database pool not initialized');
+      throw ErrorFactory.domain.serviceError('DatabaseService', 'Database pool not initialized');
     }
 
     const startTime = Date.now();
@@ -432,7 +432,7 @@ export class DatabaseService extends BaseService {
    */
   async query<T extends QueryResultRow = Record<string, unknown>>(text: string, params?: unknown[]): Promise<QueryResult<T>> {
     if (!this.pool) {
-      throw ErrorFactory.domain.serviceError('Database pool not initialized');
+      throw ErrorFactory.domain.serviceError('DatabaseService', 'Database pool not initialized');
     }
 
     const startTime = Date.now();
@@ -473,7 +473,7 @@ export class DatabaseService extends BaseService {
    */
   async getClient(): Promise<PoolClient> {
     if (!this.pool) {
-      throw ErrorFactory.domain.serviceError('Database pool not initialized');
+      throw ErrorFactory.domain.serviceError('DatabaseService', 'Database pool not initialized');
     }
 
     try {
@@ -548,8 +548,8 @@ export class DatabaseService extends BaseService {
     if (result.rows.length === 0) {
       return null;
     }
-    
-    const row = result.rows[0];
+
+    const row = result.rows[0] as any;
     return {
       sessionId: row.session_id,
       userId: row.user_id,
@@ -645,8 +645,8 @@ export class DatabaseService extends BaseService {
     if (result.rows.length === 0) {
       return null;
     }
-    
-    const row = result.rows[0];
+
+    const row = result.rows[0] as any;
     return {
       userId: row.user_id,
       googleTokens: row.google_access_token ? {

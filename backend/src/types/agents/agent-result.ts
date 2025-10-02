@@ -171,9 +171,10 @@ export function unwrap<T>(result: AgentResult<T>): T {
   if (result.ok) {
     return result.value;
   }
-  const error = new Error(result.error.message);
-  (error as any).code = result.error.code;
-  (error as any).context = result.error.context;
+  const errResult = result as { ok: false; error: { message: string; code: string; context?: Record<string, unknown> } };
+  const error = new Error(errResult.error.message);
+  (error as any).code = errResult.error.code;
+  (error as any).context = errResult.error.context;
   throw error;
 }
 
@@ -194,7 +195,7 @@ export function mapResult<T, U>(
   if (result.ok) {
     return { ok: true, value: mapper(result.value), metadata: result.metadata };
   }
-  return result;
+  return result as AgentResult<U>;
 }
 
 /**
@@ -207,5 +208,5 @@ export async function chainResult<T, U>(
   if (result.ok) {
     return await mapper(result.value);
   }
-  return result;
+  return result as AgentResult<U>;
 }

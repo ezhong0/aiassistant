@@ -106,7 +106,7 @@ export class BuilderGuard {
 
       // Validate the response structure
       if (!isValidBuilderResponse(result)) {
-        throw ErrorFactory.domain.serviceError(`Invalid builder response structure from ${BUILDER_NAMES[builderType]}`);
+        throw ErrorFactory.domain.serviceError('BuilderGuard', `Invalid builder response structure from ${BUILDER_NAMES[builderType]}`);
       }
 
       return result as unknown as BuilderResponseMap[T];
@@ -269,7 +269,7 @@ export function RequireBuilder<T extends keyof PromptBuilderMap>(builderType: T)
       const builderPropertyName = `${builderType}Builder`;
       const builder = (this as Record<string, unknown>)[builderPropertyName];
 
-      BuilderGuard.ensureBuilder(builder, builderType, {
+      BuilderGuard.ensureBuilder(builder as PromptBuilderMap[T] | undefined, builderType, {
         method: propertyName,
         class: target.constructor.name,
       });
@@ -290,7 +290,8 @@ export function isValidBuilderResponse(response: unknown): response is BaseBuild
     response.parsed !== null &&
     response.parsed !== undefined &&
     typeof response.parsed === 'object' &&
-    typeof response.parsed.context === 'string'
+    'context' in response.parsed &&
+    typeof (response.parsed as any).context === 'string'
   );
 }
 

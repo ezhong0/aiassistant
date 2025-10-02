@@ -42,7 +42,7 @@ export class ErrorHandlingService extends BaseService {
   /**
    * Handle application errors with standardized response format
    */
-  handleError(
+  handleAppError(
     err: AppError | Error,
     req: Request,
     res: Response,
@@ -59,7 +59,7 @@ export class ErrorHandlingService extends BaseService {
       : appError.addContext({ correlationId: correlatedReq.correlationId });
 
     // Log the error
-    this.logError(enrichedError, context);
+    this.logAppError(enrichedError, context);
 
     // Track error counts
     this.trackError(enrichedError);
@@ -71,7 +71,7 @@ export class ErrorHandlingService extends BaseService {
   /**
    * Log error with appropriate level based on severity
    */
-  private logError(appError: AppError, context?: Record<string, unknown>): void {
+  private logAppError(appError: AppError, context?: Record<string, unknown>): void {
     const logData = {
       error: appError.code,
       statusCode: appError.statusCode,
@@ -95,10 +95,10 @@ export class ErrorHandlingService extends BaseService {
         this.logError(appError.message, appError, logData);
         break;
       case ERROR_SEVERITY.MEDIUM:
-        this.logWarn(appError.message, appError, logData);
+        this.logWarn(appError.message, logData);
         break;
       case ERROR_SEVERITY.LOW:
-        this.logInfo(appError.message, appError, logData);
+        this.logInfo(appError.message, logData);
         break;
       default:
         this.logError(appError.message, appError, logData);
@@ -129,21 +129,23 @@ export class ErrorHandlingService extends BaseService {
    * Send standardized error response
    */
   private sendErrorResponse(res: Response, appError: AppError): void {
-    const response: Record<string, unknown> = {
-      success: false,
-      error: {
-        code: appError.code,
-        message: appError.userFriendly ? appError.message : 'Internal server error',
-        category: appError.category,
-        ...(appError.correlationId && { correlationId: appError.correlationId }),
-      },
+    const errorDetails: Record<string, unknown> = {
+      code: appError.code,
+      message: appError.userFriendly ? appError.message : 'Internal server error',
+      category: appError.category,
+      ...(appError.correlationId && { correlationId: appError.correlationId }),
     };
 
     // Add retry-after header if available
     if (appError.retryable && appError.retryAfter) {
       res.setHeader('Retry-After', appError.retryAfter.toString());
-      response.error.retryAfter = appError.retryAfter;
+      errorDetails.retryAfter = appError.retryAfter;
     }
+
+    const response: Record<string, unknown> = {
+      success: false,
+      error: errorDetails,
+    };
 
     // Add rate limit info if applicable
     if (appError.statusCode === 429) {
@@ -159,7 +161,7 @@ export class ErrorHandlingService extends BaseService {
    */
   handleNotFound(req: Request, res: Response): void {
     const notFoundError = ErrorFactory.api.notFound(`Route ${req.path}`);
-    this.handleError(notFoundError, req, res);
+    this.handleAppError(notFoundError, req, res);
   }
 
   /**

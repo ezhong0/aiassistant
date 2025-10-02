@@ -651,7 +651,7 @@ export class TokenManager extends BaseService {
     }
 
     try {
-      await this.tokenStorageService.storeUserTokens(userId, tokens);
+      await this.tokenStorageService.storeUserTokens(userId, tokens as any);
       
       // Invalidate cache to force refresh
       if (this.cacheService) {

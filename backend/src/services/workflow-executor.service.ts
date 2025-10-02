@@ -393,7 +393,7 @@ export class WorkflowExecutor extends BaseService {
         },
       );
 
-      return { result };
+      return { result: result as unknown as Record<string, unknown> };
 
     } catch (error) {
       this.logError('Agent execution failed', error as Error, {

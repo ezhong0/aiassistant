@@ -269,7 +269,7 @@ export function isValidToolResult(value: unknown): value is ToolResult {
 export function validateToolCallWithZod(value: unknown): { success: true; data: ToolCall } | { success: false; error: z.ZodError } {
   const result = ToolCallSchema.safeParse(value);
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: result.data as ToolCall };
   }
   return { success: false, error: result.error };
 }
@@ -280,7 +280,7 @@ export function validateToolCallWithZod(value: unknown): { success: true; data: 
 export function validateToolResultWithZod(value: unknown): { success: true; data: ToolResult } | { success: false; error: z.ZodError } {
   const result = ToolResultSchema.safeParse(value);
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: result.data as ToolResult };
   }
   return { success: false, error: result.error };
 }

@@ -174,7 +174,7 @@ export class AuditLogger {
     // Sanitize nested objects
     for (const [key, value] of Object.entries(sanitized)) {
       if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        sanitized[key] = this.sanitizeAuditDetails(value);
+        sanitized[key] = this.sanitizeAuditDetails(value as Record<string, unknown>);
       }
     }
     

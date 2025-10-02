@@ -542,7 +542,7 @@ export class ContextManager extends BaseService {
         return ((result as Record<string, unknown>).emails as EmailSummary[]).map((email: EmailSummary) => ({
           from: email.from || target,
           subject: email.subject || 'No subject',
-          date: new Date(email.date || Date.now()),
+          date: new Date((email as any).date || Date.now()),
         }));
       }
 
@@ -578,8 +578,8 @@ export class ContextManager extends BaseService {
 
       if (result && (result as Record<string, unknown>)?.events) {
         return ((result as Record<string, unknown>).events as CalendarConflict[]).slice(0, 3).map((event: CalendarConflict) => ({
-          title: event.title || event.summary || 'Untitled event',
-          time: new Date(event.start?.dateTime || event.start?.date || Date.now()),
+          title: (event as any).title || event.summary || 'Untitled event',
+          time: new Date((event.start as any)?.dateTime || (event.start as any)?.date || Date.now()),
         }));
       }
 

@@ -119,7 +119,12 @@ export function validateRequest(options: ValidationOptions) {
         });
 
         // Throw AppError instead of sending response directly
-        throw ErrorFactory.validation.multipleErrors(validationResult.errors);
+        // Transform ValidationError[] to Record<string, string>
+        const errorRecord = validationResult.errors.reduce((acc, err) => {
+          acc[err.field] = err.message;
+          return acc;
+        }, {} as Record<string, string>);
+        throw ErrorFactory.validation.multipleErrors(errorRecord);
       }
 
       next();

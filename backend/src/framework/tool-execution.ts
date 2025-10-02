@@ -49,11 +49,11 @@ export const ToolResultSchema = z.object({
  */
 
 export function validateToolCall(data: unknown): ToolCall {
-  return ToolCallSchema.parse(data);
+  return ToolCallSchema.parse(data) as ToolCall;
 }
 
 export function validateToolResult(data: unknown): ToolResult {
-  return ToolResultSchema.parse(data);
+  return ToolResultSchema.parse(data) as ToolResult;
 }
 
 /**
@@ -63,7 +63,7 @@ export function validateToolResult(data: unknown): ToolResult {
 export function safeParseToolCall(data: unknown): { success: true; data: ToolCall } | { success: false; error: z.ZodError } {
   const result = ToolCallSchema.safeParse(data);
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: result.data as ToolCall };
   }
   return { success: false, error: result.error };
 }
@@ -71,7 +71,7 @@ export function safeParseToolCall(data: unknown): { success: true; data: ToolCal
 export function safeParseToolResult(data: unknown): { success: true; data: ToolResult } | { success: false; error: z.ZodError } {
   const result = ToolResultSchema.safeParse(data);
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: result.data as ToolResult };
   }
   return { success: false, error: result.error };
 }

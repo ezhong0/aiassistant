@@ -166,7 +166,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       });
 
       // Build email message in RFC 2822 format
-      const message = this.buildEmailMessage(validatedParams);
+      const message = this.buildEmailMessage(validatedParams as any);
 
       const response = await this.googleClient.makeRequest({
         method: 'POST',

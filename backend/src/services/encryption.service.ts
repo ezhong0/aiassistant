@@ -55,7 +55,7 @@ export class EncryptionService extends BaseService {
       try {
         this.encryptionKey = Buffer.from(envKey, 'base64');
         if (this.encryptionKey.length !== EncryptionService.KEY_LENGTH) {
-          throw ErrorFactory.domain.serviceError(`Invalid key length: ${this.encryptionKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
+          throw ErrorFactory.domain.serviceError('EncryptionService', `Invalid key length: ${this.encryptionKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
         }
         this.logDebug('Using provided token encryption key', {
           operation: 'encryption_key_initialization',
@@ -88,7 +88,7 @@ export class EncryptionService extends BaseService {
     }
     
     if (!this.encryptionKey) {
-      throw ErrorFactory.domain.serviceError('Encryption key not initialized');
+      throw ErrorFactory.domain.serviceError('EncryptionService', 'Encryption key not initialized');
     }
     
     try {
@@ -111,7 +111,7 @@ export class EncryptionService extends BaseService {
       return combined.toString('base64');
     } catch (error) {
       this.logError('Token encryption failed', { error });
-      throw ErrorFactory.domain.serviceError('Failed to encrypt sensitive data');
+      throw ErrorFactory.domain.serviceError('EncryptionService', 'Failed to encrypt sensitive data');
     }
   }
 
@@ -126,7 +126,7 @@ export class EncryptionService extends BaseService {
     }
     
     if (!this.encryptionKey) {
-      throw ErrorFactory.domain.serviceError('Encryption key not initialized');
+      throw ErrorFactory.domain.serviceError('EncryptionService', 'Encryption key not initialized');
     }
     
     try {
@@ -155,7 +155,7 @@ export class EncryptionService extends BaseService {
       return decrypted;
     } catch (error) {
       this.logError('Token decryption failed', { error });
-      throw ErrorFactory.domain.serviceError('Failed to decrypt sensitive data');
+      throw ErrorFactory.domain.serviceError('EncryptionService', 'Failed to decrypt sensitive data');
     }
   }
 
@@ -184,7 +184,7 @@ export class EncryptionService extends BaseService {
     try {
       const newKey = Buffer.from(newKeyBase64, 'base64');
       if (newKey.length !== EncryptionService.KEY_LENGTH) {
-        throw ErrorFactory.domain.serviceError(`Invalid key length: ${newKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
+        throw ErrorFactory.domain.serviceError('EncryptionService', `Invalid key length: ${newKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
       }
       
       this.encryptionKey = newKey;
@@ -194,7 +194,7 @@ export class EncryptionService extends BaseService {
       });
     } catch (error) {
       this.logError('Failed to rotate encryption key', { error });
-      throw ErrorFactory.domain.serviceError('Failed to rotate encryption key');
+      throw ErrorFactory.domain.serviceError('EncryptionService', 'Failed to rotate encryption key');
     }
   }
 

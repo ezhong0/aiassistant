@@ -5,7 +5,7 @@ import { EncryptionService } from './encryption.service';
 import { AuditLogger } from '../utils/audit-logger';
 import { ErrorFactory } from '../errors/error-factory';
 
-export interface GoogleTokens {
+export interface GoogleTokens extends Record<string, unknown> {
   access_token: string;
   refresh_token?: string;
   expires_at?: Date;
@@ -13,7 +13,7 @@ export interface GoogleTokens {
   scope?: string;
 }
 
-export interface SlackTokens {
+export interface SlackTokens extends Record<string, unknown> {
   access_token?: string | undefined;
   team_id?: string | undefined;
   user_id?: string | undefined;
@@ -287,15 +287,16 @@ export class TokenStorageService extends BaseService {
           // Decrypt Google refresh token if present
           if (tokens.googleTokens?.refresh_token) {
             try {
+              const refreshToken = tokens.googleTokens.refresh_token as string;
               // Check if the token is encrypted
-              if (this.isEncrypted(tokens.googleTokens.refresh_token)) {
-                tokens.googleTokens.refresh_token = this.encryptionService.decryptSensitiveData(tokens.googleTokens.refresh_token);
+              if (this.isEncrypted(refreshToken)) {
+                tokens.googleTokens.refresh_token = this.encryptionService.decryptSensitiveData(refreshToken);
                 this.logDebug('Successfully decrypted Google refresh token', { userId });
               } else {
                 this.logDebug('Google refresh token is not encrypted (stored in plain text)', { userId });
                 // Encrypt it for security
                 try {
-                  const encrypted = this.encryptionService.encryptSensitiveData(tokens.googleTokens.refresh_token);
+                  const encrypted = this.encryptionService.encryptSensitiveData(refreshToken);
                   await this.databaseService!.updateUserTokenRefreshToken(userId, encrypted);
                   this.logInfo('Encrypted plain text refresh token for security', { userId });
                 } catch (encryptError) {
@@ -320,7 +321,7 @@ export class TokenStorageService extends BaseService {
           }
 
           this.logDebug('Retrieved tokens from database', { userId });
-          return tokens;
+          return tokens as UserTokens;
         }
         
         this.logDebug('No tokens found for user in database', { userId });
@@ -394,8 +395,8 @@ export class TokenStorageService extends BaseService {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new (globalThis.URLSearchParams || globalThis.require('url').URLSearchParams)({
-          client_id: this.config.googleAuth?.clientId,
-          client_secret: this.config.googleAuth?.clientSecret,
+          client_id: (this.config.googleAuth as any)?.clientId,
+          client_secret: (this.config.googleAuth as any)?.clientSecret,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
         }),
@@ -450,10 +451,11 @@ export class TokenStorageService extends BaseService {
       };
 
     } catch (error: unknown) {
-      this.logError('Error refreshing Google access token', { userId, error: error?.message || error });
-      
+      const err = error as any;
+      this.logError('Error refreshing Google access token', { userId, error: err?.message || err });
+
       // If refresh fails with 400 (invalid refresh token), user needs to re-authenticate
-      if (error?.status === 400 || error?.message?.includes('invalid_grant')) {
+      if (err?.status === 400 || err?.message?.includes('invalid_grant')) {
         this.logWarn('Refresh token is invalid, user will need to re-authenticate', { userId });
         // Could optionally clean up the invalid tokens here
       }
