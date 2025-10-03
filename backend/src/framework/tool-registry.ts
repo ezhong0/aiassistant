@@ -28,7 +28,7 @@ export interface ToolDefinition {
   description: string;
   parameters: Record<string, ToolParameterSchema>;
   requiredParameters: string[];
-  domain: 'email' | 'calendar' | 'contacts' | 'slack';
+  domains: Array<'email' | 'calendar' | 'contacts' | 'slack'>;
   serviceMethod: string;
   requiresAuth: boolean;
   requiresConfirmation: boolean;
@@ -65,7 +65,7 @@ export class ToolRegistry {
    * Get all tools for a domain
    */
   static getToolsForDomain(domain: string): ToolDefinition[] {
-    return Array.from(this.tools.values()).filter(tool => tool.domain === domain);
+    return Array.from(this.tools.values()).filter(tool => tool.domains.includes(domain as any));
   }
 
   /**
@@ -298,7 +298,7 @@ ToolRegistry.registerTool({
     bcc: { type: 'array', description: 'BCC recipients', items: { type: 'string', description: 'BCC email address', format: 'email' } },
   },
   requiredParameters: ['to', 'subject', 'body'],
-  domain: 'email',
+  domains: ['email'],
   serviceMethod: 'sendEmail',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -311,13 +311,18 @@ ToolRegistry.registerTool({
 
 ToolRegistry.registerTool({
   name: 'search_emails',
-  description: 'Search for emails using a query',
+  description: 'Search for emails using a query (supports cross-account search)',
   parameters: {
     query: { type: 'string', description: 'Search query', required: true },
     maxResults: { type: 'number', description: 'Maximum number of results to return' },
+    account_ids: {
+      type: 'array',
+      description: 'Array of email account IDs to search (optional, searches default account if not provided)',
+      items: { type: 'string', description: 'Account ID' }
+    },
   },
   requiredParameters: ['query'],
-  domain: 'email',
+  domains: ['email'],
   serviceMethod: 'searchEmails',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -325,6 +330,7 @@ ToolRegistry.registerTool({
   examples: [
     'Search for emails from Sarah about budget',
     'Find all emails with attachments from last week',
+    'Search across all accounts for newsletters',
   ],
 });
 
@@ -335,7 +341,7 @@ ToolRegistry.registerTool({
     messageId: { type: 'string', description: 'Email message ID', required: true },
   },
   requiredParameters: ['messageId'],
-  domain: 'email',
+  domains: ['email'],
   serviceMethod: 'getEmail',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -354,7 +360,7 @@ ToolRegistry.registerTool({
     replyBody: { type: 'string', description: 'Reply message content', required: true },
   },
   requiredParameters: ['messageId', 'replyBody'],
-  domain: 'email',
+  domains: ['email'],
   serviceMethod: 'replyToEmail',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -372,7 +378,7 @@ ToolRegistry.registerTool({
     threadId: { type: 'string', description: 'Email thread ID', required: true },
   },
   requiredParameters: ['threadId'],
-  domain: 'email',
+  domains: ['email'],
   serviceMethod: 'getEmailThread',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -380,6 +386,172 @@ ToolRegistry.registerTool({
   examples: [
     'Get the full conversation thread about the proposal',
     'Retrieve all messages in the thread with ID xyz789',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'archive_email',
+  description: 'Archive an email (move to archive, remove from inbox)',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID to archive', required: true },
+  },
+  requiredParameters: ['messageId'],
+  domains: ['email'],
+  serviceMethod: 'archiveEmail',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Archive the email from Sarah about the budget',
+    'Move this email to archive',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'mark_read',
+  description: 'Mark an email as read',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID to mark as read', required: true },
+  },
+  requiredParameters: ['messageId'],
+  domains: ['email'],
+  serviceMethod: 'markRead',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Mark the latest email as read',
+    'Mark all emails from today as read',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'mark_unread',
+  description: 'Mark an email as unread',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID to mark as unread', required: true },
+  },
+  requiredParameters: ['messageId'],
+  domains: ['email'],
+  serviceMethod: 'markUnread',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Mark this email as unread so I remember to respond',
+    'Flag the email from John as unread',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'star_email',
+  description: 'Star an email (add star/flag for importance)',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID to star', required: true },
+  },
+  requiredParameters: ['messageId'],
+  domains: ['email'],
+  serviceMethod: 'starEmail',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Star the email from the CEO',
+    'Add a star to this important message',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'unstar_email',
+  description: 'Remove star from an email',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID to unstar', required: true },
+  },
+  requiredParameters: ['messageId'],
+  domains: ['email'],
+  serviceMethod: 'unstarEmail',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Unstar the email from yesterday',
+    'Remove the star from this email',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'create_label',
+  description: 'Create a new email label/category',
+  parameters: {
+    name: { type: 'string', description: 'Label name', required: true },
+    color: { type: 'string', description: 'Label color (optional)' },
+  },
+  requiredParameters: ['name'],
+  domains: ['email'],
+  serviceMethod: 'createLabel',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Create a label called "Important Projects"',
+    'Add a new category for client emails',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'add_label_to_email',
+  description: 'Add a label to an email',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID', required: true },
+    labelId: { type: 'string', description: 'Label ID to add', required: true },
+  },
+  requiredParameters: ['messageId', 'labelId'],
+  domains: ['email'],
+  serviceMethod: 'addLabel',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Label this email as "Important"',
+    'Add the "Follow Up" label to this message',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'remove_label_from_email',
+  description: 'Remove a label from an email',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID', required: true },
+    labelId: { type: 'string', description: 'Label ID to remove', required: true },
+  },
+  requiredParameters: ['messageId', 'labelId'],
+  domains: ['email'],
+  serviceMethod: 'removeLabel',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Remove the "Urgent" label from this email',
+    'Unlabel this message',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'get_attachment',
+  description: 'Download an email attachment',
+  parameters: {
+    messageId: { type: 'string', description: 'Email message ID', required: true },
+    attachmentId: { type: 'string', description: 'Attachment ID', required: true },
+  },
+  requiredParameters: ['messageId', 'attachmentId'],
+  domains: ['email'],
+  serviceMethod: 'downloadAttachment',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Download the PDF attachment from the contract email',
+    'Get the attachment from Sarah\'s email',
   ],
 });
 
@@ -396,7 +568,7 @@ ToolRegistry.registerTool({
     location: { type: 'string', description: 'Event location' },
   },
   requiredParameters: ['title', 'start', 'end'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'createEvent',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -409,13 +581,18 @@ ToolRegistry.registerTool({
 
 ToolRegistry.registerTool({
   name: 'list_events',
-  description: 'List calendar events in a date range',
+  description: 'List calendar events in a date range (supports multiple calendars)',
   parameters: {
     start: { type: 'string', description: 'Start date (ISO 8601)', required: true, format: 'datetime' },
     end: { type: 'string', description: 'End date (ISO 8601)', required: true, format: 'datetime' },
+    calendar_ids: {
+      type: 'array',
+      description: 'Array of calendar IDs to search (optional, searches default calendar if not provided)',
+      items: { type: 'string', description: 'Calendar ID' }
+    },
   },
   requiredParameters: ['start', 'end'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'listEvents',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -423,6 +600,7 @@ ToolRegistry.registerTool({
   examples: [
     'List all my events for next Monday',
     'Show my calendar for this week',
+    'List events across all my calendars for tomorrow',
   ],
 });
 
@@ -434,7 +612,7 @@ ToolRegistry.registerTool({
     calendarId: { type: 'string', description: 'Calendar ID' },
   },
   requiredParameters: ['eventId'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'getEvent',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -460,7 +638,7 @@ ToolRegistry.registerTool({
     } },
   },
   requiredParameters: ['eventId', 'updates'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'updateEvent',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -479,7 +657,7 @@ ToolRegistry.registerTool({
     calendarId: { type: 'string', description: 'Calendar ID' },
   },
   requiredParameters: ['eventId'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'deleteEvent',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -499,7 +677,7 @@ ToolRegistry.registerTool({
     end: { type: 'string', description: 'End time', required: true, format: 'datetime' },
   },
   requiredParameters: ['attendees', 'start', 'end'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'checkAvailability',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -520,7 +698,7 @@ ToolRegistry.registerTool({
     end: { type: 'string', description: 'Search end time', required: true, format: 'datetime' },
   },
   requiredParameters: ['attendees', 'duration', 'start', 'end'],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'findAvailableSlots',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -536,7 +714,7 @@ ToolRegistry.registerTool({
   description: 'List available calendars',
   parameters: {},
   requiredParameters: [],
-  domain: 'calendar',
+  domains: ['calendar'],
   serviceMethod: 'listCalendars',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -544,6 +722,32 @@ ToolRegistry.registerTool({
   examples: [
     'Show me all my calendars',
     'List available calendars for scheduling',
+  ],
+});
+
+ToolRegistry.registerTool({
+  name: 'respond_to_event',
+  description: 'Respond to a calendar event invitation (accept, decline, or tentative)',
+  parameters: {
+    eventId: { type: 'string', description: 'Event ID to respond to', required: true },
+    response: {
+      type: 'string',
+      description: 'Response type',
+      required: true,
+      enum: ['accepted', 'declined', 'tentative']
+    },
+    calendarId: { type: 'string', description: 'Calendar ID (optional)' },
+  },
+  requiredParameters: ['eventId', 'response'],
+  domains: ['calendar'],
+  serviceMethod: 'respondToEvent',
+  requiresAuth: true,
+  requiresConfirmation: false,
+  isCritical: false,
+  examples: [
+    'Accept the meeting invitation from John',
+    'Decline the team standup for tomorrow',
+    'Mark the project review as tentative',
   ],
 });
 
@@ -555,7 +759,7 @@ ToolRegistry.registerTool({
     query: { type: 'string', description: 'Search query', required: true },
   },
   requiredParameters: ['query'],
-  domain: 'contacts',
+  domains: ['email', 'calendar'],
   serviceMethod: 'searchContacts',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -573,7 +777,7 @@ ToolRegistry.registerTool({
     contactId: { type: 'string', description: 'Contact ID', required: true },
   },
   requiredParameters: ['contactId'],
-  domain: 'contacts',
+  domains: ['email', 'calendar'],
   serviceMethod: 'getContact',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -591,7 +795,7 @@ ToolRegistry.registerTool({
     maxResults: { type: 'number', description: 'Maximum number of results' },
   },
   requiredParameters: [],
-  domain: 'contacts',
+  domains: ['email', 'calendar'],
   serviceMethod: 'listContacts',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -611,7 +815,7 @@ ToolRegistry.registerTool({
     phone: { type: 'string', description: 'Contact phone number' },
   },
   requiredParameters: ['name'],
-  domain: 'contacts',
+  domains: ['email', 'calendar'],
   serviceMethod: 'createContact',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -634,7 +838,7 @@ ToolRegistry.registerTool({
     } },
   },
   requiredParameters: ['contactId', 'updates'],
-  domain: 'contacts',
+  domains: ['email', 'calendar'],
   serviceMethod: 'updateContact',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -652,7 +856,7 @@ ToolRegistry.registerTool({
     contactId: { type: 'string', description: 'Contact ID to delete', required: true },
   },
   requiredParameters: ['contactId'],
-  domain: 'contacts',
+  domains: ['email', 'calendar'],
   serviceMethod: 'deleteContact',
   requiresAuth: true,
   requiresConfirmation: true,
@@ -673,7 +877,7 @@ ToolRegistry.registerTool({
     threadTs: { type: 'string', description: 'Thread timestamp for replies' },
   },
   requiredParameters: ['channel', 'text'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'sendMessage',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -692,7 +896,7 @@ ToolRegistry.registerTool({
     limit: { type: 'number', description: 'Maximum number of messages to retrieve' },
   },
   requiredParameters: ['channel'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'getChannelHistory',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -711,7 +915,7 @@ ToolRegistry.registerTool({
     threadTs: { type: 'string', description: 'Thread timestamp', required: true },
   },
   requiredParameters: ['channel', 'threadTs'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'getThreadReplies',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -729,7 +933,7 @@ ToolRegistry.registerTool({
     userId: { type: 'string', description: 'User ID', required: true },
   },
   requiredParameters: ['userId'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'getUserInfo',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -747,7 +951,7 @@ ToolRegistry.registerTool({
     limit: { type: 'number', description: 'Maximum number of users to retrieve' },
   },
   requiredParameters: [],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'listUsers',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -768,7 +972,7 @@ ToolRegistry.registerTool({
     title: { type: 'string', description: 'File title' },
   },
   requiredParameters: ['channel', 'filename', 'content'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'uploadFile',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -788,7 +992,7 @@ ToolRegistry.registerTool({
     text: { type: 'string', description: 'New message text', required: true },
   },
   requiredParameters: ['channel', 'ts', 'text'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'updateMessage',
   requiresAuth: true,
   requiresConfirmation: false,
@@ -807,7 +1011,7 @@ ToolRegistry.registerTool({
     ts: { type: 'string', description: 'Message timestamp', required: true },
   },
   requiredParameters: ['channel', 'ts'],
-  domain: 'slack',
+  domains: ['slack'],
   serviceMethod: 'deleteMessage',
   requiresAuth: true,
   requiresConfirmation: true,

@@ -197,12 +197,13 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }
 
   /**
-   * Search emails
+   * Search emails (with optional cross-account support)
    */
   async searchEmails(userId: string, params: {
     query: string;
     maxResults?: number;
     includeSpamTrash?: boolean;
+    account_ids?: string[]; // Cross-account support
   }): Promise<Array<{
     id: string;
     threadId: string;
@@ -671,6 +672,293 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }
 
   /**
+   * Archive an email (remove from inbox)
+   */
+  async archiveEmail(params: { messageId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Archiving email', { messageId: params.messageId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          removeLabelIds: ['INBOX']
+        }
+      });
+
+      this.logInfo('Email archived successfully', { messageId: params.messageId });
+    } catch (error) {
+      this.logError('Failed to archive email', error, { messageId: params.messageId });
+      throw error;
+    }
+  }
+
+  /**
+   * Mark an email as read
+   */
+  async markRead(params: { messageId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Marking email as read', { messageId: params.messageId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          removeLabelIds: ['UNREAD']
+        }
+      });
+
+      this.logInfo('Email marked as read', { messageId: params.messageId });
+    } catch (error) {
+      this.logError('Failed to mark email as read', error, { messageId: params.messageId });
+      throw error;
+    }
+  }
+
+  /**
+   * Mark an email as unread
+   */
+  async markUnread(params: { messageId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Marking email as unread', { messageId: params.messageId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          addLabelIds: ['UNREAD']
+        }
+      });
+
+      this.logInfo('Email marked as unread', { messageId: params.messageId });
+    } catch (error) {
+      this.logError('Failed to mark email as unread', error, { messageId: params.messageId });
+      throw error;
+    }
+  }
+
+  /**
+   * Star an email
+   */
+  async starEmail(params: { messageId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Starring email', { messageId: params.messageId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          addLabelIds: ['STARRED']
+        }
+      });
+
+      this.logInfo('Email starred successfully', { messageId: params.messageId });
+    } catch (error) {
+      this.logError('Failed to star email', error, { messageId: params.messageId });
+      throw error;
+    }
+  }
+
+  /**
+   * Unstar an email
+   */
+  async unstarEmail(params: { messageId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Unstarring email', { messageId: params.messageId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          removeLabelIds: ['STARRED']
+        }
+      });
+
+      this.logInfo('Email unstarred successfully', { messageId: params.messageId });
+    } catch (error) {
+      this.logError('Failed to unstar email', error, { messageId: params.messageId });
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new label
+   */
+  async createLabel(params: { name: string; color?: string }): Promise<{ id: string; name: string }> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Creating label', { name: params.name });
+
+      const response = await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/labels',
+        data: {
+          name: params.name,
+          labelListVisibility: 'labelShow',
+          messageListVisibility: 'show',
+          ...(params.color && { color: { backgroundColor: params.color } })
+        }
+      });
+
+      const result = {
+        id: response.data.id,
+        name: response.data.name
+      };
+
+      this.logInfo('Label created successfully', result);
+
+      return result;
+    } catch (error) {
+      this.logError('Failed to create label', error, { name: params.name });
+      throw error;
+    }
+  }
+
+  /**
+   * Add a label to an email
+   */
+  async addLabel(params: { messageId: string; labelId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Adding label to email', { messageId: params.messageId, labelId: params.labelId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          addLabelIds: [params.labelId]
+        }
+      });
+
+      this.logInfo('Label added successfully', { messageId: params.messageId, labelId: params.labelId });
+    } catch (error) {
+      this.logError('Failed to add label', error, { messageId: params.messageId, labelId: params.labelId });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove a label from an email
+   */
+  async removeLabel(params: { messageId: string; labelId: string }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Removing label from email', { messageId: params.messageId, labelId: params.labelId });
+
+      await this.googleClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/modify',
+        query: { id: params.messageId },
+        data: {
+          removeLabelIds: [params.labelId]
+        }
+      });
+
+      this.logInfo('Label removed successfully', { messageId: params.messageId, labelId: params.labelId });
+    } catch (error) {
+      this.logError('Failed to remove label', error, { messageId: params.messageId, labelId: params.labelId });
+      throw error;
+    }
+  }
+
+  /**
+   * Download an email attachment
+   */
+  async downloadAttachment(params: { messageId: string; attachmentId: string }): Promise<{
+    data: string;
+    size: number;
+  }> {
+    this.assertReady();
+
+    if (!this.googleClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    try {
+      this.logInfo('Downloading attachment', { messageId: params.messageId, attachmentId: params.attachmentId });
+
+      const response = await this.googleClient.makeRequest({
+        method: 'GET',
+        endpoint: '/gmail/v1/users/me/messages/attachments',
+        query: {
+          messageId: params.messageId,
+          id: params.attachmentId
+        }
+      });
+
+      const result = {
+        data: response.data.data, // Base64-encoded data
+        size: response.data.size
+      };
+
+      this.logInfo('Attachment downloaded successfully', {
+        messageId: params.messageId,
+        attachmentId: params.attachmentId,
+        size: result.size
+      });
+
+      return result;
+    } catch (error) {
+      this.logError('Failed to download attachment', error, {
+        messageId: params.messageId,
+        attachmentId: params.attachmentId
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get service health information
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
@@ -684,8 +972,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
 
       return { healthy, details };
     } catch (error) {
-      return { 
-        healthy: false, 
+      return {
+        healthy: false,
         details: { error: error instanceof Error ? error.message : 'Unknown error' }
       };
     }

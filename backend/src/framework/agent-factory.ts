@@ -271,14 +271,10 @@ export class AgentFactory {
       // Resolve agents from DI container (already registered with all dependencies)
       const calendarAgent = this.container.resolve('calendarAgent');
       const emailAgent = this.container.resolve('emailAgent');
-      const contactAgent = this.container.resolve('contactAgent');
-      const slackAgent = this.container.resolve('slackAgent');
 
       // Register all core SubAgents (already instantiated via DI)
       this.registerAgent('calendarAgent', calendarAgent);
       this.registerAgent('emailAgent', emailAgent);
-      this.registerAgent('contactAgent', contactAgent);
-      this.registerAgent('slackAgent', slackAgent);
 
       this.initialized = true;
 

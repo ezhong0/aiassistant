@@ -10,39 +10,25 @@ import { ErrorFactory } from '../errors/error-factory';
 
 /** Agent capability descriptions for AI-driven routing */
 export const AGENT_CAPABILITIES = {
-  
-  /** Email agent - email operations */
+
+  /** Email agent - email operations and contact management */
   email: {
-    description: 'Send, reply to, search, and manage emails using Gmail API',
-    capabilities: ['send_email', 'reply_email', 'search_email', 'draft_email', 'manage_gmail'],
-    useCases: ['send messages', 'reply to emails', 'search inbox', 'create drafts', 'manage email'],
+    description: 'Send, reply to, search, and manage emails using Gmail API. Includes contact lookup and management.',
+    capabilities: ['send_email', 'reply_email', 'search_email', 'draft_email', 'manage_gmail', 'search_contacts', 'lookup_email'],
+    useCases: ['send messages', 'reply to emails', 'search inbox', 'create drafts', 'manage email', 'find contact info', 'lookup email addresses'],
   },
-  
-  /** Contact agent - contact management */
-  contact: {
-    description: 'Search and manage contacts from Google Contacts and email history',
-    capabilities: ['search_contacts', 'find_people', 'lookup_email', 'contact_management'],
-    useCases: ['find contact info', 'lookup email addresses', 'search people', 'get contact details'],
-  },
-  
+
   /** Calendar agent - scheduling and events */
   calendar: {
-    description: 'Create, update, and manage calendar events and scheduling',
-    capabilities: ['create_events', 'schedule_meetings', 'manage_calendar', 'check_availability'],
-    useCases: ['schedule meetings', 'create events', 'check availability', 'manage calendar'],
-  },
-  
-  /** Slack agent - message reading and management */
-  slack: {
-    description: 'Read Slack message history, manage drafts, and handle confirmations',
-    capabilities: ['read_messages', 'detect_drafts', 'manage_confirmations', 'thread_management'],
-    useCases: ['read conversation history', 'check for drafts', 'manage confirmations', 'analyze threads'],
+    description: 'Create, update, and manage calendar events and scheduling. Includes contact lookup for meeting attendees.',
+    capabilities: ['create_events', 'schedule_meetings', 'manage_calendar', 'check_availability', 'search_contacts', 'lookup_email'],
+    useCases: ['schedule meetings', 'create events', 'check availability', 'manage calendar', 'find contact info for meetings'],
   },
 };
 
 /** AI-Driven Agent Configuration */
 export const AGENT_CONFIG = {
-  
+
   email: {
     description: AGENT_CAPABILITIES.email.description,
     capabilities: AGENT_CAPABILITIES.email.capabilities,
@@ -53,18 +39,7 @@ export const AGENT_CONFIG = {
     hasExternalEffects: true,
     isReadOnly: false,
   },
-  
-  contact: {
-    description: AGENT_CAPABILITIES.contact.description,
-    capabilities: AGENT_CAPABILITIES.contact.capabilities,
-    useCases: AGENT_CAPABILITIES.contact.useCases,
-    requiresConfirmation: false,
-    isCritical: true,
-    requiresAuth: true,
-    hasExternalEffects: false,
-    isReadOnly: true,
-  },
-  
+
   calendar: {
     description: AGENT_CAPABILITIES.calendar.description,
     capabilities: AGENT_CAPABILITIES.calendar.capabilities,
@@ -75,30 +50,10 @@ export const AGENT_CONFIG = {
     hasExternalEffects: true,
     isReadOnly: false,
   },
-  
-  slack: {
-    description: AGENT_CAPABILITIES.slack.description,
-    capabilities: AGENT_CAPABILITIES.slack.capabilities,
-    useCases: AGENT_CAPABILITIES.slack.useCases,
-    requiresConfirmation: false,
-    isCritical: false,
-    requiresAuth: true,
-    hasExternalEffects: false,
-    isReadOnly: true,
-  },
 };
 
 /** Agent operation types */
-export const AGENT_OPERATIONS = {
-  contact: {
-    /** Search for existing contacts */
-    search: 'search',
-    /** Create new contact (requires additional permissions) */
-    create: 'create',
-    /** Update existing contact (requires additional permissions) */
-    update: 'update',
-  },
-};
+export const AGENT_OPERATIONS = {};
 
 /** AI-Driven Helper Functions */
 export const AGENT_HELPERS = {

@@ -1,16 +1,24 @@
 import logger from '../utils/logger';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
-// AgentFactory import removed - using new BaseSubAgent architecture
-// Prompt builders are now created via factory - no direct imports needed
+import { AgentFactory } from '../framework/agent-factory';
 
 // Utilities and error handling
-import { BuilderGuard, createBuilderContext, PromptBuilderMap } from '../utils/builder-guard';
 import { ErrorFactory } from '../errors';
 
 import { TokenManager } from '../services/token-manager';
-import { WorkflowExecutor } from '../services/workflow-executor.service';
-// Token types no longer needed - using TokenManager directly
+
+// Prompt builders
+import {
+  IntentUnderstandingPromptBuilder,
+  IntentUnderstandingContext,
+  Command
+} from '../services/prompt-builders/master-agent/intent-understanding-prompt-builder';
+import {
+  ContextUpdatePromptBuilder,
+  ContextUpdateContext,
+  CommandWithStatus
+} from '../services/prompt-builders/master-agent/context-update-prompt-builder';
 
 // Types
 import { SlackContext } from '../types/slack/slack.types';
@@ -30,43 +38,45 @@ export interface ProcessingResult {
 }
 
 /**
- * Master Agent following the redesigned architecture
+ * Master Agent following the 4-Prompt Architecture
  *
- * 1. Understanding & Planning
- * 2. Execution Loop (Max 10 Iterations)
- * 3. Final Output Generation
+ * New 2-Prompt Flow:
+ * 1. Intent Understanding (Prompt 1): Creates command_list
+ * 2. Execution Loop with Context Update (Prompt 2): Updates accumulated_knowledge after each SubAgent
+ * 3. Returns accumulated_knowledge as final response
  */
 export class MasterAgent {
   private aiService: GenericAIService;
   private contextManager: ContextManager;
   private tokenManager: TokenManager;
-  private workflowExecutor: WorkflowExecutor;
   private isInitialized = false;
 
-  // Prompt builders - single object instead of individual properties
-  private builders: PromptBuilderMap;
+  // New prompt builders for 2-prompt architecture
+  private intentUnderstandingBuilder: IntentUnderstandingPromptBuilder;
+  private contextUpdateBuilder: ContextUpdatePromptBuilder;
+
+  // Internal state for execution
+  private accumulated_knowledge: string = '';
+  private command_list: CommandWithStatus[] = [];
 
   constructor(
     aiService: GenericAIService,
     contextManager: ContextManager,
     tokenManager: TokenManager,
-    workflowExecutor: WorkflowExecutor,
-    builders: PromptBuilderMap,
   ) {
     this.aiService = aiService;
     this.contextManager = contextManager;
     this.tokenManager = tokenManager;
-    this.workflowExecutor = workflowExecutor;
-    this.builders = builders;
-    this.isInitialized = true; // Already initialized when created via DI
+    this.intentUnderstandingBuilder = new IntentUnderstandingPromptBuilder(aiService);
+    this.contextUpdateBuilder = new ContextUpdatePromptBuilder(aiService);
+    this.isInitialized = true;
   }
 
   /**
    * Initialize the new Master Agent
-   * @deprecated No longer needed - initialization happens in constructor via DI
+   * @deprecated No longer needed - initialization happens in constructor
    */
   async initialize(): Promise<void> {
-    // No-op: Everything is initialized in the constructor when created via DI
     if (this.isInitialized) {
       return;
     }
@@ -84,16 +94,6 @@ export class MasterAgent {
       throw ErrorFactory.domain.serviceError('MasterAgent', 'TokenManager not provided to MasterAgent');
     }
 
-    if (!this.workflowExecutor) {
-      throw ErrorFactory.workflow.executionFailed('WorkflowExecutor not provided to MasterAgent');
-    }
-
-    if (!this.builders) {
-      throw ErrorFactory.domain.serviceError('MasterAgent', 'Builders not provided to MasterAgent');
-    }
-
-    BuilderGuard.validateAllBuilders(this.builders);
-
     this.isInitialized = true;
 
     logger.info('MasterAgent initialized successfully', {
@@ -102,7 +102,7 @@ export class MasterAgent {
   }
 
   /**
-   * Process user input with the new architecture
+   * Process user input with the new 2-prompt architecture
    */
   async processUserInput(
     userInput: string,
@@ -114,7 +114,7 @@ export class MasterAgent {
 
     const processingStartTime = Date.now();
 
-    logger.info('Processing user input with Master Agent', {
+    logger.info('Processing user input with Master Agent (2-prompt architecture)', {
       userInputLength: userInput?.length || 0,
       sessionId,
       userId,
@@ -123,176 +123,239 @@ export class MasterAgent {
     });
 
     try {
-      // Update progress for stage 1
-      if (slackContext?.updateProgress) {
-        await slackContext.updateProgress('Building message history...');
-      }
-      
-      // Gather conversation history and build message history
-      const messageHistory = await this.buildMessageHistory(userInput, sessionId, slackContext);
+      // Reset state for new request
+      this.accumulated_knowledge = '';
+      this.command_list = [];
 
-      // Update progress for stage 2
+      // Stage 1: Build message history
       if (slackContext?.updateProgress) {
-        await slackContext.updateProgress('Analyzing and planning...');
+        await slackContext.updateProgress('Understanding your request...');
       }
-      
-      // Understanding & Planning
-      const workflowContext = await this.analyzeAndPlan(messageHistory, sessionId, userId);
 
-      // Update progress for stage 3
+      const conversationHistory = await this.buildConversationHistory(userInput, sessionId, slackContext);
+      const userContext = await this.gatherUserContext(userId);
+
+      // Stage 2: Master Prompt 1 - Intent Understanding & Command List Creation
+      logger.info('Executing Master Prompt 1: Intent Understanding', { sessionId, userId });
+
+      const intentContext: IntentUnderstandingContext = {
+        user_query: userInput,
+        conversation_history: conversationHistory,
+        user_context: userContext
+      };
+
+      const intentResult = await this.intentUnderstandingBuilder.execute(intentContext);
+
+      // Store initial command list
+      this.command_list = intentResult.command_list.map(cmd => ({
+        ...cmd,
+        status: 'pending' as const
+      }));
+
+      logger.info('Intent understood, created command list', {
+        sessionId,
+        userId,
+        commandCount: this.command_list.length,
+        queryType: intentResult.query_type,
+        crossAccount: intentResult.cross_account,
+        operation: 'intent_understanding_complete'
+      });
+
+      // Stage 3: Execution Loop (Max 10 iterations)
       if (slackContext?.updateProgress) {
-        await slackContext.updateProgress('Executing workflow...');
+        await slackContext.updateProgress('Executing commands...');
       }
-      
-      // Execution Loop (Max 10 Iterations)
-      const executionResult = await this.executeWorkflow(workflowContext, sessionId, userId);
 
-      // Update progress for stage 4
-      if (slackContext?.updateProgress) {
-        await slackContext.updateProgress('Generating response...');
+      const MAX_ITERATIONS = 10;
+      let iteration = 0;
+      let isComplete = false;
+
+      while (iteration < MAX_ITERATIONS && !isComplete) {
+        iteration++;
+
+        // Get next pending command
+        const nextCommand = this.command_list.find(cmd => cmd.status === 'pending');
+
+        if (!nextCommand) {
+          // No more pending commands
+          isComplete = true;
+          break;
+        }
+
+        logger.info(`Executing command ${nextCommand.order}/${this.command_list.length}`, {
+          sessionId,
+          userId,
+          iteration,
+          agent: nextCommand.agent,
+          command: nextCommand.command.substring(0, 100)
+        });
+
+        // Mark as executing
+        nextCommand.status = 'executing';
+
+        // Execute SubAgent
+        const agentResult = await AgentFactory.executeAgentWithNaturalLanguage(
+          `${nextCommand.agent}Agent`,
+          nextCommand.command,
+          {
+            sessionId,
+            userId: userId || 'unknown',
+            correlationId: `master-${sessionId}-${iteration}`
+          }
+        );
+
+        // Check if SubAgent execution failed
+        if (!agentResult.success) {
+          logger.warn('SubAgent execution failed', {
+            sessionId,
+            userId,
+            agent: nextCommand.agent,
+            error: agentResult.error
+          });
+          nextCommand.status = 'failed';
+          // Continue to Prompt 2 to decide how to handle failure
+        } else {
+          nextCommand.status = 'completed';
+        }
+
+        const subAgentResponse = agentResult.response || agentResult.error || 'No response';
+
+        // Master Prompt 2 - Context Update
+        logger.info('Executing Master Prompt 2: Context Update', { sessionId, userId, iteration });
+
+        const contextUpdateInput: ContextUpdateContext = {
+          accumulated_knowledge: this.accumulated_knowledge,
+          command_list: this.command_list,
+          latest_subagent_response: subAgentResponse,
+          conversation_history: conversationHistory
+        };
+
+        const updateResult = await this.contextUpdateBuilder.execute(contextUpdateInput);
+
+        // Update state from Prompt 2
+        this.accumulated_knowledge = updateResult.accumulated_knowledge;
+        this.command_list = updateResult.command_list;
+        isComplete = updateResult.is_complete;
+
+        logger.info('Context updated', {
+          sessionId,
+          userId,
+          iteration,
+          isComplete,
+          needsConfirmation: updateResult.needs_user_confirmation,
+          commandsRemaining: this.command_list.filter(c => c.status === 'pending').length
+        });
+
+        // Check if waiting for user confirmation
+        if (updateResult.needs_user_confirmation) {
+          logger.info('Workflow paused - waiting for user confirmation', { sessionId, userId });
+          return {
+            message: updateResult.confirmation_prompt || this.accumulated_knowledge,
+            success: true,
+            metadata: {
+              processingTime: Date.now() - processingStartTime,
+              totalSteps: iteration,
+              workflowAction: 'awaiting_confirmation'
+            }
+          };
+        }
+
+        // Check if complete
+        if (isComplete) {
+          logger.info('Workflow completed', { sessionId, userId, iterations: iteration });
+          break;
+        }
       }
-      
-      // Final Output Generation
-      const finalResult = await this.generateFinalResponse(executionResult, processingStartTime);
 
-      return finalResult;
+      if (iteration >= MAX_ITERATIONS) {
+        logger.warn('Max iterations reached', { sessionId, userId, iterations: iteration });
+        this.accumulated_knowledge += '\n\n(Note: Maximum execution steps reached. Some commands may not have completed.)';
+      }
+
+      // Stage 4: Return accumulated knowledge as final response
+      return {
+        message: this.accumulated_knowledge || 'Request processed successfully.',
+        success: true,
+        metadata: {
+          processingTime: Date.now() - processingStartTime,
+          totalSteps: iteration
+        }
+      };
 
     } catch (error) {
       logger.error('Failed to process user input', error as Error, {
-        userInput: `${userInput.substring(0, 100)  }...`,
+        userInput: `${userInput.substring(0, 100)}...`,
         sessionId,
         userId,
         operation: 'process_user_input_error',
       });
 
       return this.createErrorResult('I encountered an error while processing your request. Please try again.', processingStartTime);
-
     }
   }
 
   /**
-   * Build message history from user input and conversation context
+   * Build conversation history from Slack context
    */
-  private async buildMessageHistory(
+  private async buildConversationHistory(
     userInput: string,
     sessionId: string,
     slackContext?: SlackContext,
-  ): Promise<string> {
-    logger.info('Building message history', { sessionId });
+  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }>> {
+    logger.info('Building conversation history', { sessionId });
 
-    // Start with user input
-    let messageHistory = userInput;
-    
+    const conversationHistory: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }> = [];
+
     // Add conversation history if available
     if (slackContext && this.contextManager) {
       try {
         const gatheredContext = await this.contextManager.gatherContext(sessionId, slackContext);
-        
-        // Add recent messages to context
+
+        // Convert recent messages to conversation history format
         if (gatheredContext.conversation.recentMessages.length > 0) {
-          const historyText = gatheredContext.conversation.recentMessages
-            .map(msg => `${msg.user}: ${msg.text}`)
-            .join('\n');
-          messageHistory = `Previous conversation:\n${historyText}\n\nCurrent request: ${userInput}`;
+          gatheredContext.conversation.recentMessages.forEach(msg => {
+            conversationHistory.push({
+              role: msg.user === 'bot' ? 'assistant' : 'user',
+              content: msg.text,
+              timestamp: msg.timestamp
+            });
+          });
         }
       } catch (error) {
         logger.warn('Failed to gather conversation context', { error, sessionId });
-        // Continue with just user input if context gathering fails
       }
     }
 
-    return messageHistory;
+    // Add current user input as latest turn
+    conversationHistory.push({
+      role: 'user',
+      content: userInput
+    });
+
+    return conversationHistory.slice(-5); // Keep only last 5 turns
   }
 
   /**
-   * Analyze the situation and create a workflow plan
+   * Gather user context (accounts, calendars, timezone)
    */
-  private async analyzeAndPlan(
-    messageHistory: string,
-    sessionId: string,
-    userId?: string,
-  ): Promise<string> {
-    logger.info('Analyzing situation and creating plan', { sessionId, userId });
+  private async gatherUserContext(userId?: string): Promise<{
+    email_accounts?: Array<{ id: string; email: string; primary?: boolean }>;
+    calendars?: Array<{ id: string; name: string; primary?: boolean }>;
+    timezone?: string;
+  }> {
+    // TODO: Implement actual user context gathering from TokenManager
+    // For now, return basic context
+    // In future, this should fetch:
+    // - User's email accounts from TokenManager
+    // - User's calendars from TokenManager
+    // - User's timezone preference
 
-    const context = createBuilderContext(sessionId, userId, 'analyze_and_plan');
-
-    // Situation Analysis
-    const situationResult = await BuilderGuard.safeExecute(
-      this.builders?.situation,
-      'situation',
-      messageHistory,
-      context,
-    );
-    let workflowContext = situationResult.parsed.context;
-
-    // Workflow Planning
-    const planningResult = await BuilderGuard.safeExecute(
-      this.builders?.planning,
-      'planning',
-      workflowContext,
-      context,
-    );
-    workflowContext = planningResult.parsed.context;
-
-    return workflowContext;
-  }
-
-  /**
-   * Execute the workflow with iterative steps (now using WorkflowExecutor)
-   */
-  private async executeWorkflow(
-    workflowContext: string,
-    sessionId: string,
-    userId?: string,
-  ): Promise<string> {
-    if (!this.workflowExecutor) {
-      throw ErrorFactory.domain.serviceUnavailable('WorkflowExecutor', {
-        component: 'master-agent',
-        operation: 'execute_workflow',
-        sessionId,
-        userId,
-      });
-    }
-
-    logger.info('Executing workflow with WorkflowExecutor', { sessionId, userId });
-
-    try {
-      return await this.workflowExecutor.execute(workflowContext, sessionId, userId);
-    } catch (error) {
-      logger.error('Workflow execution failed', error as Error, {
-        sessionId,
-        userId,
-        operation: 'execute_workflow',
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Generate the final response from the completed workflow
-   */
-  private async generateFinalResponse(
-    workflowContext: string,
-    processingStartTime: number,
-  ): Promise<ProcessingResult> {
-    logger.info('Generating final response');
-
-    const context = createBuilderContext(undefined, undefined, 'generate_final_response');
-
-    const finalResult = await BuilderGuard.safeExecute(
-      this.builders?.final,
-      'final',
-      workflowContext,
-      context,
-    );
-    const response = finalResult.parsed.response;
+    logger.debug('Gathering user context', { userId });
 
     return {
-      message: response,
-      success: true,
-      metadata: {
-        processingTime: Date.now() - processingStartTime,
-      },
+      timezone: 'America/Los_Angeles', // Default for now
+      email_accounts: [],
+      calendars: []
     };
   }
 
