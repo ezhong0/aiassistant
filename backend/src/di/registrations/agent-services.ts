@@ -21,15 +21,17 @@ export function registerAgentServices(container: AppContainer): void {
   container.register({
     // ===== Master Agent =====
     // Main orchestration agent using 2-prompt architecture
-    // Dependencies: aiService, contextManager, tokenManager
+    // Dependencies: aiService, contextManager, sessionManager, tokenManager
     masterAgent: asFunction(({
       aiService,
       contextManager,
+      sessionManager,
       tokenManager
     }) => {
       return new MasterAgent(
         aiService,
         contextManager,
+        sessionManager,
         tokenManager
       );
     }).singleton(),

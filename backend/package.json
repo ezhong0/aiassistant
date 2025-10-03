@@ -60,8 +60,6 @@
   "dependencies": {
     "@sentry/node": "^8.45.0",
     "@sentry/profiling-node": "^8.45.0",
-    "@slack/bolt": "^4.4.0",
-    "@slack/web-api": "^7.10.0",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "^9.0.10",

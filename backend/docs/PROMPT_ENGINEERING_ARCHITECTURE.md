@@ -2859,9 +2859,6 @@ For each unprepared meeting:
 **All of this emerges from chain-of-thought.** No hardcoded "meeting prep detector."
 
 ---
-
-## Post-MVP Considerations
-
 The following can be added later to improve performance but are NOT required for MVP:
 
 **Vector Search:**

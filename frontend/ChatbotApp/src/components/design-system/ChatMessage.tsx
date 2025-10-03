@@ -24,7 +24,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const bubbleStyle = {
     backgroundColor: isFromUser ? colors.messageSent : colors.messageReceived,
     alignSelf: isFromUser ? 'flex-end' : 'flex-start',
-    maxWidth: '80%',
+    maxWidth: '85%', // Increased from 80% to 85%
+    minWidth: '20%', // Added minimum width
     borderRadius: designSystem.borderRadius.message,
     paddingVertical: designSystem.spacing.chatMessagePadding,
     paddingHorizontal: designSystem.spacing['4'],
@@ -56,7 +57,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </Text>
         ) : (
           <>
-            <Text style={textStyle}>
+            <Text 
+              style={textStyle}
+              numberOfLines={0} // Allow unlimited lines for full message
+            >
               {message}
             </Text>
             {timestamp && (

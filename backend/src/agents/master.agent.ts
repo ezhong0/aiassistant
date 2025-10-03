@@ -1,6 +1,7 @@
 import logger from '../utils/logger';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
+import { SessionManager } from '../services/session-manager.service';
 import { AgentFactory } from '../framework/agent-factory';
 
 // Utilities and error handling
@@ -48,6 +49,7 @@ export interface ProcessingResult {
 export class MasterAgent {
   private aiService: GenericAIService;
   private contextManager: ContextManager;
+  private sessionManager: SessionManager;
   private tokenManager: TokenManager;
   private isInitialized = false;
 
@@ -62,10 +64,12 @@ export class MasterAgent {
   constructor(
     aiService: GenericAIService,
     contextManager: ContextManager,
+    sessionManager: SessionManager,
     tokenManager: TokenManager,
   ) {
     this.aiService = aiService;
     this.contextManager = contextManager;
+    this.sessionManager = sessionManager;
     this.tokenManager = tokenManager;
     this.intentUnderstandingBuilder = new IntentUnderstandingPromptBuilder(aiService);
     this.contextUpdateBuilder = new ContextUpdatePromptBuilder(aiService);
@@ -88,6 +92,10 @@ export class MasterAgent {
 
     if (!this.contextManager) {
       throw ErrorFactory.domain.serviceError('MasterAgent', 'ContextManager not provided to MasterAgent');
+    }
+
+    if (!this.sessionManager) {
+      throw ErrorFactory.domain.serviceError('MasterAgent', 'SessionManager not provided to MasterAgent');
     }
 
     if (!this.tokenManager) {
@@ -295,7 +303,7 @@ export class MasterAgent {
   }
 
   /**
-   * Build conversation history from Slack context
+   * Build conversation history from SessionManager or Slack context (fallback)
    */
   private async buildConversationHistory(
     userInput: string,
@@ -306,8 +314,32 @@ export class MasterAgent {
 
     const conversationHistory: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }> = [];
 
-    // Add conversation history if available
-    if (slackContext && this.contextManager) {
+    // Try to load from SessionManager first (new architecture)
+    try {
+      const session = await this.sessionManager.getSession(sessionId);
+      if (session && session.conversationHistory.length > 0) {
+        session.conversationHistory.forEach(msg => {
+          conversationHistory.push({
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp).toISOString()
+          });
+        });
+
+        logger.info('Conversation history loaded from SessionManager', {
+          sessionId,
+          messageCount: conversationHistory.length
+        });
+      }
+    } catch (error) {
+      logger.warn('Failed to load from SessionManager, trying fallback', {
+        sessionId,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+
+    // Fallback: Add conversation history from Slack if available (legacy)
+    if (conversationHistory.length === 0 && slackContext && this.contextManager) {
       try {
         const gatheredContext = await this.contextManager.gatherContext(sessionId, slackContext);
 
@@ -321,6 +353,11 @@ export class MasterAgent {
             });
           });
         }
+
+        logger.info('Conversation history loaded from Slack context (fallback)', {
+          sessionId,
+          messageCount: conversationHistory.length
+        });
       } catch (error) {
         logger.warn('Failed to gather conversation context', { error, sessionId });
       }

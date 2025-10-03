@@ -22,16 +22,13 @@ import {
 } from './middleware/security.middleware';
 import { createAuthRoutes } from './routes/auth';
 import { createProtectedRoutes } from './routes/protected.routes';
-import { createSlackRoutes } from './routes/slack.routes';
+import { createChatRoutes } from './routes/chat.routes';
 import { createApiRateLimit } from './middleware/rate-limiting.middleware';
-// import { serviceManager } from './services/service-manager'; // REMOVED - Using DI container now
-import { initializeInterfaces, startInterfaces, InterfaceManager } from './types/slack';
 import { setupSwagger } from './docs/swagger';
 import { unifiedConfig } from './config/unified-config';
 
-// Global DI container and interfaces store
+// Global DI container
 let appContainer: AppContainer | null = null;
-let globalInterfaces: InterfaceManager | null = null;
 
 // Error boundary logging for unhandled errors
 process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
@@ -133,10 +130,8 @@ function setupRoutes(app: express.Application, container: AppContainer): void {
   // API Routes - pass container for dependency resolution
   app.use('/auth', createAuthRoutes(container));
   app.use('/protected', createProtectedRoutes(container));
-  
-  // Slack routes - pass DI container for service access
-  app.use('/slack', createSlackRoutes(container, () => globalInterfaces));
-  
+  app.use('/api/chat', createChatRoutes(container));
+
   logger.info('Application routes configured', {
     correlationId: 'startup',
     operation: 'route_setup_complete'
@@ -242,40 +237,6 @@ setupSwagger(app);
 
 // Note: API routes will be registered after bootstrap in setupRoutes()
 
-// Slack interface integration (runs in background, completely optional)
-const setupSlackInterface = async () => {
-  try {
-    logger.info('Setting up Slack interface', {
-      correlationId: 'startup',
-      operation: 'slack_interface_setup'
-    });
-    globalInterfaces = await initializeInterfaces(appContainer!);
-    if (globalInterfaces.slackInterface) {
-      await startInterfaces(globalInterfaces);
-      logger.info('Slack interface initialized successfully', {
-        correlationId: 'startup',
-        operation: 'slack_interface_init_success'
-      });
-    } else {
-      logger.warn('Slack interface not available, continuing without it', {
-        correlationId: 'startup',
-        operation: 'slack_interface_unavailable'
-      });
-    }
-  } catch (error) {
-    logger.error('Slack interface setup failed', error as Error, {
-      correlationId: 'startup',
-      operation: 'slack_interface_setup_error'
-    });
-    logger.warn('Continuing without Slack interface', {
-      correlationId: 'startup',
-      operation: 'slack_interface_fallback'
-    });
-  }
-};
-
-
-
 // Root endpoint
 app.get('/', (req: Request, res: Response) => {
   res.json({ 
@@ -323,14 +284,6 @@ const startServer = async (): Promise<void> => {
           // Error handling middleware (must be last)
           app.use(notFoundHandler);
           app.use(errorHandler);
-
-          // Set up Slack interface after services are ready
-          setupSlackInterface().catch(error => {
-            logger.error('Background Slack setup failed', error as Error, {
-              correlationId: 'startup',
-              operation: 'background_slack_setup_error'
-            });
-          });
         })
         .catch(error => {
           logger.error('Service initialization failed', error as Error, {

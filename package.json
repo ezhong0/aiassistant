@@ -8,5 +8,8 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "^20.0.2"
   }
 }
