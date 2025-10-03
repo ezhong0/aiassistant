@@ -354,7 +354,7 @@ export class GoogleOAuthManager extends BaseService {
   /**
    * Generate state parameter for OAuth flow
    */
-  private buildSignedState(context: SlackContext): string {
+  private buildSignedState(context: OAuthContext): string {
     if (this.oauthStateService) {
       return this.oauthStateService.issueState(context);
     }
@@ -370,7 +370,7 @@ export class GoogleOAuthManager extends BaseService {
   /**
    * Validate and parse state parameter (fallback)
    */
-  private validateSignedState(state: string): SlackContext | null {
+  private validateSignedState(state: string): OAuthContext | null {
     try {
       const payload = Buffer.from(state, 'base64').toString('utf8');
       const obj = JSON.parse(payload) as { userId: string; teamId: string; channelId: string; ts: number };

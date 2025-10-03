@@ -8,8 +8,9 @@
  * Context information for OAuth initialization
  */
 export interface OAuthContext {
-  userId: string;
+  userId?: string;
   teamId?: string;
   channelId?: string;
+  source?: string;
   [key: string]: unknown;
 }

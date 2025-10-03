@@ -13,7 +13,7 @@ export { BaseAPIClient } from './base-api-client';
 export { APIClientFactory, apiClientFactory } from './api-client-factory';
 
 // Export specific API clients
-export { GoogleAPIClient, SlackAPIClient, OpenAIClient } from './clients';
+export { GoogleAPIClient, OpenAIClient } from './clients';
 
 // Export registry functions
 export {

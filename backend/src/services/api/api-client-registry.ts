@@ -1,5 +1,5 @@
 import { apiClientFactory } from './api-client-factory';
-import { GoogleAPIClient, SlackAPIClient, OpenAIClient } from './clients';
+import { GoogleAPIClient, OpenAIClient } from './clients';
 
 /**
  * API Client Registry - Centralized registration of all API clients
@@ -30,35 +30,6 @@ export function registerAllAPIClients(): void {
       recoveryTimeout: 60000,
       successThreshold: 3,
       timeout: 45000
-    },
-    defaultHeaders: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'AssistantApp/1.0'
-    }
-  });
-
-  // Register Slack API client
-  apiClientFactory.registerClient('slack', SlackAPIClient, {
-    baseUrl: 'https://slack.com/api',
-    timeout: 15000, // Shorter timeout for Slack
-    retry: {
-      maxAttempts: 3,
-      baseDelay: 1000,
-      maxDelay: 10000,
-      backoffMultiplier: 2,
-      jitter: true,
-      strategy: 'EXPONENTIAL_BACKOFF'
-    },
-    circuitBreaker: {
-      failureThreshold: 3,
-      recoveryTimeout: 30000,
-      successThreshold: 2,
-      timeout: 15000
-    },
-    rateLimit: {
-      maxRequests: 100,
-      windowMs: 60000, // 100 requests per minute
-      queueRequests: true
     },
     defaultHeaders: {
       'Content-Type': 'application/json',

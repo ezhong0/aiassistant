@@ -7,12 +7,12 @@
 
 import { AuthService } from '../auth.service';
 import { GoogleOAuthManager } from './google-oauth-manager';
-import { SlackOAuthManager } from './slack-oauth-manager';
 import type { AppContainer } from '../../di';
 import { ScopeManager } from '../../constants/oauth-scopes';
 import { ValidationUtils } from '../../utils/validation-helpers';
 import { HTMLTemplates } from '../../templates/html-templates';
 import logger from '../../utils/logger';
+import { OAuthContext } from '../../types/oauth.types';
 
 export interface OAuthInitiationResult {
   authUrl: string;
@@ -31,14 +31,6 @@ export interface OAuthCallbackResult {
   };
 }
 
-export interface OAuthContext {
-  source?: 'slack' | 'web' | 'mobile';
-  userId?: string;
-  teamId?: string;
-  channelId?: string;
-  returnUrl?: string;
-}
-
 /**
  * OAuth Service Factory - Handles all OAuth operations
  * Created via factory pattern with dependency injection
@@ -46,8 +38,7 @@ export interface OAuthContext {
 export class OAuthServiceFactory {
   constructor(
     private readonly authService: AuthService,
-    private readonly googleOAuthManager: GoogleOAuthManager,
-    private readonly slackOAuthManager: SlackOAuthManager
+    private readonly googleOAuthManager: GoogleOAuthManager
   ) {}
 
   /**
@@ -55,9 +46,8 @@ export class OAuthServiceFactory {
    */
   async initiateGoogleAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
 
-    // Determine scope based on context
-    const scopeType = context.source === 'slack' ? 'slack' : 'full';
-    const scopes = ScopeManager.getGoogleScopes(scopeType);
+    // Use full scopes for Google OAuth
+    const scopes = ScopeManager.getGoogleScopes('full');
 
     // Create state parameter
     const state = ValidationUtils.createOAuthState({
@@ -219,207 +209,33 @@ export class OAuthServiceFactory {
   }
 
   /**
-   * Initiate Slack OAuth flow
-   */
-  async initiateSlackAuth(context: OAuthContext = {}): Promise<OAuthInitiationResult> {
-    const slackOAuth = this.slackOAuthManager;
-
-    const slackContext = {
-      teamId: context.teamId || 'unknown',
-      userId: context.userId || 'unknown',
-      channelId: context.channelId || 'unknown',
-      isDirectMessage: false
-    };
-
-    const authUrl = await slackOAuth.generateAuthUrl(slackContext);
-
-    // Create state parameter
-    const state = ValidationUtils.createOAuthState({
-      source: 'slack',
-      team_id: context.teamId,
-      user_id: context.userId,
-      channel_id: context.channelId,
-      return_url: context.returnUrl
-    });
-
-    logger.info('Slack OAuth initiated', {
-      correlationId: `oauth-init-${Date.now()}`,
-      operation: 'slack_oauth_initiate',
-      metadata: {
-        teamId: context.teamId,
-        userId: context.userId
-      }
-    });
-
-    return { authUrl, state };
-  }
-
-  /**
-   * Handle Slack OAuth callback
-   */
-  async handleSlackCallback(
-    code?: string,
-    state?: string,
-    error?: string,
-    errorDescription?: string
-  ): Promise<OAuthCallbackResult> {
-    const correlationId = `slack-oauth-callback-${Date.now()}`;
-
-    try {
-      // Handle OAuth errors
-      if (error) {
-        logger.warn('Slack OAuth error received', {
-          correlationId,
-          operation: 'slack_oauth_callback',
-          metadata: { error, errorDescription }
-        });
-
-        return {
-          success: false,
-          html: HTMLTemplates.authError({
-            title: 'Slack Authentication Failed',
-            message: errorDescription || 'Slack authentication was cancelled or failed',
-            details: error
-          })
-        };
-      }
-
-      // Validate required parameters
-      if (!code || !state) {
-        return {
-          success: false,
-          html: HTMLTemplates.authError({
-            title: 'Invalid Request',
-            message: 'Missing required Slack authentication parameters'
-          })
-        };
-      }
-
-      // Parse state
-      let parsedState: any;
-      try {
-        parsedState = ValidationUtils.parseOAuthState(state);
-      } catch (stateError) {
-        logger.error('Invalid Slack OAuth state', stateError, {
-          correlationId,
-          operation: 'slack_oauth_callback'
-        });
-
-        return {
-          success: false,
-          html: HTMLTemplates.authError({
-            title: 'Invalid State',
-            message: 'Slack authentication state is invalid or expired'
-          })
-        };
-      }
-
-      // Use injected Slack OAuth manager
-      const slackOAuth = this.slackOAuthManager;
-
-      const tokenResult = await slackOAuth.exchangeCodeForTokens(code, state);
-      if (!tokenResult.success) {
-        logger.error('Slack token exchange failed', {
-          correlationId,
-          operation: 'slack_oauth_callback',
-          metadata: { error: tokenResult.error }
-        });
-
-        return {
-          success: false,
-          html: HTMLTemplates.authError({
-            title: 'Slack Authentication Failed',
-            message: 'Failed to complete Slack authentication process',
-            details: tokenResult.error
-          })
-        };
-      }
-
-      logger.info('Slack OAuth completed successfully', {
-        correlationId,
-        operation: 'slack_oauth_callback',
-        metadata: {
-          teamId: parsedState.team_id,
-          userId: parsedState.user_id
-        }
-      });
-
-      return {
-        success: true,
-        html: HTMLTemplates.authSuccess({
-          title: 'Slack Authentication Successful',
-          message: 'Your Slack account has been successfully connected!'
-        })
-      };
-
-    } catch (error) {
-      logger.error('Slack OAuth callback error', error, {
-        correlationId,
-        operation: 'slack_oauth_callback'
-      });
-
-      return {
-        success: false,
-        html: HTMLTemplates.error({
-          title: 'Slack Authentication Error',
-          message: 'An unexpected error occurred during Slack authentication'
-        })
-      };
-    }
-  }
-
-  /**
    * Revoke OAuth tokens
    */
   async revokeTokens(
-    provider: 'google' | 'slack',
+    provider: 'google',
     userId: string
   ): Promise<{ success: boolean; message: string; html?: string }> {
     const correlationId = `oauth-revoke-${Date.now()}`;
 
     try {
-      if (provider === 'google') {
-        const googleOAuth = this.googleOAuthManager;
+      const googleOAuth = this.googleOAuthManager;
 
-        await googleOAuth.revokeTokens(userId);
+      await googleOAuth.revokeTokens(userId);
 
-        logger.info('Google tokens revoked', {
-          correlationId,
-          operation: 'google_token_revoke',
-          metadata: { userId }
-        });
+      logger.info('Google tokens revoked', {
+        correlationId,
+        operation: 'google_token_revoke',
+        metadata: { userId }
+      });
 
-        return {
-          success: true,
-          message: 'Google account access revoked successfully',
-          html: HTMLTemplates.oauthRevoked({
-            title: 'Google Access Revoked',
-            message: 'Your Google account access has been successfully revoked.'
-          })
-        };
-
-      } else if (provider === 'slack') {
-        const slackOAuth = this.slackOAuthManager;
-
-        // Note: Slack doesn't typically support token revocation
-        // This would typically remove tokens from local storage
-        logger.info('Slack tokens revoked locally', {
-          correlationId,
-          operation: 'slack_token_revoke',
-          metadata: { userId }
-        });
-
-        return {
-          success: true,
-          message: 'Slack account access revoked successfully',
-          html: HTMLTemplates.oauthRevoked({
-            title: 'Slack Access Revoked',
-            message: 'Your Slack account access has been successfully revoked.'
-          })
-        };
-      }
-
-      throw new Error('Unsupported OAuth provider');
+      return {
+        success: true,
+        message: 'Google account access revoked successfully',
+        html: HTMLTemplates.oauthRevoked({
+          title: 'Google Access Revoked',
+          message: 'Your Google account access has been successfully revoked.'
+        })
+      };
 
     } catch (error) {
       logger.error(`${provider} token revocation error`, error, {
@@ -445,13 +261,11 @@ export class OAuthServiceFactory {
    */
   async getOAuthStatus(userId: string): Promise<{
     google: { connected: boolean; email?: string };
-    slack: { connected: boolean; teamId?: string };
   }> {
     // This would typically check the token storage service
     // Implementation depends on your token storage strategy
     return {
-      google: { connected: false },
-      slack: { connected: false }
+      google: { connected: false }
     };
   }
 }
@@ -463,7 +277,6 @@ export class OAuthServiceFactory {
 export function createOAuthServiceFactory(container: AppContainer): OAuthServiceFactory {
   const authService = container.resolve('authService');
   const googleOAuthManager = container.resolve('googleOAuthManager');
-  const slackOAuthManager = container.resolve('slackOAuthManager');
-  
-  return new OAuthServiceFactory(authService, googleOAuthManager, slackOAuthManager);
+
+  return new OAuthServiceFactory(authService, googleOAuthManager);
 }

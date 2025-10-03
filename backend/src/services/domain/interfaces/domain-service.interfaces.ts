@@ -109,7 +109,7 @@ export interface IEmailDomainService extends IDomainService {
 // Calendar domain service interface
 export interface ICalendarDomainService extends IDomainService {
   // OAuth management
-  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
   completeOAuth(userId: string, code: string, state: string): Promise<void>;
   refreshTokens(userId: string): Promise<void>;
   revokeTokens(userId: string): Promise<void>;
@@ -244,7 +244,7 @@ export interface ICalendarDomainService extends IDomainService {
 // Contacts domain service interface
 export interface IContactsDomainService extends IDomainService {
   // OAuth management
-  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
   completeOAuth(userId: string, code: string, state: string): Promise<void>;
   refreshTokens(userId: string): Promise<void>;
   revokeTokens(userId: string): Promise<void>;
@@ -514,7 +514,7 @@ export interface IContactsDomainService extends IDomainService {
 // Slack domain service interface
 export interface ISlackDomainService extends IDomainService {
   // OAuth management
-  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
   completeOAuth(userId: string, code: string, state: string): Promise<void>;
   refreshTokens(userId: string): Promise<void>;
   revokeTokens(userId: string): Promise<void>;

@@ -114,32 +114,6 @@ export class AuthStatusService extends BaseService {
     }
   }
 
-  private async getSlackConnectionStatus(userId: string): Promise<ServiceConnection> {
-    try {
-      if (!this.slackOAuthManager) {
-        return this.createDisconnectedConnection('slack', 'Slack', '🟣', ['Messaging', 'Channels']);
-      }
-
-      const validation = await this.slackOAuthManager.validateTokens(userId);
-      const tokens = await this.slackOAuthManager.getValidTokens(userId);
-
-      return {
-        provider: 'slack',
-        providerName: 'Slack',
-        emoji: '🟣',
-        services: ['Messaging', 'Channels'],
-        status: validation.isValid ? 'connected' : 'disconnected',
-        hasAccessToken: !!tokens,
-        hasRefreshToken: false, // Slack doesn't use refresh tokens
-        expiresAt: undefined,
-        expiresIn: undefined,
-      };
-    } catch (error) {
-      this.logError('Failed to get Slack connection status', error as Error, { userId });
-      return this.createDisconnectedConnection('slack', 'Slack', '🟣', ['Messaging', 'Channels']);
-    }
-  }
-
   private createDisconnectedConnection(
     provider: string,
     providerName: string,
@@ -330,27 +304,6 @@ export class AuthStatusService extends BaseService {
         };
       }
 
-      if (provider === 'slack') {
-        if (!this.slackOAuthManager) {
-          return {
-            success: false,
-            message: 'Slack OAuth manager not available.',
-          };
-        }
-
-        const validation = await this.slackOAuthManager.validateTokens(combinedUserId);
-        if (!validation.isValid) {
-          return {
-            success: false,
-            message: 'Slack connection is not valid. Please reconnect your account.',
-          };
-        }
-
-        return {
-          success: true,
-          message: 'Slack connection is working! ✅',
-        };
-      }
 
       return {
         success: false,
