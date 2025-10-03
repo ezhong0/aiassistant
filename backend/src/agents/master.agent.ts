@@ -1,7 +1,6 @@
 import logger from '../utils/logger';
 import { GenericAIService } from '../services/generic-ai.service';
 import { ContextManager } from '../services/context-manager.service';
-import { SessionManager } from '../services/session-manager.service';
 import { AgentFactory } from '../framework/agent-factory';
 
 // Utilities and error handling
@@ -22,11 +21,22 @@ import {
 } from '../services/prompt-builders/master-agent/context-update-prompt-builder';
 
 /**
- * Processing result interface for the new Master Agent
+ * Conversation message for stateless architecture
+ */
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+}
+
+/**
+ * Processing result interface for stateless Master Agent
  */
 export interface ProcessingResult {
   message: string;
   success: boolean;
+  masterState?: any;
+  subAgentStates?: any;
   metadata?: {
     processingTime?: number;
     workflowId?: string;
@@ -36,17 +46,18 @@ export interface ProcessingResult {
 }
 
 /**
- * Master Agent following the 4-Prompt Architecture
+ * Stateless Master Agent following the 4-Prompt Architecture
  *
  * New 2-Prompt Flow:
  * 1. Intent Understanding (Prompt 1): Creates command_list
  * 2. Execution Loop with Context Update (Prompt 2): Updates accumulated_knowledge after each SubAgent
- * 3. Returns accumulated_knowledge as final response
+ * 3. Returns accumulated_knowledge and updated state as final response
+ *
+ * Architecture: Stateless - client provides conversationHistory and state, receives updated state
  */
 export class MasterAgent {
   private aiService: GenericAIService;
   private contextManager: ContextManager;
-  private sessionManager: SessionManager;
   private tokenManager: TokenManager;
   private isInitialized = false;
 
@@ -54,19 +65,13 @@ export class MasterAgent {
   private intentUnderstandingBuilder: IntentUnderstandingPromptBuilder;
   private contextUpdateBuilder: ContextUpdatePromptBuilder;
 
-  // Internal state for execution
-  private accumulated_knowledge: string = '';
-  private command_list: CommandWithStatus[] = [];
-
   constructor(
     aiService: GenericAIService,
     contextManager: ContextManager,
-    sessionManager: SessionManager,
     tokenManager: TokenManager,
   ) {
     this.aiService = aiService;
     this.contextManager = contextManager;
-    this.sessionManager = sessionManager;
     this.tokenManager = tokenManager;
     this.intentUnderstandingBuilder = new IntentUnderstandingPromptBuilder(aiService);
     this.contextUpdateBuilder = new ContextUpdatePromptBuilder(aiService);
@@ -74,52 +79,59 @@ export class MasterAgent {
   }
 
   /**
-   * Process user input with the new 2-prompt architecture
+   * Process user input with the new 2-prompt architecture (stateless)
+   *
+   * @param userInput - The user's message
+   * @param userId - User ID for authentication
+   * @param conversationHistory - Full conversation history from client
+   * @param masterState - Previous master agent state (optional)
+   * @param subAgentStates - Previous subagent states (optional)
    */
   async processUserInput(
     userInput: string,
-    sessionId: string,
-    userId?: string,
+    userId: string,
+    conversationHistory: ConversationMessage[] = [],
+    masterState?: any,
+    subAgentStates?: any,
   ): Promise<ProcessingResult> {
     const processingStartTime = Date.now();
 
-    logger.info('Processing user input with Master Agent (2-prompt architecture)', {
+    logger.info('Processing user input with Master Agent (stateless, 2-prompt architecture)', {
       userInputLength: userInput?.length || 0,
-      sessionId,
       userId,
+      conversationLength: conversationHistory.length,
       operation: 'process_user_input',
     });
 
     try {
-      // Reset state for new request
-      this.accumulated_knowledge = '';
-      this.command_list = [];
+      // Initialize state for this request (use provided state or create new)
+      let accumulated_knowledge = masterState?.accumulated_knowledge || '';
+      let command_list: CommandWithStatus[] = masterState?.command_list || [];
 
-      // Stage 1: Build message history
-      const conversationHistory = await this.buildConversationHistory(userInput, sessionId);
+      // Stage 1: Build message history from provided conversationHistory
+      const formattedHistory = this.formatConversationHistory(conversationHistory);
       const userContext = await this.gatherUserContext(userId);
 
       // Stage 2: Master Prompt 1 - Intent Understanding & Command List Creation
-      logger.info('Executing Master Prompt 1: Intent Understanding', { sessionId, userId });
+      logger.info('Executing Master Prompt 1: Intent Understanding', { userId });
 
       const intentContext: IntentUnderstandingContext = {
         user_query: userInput,
-        conversation_history: conversationHistory,
+        conversation_history: formattedHistory,
         user_context: userContext
       };
 
       const intentResult = await this.intentUnderstandingBuilder.execute(intentContext);
 
       // Store initial command list
-      this.command_list = intentResult.command_list.map(cmd => ({
+      command_list = intentResult.command_list.map(cmd => ({
         ...cmd,
         status: 'pending' as const
       }));
 
       logger.info('Intent understood, created command list', {
-        sessionId,
         userId,
-        commandCount: this.command_list.length,
+        commandCount: command_list.length,
         queryType: intentResult.query_type,
         crossAccount: intentResult.cross_account,
         operation: 'intent_understanding_complete'
@@ -134,7 +146,7 @@ export class MasterAgent {
         iteration++;
 
         // Get next pending command
-        const nextCommand = this.command_list.find(cmd => cmd.status === 'pending');
+        const nextCommand = command_list.find(cmd => cmd.status === 'pending');
 
         if (!nextCommand) {
           // No more pending commands
@@ -142,8 +154,7 @@ export class MasterAgent {
           break;
         }
 
-        logger.info(`Executing command ${nextCommand.order}/${this.command_list.length}`, {
-          sessionId,
+        logger.info(`Executing command ${nextCommand.order}/${command_list.length}`, {
           userId,
           iteration,
           agent: nextCommand.agent,
@@ -158,16 +169,15 @@ export class MasterAgent {
           `${nextCommand.agent}Agent`,
           nextCommand.command,
           {
-            sessionId,
-            userId: userId || 'unknown',
-            correlationId: `master-${sessionId}-${iteration}`
+            sessionId: `${userId}-${Date.now()}`, // Generate temporary ID for logging
+            userId,
+            correlationId: `master-${userId}-${iteration}`
           }
         );
 
         // Check if SubAgent execution failed
         if (!agentResult.success) {
           logger.warn('SubAgent execution failed', {
-            sessionId,
             userId,
             agent: nextCommand.agent,
             error: agentResult.error
@@ -181,37 +191,38 @@ export class MasterAgent {
         const subAgentResponse = agentResult.response || agentResult.error || 'No response';
 
         // Master Prompt 2 - Context Update
-        logger.info('Executing Master Prompt 2: Context Update', { sessionId, userId, iteration });
+        logger.info('Executing Master Prompt 2: Context Update', { userId, iteration });
 
         const contextUpdateInput: ContextUpdateContext = {
-          accumulated_knowledge: this.accumulated_knowledge,
-          command_list: this.command_list,
+          accumulated_knowledge,
+          command_list,
           latest_subagent_response: subAgentResponse,
-          conversation_history: conversationHistory
+          conversation_history: formattedHistory
         };
 
         const updateResult = await this.contextUpdateBuilder.execute(contextUpdateInput);
 
         // Update state from Prompt 2
-        this.accumulated_knowledge = updateResult.accumulated_knowledge;
-        this.command_list = updateResult.command_list;
+        accumulated_knowledge = updateResult.accumulated_knowledge;
+        command_list = updateResult.command_list;
         isComplete = updateResult.is_complete;
 
         logger.info('Context updated', {
-          sessionId,
           userId,
           iteration,
           isComplete,
           needsConfirmation: updateResult.needs_user_confirmation,
-          commandsRemaining: this.command_list.filter(c => c.status === 'pending').length
+          commandsRemaining: command_list.filter(c => c.status === 'pending').length
         });
 
         // Check if waiting for user confirmation
         if (updateResult.needs_user_confirmation) {
-          logger.info('Workflow paused - waiting for user confirmation', { sessionId, userId });
+          logger.info('Workflow paused - waiting for user confirmation', { userId });
           return {
-            message: updateResult.confirmation_prompt || this.accumulated_knowledge,
+            message: updateResult.confirmation_prompt || accumulated_knowledge,
             success: true,
+            masterState: { accumulated_knowledge, command_list },
+            subAgentStates,
             metadata: {
               processingTime: Date.now() - processingStartTime,
               totalSteps: iteration,
@@ -222,20 +233,22 @@ export class MasterAgent {
 
         // Check if complete
         if (isComplete) {
-          logger.info('Workflow completed', { sessionId, userId, iterations: iteration });
+          logger.info('Workflow completed', { userId, iterations: iteration });
           break;
         }
       }
 
       if (iteration >= MAX_ITERATIONS) {
-        logger.warn('Max iterations reached', { sessionId, userId, iterations: iteration });
-        this.accumulated_knowledge += '\n\n(Note: Maximum execution steps reached. Some commands may not have completed.)';
+        logger.warn('Max iterations reached', { userId, iterations: iteration });
+        accumulated_knowledge += '\n\n(Note: Maximum execution steps reached. Some commands may not have completed.)';
       }
 
-      // Stage 4: Return accumulated knowledge as final response
+      // Stage 4: Return accumulated knowledge and updated state
       return {
-        message: this.accumulated_knowledge || 'Request processed successfully.',
+        message: accumulated_knowledge || 'Request processed successfully.',
         success: true,
+        masterState: { accumulated_knowledge, command_list },
+        subAgentStates,
         metadata: {
           processingTime: Date.now() - processingStartTime,
           totalSteps: iteration
@@ -245,7 +258,6 @@ export class MasterAgent {
     } catch (error) {
       logger.error('Failed to process user input', error as Error, {
         userInput: `${userInput.substring(0, 100)}...`,
-        sessionId,
         userId,
         operation: 'process_user_input_error',
       });
@@ -255,47 +267,23 @@ export class MasterAgent {
   }
 
   /**
-   * Build conversation history from SessionManager
+   * Format conversation history from client format to prompt format
    */
-  private async buildConversationHistory(
-    userInput: string,
-    sessionId: string,
-  ): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }>> {
-    logger.info('Building conversation history', { sessionId });
-
-    const conversationHistory: Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }> = [];
-
-    // Try to load from SessionManager first (new architecture)
-    try {
-      const session = await this.sessionManager.getSession(sessionId);
-      if (session && session.conversationHistory.length > 0) {
-        session.conversationHistory.forEach(msg => {
-          conversationHistory.push({
-            role: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.timestamp).toISOString()
-          });
-        });
-
-        logger.info('Conversation history loaded from SessionManager', {
-          sessionId,
-          messageCount: conversationHistory.length
-        });
-      }
-    } catch (error) {
-      logger.warn('Failed to load from SessionManager, trying fallback', {
-        sessionId,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-
-    // Add current user input as latest turn
-    conversationHistory.push({
-      role: 'user',
-      content: userInput
+  private formatConversationHistory(
+    conversationHistory: ConversationMessage[]
+  ): Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }> {
+    logger.debug('Formatting conversation history', {
+      messageCount: conversationHistory.length
     });
 
-    return conversationHistory.slice(-5); // Keep only last 5 turns
+    const formatted = conversationHistory.map(msg => ({
+      role: msg.role === 'system' ? 'assistant' as const : msg.role,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp).toISOString()
+    }));
+
+    // Keep only last 5 turns for context window management
+    return formatted.slice(-5);
   }
 
   /**

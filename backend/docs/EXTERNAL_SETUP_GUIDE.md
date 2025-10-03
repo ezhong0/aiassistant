@@ -69,35 +69,9 @@ Back in Supabase:
 
 ---
 
-## Step 3: Add Railway Redis Addon
+## Step 3: Update Railway Environment Variables
 
-### 3.1 Install Redis Plugin
-
-1. Go to your Railway project dashboard
-2. Click **"+ New"** → **"Plugin"**
-3. Select **Redis**
-4. Click **"Add Plugin"**
-
-Railway will automatically:
-- Deploy a Redis instance
-- Set environment variable `REDIS_URL` (or similar)
-
-### 3.2 Verify Redis Connection
-
-Railway will provide one of these environment variables:
-- `REDIS_URL`
-- `REDIS_PRIVATE_URL`
-- `RAILWAY_REDIS_URL`
-
-The backend code automatically checks for these (see `cache.service.ts`).
-
-**Cost**: ~$3/month for 25MB
-
----
-
-## Step 4: Update Railway Environment Variables
-
-### 4.1 Add Supabase Variables
+### 3.1 Add Supabase Variables
 
 In Railway project settings → **Variables**, add:
 
@@ -106,12 +80,11 @@ In Railway project settings → **Variables**, add:
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_JWT_SECRET=your-jwt-secret-from-supabase
 SUPABASE_ANON_KEY=your-anon-key-from-supabase
-
-# Redis is auto-configured by Railway plugin
-# REDIS_URL is automatically set when you add the Redis plugin
 ```
 
-### 4.2 Verify Existing Variables
+**Note**: No Redis needed - backend is stateless! ✅
+
+### 3.2 Verify Existing Variables
 
 Make sure these are still set (from your current deployment):
 
@@ -132,7 +105,7 @@ JWT_SECRET=your-existing-jwt-secret
 DATABASE_URL=postgresql://...
 ```
 
-### 4.3 Add Node Environment
+### 3.3 Add Node Environment
 
 If not already set:
 
@@ -142,16 +115,16 @@ NODE_ENV=production
 
 ---
 
-## Step 5: Deploy Backend Changes
+## Step 4: Deploy Backend Changes
 
-### 5.1 Commit and Push
+### 4.1 Commit and Push
 
 The backend code changes are already done. To deploy:
 
 ```bash
 # From backend directory
 git add .
-git commit -m "feat: add Supabase auth and chat API"
+git commit -m "feat: add stateless Supabase auth and chat API"
 git push origin main
 ```
 
@@ -160,21 +133,21 @@ Railway will automatically:
 2. Build the new code
 3. Deploy with new environment variables
 
-### 5.2 Verify Deployment
+### 4.2 Verify Deployment
 
 Check Railway logs for:
 
 ```
-✅ SessionManager initialized successfully
 ✅ Server started successfully
 ✅ Application routes configured
+✅ DI Container initialized
 ```
 
 ---
 
-## Step 6: Test the Chat API
+## Step 5: Test the Chat API (Stateless)
 
-### 6.1 Get a Supabase Auth Token
+### 5.1 Get a Supabase Auth Token
 
 **Option A: Using Supabase UI**
 
@@ -206,7 +179,7 @@ This returns:
 
 **Save the `access_token`** - this is your JWT.
 
-### 6.2 Test Chat Endpoint
+### 5.2 Test First Message (No Context)
 
 ```bash
 curl -X POST 'https://your-backend.railway.app/api/chat/message' \
@@ -221,16 +194,25 @@ Expected response:
 ```json
 {
   "message": "Hello! I'm your AI assistant. I can help you with...",
-  "session_id": "sess_abc-123-...",
+  "context": {
+    "conversationHistory": [
+      {"role": "user", "content": "Hello! Can you help me?", "timestamp": 1234567890},
+      {"role": "assistant", "content": "Hello! I'm your AI assistant...", "timestamp": 1234567891}
+    ],
+    "masterState": {...},
+    "subAgentStates": {...}
+  },
   "metadata": {
     "processing_time": 1.234
   }
 }
 ```
 
-### 6.3 Test Multi-Turn Conversation
+**Save the entire `context` object** - you'll send it with the next request.
 
-Use the `session_id` from the previous response:
+### 5.3 Test Multi-Turn Conversation (With Context)
+
+Send the context from the previous response:
 
 ```bash
 curl -X POST 'https://your-backend.railway.app/api/chat/message' \
@@ -238,23 +220,30 @@ curl -X POST 'https://your-backend.railway.app/api/chat/message' \
 -H "Content-Type: application/json" \
 -d '{
   "message": "What did I just ask you?",
-  "session_id": "sess_abc-123-..."
+  "context": {
+    "conversationHistory": [
+      {"role": "user", "content": "Hello! Can you help me?", "timestamp": 1234567890},
+      {"role": "assistant", "content": "Hello! I'\''m your AI assistant...", "timestamp": 1234567891}
+    ],
+    "masterState": {...},
+    "subAgentStates": {...}
+  }
 }'
 ```
 
-The AI should remember your previous message.
+The AI should remember your previous message and provide updated context in the response.
 
 ---
 
-## Step 7: Frontend Integration (Optional)
+## Step 6: Frontend Integration (Optional)
 
-### 7.1 Install Supabase Client
+### 6.1 Install Supabase Client
 
 ```bash
 npm install @supabase/supabase-js
 ```
 
-### 7.2 Initialize Supabase
+### 6.2 Initialize Supabase
 
 ```javascript
 import { createClient } from '@supabase/supabase-js'
@@ -265,7 +254,7 @@ const supabase = createClient(
 )
 ```
 
-### 7.3 Example: Sign In with Google
+### 6.3 Example: Sign In with Google
 
 ```javascript
 // Trigger Google OAuth
@@ -281,9 +270,12 @@ const { data: { session } } = await supabase.auth.getSession()
 const accessToken = session.access_token
 ```
 
-### 7.4 Example: Chat API Call
+### 6.4 Example: Stateless Chat API Call
 
 ```javascript
+// Store context in component state or localStorage
+const [context, setContext] = useState(null)
+
 const response = await fetch('https://your-backend.railway.app/api/chat/message', {
   method: 'POST',
   headers: {
@@ -292,40 +284,44 @@ const response = await fetch('https://your-backend.railway.app/api/chat/message'
   },
   body: JSON.stringify({
     message: 'Find my emails from Sarah',
-    session_id: sessionId // optional, from previous response
+    context: context // Include previous context for multi-turn
   })
 })
 
 const data = await response.json()
 console.log(data.message) // AI response
-console.log(data.session_id) // Save for next turn
+setContext(data.context) // Save context for next turn
 ```
+
+**Key Difference**: Client manages `context` instead of `session_id`. Store in state or localStorage for persistence.
 
 ---
 
-## Step 8: Cost Breakdown
+## Step 7: Cost Breakdown (Stateless)
 
 ### Current Monthly Costs
 
 | Service | Cost | Notes |
 |---------|------|-------|
 | Railway Backend | $5-8 | Hobby plan |
-| Railway Redis | $3 | 25MB addon |
+| Railway Redis | $0 | Not needed! ✅ |
 | Supabase Auth | $0 | Free tier (up to 50k users) |
 | Database (Railway/Supabase) | $0 | Included |
-| **Total Infrastructure** | **$8-11** | |
+| **Total Infrastructure** | **$5-8** | **Cheaper than session-based!** |
 | | | |
 | OpenAI/Anthropic API | $3-30 | Usage-based |
 | Gmail/Calendar API | $0 | Free |
-| **Total with AI** | **$11-41** | Depends on usage |
+| **Total with AI** | **$8-38** | Depends on usage |
 
 ### Scaling Costs
 
-- **1k messages/month**: ~$11/month
-- **10k messages/month**: ~$25/month
-- **100k messages/month**: ~$150/month
+- **1k messages/month**: ~$8/month
+- **10k messages/month**: ~$20/month
+- **100k messages/month**: ~$120/month
 
 Linear scaling = predictable costs ✅
+
+**Savings**: $3-5/month by going stateless!
 
 ---
 
@@ -334,15 +330,6 @@ Linear scaling = predictable costs ✅
 ### Issue: "Supabase JWT secret not configured"
 
 **Solution**: Make sure `SUPABASE_JWT_SECRET` is set in Railway environment variables. Redeploy after adding.
-
-### Issue: "Session not found"
-
-**Cause**: Redis not connected or session expired (5-min TTL).
-
-**Solution**:
-1. Check Railway Redis addon is running
-2. Check logs for Redis connection errors
-3. Sessions expire after 5 minutes - this is normal
 
 ### Issue: "Invalid or expired token"
 
@@ -355,14 +342,23 @@ Linear scaling = predictable costs ✅
    const { data, error } = await supabase.auth.refreshSession()
    ```
 
-### Issue: "MasterAgent initialization failed"
+### Issue: "Context too large"
 
-**Cause**: SessionManager not properly initialized.
+**Cause**: Conversation history has grown very large.
 
 **Solution**:
-1. Check that Redis is running
-2. Check logs for DI container errors
-3. Verify `sessionManager` is registered in `core-services.ts`
+1. The backend keeps only last 5 turns automatically
+2. Client can reset context by not sending it (starts new conversation)
+3. For long conversations, consider summarization
+
+### Issue: "MasterAgent initialization failed"
+
+**Cause**: DI container initialization error.
+
+**Solution**:
+1. Check logs for DI container errors
+2. Verify all required environment variables are set
+3. Check that database connection is working
 
 ---
 
@@ -373,11 +369,10 @@ Use this checklist to track your setup progress:
 - [ ] Create Supabase project
 - [ ] Get Supabase credentials (URL, JWT Secret, Anon Key)
 - [ ] Configure Google OAuth in Supabase
-- [ ] Add Railway Redis addon
-- [ ] Update Railway environment variables
+- [ ] Update Railway environment variables (NO Redis needed!)
 - [ ] Deploy backend changes
-- [ ] Test chat endpoint with cURL
-- [ ] Test multi-turn conversation
+- [ ] Test chat endpoint with cURL (first message)
+- [ ] Test multi-turn conversation (with context)
 - [ ] (Optional) Integrate with frontend
 - [ ] Verify costs are within budget
 
@@ -390,7 +385,8 @@ Once setup is complete:
 1. **Remove old auth**: You can remove the old JWT-based auth endpoints once all clients are using Supabase
 2. **Add more providers**: Supabase supports Apple, GitHub, etc. - easy to add
 3. **Custom user metadata**: Store user preferences in Supabase `user_metadata`
-4. **Row-level security**: Use Supabase RLS to secure data per user
+4. **Client state management**: Consider using localStorage or IndexedDB for conversation persistence
+5. **Context summarization**: For very long conversations, implement AI summarization to keep context small
 
 ---
 
@@ -398,7 +394,7 @@ Once setup is complete:
 
 - **Supabase Docs**: https://supabase.com/docs
 - **Railway Docs**: https://docs.railway.app
-- **Architecture**: See `/docs/FIRST_PRINCIPLES_DESIGN.md`
+- **Architecture**: See `/docs/FIRST_PRINCIPLES_DESIGN.md` (v3.0 - Stateless)
 
 ---
 
@@ -407,7 +403,13 @@ Once setup is complete:
 Your backend now uses:
 - ✅ Supabase for authentication (OAuth, JWT, user management)
 - ✅ Railway for deployment (no cold starts, auto-scaling)
-- ✅ Redis for session management (fast, reliable)
-- ✅ Simple chat API (natural language in/out)
+- ✅ Stateless architecture (no Redis, infinite scaling!)
+- ✅ Simple chat API (natural language in/out, client manages context)
 
-Total migration: **~3-4 hours** from start to finish.
+**Benefits of stateless approach:**
+- Simpler backend (no session management)
+- Cheaper ($3-5/month savings - no Redis)
+- Infinitely scalable (no shared state)
+- Easier debugging (full context in each request)
+
+Total migration: **~2-3 hours** from start to finish.

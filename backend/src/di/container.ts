@@ -60,9 +60,8 @@ export interface Cradle {
   aiService: import('../services/generic-ai.service').GenericAIService; // Alias for genericAIService
   aiCircuitBreakerService: import('../services/ai-circuit-breaker.service').AIServiceCircuitBreaker;
 
-  // Context & Session Management
+  // Context Management
   contextManager: import('../services/context-manager.service').ContextManager;
-  sessionManager: import('../services/session-manager.service').SessionManager;
 
   // Middleware Services
   rateLimitStore: import('../middleware/rate-limiting.middleware').RateLimitStore;

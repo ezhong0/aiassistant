@@ -110,73 +110,72 @@ Existing TokenManager:
 
 ### Decision 3: State Management
 
-**Core Requirement**: Persist state between requests
+**Core Requirement**: Maintain conversation context and agent state across requests
 
 **Options:**
-1. Stateless (pass everything in request)
-2. Database storage (PostgreSQL)
-3. In-memory + Redis backup
-4. Redis-only
+1. Stateless (client manages state)
+2. Server-side sessions (in-memory + Redis)
+3. Database storage (PostgreSQL)
 
 **Analysis:**
 ```
-Stateless:
-- Pro: Simple
-- Con: Large payloads (working_data can be big)
-- Con: Security risk (sensitive data in requests)
-- Verdict: ❌ Not viable for confirmation flows
+Stateless (Client manages state):
+- Pro: Infinitely scalable (no server state)
+- Pro: No Redis cost
+- Pro: Client controls conversation history
+- Pro: No session TTL issues
+- Pro: Perfect for Railway auto-scaling
+- Con: Larger request/response payloads (~100KB for long conversations)
+- Con: Client must manage state
+- Verdict: ✅ OPTIMAL for greenfield with low concurrent users
 
-Database:
+Server-side sessions:
+- Pro: Smaller requests
+- Con: Requires Redis ($15-30/mo)
+- Con: Scaling complexity (shared Redis)
+- Con: Session expiry management
+- Verdict: ❌ Over-engineered for MVP
+
+Database storage:
 - Pro: Durable
 - Con: Slow (network roundtrip)
-- Con: Overkill for 5-min sessions
+- Con: Overkill for ephemeral conversations
 - Verdict: ❌ Over-engineered
-
-In-memory + Redis:
-- Pro: Fast (< 1ms access)
-- Pro: Backup for failover
-- Pro: Auto-expiry (TTL)
-- Con: Slightly complex
-- Verdict: ✅ Optimal
-
-Redis-only:
-- Pro: Simple
-- Con: Network latency on every access
-- Con: More expensive (higher Redis usage)
-- Verdict: ⚠️ Good, but slower
 ```
 
-**Winner: In-memory + Redis Backup**
+**Winner: Stateless (Client Manages State)**
 
 **Implementation:**
 ```typescript
-class SessionManager {
-  private sessions: Map<string, SessionState> = new Map()
-
-  async get(id: string) {
-    // 1. Try memory (< 1ms)
-    if (this.sessions.has(id)) return this.sessions.get(id)
-
-    // 2. Fallback to Redis (~5ms)
-    const cached = await redis.get(`session:${id}`)
-    if (cached) {
-      const session = JSON.parse(cached)
-      this.sessions.set(id, session) // Warm cache
-      return session
-    }
-
-    // 3. Create new
-    return this.create(id)
+// Client sends full context with each request
+POST /api/chat/message
+{
+  "message": "Schedule meeting with John",
+  "context": {
+    "conversationHistory": [
+      {"role": "user", "content": "...", "timestamp": 123},
+      {"role": "assistant", "content": "...", "timestamp": 124}
+    ],
+    "masterState": {
+      "accumulated_knowledge": "...",
+      "command_list": [...]
+    },
+    "subAgentStates": {...}
   }
+}
 
-  async save(id: string, state: SessionState) {
-    this.sessions.set(id, state) // Update memory
-    await redis.setex(`session:${id}`, 300, JSON.stringify(state)) // Backup
+// Server returns updated context
+{
+  "message": "Meeting scheduled for tomorrow at 2pm",
+  "context": {
+    "conversationHistory": [...updated...],
+    "masterState": {...updated...},
+    "subAgentStates": {...updated...}
   }
 }
 ```
 
-**Key Insight**: In-memory for speed, Redis for reliability. Best of both worlds.
+**Key Insight**: For greenfield projects with low user count, stateless is simpler and cheaper. No Redis, no session management, perfect horizontal scaling.
 
 ### Decision 4: API Design
 
@@ -215,20 +214,32 @@ WebSocket:
 - Verdict: ⚠️ Future enhancement
 ```
 
-**Winner: Single POST /chat/message Endpoint**
+**Winner: Single POST /chat/message Endpoint (Stateless)**
 
 **Contract:**
 ```typescript
 Request:
 {
   message: string           // Natural language
-  session_id?: string       // Optional (auto-create)
+  context?: {               // Optional (empty for first message)
+    conversationHistory: Array<{
+      role: 'user' | 'assistant' | 'system'
+      content: string
+      timestamp: number
+    }>
+    masterState?: any       // MasterAgent state
+    subAgentStates?: any    // SubAgent states
+  }
 }
 
 Response:
 {
-  message: string           // Natural language
-  session_id: string        // For next request
+  message: string           // Natural language response
+  context: {                // Updated context for next request
+    conversationHistory: [...updated...]
+    masterState: {...updated...}
+    subAgentStates: {...updated...}
+  }
   metadata?: {              // Optional diagnostics
     tools_used: string[]
     processing_time: number
@@ -236,7 +247,7 @@ Response:
 }
 ```
 
-**Key Insight**: Simplest API = easiest to use. Natural language doesn't need complex routing.
+**Key Insight**: Stateless API = simpler backend, client controls state. Natural language doesn't need complex routing or session management.
 
 ### Decision 5: Deployment Platform
 
@@ -255,9 +266,9 @@ Response:
 Railway:
 - Pro: Already deployed ✅
 - Pro: No cold starts ✅
-- Pro: $8-15/month ✅
-- Pro: Built-in Redis ✅
+- Pro: $5-8/month ✅ (no Redis needed with stateless)
 - Pro: Auto-scaling ✅
+- Pro: Perfect for stateless backends ✅
 - Con: Less features than AWS
 - Verdict: ✅ Perfect for our needs
 
@@ -297,8 +308,9 @@ Vercel:
 │              CLIENT (iOS/Web)                    │
 │  • Natural language chat                         │
 │  • Supabase Auth SDK                             │
+│  • Manages conversation state locally            │
 └─────────────────────────────────────────────────┘
-                      ↓ HTTPS + JWT
+                      ↓ HTTPS + JWT + Context
 ┌─────────────────────────────────────────────────┐
 │           SUPABASE (Auth Only)                   │
 │  • OAuth (Google, Apple, Email)                  │
@@ -309,26 +321,20 @@ Vercel:
                       ↓ JWT Token
 ┌─────────────────────────────────────────────────┐
 │          RAILWAY BACKEND (Express)               │
-│  ┌───────────────────────────────────────────┐  │
-│  │  POST /api/chat/message                   │  │
-│  │                                           │  │
-│  │  1. Verify Supabase JWT                   │  │
-│  │  2. Get/Create session                    │  │
-│  │  3. Call Master Agent                     │  │
-│  │  4. Save session                          │  │
-│  │  5. Return response                       │  │
-│  └───────────────────────────────────────────┘  │
 │                                                  │
 │  ┌───────────────────────────────────────────┐  │
-│  │  SessionManager                           │  │
-│  │  • In-memory Map<id, SessionState>        │  │
-│  │  • Redis backup (5-min TTL)               │  │
+│  │  POST /api/chat/message (STATELESS)       │  │
+│  │                                           │  │
+│  │  1. Verify Supabase JWT                   │  │
+│  │  2. Extract context from request          │  │
+│  │  3. Call Master Agent with context        │  │
+│  │  4. Return response + updated context     │  │
 │  └───────────────────────────────────────────┘  │
 │                                                  │
 │  ┌───────────────────────────────────────────┐  │
 │  │  MasterAgent + SubAgents                  │  │
 │  │  • 4-Prompt Architecture (unchanged)      │  │
-│  │  • Uses SessionManager for state          │  │
+│  │  • Stateless: receives state, returns new │  │
 │  └───────────────────────────────────────────┘  │
 │                                                  │
 │  ┌───────────────────────────────────────────┐  │
@@ -349,45 +355,56 @@ Vercel:
 | Component | Responsibility | Why? |
 |-----------|---------------|------|
 | **Supabase** | User auth, JWT validation | Best-in-class OAuth, zero maintenance |
-| **SessionManager** | Conversation state | Fast (in-memory) + reliable (Redis) |
+| **Client** | Conversation state management | Stateless backend, client controls context |
 | **TokenManager** | Google API tokens | Already implemented, works well |
-| **MasterAgent** | Orchestration | 4-Prompt Architecture (unchanged) |
+| **MasterAgent** | Orchestration (stateless) | 4-Prompt Architecture, receives/returns state |
 | **SubAgents** | Tool execution | Domain-specific logic (unchanged) |
 | **Single API** | Natural language I/O | Simplest interface |
 
 ### Data Flow
 
-**Request Flow:**
+**Request Flow (Stateless):**
 ```
 1. Client → POST /api/chat/message
    Headers: { Authorization: Bearer <supabase_jwt> }
-   Body: { message: "Find emails from Sarah", session_id: "sess_123" }
+   Body: {
+     message: "Find emails from Sarah",
+     context: {
+       conversationHistory: [...],
+       masterState: {...},
+       subAgentStates: {...}
+     }
+   }
 
 2. Middleware → Verify JWT with Supabase
    Extract user.id from JWT
 
-3. SessionManager → Load session state
-   Try memory → Try Redis → Create new
-
-4. MasterAgent → Process request
+3. MasterAgent → Process request (stateless)
    - Intent Understanding (Prompt 1)
    - Execute SubAgents
    - Context Update (Prompt 2)
+   - Returns updated state
 
-5. SessionManager → Save session state
-   Update memory + Redis backup
-
-6. Response → Return to client
-   { message: "Found 3 emails...", session_id: "sess_123" }
+4. Response → Return to client with updated context
+   {
+     message: "Found 3 emails...",
+     context: {
+       conversationHistory: [...updated...],
+       masterState: {...updated...},
+       subAgentStates: {...updated...}
+     }
+   }
 ```
 
 **State Storage:**
 ```
-In-Memory (fast):
-sessions: Map<sessionId, SessionState>
+Client-side (localStorage or in-memory):
+- conversationHistory
+- masterState
+- subAgentStates
 
-Redis (backup):
-session:sess_123 → { ...SessionState } (TTL: 300s)
+Server-side:
+- None (stateless) ✅
 ```
 
 ---
@@ -398,57 +415,64 @@ session:sess_123 → { ...SessionState } (TTL: 300s)
 ✅ Supabase for auth (still best choice)
 ✅ Railway deployment (already there)
 ✅ Single /chat endpoint (simplest)
-✅ In-memory + Redis state (optimal)
+✅ Existing TokenManager (works well)
 
-### Simplified:
-✅ **No custom user_tokens table** - use existing TokenManager
-✅ **No database migrations** - state lives in Redis only
-✅ **No Supabase database** - just auth service
-✅ **Minimal code changes** - mostly deletions
+### Simplified Further (v3.0):
+✅ **No SessionManager** - stateless architecture
+✅ **No Redis needed** - saves $3-5/month + complexity
+✅ **No server-side state** - perfect horizontal scaling
+✅ **Client manages context** - simpler backend
+✅ **Even fewer lines of code** - mostly deletions
 
-### Why This is Better:
+### Evolution:
 
-**Original Plan:**
+**Original Plan (v1.0):**
 - Migrate tokens to Supabase database
-- Create user_tokens table
-- Update TokenManager to use Supabase
-- = More complexity, more code
+- SessionManager with in-memory + Redis
+- Server-side session management
+- = High complexity, high cost
 
-**Revised Plan:**
+**Revised Plan (v2.0):**
 - Keep existing TokenManager
-- Link Supabase user.id → TokenManager userId
-- = Less complexity, less code
+- SessionManager with in-memory + Redis
+- Server-side session management
+- = Medium complexity, medium cost
 
-**Key Insight**: The existing token management works. Don't replace what works.
+**Final Plan (v3.0 - Stateless):**
+- Keep existing TokenManager
+- No SessionManager - client manages state
+- No Redis needed
+- = Low complexity, low cost ✅
+
+**Key Insight**: For greenfield with low users, stateless is simplest. No Redis, no sessions, perfect scaling.
 
 ---
 
 ## Implementation Complexity
 
-### Lines of Code by Task:
+### Lines of Code by Task (Stateless v3.0):
 
 1. **Remove Slack**: -2000 lines (deletion)
-2. **SessionManager**: +150 lines (new service)
-3. **Supabase middleware**: +30 lines (auth check)
-4. **Chat endpoint**: +50 lines (route handler)
-5. **Agent updates**: +50 lines (session integration)
-6. **DI updates**: +20 lines (registration)
+2. **Supabase middleware**: +30 lines (auth check)
+3. **Stateless chat endpoint**: +80 lines (context handling)
+4. **MasterAgent updates**: +30 lines (stateless signature)
+5. **DI updates**: -50 lines (removed SessionManager)
 
-**Total: +300 lines, -2000 lines = Net -1700 lines**
+**Total: +140 lines, -2050 lines = Net -1910 lines**
 
-**Simpler codebase = easier to maintain**
+**Even simpler than v2.0 - no SessionManager needed!**
 
 ---
 
 ## Cost Analysis
 
-### Infrastructure Costs:
+### Infrastructure Costs (Stateless v3.0):
 
 ```
 Railway:
 - Backend: $5-8/month (hobby plan)
-- Redis: $3/month (25MB)
-Total: $8-11/month
+- Redis: $0/month (not needed! ✅)
+Total: $5-8/month
 
 Supabase:
 - Auth: FREE (up to 50k users)
@@ -459,55 +483,61 @@ External APIs:
 - Claude/OpenAI: $3-30/month (usage-based)
 - Gmail/Calendar: FREE
 
-TOTAL: $11-41/month
+TOTAL: $8-38/month
 ```
+
+**Saved $3-5/month by going stateless!**
 
 ### Scaling Costs:
 
 ```
-1k messages/month:     $11/month
-10k messages/month:    $25/month
-100k messages/month:   $150/month
+1k messages/month:     $8/month
+10k messages/month:    $20/month
+100k messages/month:   $120/month
 ```
 
-**Linear scaling = predictable costs**
+**Linear scaling = predictable costs + cheaper than session-based**
 
 ---
 
 ## Risk Analysis
 
-### Risks Mitigated:
+### Risks Mitigated (Stateless v3.0):
 
-1. **State Loss**: Redis backup prevents session loss on container restart
+1. **State Loss**: No server-side state = nothing to lose ✅
 2. **Auth Vulnerability**: Supabase handles security (SOC 2 certified)
 3. **Token Expiry**: Existing TokenManager handles refresh
-4. **Scale Limits**: Railway auto-scales, Supabase handles 50k users
+4. **Scale Limits**: Railway auto-scales infinitely (stateless)
 5. **Cost Overrun**: Free tiers + predictable scaling
+6. **Redis Failure**: Not using Redis ✅
 
 ### Remaining Risks:
 
-1. **Redis Failure**: Sessions lost (acceptable - 5 min TTL anyway)
-2. **Railway Outage**: Downtime (mitigated by Railway SLA)
-3. **Supabase Outage**: Can't auth new users (cached JWT still works)
+1. **Client State Tampering**: Client can modify context (acceptable - user authenticated)
+2. **Large Request Payloads**: ~100KB for long conversations (acceptable - low user count)
+3. **Railway Outage**: Downtime (mitigated by Railway SLA)
+4. **Supabase Outage**: Can't auth new users (cached JWT still works)
 
-**All risks acceptable for MVP**
+**All risks acceptable for MVP - stateless is simpler and more reliable**
 
 ---
 
 ## Final Verdict
 
-**This architecture is:**
-- ✅ Simpler than original plan
-- ✅ Cheaper ($11-25/month vs $100+/month FaaS)
-- ✅ Faster (in-memory state, no cold starts)
-- ✅ More maintainable (less code)
+**This stateless architecture is:**
+- ✅ Simplest possible design (no sessions, no Redis)
+- ✅ Cheapest ($8-20/month vs $100+/month FaaS)
+- ✅ Fastest (no state lookups, no cold starts)
+- ✅ Most maintainable (net -1910 lines of code)
+- ✅ Infinitely scalable (no shared state)
 - ✅ Production-ready (battle-tested components)
 
-**Implementation timeline: 3-4 days**
+**Implementation timeline: 2-3 days** (faster than v2.0!)
 
-**Next: Execute migration**
+**Status: ✅ COMPLETE**
 
 ---
 
-*Design Version: 2.0 (Simplified)*
-*Created: January 2025*
+*Design Version: 3.0 (Stateless)*
+*Updated: January 2025*
+*Previous versions: v1.0 (database sessions), v2.0 (in-memory + Redis)*
