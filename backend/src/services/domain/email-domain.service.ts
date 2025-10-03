@@ -6,7 +6,7 @@ import { AuthCredentials } from '../../types/api/api-client.types';
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
 import { IEmailDomainService, EmailThread } from './interfaces/email-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { SlackContext } from '../../types/slack/slack.types';
+import { OAuthContext } from '../../types/oauth.types';
 
 /**
  * Email Domain Service - High-level email operations using standardized API client
@@ -62,7 +62,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * OAuth management methods
    */
-  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+  async initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }> {
     this.assertReady();
     
     if (!this.googleOAuthManager) {

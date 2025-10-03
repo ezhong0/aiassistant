@@ -60,18 +60,22 @@ export interface Cradle {
   aiService: import('../services/generic-ai.service').GenericAIService; // Alias for genericAIService
   aiCircuitBreakerService: import('../services/ai-circuit-breaker.service').AIServiceCircuitBreaker;
 
-  // Context Management
-  contextManager: import('../services/context-manager.service').ContextManager;
-
   // Middleware Services
   rateLimitStore: import('../middleware/rate-limiting.middleware').RateLimitStore;
 
-  // Master Agent
-  masterAgent: import('../agents/master.agent').MasterAgent;
+  // 3-Layer Architecture Services
+  strategyRegistry: import('../layers/layer2-execution/strategy-registry').StrategyRegistry;
+  queryDecomposer: import('../layers/layer1-decomposition/query-decomposer.service').QueryDecomposerService;
+  executionCoordinator: import('../layers/layer2-execution/execution-coordinator.service').ExecutionCoordinatorService;
+  synthesisService: import('../layers/layer3-synthesis/synthesis.service').SynthesisService;
+  orchestrator: import('../layers/orchestrator.service').OrchestratorService;
 
-  // Sub-Agents
-  calendarAgent: import('../agents/calendar.agent').CalendarAgent;
-  emailAgent: import('../agents/email.agent').EmailAgent;
+  // Phase 2: Strategy Executors
+  metadataFilterStrategy: import('../layers/layer2-execution/strategies/metadata-filter-strategy').MetadataFilterStrategy;
+  keywordSearchStrategy: import('../layers/layer2-execution/strategies/keyword-search-strategy').KeywordSearchStrategy;
+  batchThreadReadStrategy: import('../layers/layer2-execution/strategies/batch-thread-read-strategy').BatchThreadReadStrategy;
+  crossReferenceStrategy: import('../layers/layer2-execution/strategies/cross-reference-strategy').CrossReferenceStrategy;
+  semanticAnalysisStrategy: import('../layers/layer2-execution/strategies/semantic-analysis-strategy').SemanticAnalysisStrategy;
 }
 
 export type AppContainer = AwilixContainer<Cradle>;

@@ -1,12 +1,12 @@
 /**
  * Domain Service Interfaces - Abstract interfaces for dependency injection
- * 
+ *
  * This module defines interfaces for all domain services, enabling dependency
  * injection and loose coupling between components.
  */
 
 import { APIClientError } from '../../../errors';
-import { SlackContext } from '../../../types/slack/slack.types';
+import { OAuthContext } from '../../../types/oauth.types';
 
 // Base domain service interface
 export interface IDomainService {
@@ -18,7 +18,7 @@ export interface IDomainService {
 // Email domain service interface
 export interface IEmailDomainService extends IDomainService {
   // OAuth management
-  initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }>;
+  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
   completeOAuth(userId: string, code: string, state: string): Promise<void>;
   refreshTokens(userId: string): Promise<void>;
   revokeTokens(userId: string): Promise<void>;

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import logger from '../utils/logger';
 import { BaseService } from './base-service';
 import { CacheService } from './cache.service';
-import { SlackContext } from '../types/slack/slack.types';
+import { OAuthContext } from '../types/oauth.types';
 
 /**
  * OAuthStateService
@@ -37,7 +37,7 @@ export class OAuthStateService extends BaseService {
   }
 
   /** Issue a signed state and persist nonce with TTL */
-  issueState(context: SlackContext): string {
+  issueState(context: OAuthContext): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const payloadObj = {
       userId: context.userId,
@@ -60,7 +60,7 @@ export class OAuthStateService extends BaseService {
   }
 
   /** Validate signature, freshness and consume nonce (single-use) */
-  async validateAndConsume(state: string): Promise<SlackContext | null> {
+  async validateAndConsume(state: string): Promise<OAuthContext | null> {
     try {
       const [b64, providedSig] = state.split('.');
       if (!b64 || !providedSig) return null;

@@ -140,7 +140,7 @@ const SecuritySchema = z.object({
     origin: '*',
     credentials: true,
   }),
-  
+
   rateLimiting: z.object({
     enabled: z.boolean().default(true),
     windowMs: z.number().positive().default(15 * 60 * 1000), // 15 minutes
@@ -154,7 +154,7 @@ const SecuritySchema = z.object({
     authWindowMs: 15 * 60 * 1000,
     authMaxRequests: 10,
   }),
-  
+
   requestLimits: z.object({
     jsonBodySize: z.string().default('10mb'),
     urlEncodedBodySize: z.string().default('10mb'),
@@ -164,7 +164,7 @@ const SecuritySchema = z.object({
     urlEncodedBodySize: '10mb',
     maxCommandLength: 5000,
   }),
-  
+
   securityHeaders: z.boolean().default(true),
   bcryptRounds: z.number().min(10).max(15).default(12),
 }).default({
@@ -185,6 +185,19 @@ const SecuritySchema = z.object({
   bcryptRounds: 12,
 });
 
+// Feature Flags Configuration
+const FeatureFlagsSchema = z.object({
+  // 3-Layer Architecture Migration
+  enable3LayerArchitecture: z.boolean().default(false),
+
+  // Percentage of traffic to route to 3-layer (0-100)
+  // Only applies if enable3LayerArchitecture is true
+  threeLayerTrafficPercent: z.number().min(0).max(100).default(0),
+}).default({
+  enable3LayerArchitecture: false,
+  threeLayerTrafficPercent: 0,
+});
+
 // Main configuration schema
 const UnifiedConfigSchema = z.object({
   environment: EnvironmentSchema,
@@ -192,6 +205,7 @@ const UnifiedConfigSchema = z.object({
   services: ServicesSchema,
   ai: AIConfigSchema,
   security: SecuritySchema,
+  featureFlags: FeatureFlagsSchema,
 }).default({
   environment: {
     NODE_ENV: 'development',
@@ -257,6 +271,10 @@ const UnifiedConfigSchema = z.object({
     securityHeaders: true,
     bcryptRounds: 12,
   },
+  featureFlags: {
+    enable3LayerArchitecture: false,
+    threeLayerTrafficPercent: 0,
+  },
 });
 
 // Type definitions
@@ -266,6 +284,7 @@ export type AuthConfig = z.infer<typeof AuthSchema>;
 export type ServicesConfig = z.infer<typeof ServicesSchema>;
 export type AIConfig = z.infer<typeof AIConfigSchema>;
 export type SecurityConfig = z.infer<typeof SecuritySchema>;
+export type FeatureFlagsConfig = z.infer<typeof FeatureFlagsSchema>;
 
 /**
  * Elegant Unified Configuration Service
@@ -402,6 +421,10 @@ export class UnifiedConfigService extends BaseService {
           },
           securityHeaders: process.env.SECURITY_SECURITY_HEADERS !== 'false',
           bcryptRounds: process.env.SECURITY_BCRYPT_ROUNDS ? parseInt(process.env.SECURITY_BCRYPT_ROUNDS) : undefined,
+        },
+        featureFlags: {
+          enable3LayerArchitecture: process.env.ENABLE_3_LAYER_ARCH === 'true',
+          threeLayerTrafficPercent: process.env.THREE_LAYER_TRAFFIC_PERCENT ? parseInt(process.env.THREE_LAYER_TRAFFIC_PERCENT) : undefined,
         },
       };
 

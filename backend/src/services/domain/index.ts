@@ -11,7 +11,6 @@
 export { EmailDomainService } from './email-domain.service';
 export { CalendarDomainService } from './calendar-domain.service';
 export { ContactsDomainService } from './contacts-domain.service';
-export { SlackDomainService } from './slack-domain.service';
 export { AIDomainService } from './ai-domain.service';
 
 // Export interfaces
@@ -19,7 +18,6 @@ export type {
   IEmailDomainService,
   ICalendarDomainService,
   IContactsDomainService,
-  ISlackDomainService,
   IAIDomainService
 } from './interfaces';
 
@@ -47,6 +45,5 @@ export {
   EmailValidationSchemas,
   CalendarValidationSchemas,
   ContactsValidationSchemas,
-  SlackValidationSchemas,
   AIValidationSchemas
 } from '../../validation/api-client.validation';

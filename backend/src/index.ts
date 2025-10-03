@@ -7,7 +7,6 @@ const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
-import { initializeAgentFactory, AgentFactory } from './framework/agent-factory';
 import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, validateContainer, type AppContainer } from './di';
 import { requestLogger } from './middleware/requestLogger';
 import logger from './utils/logger';
@@ -95,9 +94,6 @@ const initializeApplication = async (): Promise<void> => {
     });
     await initializeAllServices(appContainer);
 
-    // Initialize AgentFactory after services (pass container)
-    await initializeAgentFactory(appContainer);
-    
     logger.info('Application initialized successfully with DI container', {
       correlationId: 'startup',
       operation: 'app_initialization_complete'
@@ -173,20 +169,16 @@ const getDetailedHealthStatus = async () => {
           }
         }
       }
-      
-      const agentHealth = AgentFactory.getAllAgentHealth();
-      
+
       return {
         ...basicHealth,
         services: serviceHealth,
-        agents: agentHealth,
         detailed: true
       };
     } catch (error) {
       return {
         ...basicHealth,
         services: { error: 'Failed to get service health' },
-        agents: { error: 'Failed to get agent health' },
         detailed: false
       };
     }

@@ -6,7 +6,7 @@ import { ErrorFactory, DomainError } from '../../errors';
 import { ValidationHelper, CalendarValidationSchemas } from '../../validation/api-client.validation';
 import { ICalendarDomainService } from './interfaces/calendar-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { SlackContext } from '../../types/slack/slack.types';
+import { OAuthContext } from '../../types/oauth.types';
 
 /**
  * Calendar Domain Service - High-level calendar operations using standardized API client
@@ -62,7 +62,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   /**
    * OAuth management methods
    */
-  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+  async initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }> {
     this.assertReady();
 
     if (!this.googleOAuthManager) {

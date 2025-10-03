@@ -11,7 +11,6 @@ export * from './ai-domain.interface';
 export * from './calendar-domain.interface';
 export * from './contacts-domain.interface';
 export * from './email-domain.interface';
-export * from './slack-domain.interface';
 
 // Type-only exports for better tree-shaking
 export type {
@@ -55,12 +54,3 @@ export type {
   EmailThread,
   EmailDraft
 } from './email-domain.interface';
-
-export type {
-  ISlackDomainService,
-  SlackChannel,
-  SlackUser,
-  SlackMessageParams,
-  SlackMessageResult,
-  SlackFile
-} from './slack-domain.interface';

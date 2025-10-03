@@ -2,7 +2,7 @@ import { BaseService } from './base-service';
 import { TokenManager } from './token-manager';
 import { TokenStorageService } from './token-storage.service';
 import { GoogleOAuthManager } from './oauth/google-oauth-manager';
-import { SlackOAuthManager } from './oauth/slack-oauth-manager';
+// Slack integration removed
 
 export interface ServiceConnection {
   provider: string;
@@ -32,7 +32,6 @@ export class AuthStatusService extends BaseService {
     private readonly tokenStorageService: TokenStorageService,
     private readonly tokenManager: TokenManager,
     private readonly googleOAuthManager: GoogleOAuthManager,
-    private readonly slackOAuthManager: SlackOAuthManager,
   ) {
     super('AuthStatusService');
   }
@@ -54,12 +53,6 @@ export class AuthStatusService extends BaseService {
       if (this.googleOAuthManager) {
         const googleStatus = await this.getGoogleConnectionStatus(combinedUserId);
         connections.push(googleStatus);
-      }
-
-      // Get Slack connection status
-      if (this.slackOAuthManager) {
-        const slackStatus = await this.getSlackConnectionStatus(combinedUserId);
-        connections.push(slackStatus);
       }
 
       // If no OAuth managers available, return disconnected status

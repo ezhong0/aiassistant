@@ -7,7 +7,7 @@ export * from './auth.schemas';
 export * from './email.schemas';
 export * from './calendar.schemas';
 export * from './contact.schemas';
-export { 
+export {
   HealthCheckSchema,
   AuditEventSchema,
   CacheOperationSchema,
@@ -15,15 +15,6 @@ export {
   AdminUsersResponseSchema,
 } from './api.schemas';
 export * from './common.schemas';
-export { 
-  SlackContextSchema,
-  SlackMessageSchema,
-  SlackThreadSchema,
-  SlackDraftSchema,
-  SlackChannelSchema,
-  SlackWebhookEventSchema,
-  SlackTokensSchema as SlackTokensValidationSchema,
-} from './slack.schemas';
 
 // Tool execution schemas
 export { 

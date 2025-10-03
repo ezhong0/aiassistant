@@ -7,7 +7,7 @@ import { APIClientError } from '../../errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { SlackContext } from '../../types/slack/slack.types';
+import { OAuthContext } from '../../types/oauth.types';
 
 /**
  * Contacts Domain Service - High-level contacts operations using standardized API client
@@ -62,7 +62,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   /**
    * OAuth management methods
    */
-  async initializeOAuth(userId: string, context: SlackContext): Promise<{ authUrl: string; state: string }> {
+  async initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }> {
     this.assertReady();
     
     if (!this.googleOAuthManager) {

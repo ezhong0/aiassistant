@@ -3,7 +3,7 @@ import { AuthService } from '../auth.service';
 import { TokenManager } from '../token-manager';
 import { OAuthStateService } from '../oauth-state.service';
 import { GoogleTokens } from '../../types/auth.types';
-import { SlackContext } from '../../types/slack/slack.types';
+import { OAuthContext } from '../../types/oauth.types';
 
 export interface GoogleOAuthConfig {
   clientId: string;
@@ -90,7 +90,7 @@ export class GoogleOAuthManager extends BaseService {
   /**
    * Generate OAuth authorization URL for Google services
    */
-  async generateAuthUrl(context: SlackContext, scopes?: string[]): Promise<{ authUrl: string; state: string }> {
+  async generateAuthUrl(context: OAuthContext, scopes?: string[]): Promise<{ authUrl: string; state: string }> {
     try {
       this.logInfo('Starting Google OAuth URL generation', {
         userId: context.userId,

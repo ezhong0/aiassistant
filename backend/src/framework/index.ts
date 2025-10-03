@@ -1,19 +1,15 @@
 /**
- * Unified Agent Framework - Public API
+ * Framework Utilities - Public API
  *
- * This module exports all the new framework types and utilities.
- * Import from here to use the unified framework.
+ * This module exports framework utilities like tool registry and execution helpers.
  */
 
-// Core BaseSubAgent architecture
-export * from './base-subagent';
+// Tool registry and execution
+export * from './tool-registry';
+export * from './tool-execution';
 
-// Agent factory
-export * from './agent-factory';
-
-// Individual SubAgents
-export { CalendarAgent } from '../agents/calendar.agent';
-export { EmailAgent } from '../agents/email.agent';
+// Base route handler
+export * from './base-route-handler';
 
 // Legacy types for compatibility
 export * from '../types/agents/agent-result';

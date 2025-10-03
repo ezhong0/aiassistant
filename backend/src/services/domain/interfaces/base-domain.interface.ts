@@ -3,7 +3,7 @@
  * Core interface that all domain services must implement
  */
 
-import { SlackContext } from '../../../types/slack/slack.types';
+import { OAuthContext } from '../../../types/oauth.types';
 
 /**
  * Health status information
@@ -60,7 +60,7 @@ export interface IOAuthEnabledDomainService extends IDomainService {
   /**
    * Initialize OAuth flow for a user
    */
-  initializeOAuth(userId: string, context: SlackContext): Promise<OAuthResult>;
+  initializeOAuth(userId: string, context: OAuthContext): Promise<OAuthResult>;
 
   /**
    * Complete OAuth flow with authorization code

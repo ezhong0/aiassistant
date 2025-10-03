@@ -20,7 +20,8 @@ export function createChatRoutes(container: AppContainer) {
   const router = express.Router();
 
   // Resolve dependencies from container
-  const masterAgent = container.resolve('masterAgent');
+  // Use new 3-layer orchestrator instead of old MasterAgent
+  const orchestrator = container.resolve('orchestrator');
 
   // Get Supabase JWT secret from environment
   const supabaseJwtSecret = process.env.SUPABASE_JWT_SECRET;
@@ -112,8 +113,8 @@ export function createChatRoutes(container: AppContainer) {
           },
         ];
 
-        // Process message with MasterAgent
-        logger.debug('Calling MasterAgent', {
+        // Process message with 3-layer Orchestrator
+        logger.debug('Calling Orchestrator (3-layer architecture)', {
           correlationId: logContext.correlationId,
           operation: 'chat_message',
           metadata: {
@@ -122,12 +123,11 @@ export function createChatRoutes(container: AppContainer) {
           },
         });
 
-        const result = await masterAgent.processUserInput(
+        const result = await orchestrator.processUserInput(
           message,
           userId,
           updatedHistory,
-          currentContext.masterState,
-          currentContext.subAgentStates
+          currentContext.masterState
         );
 
         // Add assistant response to conversation history
@@ -159,11 +159,14 @@ export function createChatRoutes(container: AppContainer) {
           context: {
             conversationHistory: finalHistory,
             masterState: result.masterState,
-            subAgentStates: result.subAgentStates,
+            // Note: subAgentStates not used in 3-layer architecture
+            subAgentStates: undefined,
           },
           metadata: {
             tools_used: result.metadata?.workflowAction ? [result.metadata.workflowAction] : [],
             processing_time: processingTime,
+            tokens_used: result.metadata?.tokensUsed,
+            layers: result.metadata?.layers,
           },
         });
       } catch (error) {

@@ -3,9 +3,8 @@ import { registerCoreServices } from './core-services';
 import { registerAuthServices } from './auth-services';
 import { registerDomainServices } from './domain-services';
 import { registerAIServices } from './ai-services';
-import { registerWorkflowServices } from './workflow-services';
-import { registerAgentServices } from './agent-services';
 import { registerMiddlewareServices } from './middleware-services';
+import { registerLayerServices } from './layer-services';
 import logger from '../../utils/logger';
 
 /**
@@ -16,9 +15,8 @@ import logger from '../../utils/logger';
  * 2. Authentication (OAuth, tokens)
  * 3. Domain services (email, calendar, contacts)
  * 4. AI services (OpenAI, circuit breaker)
- * 5. Workflow services (context, execution)
- * 6. Agent services (sub-agents, master agent, workflow executor)
- * 7. Middleware services
+ * 5. Layer services (3-layer architecture)
+ * 6. Middleware services
  *
  * Awilix automatically resolves dependencies based on constructor parameters.
  */
@@ -33,8 +31,7 @@ export function registerAllServices(container: AppContainer): AppContainer {
   registerAuthServices(container);
   registerDomainServices(container);
   registerAIServices(container);
-  registerWorkflowServices(container);
-  registerAgentServices(container);
+  registerLayerServices(container);
   registerMiddlewareServices(container);
 
   const registeredServices = Object.keys(container.registrations);
