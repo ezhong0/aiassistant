@@ -54,7 +54,7 @@ export interface StructuredSchema {
 const DEFAULT_CONFIG = {
   TEMPERATURE: 0.1,
   MAX_TOKENS: 1000,
-  MODEL: 'gpt-4o-mini',
+  MODEL: 'gpt-5-nano',
 } as const;
 
 /**

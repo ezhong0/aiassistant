@@ -72,48 +72,48 @@ const ServicesSchema = z.object({
 const AIConfigSchema = z.object({
   models: z.object({
     general: z.object({
-      model: z.string().default('gpt-4o-mini'),
+      model: z.string().default('gpt-5-nano'),
       temperature: z.number().min(0).max(2).default(0.3),
       maxTokens: z.number().positive().default(1000),
       timeout: z.number().positive().default(25000),
     }).default({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-nano',
       temperature: 0.3,
       maxTokens: 1000,
       timeout: 25000,
     }),
     
     routing: z.object({
-      model: z.string().default('gpt-4o-mini'),
+      model: z.string().default('gpt-5-nano'),
       temperature: z.number().min(0).max(2).default(0.1),
       maxTokens: z.number().positive().default(500),
       timeout: z.number().positive().default(15000),
     }).default({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-nano',
       temperature: 0.1,
       maxTokens: 500,
       timeout: 15000,
     }),
     
     content: z.object({
-      model: z.string().default('gpt-4o-mini'),
+      model: z.string().default('gpt-5-mini'),
       temperature: z.number().min(0).max(2).default(0.7),
       maxTokens: z.number().positive().default(2000),
       timeout: z.number().positive().default(30000),
     }).default({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       temperature: 0.7,
       maxTokens: 2000,
       timeout: 30000,
     }),
     
     analysis: z.object({
-      model: z.string().default('gpt-4o-mini'),
+      model: z.string().default('gpt-5-nano'),
       temperature: z.number().min(0).max(2).default(0.0),
       maxTokens: z.number().positive().default(1000),
       timeout: z.number().positive().default(20000),
     }).default({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-nano',
       temperature: 0.0,
       maxTokens: 1000,
       timeout: 20000,
@@ -224,25 +224,25 @@ const UnifiedConfigSchema = z.object({
   ai: {
     models: {
       general: {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         temperature: 0.3,
         maxTokens: 1000,
         timeout: 25000,
       },
       routing: {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         temperature: 0.1,
         maxTokens: 500,
         timeout: 15000,
       },
       content: {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         temperature: 0.7,
         maxTokens: 2000,
         timeout: 30000,
       },
       analysis: {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         temperature: 0.0,
         maxTokens: 1000,
         timeout: 20000,

@@ -131,7 +131,7 @@ export const TOOL_CONSTANTS = {
  */
 export const AI_CONSTANTS = {
   /** Default OpenAI model */
-  DEFAULT_MODEL: 'gpt-4o-mini',
+  DEFAULT_MODEL: 'gpt-5-nano',
   
   /** Maximum tokens for completion */
   MAX_COMPLETION_TOKENS: 1000,
