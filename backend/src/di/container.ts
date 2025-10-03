@@ -44,17 +44,15 @@ export interface Cradle {
 
   // OAuth Managers
   googleOAuthManager: import('../services/oauth/google-oauth-manager').GoogleOAuthManager;
-  slackOAuthManager: import('../services/oauth/slack-oauth-manager').SlackOAuthManager;
 
   // Middleware
   errorHandler: import('../middleware/errorHandler').ErrorHandlerMiddleware;
   notFoundHandler: import('../middleware/errorHandler').NotFoundHandlerMiddleware;
 
-  // Domain Services (using concrete classes - interfaces not fully implemented yet)
+  // Domain Services
   emailDomainService: import('../services/domain/email-domain.service').EmailDomainService;
   calendarDomainService: import('../services/domain/calendar-domain.service').CalendarDomainService;
   contactsDomainService: import('../services/domain/contacts-domain.service').ContactsDomainService;
-  slackDomainService: import('../services/domain/slack-domain.service').SlackDomainService;
   aiDomainService: import('../services/domain/ai-domain.service').AIDomainService;
 
   // AI Services
@@ -62,22 +60,12 @@ export interface Cradle {
   aiService: import('../services/generic-ai.service').GenericAIService; // Alias for genericAIService
   aiCircuitBreakerService: import('../services/ai-circuit-breaker.service').AIServiceCircuitBreaker;
 
-  // Context & Workflow
+  // Context & Session Management
   contextManager: import('../services/context-manager.service').ContextManager;
+  sessionManager: import('../services/session-manager.service').SessionManager;
 
   // Middleware Services
   rateLimitStore: import('../middleware/rate-limiting.middleware').RateLimitStore;
-
-  // Prompt Builders
-  situationAnalysisPromptBuilder: import('../services/prompt-builders/main-agent').SituationAnalysisPromptBuilder;
-  workflowPlanningPromptBuilder: import('../services/prompt-builders/main-agent').WorkflowPlanningPromptBuilder;
-  environmentCheckPromptBuilder: import('../services/prompt-builders/main-agent').EnvironmentCheckPromptBuilder;
-  actionExecutionPromptBuilder: import('../services/prompt-builders/main-agent').ActionExecutionPromptBuilder;
-  progressAssessmentPromptBuilder: import('../services/prompt-builders/main-agent').ProgressAssessmentPromptBuilder;
-  finalResponsePromptBuilder: import('../services/prompt-builders/main-agent').FinalResponsePromptBuilder;
-
-  // Workflow Executor
-  workflowExecutor: import('../services/workflow-executor.service').WorkflowExecutor;
 
   // Master Agent
   masterAgent: import('../agents/master.agent').MasterAgent;
@@ -85,8 +73,6 @@ export interface Cradle {
   // Sub-Agents
   calendarAgent: import('../agents/calendar.agent').CalendarAgent;
   emailAgent: import('../agents/email.agent').EmailAgent;
-  contactAgent: import('../agents/contact.agent').ContactAgent;
-  slackAgent: import('../agents/slack.agent').SlackAgent;
 }
 
 export type AppContainer = AwilixContainer<Cradle>;

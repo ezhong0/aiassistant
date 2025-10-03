@@ -85,37 +85,6 @@ export class AuthService extends BaseService {
   }
 
   /**
-   * Generate Google OAuth URL for Slack integration
-   */
-  generateGoogleAuthURL(state: string, scopes?: string[]): string {
-    const slackScopes = scopes || ScopeManager.getGoogleScopes('slack');
-    return this.generateAuthUrl(slackScopes, state);
-  }
-
-  /**
-   * Generate Slack OAuth URL
-   */
-  generateSlackAuthURL(state: string): string {
-    const clientId = this.config.slackAuth?.clientId;
-    const redirectUri = this.config.slackAuth?.redirectUri;
-
-    if (!clientId || !redirectUri) {
-      throw ErrorFactory.domain.serviceUnavailable('SlackAuthService', { reason: 'OAuth not configured' });
-    }
-
-    const userScopes = [...OAUTH_SCOPES.SLACK.USER].join(',');
-    const params = new (globalThis.URLSearchParams || globalThis.require('url').URLSearchParams)({
-      client_id: clientId,
-      scope: userScopes,
-      redirect_uri: redirectUri,
-      state: state,
-      user_scope: userScopes,
-    });
-
-    return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
-  }
-
-  /**
    * Generate Google OAuth URL for minimal permissions
    */
   generateMinimalGoogleAuthURL(state: string): string {

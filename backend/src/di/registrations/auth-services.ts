@@ -6,7 +6,6 @@ import { TokenManager } from '../../services/token-manager';
 import { AuthStatusService } from '../../services/auth-status.service';
 import { OAuthStateService } from '../../services/oauth-state.service';
 import { GoogleOAuthManager } from '../../services/oauth/google-oauth-manager';
-import { SlackOAuthManager } from '../../services/oauth/slack-oauth-manager';
 
 /**
  * Register authentication and authorization services
@@ -51,18 +50,6 @@ export function registerAuthServices(container: AppContainer): void {
             'https://www.googleapis.com/auth/calendar',
             'https://www.googleapis.com/auth/contacts.readonly'
           ]
-        };
-      }),
-
-    slackOAuthManager: asClass(SlackOAuthManager)
-      .singleton()
-      .inject(() => {
-        const config = container.cradle.config;
-        return {
-          clientId: config.auth?.slack?.clientId || '',
-          clientSecret: config.auth?.slack?.clientSecret || '',
-          redirectUri: config.auth?.slack?.redirectUri || '',
-          scopes: ['chat:write', 'channels:read', 'users:read']
         };
       }),
   });

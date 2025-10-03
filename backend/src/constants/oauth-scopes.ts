@@ -40,31 +40,6 @@ export const OAUTH_SCOPES = {
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/calendar.events',
     ],
-
-    SLACK_INTEGRATION: [
-      'openid',
-      'email',
-      'profile',
-      'https://www.googleapis.com/auth/gmail.send',
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/contacts.readonly',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events',
-    ],
-  },
-
-  SLACK: {
-    BOT: [
-      'chat:write',
-      'channels:read',
-      'users:read',
-    ],
-
-    USER: [
-      'identity.basic',
-      'identity.email',
-      'identity.team',
-    ],
   },
 } as const;
 
@@ -75,12 +50,10 @@ export class ScopeManager {
   /**
    * Get scopes for Google OAuth based on use case
    */
-  static getGoogleScopes(useCase: 'full' | 'slack' | 'minimal'): string[] {
+  static getGoogleScopes(useCase: 'full' | 'minimal'): string[] {
     switch (useCase) {
       case 'full':
         return [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
-      case 'slack':
-        return [...OAUTH_SCOPES.GOOGLE.SLACK_INTEGRATION];
       case 'minimal':
         return [...OAUTH_SCOPES.GOOGLE.CORE];
       default:
@@ -91,11 +64,8 @@ export class ScopeManager {
   /**
    * Validate if requested scopes are allowed
    */
-  static validateScopes(provider: 'google' | 'slack', requestedScopes: string[]): boolean {
-    const allowedScopes = provider === 'google'
-      ? OAUTH_SCOPES.GOOGLE.FULL_ACCESS
-      : [...OAUTH_SCOPES.SLACK.BOT, ...OAUTH_SCOPES.SLACK.USER];
-
-    return requestedScopes.every(scope => (allowedScopes as string[]).includes(scope));
+  static validateScopes(provider: 'google', requestedScopes: string[]): boolean {
+    const allowedScopes = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
+    return requestedScopes.every(scope => allowedScopes.includes(scope));
   }
 }

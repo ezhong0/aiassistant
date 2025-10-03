@@ -21,9 +21,6 @@ import {
   CommandWithStatus
 } from '../services/prompt-builders/master-agent/context-update-prompt-builder';
 
-// Types
-import { SlackContext } from '../types/slack/slack.types';
-
 /**
  * Processing result interface for the new Master Agent
  */
@@ -77,56 +74,19 @@ export class MasterAgent {
   }
 
   /**
-   * Initialize the new Master Agent
-   * @deprecated No longer needed - initialization happens in constructor
-   */
-  async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
-
-    // Validate injected dependencies
-    if (!this.aiService) {
-      throw ErrorFactory.domain.serviceError('MasterAgent', 'GenericAIService not provided to MasterAgent');
-    }
-
-    if (!this.contextManager) {
-      throw ErrorFactory.domain.serviceError('MasterAgent', 'ContextManager not provided to MasterAgent');
-    }
-
-    if (!this.sessionManager) {
-      throw ErrorFactory.domain.serviceError('MasterAgent', 'SessionManager not provided to MasterAgent');
-    }
-
-    if (!this.tokenManager) {
-      throw ErrorFactory.domain.serviceError('MasterAgent', 'TokenManager not provided to MasterAgent');
-    }
-
-    this.isInitialized = true;
-
-    logger.info('MasterAgent initialized successfully', {
-      operation: 'master_agent_init',
-    });
-  }
-
-  /**
    * Process user input with the new 2-prompt architecture
    */
   async processUserInput(
     userInput: string,
     sessionId: string,
     userId?: string,
-    slackContext?: SlackContext,
   ): Promise<ProcessingResult> {
-    await this.ensureInitialized();
-
     const processingStartTime = Date.now();
 
     logger.info('Processing user input with Master Agent (2-prompt architecture)', {
       userInputLength: userInput?.length || 0,
       sessionId,
       userId,
-      hasSlackContext: !!slackContext,
       operation: 'process_user_input',
     });
 
@@ -136,11 +96,7 @@ export class MasterAgent {
       this.command_list = [];
 
       // Stage 1: Build message history
-      if (slackContext?.updateProgress) {
-        await slackContext.updateProgress('Understanding your request...');
-      }
-
-      const conversationHistory = await this.buildConversationHistory(userInput, sessionId, slackContext);
+      const conversationHistory = await this.buildConversationHistory(userInput, sessionId);
       const userContext = await this.gatherUserContext(userId);
 
       // Stage 2: Master Prompt 1 - Intent Understanding & Command List Creation
@@ -170,10 +126,6 @@ export class MasterAgent {
       });
 
       // Stage 3: Execution Loop (Max 10 iterations)
-      if (slackContext?.updateProgress) {
-        await slackContext.updateProgress('Executing commands...');
-      }
-
       const MAX_ITERATIONS = 10;
       let iteration = 0;
       let isComplete = false;
@@ -303,12 +255,11 @@ export class MasterAgent {
   }
 
   /**
-   * Build conversation history from SessionManager or Slack context (fallback)
+   * Build conversation history from SessionManager
    */
   private async buildConversationHistory(
     userInput: string,
     sessionId: string,
-    slackContext?: SlackContext,
   ): Promise<Array<{ role: 'user' | 'assistant'; content: string; timestamp?: string }>> {
     logger.info('Building conversation history', { sessionId });
 
@@ -336,31 +287,6 @@ export class MasterAgent {
         sessionId,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
-    }
-
-    // Fallback: Add conversation history from Slack if available (legacy)
-    if (conversationHistory.length === 0 && slackContext && this.contextManager) {
-      try {
-        const gatheredContext = await this.contextManager.gatherContext(sessionId, slackContext);
-
-        // Convert recent messages to conversation history format
-        if (gatheredContext.conversation.recentMessages.length > 0) {
-          gatheredContext.conversation.recentMessages.forEach(msg => {
-            conversationHistory.push({
-              role: msg.user === 'bot' ? 'assistant' : 'user',
-              content: msg.text,
-              timestamp: msg.timestamp
-            });
-          });
-        }
-
-        logger.info('Conversation history loaded from Slack context (fallback)', {
-          sessionId,
-          messageCount: conversationHistory.length
-        });
-      } catch (error) {
-        logger.warn('Failed to gather conversation context', { error, sessionId });
-      }
     }
 
     // Add current user input as latest turn
@@ -407,12 +333,6 @@ export class MasterAgent {
   /**
    * Private helper methods
    */
-  private async ensureInitialized(): Promise<void> {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
-  }
-
   private createErrorResult(message: string, processingStartTime: number): ProcessingResult {
     return {
       message,

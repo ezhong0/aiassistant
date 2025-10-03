@@ -55,7 +55,7 @@ router.get('/google/slack',
     const { user_id, team_id } = req.query;
 
     // Use centralized scope management
-    const scopes = [...OAUTH_SCOPES.GOOGLE.SLACK_INTEGRATION];
+    const scopes = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
 
     // Use resolved authService from container
 
@@ -68,10 +68,10 @@ router.get('/google/slack',
 
     const authUrl = authService.generateAuthUrl(scopes, state);
 
-    const logContext = createLogContext(req, { operation: 'slack_oauth_init' });
-    logger.info('Generated Google OAuth URL for Slack user authentication', {
+    const logContext = createLogContext(req, { operation: 'google_oauth_init' });
+    logger.info('Generated Google OAuth URL for user authentication', {
       ...logContext,
-      metadata: { user_id, team_id, scopesUsed: 'SLACK_INTEGRATION' }
+      metadata: { user_id, team_id, scopesUsed: 'FULL_ACCESS' }
     });
 
     return res.redirect(authUrl);

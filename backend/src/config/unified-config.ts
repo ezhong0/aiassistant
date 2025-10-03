@@ -28,15 +28,7 @@ const AuthSchema = z.object({
     redirectUri: z.string().optional(),
     webClientId: z.string().optional(),
   }).optional(),
-  
-  slack: z.object({
-    clientId: z.string().optional(),
-    clientSecret: z.string().optional(),
-    signingSecret: z.string().optional(),
-    botToken: z.string().optional(),
-    redirectUri: z.string().optional(),
-  }).optional(),
-  
+
   // JWT Configuration
   jwt: z.object({
     secret: z.string().min(32, 'JWT_SECRET must be at least 32 characters').default('development_jwt_secret_key_at_least_32_characters_long_for_security'),
@@ -332,13 +324,6 @@ export class UnifiedConfigService extends BaseService {
             redirectUri: process.env.GOOGLE_REDIRECT_URI,
             webClientId: process.env.GOOGLE_WEB_CLIENT_ID,
           },
-          slack: {
-            clientId: process.env.SLACK_CLIENT_ID,
-            clientSecret: process.env.SLACK_CLIENT_SECRET,
-            signingSecret: process.env.SLACK_SIGNING_SECRET,
-            botToken: process.env.SLACK_BOT_TOKEN,
-            redirectUri: process.env.SLACK_OAUTH_REDIRECT_URI,
-          },
           jwt: {
             secret: process.env.JWT_SECRET,
             expiresIn: process.env.JWT_EXPIRES_IN,
@@ -470,7 +455,6 @@ export class UnifiedConfigService extends BaseService {
       environment: this.config.environment.NODE_ENV,
       port: this.config.environment.PORT,
       hasGoogleAuth: !!(this.config.auth.google?.clientId && this.config.auth.google?.clientSecret),
-      hasSlackAuth: !!(this.config.auth.slack?.clientId && this.config.auth.slack?.clientSecret),
       hasOpenAI: !!this.config.services.openai?.apiKey,
       hasDatabase: !!this.config.services.database?.url,
       hasRedis: !!this.config.services.redis?.url,
@@ -563,10 +547,6 @@ export class UnifiedConfigService extends BaseService {
     return this.config.auth.google;
   }
 
-  get slackAuth(): AuthConfig['slack'] {
-    return this.config.auth.slack;
-  }
-
   get databaseUrl(): string | undefined {
     return this.config.services.database?.url;
   }
@@ -609,7 +589,6 @@ export class UnifiedConfigService extends BaseService {
         port: this.port,
         features: {
           googleAuth: !!this.googleAuth?.clientId,
-          slackAuth: !!this.slackAuth?.clientId,
           openai: !!this.openaiApiKey,
           database: !!this.databaseUrl,
           redis: !!this.redisUrl,
