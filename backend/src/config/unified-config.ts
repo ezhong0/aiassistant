@@ -422,10 +422,7 @@ export class UnifiedConfigService extends BaseService {
           securityHeaders: process.env.SECURITY_SECURITY_HEADERS !== 'false',
           bcryptRounds: process.env.SECURITY_BCRYPT_ROUNDS ? parseInt(process.env.SECURITY_BCRYPT_ROUNDS) : undefined,
         },
-        featureFlags: {
-          enable3LayerArchitecture: process.env.ENABLE_3_LAYER_ARCH === 'true',
-          threeLayerTrafficPercent: process.env.THREE_LAYER_TRAFFIC_PERCENT ? parseInt(process.env.THREE_LAYER_TRAFFIC_PERCENT) : undefined,
-        },
+        // Feature flags removed - 3-layer architecture is now the default
       };
 
       const result = UnifiedConfigSchema.parse(envConfig);

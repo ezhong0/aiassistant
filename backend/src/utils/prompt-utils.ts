@@ -4,7 +4,7 @@
  * Helper functions for building consistent, context-aware prompts across the system
  */
 
-import { UserPreferences } from '../types/agents/natural-language.types';
+import { UserPreferences } from '../layers/layer3-synthesis/synthesis.types';
 
 export class PromptUtils {
   /**
@@ -67,15 +67,8 @@ export class PromptUtils {
       parts.push(`- Tone: ${prefs.tone}`);
     }
 
-    if (prefs.includeMetadata !== undefined) {
-      parts.push(prefs.includeMetadata
-        ? '- Include relevant IDs, links, and technical details'
-        : '- Hide technical details, focus on user-friendly information',
-      );
-    }
-
-    if (prefs.displayName) {
-      parts.push(`- User prefers to be called: ${prefs.displayName}`);
+    if (prefs.format_preference) {
+      parts.push(`- Format preference: ${prefs.format_preference}`);
     }
 
     if (parts.length === 0) {

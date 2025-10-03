@@ -47,10 +47,9 @@ router.get('/test-oauth-url',
 
     // Create a test state parameter
     const testState = JSON.stringify({
-      source: 'slack',
-      team_id: 'test_team',
+      source: 'debug',
       user_id: 'test_user',
-      channel_id: 'test_channel'
+      timestamp: Date.now()
     });
 
     // Generate test OAuth URL
@@ -63,41 +62,10 @@ router.get('/test-oauth-url',
 
     const authUrl = (authService as any).generateAuthUrl(testScopes, testState);
 
-    // Also test the Slack interface OAuth URL generation
-    let slackOAuthUrl = 'Not available';
-    try {
-      const mockSlackContext = {
-        teamId: 'test_team',
-        userId: 'test_user',
-        channelId: 'test_channel',
-        isDirectMessage: false
-      };
-
-      // Build a basic Slack OAuth URL for test output
-      const clientId = process.env.SLACK_CLIENT_ID;
-      const redirectUri = process.env.SLACK_OAUTH_REDIRECT_URI;
-      if (clientId && redirectUri) {
-        const scopes = [
-          'im:history',
-          'im:write',
-          'users:read',
-          'chat:write',
-          'commands'
-        ].join(',');
-        slackOAuthUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}`;
-      } else {
-        slackOAuthUrl = 'OAuth config missing';
-      }
-    } catch (slackError: unknown) {
-      const errorMessage = slackError instanceof Error ? slackError.message : 'Unknown error';
-      slackOAuthUrl = `Error: ${errorMessage}`;
-    }
-
     return res.json({
       success: true,
       message: 'Test OAuth URL generated',
       authUrl,
-      slackOAuthUrl,
       config: {
         baseUrl: process.env.BASE_URL || 'http://localhost:3000',
         clientId: config.googleAuth?.clientId ? '✅ Configured' : '❌ Not configured',

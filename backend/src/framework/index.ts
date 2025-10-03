@@ -10,6 +10,3 @@ export * from './tool-execution';
 
 // Base route handler
 export * from './base-route-handler';
-
-// Legacy types for compatibility
-export * from '../types/agents/agent-result';
