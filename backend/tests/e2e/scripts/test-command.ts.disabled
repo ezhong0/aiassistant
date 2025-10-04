@@ -13,7 +13,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { GenericAIService } from '../../../src/services/generic-ai.service';
 import { AIDomainService } from '../../../src/services/domain/ai-domain.service';
 import { InboxData } from '../generators/whole-inbox-generator';
 import { UnifiedMockManager } from '../mocks/unified-mock-manager';
@@ -84,9 +83,6 @@ async function main() {
     console.log('⚙️  Initializing services...');
     const aiDomainService = new AIDomainService();
     await aiDomainService.initialize();
-
-    const aiService = new GenericAIService(aiDomainService);
-    await aiService.initialize();
 
     const mockManager = UnifiedMockManager.getInstance();
     await mockManager.initialize();

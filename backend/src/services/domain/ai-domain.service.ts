@@ -1,6 +1,5 @@
 import { ErrorFactory, ERROR_CATEGORIES } from '../../errors';
 import { BaseService } from '../base-service';
-import { getAPIClient } from '../api';
 import { OpenAIClient } from '../api/clients/openai-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError } from '../../errors';
@@ -8,23 +7,58 @@ import { ValidationHelper, AIValidationSchemas } from '../../validation/api-clie
 import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.interface';
 
 /**
+ * AI Prompt interface for structured AI requests (from GenericAIService)
+ */
+export interface AIPrompt<TContext = any> {
+  systemPrompt: string;
+  userPrompt: string;
+  context?: TContext;
+  options?: {
+    temperature?: number;
+    maxTokens?: number;
+    model?: string;
+  };
+}
+
+/**
+ * Base response interface that all AI responses must extend
+ */
+export interface BaseAIResponse {
+  context: string; // Always present - updated context as formatted text
+}
+
+/**
+ * AI Response interface with metadata (from GenericAIService)
+ */
+export interface AIResponse<T = any> extends BaseAIResponse {
+  content: string;
+  parsed: T;
+  metadata: {
+    model: string;
+    tokens: number;
+    processingTime: number;
+    success: boolean;
+    error?: string;
+  };
+}
+
+/**
+ * Structured schema for OpenAI function calling
+ */
+export interface StructuredSchema {
+  type: 'object';
+  properties: Record<string, any>;
+  required?: string[];
+  description?: string;
+}
+
+/**
  * AI Domain Service - High-level AI operations using standardized API client
- * 
+ *
  * This service provides domain-specific AI operations that wrap the OpenAI API.
  * It handles text generation, completions, embeddings, and image generation
  * with a clean interface that's easy to use from agents and other services.
- * 
- * **Initialization Pattern:**
- * Unlike most services, this uses lazy initialization in `onInitialize()` instead
- * of constructor injection. This is intentional because:
- * - API clients are obtained via factory (`getAPIClient()`) 
- * - Authentication requires environment variables at runtime
- * - Client initialization may fail and needs proper error handling
- * - Allows service to exist before external API is ready
- * 
- * This pattern is appropriate for services that wrap external APIs with
- * runtime configuration. For internal services, prefer constructor injection.
- * 
+ *
  * Features:
  * - Chat completions with GPT models
  * - Text completions and generation
@@ -32,15 +66,14 @@ import { IAIDomainService, StructuredDataParams } from './interfaces/ai-domain.i
  * - Image generation with DALL-E
  * - Audio transcription and translation
  * - API key authentication
+ *
+ * Dependencies are now injected via constructor for better testability and explicit dependency management.
  */
 export class AIDomainService extends BaseService implements Partial<IAIDomainService> {
-  private openaiClient: OpenAIClient | null = null;
-
   /**
-   * Constructor with no dependencies - uses lazy initialization pattern
-   * API client is obtained in onInitialize() via factory
+   * Constructor with OpenAI client injection
    */
-  constructor() {
+  constructor(private readonly openAIClient: OpenAIClient) {
     super('AIDomainService');
   }
 
@@ -51,10 +84,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     try {
       this.logInfo('Initializing AI Domain Service');
 
-      // Get OpenAI API client
-      this.openaiClient = await getAPIClient<OpenAIClient>('openai');
-
-      // Authenticate with OpenAI API key (skip assertReady check during init)
+      // Authenticate with OpenAI API key
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
         throw ErrorFactory.domain.serviceError('AIDomainService', 'OPENAI_API_KEY environment variable is required for AI operations');
@@ -66,7 +96,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       });
 
       // Authenticate directly without assertReady check during initialization
-      if (!this.openaiClient) {
+      if (!this.openAIClient) {
         throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -78,7 +108,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         apiKey
       };
 
-      await this.openaiClient.authenticate(credentials);
+      await this.openAIClient.authenticate(credentials);
       this.logInfo('AI service authenticated successfully');
 
       this.logInfo('AI Domain Service initialized successfully');
@@ -93,7 +123,6 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.openaiClient = null;
       this.logInfo('AI Domain Service destroyed');
     } catch (error) {
       this.logError('Error destroying AI Domain Service', error);
@@ -106,7 +135,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   async authenticate(apiKey: string): Promise<void> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceError('AIDomainService', 'OpenAI client not available');
     }
 
@@ -116,7 +145,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         apiKey
       };
 
-      await this.openaiClient.authenticate(credentials);
+      await this.openAIClient.authenticate(credentials);
       this.logInfo('AI service authenticated successfully');
     } catch (error) {
       throw ErrorFactory.util.wrapError(error instanceof Error ? error : new Error(String(error)), ERROR_CATEGORIES.SERVICE, {
@@ -178,7 +207,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }> {
     this.assertReady();
 
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceError('AIDomainService', 'OpenAI client not available');
     }
 
@@ -188,7 +217,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       // Validate input parameters - use a more flexible validation
       const validatedParams = {
         ...params,
-        model: params.model || 'gpt-4o-mini',
+        model: params.model || 'gpt-5-nano',
         temperature: params.temperature || 0.7,
         maxTokens: params.maxTokens,
         topP: params.topP,
@@ -202,15 +231,15 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
 
       this.logInfo('Generating chat completion', {
         messageCount: validatedParams.messages.length,
-        model: validatedParams.model || 'gpt-4',
+        model: validatedParams.model || 'gpt-5-mini',
         temperature: validatedParams.temperature || 0.7
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/chat/completions',
         data: {
-          model: validatedParams.model || 'gpt-4o-mini',
+          model: validatedParams.model || 'gpt-5-nano',
           messages: validatedParams.messages,
           temperature: validatedParams.temperature || 0.7,
           max_tokens: validatedParams.maxTokens,
@@ -293,7 +322,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -305,15 +334,15 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
 
       this.logInfo('Generating text completion', {
         promptLength: params.prompt.length,
-        model: params.model || 'text-davinci-003',
+        model: params.model || 'gpt-5-nano',
         temperature: params.temperature || 0.7
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/completions',
         data: {
-          model: params.model || 'text-davinci-003',
+          model: params.model || 'gpt-5-nano',
           prompt: params.prompt,
           temperature: params.temperature || 0.7,
           max_tokens: params.maxTokens,
@@ -371,7 +400,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -387,7 +416,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         model: params.model || 'text-embedding-ada-002'
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/embeddings',
         data: {
@@ -437,7 +466,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -451,7 +480,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         size: params.size || '1024x1024'
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/images/generations',
         data: {
@@ -495,7 +524,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -509,7 +538,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         language: params.language
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/audio/transcriptions',
         data: {
@@ -551,7 +580,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -564,7 +593,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         model: params.model || 'whisper-1'
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/audio/translations',
         data: {
@@ -607,7 +636,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }>> {
     this.assertReady();
     
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceUnavailable('openai-client', {
         service: 'AIDomainService',
         operation: 'ai-operation'
@@ -617,7 +646,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     try {
       this.logInfo('Listing available models');
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'GET',
         endpoint: '/models'
       });
@@ -648,7 +677,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   async generateStructuredData<T = any>(params: StructuredDataParams): Promise<T> {
     this.assertReady();
 
-    if (!this.openaiClient) {
+    if (!this.openAIClient) {
       throw ErrorFactory.domain.serviceError('AIDomainService', 'OpenAI client not available');
     }
 
@@ -660,11 +689,11 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         promptBuilder: params.metadata?.promptBuilder || 'unknown'
       });
 
-      const response = await this.openaiClient.makeRequest({
+      const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/chat/completions',
         data: {
-          model: params.model || 'gpt-4o-mini',
+          model: params.model || 'gpt-5-nano',
           messages: [
             { role: 'system', content: params.systemPrompt || 'Generate structured response' },
             { role: 'user', content: params.prompt }
@@ -696,7 +725,7 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
       const result = JSON.parse(functionCall.arguments);
 
       this.logInfo('Structured data generated successfully', {
-        model: params.model || 'gpt-4o-mini',
+        model: params.model || 'gpt-5-nano',
         hasResult: !!result
       });
 
@@ -710,21 +739,145 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
   }
 
   /**
+   * Execute a prompt with structured output and automatic JSON parsing
+   * This is a convenience method that wraps generateStructuredData with a cleaner interface
+   *
+   * @param prompt - The AI prompt with system and user instructions
+   * @param schema - Required structured schema for function calling
+   * @param promptBuilderName - Optional name for logging
+   * @returns Promise resolving to AI response with parsed JSON
+   */
+  async executePrompt<T = any>(
+    prompt: AIPrompt,
+    schema: StructuredSchema,
+    promptBuilderName?: string,
+  ): Promise<AIResponse<T>> {
+    const startTime = Date.now();
+    const requestId = `${this.name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    this.logInfo('Executing AI prompt', {
+      requestId,
+      schemaType: schema.type,
+      temperature: prompt.options?.temperature ?? 0.1,
+      promptBuilder: promptBuilderName || 'unknown',
+    });
+
+    try {
+      this.assertReady();
+
+      this.logDebug('Executing structured AI prompt', {
+        requestId,
+        schemaType: schema.type,
+        propertiesCount: Object.keys(schema.properties).length,
+        temperature: prompt.options?.temperature ?? 0.1,
+      });
+
+      // Use generateStructuredData for the actual AI call
+      const structuredResponse = await this.generateStructuredData<T>({
+        prompt: prompt.userPrompt,
+        schema: schema,
+        systemPrompt: prompt.systemPrompt,
+        temperature: prompt.options?.temperature ?? 0.1,
+        maxTokens: prompt.options?.maxTokens ?? 1000,
+        model: prompt.options?.model ?? 'gpt-5-nano',
+        metadata: { promptBuilder: promptBuilderName || 'unknown' },
+      });
+
+      // Parse and format response
+      const response = JSON.stringify(structuredResponse);
+      const parsed = structuredResponse as T;
+
+      const result: AIResponse<T> = {
+        content: response,
+        parsed,
+        context: (parsed as any).context || '', // Extract context from parsed response
+        metadata: {
+          model: prompt.options?.model ?? 'gpt-5-nano',
+          tokens: 0, // Would extract from OpenAI response if available
+          processingTime: Date.now() - startTime,
+          success: true,
+        },
+      };
+
+      this.logInfo('AI prompt completed successfully', {
+        requestId,
+        processingTime: Date.now() - startTime,
+        model: result.metadata.model,
+      });
+
+      return result;
+
+    } catch (error) {
+      this.logError('AI prompt execution failed', error, {
+        correlationId: requestId,
+        operation: 'ai_prompt_execution_error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        prompt: {
+          systemPromptLength: prompt.systemPrompt?.length || 0,
+          userPromptLength: prompt.userPrompt?.length || 0,
+          model: prompt.options?.model,
+          temperature: prompt.options?.temperature,
+        },
+        metadata: {
+          processingTime: Date.now() - startTime,
+          success: false,
+        },
+        schema: schema.description || 'custom schema',
+      });
+
+      return {
+        content: '',
+        parsed: {} as T,
+        context: '', // Empty context on error
+        metadata: {
+          model: prompt.options?.model ?? 'gpt-5-nano',
+          tokens: 0,
+          processingTime: Date.now() - startTime,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+      };
+    }
+  }
+
+  /**
+   * Chat completion - convenience method
+   */
+  async chat(params: {
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    model?: string;
+  }): Promise<{ content: string; role: string }> {
+    const result = await this.generateChatCompletion({
+      messages: params.messages,
+      maxTokens: params.maxTokens,
+      temperature: params.temperature,
+      model: params.model
+    });
+
+    return {
+      content: result.message.content,
+      role: result.message.role
+    };
+  }
+
+  /**
    * Get service health information
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
-      const healthy = this.isReady() && this.initialized && !!this.openaiClient;
+      const healthy = this.isReady() && this.initialized && !!this.openAIClient;
       const details = {
         initialized: this.initialized,
-        hasOpenAIClient: !!this.openaiClient,
-        authenticated: this.openaiClient?.isAuthenticated() || false
+        hasOpenAIClient: !!this.openAIClient,
+        authenticated: this.openAIClient?.isAuthenticated() || false
       };
 
       return { healthy, details };
     } catch (error) {
-      return { 
-        healthy: false, 
+      return {
+        healthy: false,
         details: { error: error instanceof Error ? error.message : 'Unknown error' }
       };
     }

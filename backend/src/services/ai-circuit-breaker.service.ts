@@ -47,12 +47,12 @@ export class AIServiceCircuitBreaker extends BaseService {
     
     // Use environment variables for configuration
     const e2eTesting = process.env.E2E_TESTING === 'true';
-    
+
     this.config = {
       failureThreshold: e2eTesting ? 10000 : 5,
       recoveryTimeout: e2eTesting ? 5000 : 60000,
       successThreshold: 3,
-      timeout: e2eTesting ? 60000 : 30000,
+      timeout: e2eTesting ? 300000 : 30000, // 300s (5 min) for E2E to allow large AI generations
     };
   }
 

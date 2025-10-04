@@ -1,32 +1,33 @@
 import { BaseService } from '../base-service';
-import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { ErrorFactory, DomainError } from '../../errors';
 import { ValidationHelper, CalendarValidationSchemas } from '../../validation/api-client.validation';
 import { ICalendarDomainService } from './interfaces/calendar-domain.interface';
-import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { OAuthContext } from '../../types/oauth.types';
+import { SupabaseTokenProvider } from '../supabase-token-provider';
 
 /**
  * Calendar Domain Service - High-level calendar operations using standardized API client
- * 
+ *
  * This service provides domain-specific calendar operations that wrap the Google Calendar API.
  * It handles event creation, management, availability checking, and calendar operations
  * with a clean interface that's easy to use from agents and other services.
- * 
+ *
  * Features:
  * - Create, update, and delete calendar events
  * - List events with filtering and pagination
  * - Check availability and find free time slots
  * - Manage multiple calendars
  * - Handle recurring events and conference data
- * - OAuth2 authentication management
+ *
+ * OAuth is handled by Supabase Auth. This service fetches Google tokens from Supabase.
+ * Dependencies are injected via constructor for better testability and explicit dependency management.
  */
 export class CalendarDomainService extends BaseService implements Partial<ICalendarDomainService> {
-  private googleClient: GoogleAPIClient | null = null;
-
-  constructor(private readonly googleOAuthManager: GoogleOAuthManager) {
+  constructor(
+    private readonly supabaseTokenProvider: SupabaseTokenProvider,
+    private readonly googleAPIClient: GoogleAPIClient
+  ) {
     super('CalendarDomainService');
   }
 
@@ -36,10 +37,6 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   protected async onInitialize(): Promise<void> {
     try {
       this.logInfo('Initializing Calendar Domain Service');
-      
-      // Get Google API client
-      this.googleClient = await getAPIClient<GoogleAPIClient>('google');
-      
       this.logInfo('Calendar Domain Service initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize Calendar Domain Service', error);
@@ -52,77 +49,10 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.googleClient = null;
       this.logInfo('Calendar Domain Service destroyed');
     } catch (error) {
       this.logError('Error destroying Calendar Domain Service', error);
     }
-  }
-
-  /**
-   * OAuth management methods
-   */
-  async initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }> {
-    this.assertReady();
-
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(
-        this.name,
-        'GoogleOAuthManager not available'
-      );
-    }
-
-    const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
-    return { authUrl, state };
-  }
-
-  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
-    this.assertReady();
-
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-
-    const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
-    if (!result.success) {
-      throw ErrorFactory.external.google.authFailed(result.error || 'OAuth completion failed');
-    }
-  }
-
-  async refreshTokens(userId: string): Promise<void> {
-    this.assertReady();
-
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-
-    const success = await this.googleOAuthManager.refreshTokens(userId);
-    if (!success) {
-      throw ErrorFactory.external.google.authFailed('Token refresh failed');
-    }
-  }
-
-  async revokeTokens(userId: string): Promise<void> {
-    this.assertReady();
-
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-
-    const success = await this.googleOAuthManager.revokeTokens(userId);
-    if (!success) {
-      throw ErrorFactory.external.google.authFailed('Token revocation failed');
-    }
-  }
-
-  async requiresOAuth(userId: string): Promise<boolean> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      return true; // Assume OAuth required if manager not available
-    }
-    
-    return await this.googleOAuthManager.requiresOAuth(userId);
   }
 
 
@@ -212,7 +142,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(
         this.name,
         'Google client not available'
@@ -221,7 +151,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -250,7 +181,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         conferenceData: validatedParams.conferenceData
       };
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/calendar/v3/calendars/primary/events/insert',
         query: {
@@ -300,6 +231,76 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }
 
   /**
+   * Quick add calendar event using natural language
+   * Example: "Meeting with John tomorrow at 2pm" or "Lunch next Friday at noon"
+   */
+  async quickAddEvent(userId: string, params: {
+    text: string;
+    calendarId?: string;
+  }): Promise<{
+    id: string;
+    summary: string;
+    start: Date;
+    end: Date;
+    htmlLink?: string;
+  }> {
+    this.assertReady();
+
+    if (!this.googleAPIClient) {
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        'Google client not available'
+      );
+    }
+
+    try {
+      // Get valid tokens for user
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
+      if (!token) {
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
+      }
+
+      this.logInfo('Quick adding calendar event', {
+        text: params.text,
+        calendarId: params.calendarId || 'primary'
+      });
+
+      const response = await this.googleAPIClient.makeRequest({
+        method: 'POST',
+        endpoint: '/calendar/v3/calendars/primary/events/quickAdd',
+        query: {
+          calendarId: params.calendarId || 'primary',
+          text: params.text
+        }
+      });
+
+      const result = {
+        id: response.data.id,
+        summary: response.data.summary,
+        start: new Date(response.data.start.dateTime || response.data.start.date),
+        end: new Date(response.data.end.dateTime || response.data.end.date),
+        htmlLink: response.data.htmlLink
+      };
+
+      this.logInfo('Quick add event created successfully', {
+        eventId: result.id,
+        summary: result.summary
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof DomainError) {
+        throw error;
+      }
+      throw ErrorFactory.domain.serviceError(
+        this.name,
+        error instanceof Error ? error.message : 'Failed to quick add calendar event'
+      );
+    }
+  }
+
+  /**
    * List calendar events (with optional multi-calendar support)
    */
   async listEvents(userId: string, params: {
@@ -324,7 +325,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }>> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -333,7 +334,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -348,7 +350,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         maxResults: params.maxResults || 10
       });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/calendar/v3/calendars/primary/events/list',
         query: {
@@ -437,7 +439,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -447,7 +449,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     try {
       this.logInfo('Getting calendar event', { eventId, calendarId });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/calendar/v3/calendars/primary/events/get',
         query: {
@@ -569,7 +571,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -578,7 +580,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -600,7 +603,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         location: updates.location
       };
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'PATCH',
         endpoint: '/calendar/v3/calendars/primary/events/patch',
         query: {
@@ -650,7 +653,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   async deleteEvent(userId: string, eventId: string, calendarId: string = 'primary'): Promise<void> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -660,7 +663,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     try {
       this.logInfo('Deleting calendar event', { eventId, calendarId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'DELETE',
         endpoint: '/calendar/v3/calendars/primary/events/delete',
         query: {
@@ -693,7 +696,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -702,7 +705,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -716,7 +720,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         calendarIds: params.calendarIds || ['primary']
       });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/calendar/v3/freebusy/query',
         data: {
@@ -765,7 +769,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }>> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -774,7 +778,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -788,7 +793,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         durationMinutes: params.durationMinutes
       });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/calendar/v3/freebusy/query',
         data: {
@@ -884,7 +889,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }>> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -893,7 +898,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -903,7 +909,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
       
       this.logInfo('Listing user calendars');
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/calendar/v3/calendarList/list'
       });
@@ -939,7 +945,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'CalendarDomainService',
         operation: 'calendar-operation'
@@ -948,7 +954,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
       }
@@ -986,7 +993,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
       });
 
       // Update the event with the new response status
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'PATCH',
         endpoint: '/calendar/v3/calendars/primary/events/patch',
         query: {
@@ -1017,11 +1024,11 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
-      const healthy = this.isReady() && this.initialized && !!this.googleClient;
+      const healthy = this.isReady() && this.initialized && !!this.googleAPIClient;
       const details = {
         initialized: this.initialized,
-        hasGoogleClient: !!this.googleClient,
-        authenticated: this.googleClient?.isAuthenticated() || false
+        hasGoogleClient: !!this.googleAPIClient,
+        authenticated: this.googleAPIClient?.isAuthenticated() || false
       };
 
       return { healthy, details };

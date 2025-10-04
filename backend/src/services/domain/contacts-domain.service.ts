@@ -1,32 +1,33 @@
 import { ErrorFactory, ERROR_CATEGORIES } from '../../errors';
 import { BaseService } from '../base-service';
-import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError } from '../../errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
-import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { OAuthContext } from '../../types/oauth.types';
+import { SupabaseTokenProvider } from '../supabase-token-provider';
 
 /**
  * Contacts Domain Service - High-level contacts operations using standardized API client
- * 
+ *
  * This service provides domain-specific contacts operations that wrap the Google People API.
  * It handles contact creation, management, searching, and organization with a clean interface
  * that's easy to use from agents and other services.
- * 
+ *
  * Features:
  * - Create, update, and delete contacts
  * - Search and list contacts with filtering
  * - Manage contact groups and labels
  * - Handle contact photos and metadata
- * - OAuth2 authentication management
+ *
+ * OAuth is handled by Supabase Auth. This service fetches Google tokens from Supabase.
+ * Dependencies are injected via constructor for better testability and explicit dependency management.
  */
 export class ContactsDomainService extends BaseService implements Partial<IContactsDomainService> {
-  private googleClient: GoogleAPIClient | null = null;
-
-  constructor(private readonly googleOAuthManager: GoogleOAuthManager) {
+  constructor(
+    private readonly supabaseTokenProvider: SupabaseTokenProvider,
+    private readonly googleAPIClient: GoogleAPIClient
+  ) {
     super('ContactsDomainService');
   }
 
@@ -36,10 +37,6 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   protected async onInitialize(): Promise<void> {
     try {
       this.logInfo('Initializing Contacts Domain Service');
-      
-      // Get Google API client
-      this.googleClient = await getAPIClient<GoogleAPIClient>('google');
-      
       this.logInfo('Contacts Domain Service initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize Contacts Domain Service', error);
@@ -52,86 +49,10 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.googleClient = null;
       this.logInfo('Contacts Domain Service destroyed');
     } catch (error) {
       this.logError('Error destroying Contacts Domain Service', error);
     }
-  }
-
-  /**
-   * OAuth management methods
-   */
-  async initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
-        service: 'ContactsDomainService',
-        operation: 'oauth-operation'
-      });
-    }
-    
-    const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
-    return { authUrl, state };
-  }
-
-  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
-        service: 'ContactsDomainService',
-        operation: 'oauth-operation'
-      });
-    }
-    
-    const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
-    if (!result.success) {
-      throw ErrorFactory.domain.serviceError('GoogleOAuthManager', result.error || 'OAuth completion failed');
-    }
-  }
-
-  async refreshTokens(userId: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
-        service: 'ContactsDomainService',
-        operation: 'oauth-operation'
-      });
-    }
-    
-    const success = await this.googleOAuthManager.refreshTokens(userId);
-    if (!success) {
-      throw ErrorFactory.api.unauthorized('Google token refresh failed. Re-authentication required.');
-    }
-  }
-
-  async revokeTokens(userId: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceUnavailable('GoogleOAuthManager', {
-        service: 'ContactsDomainService',
-        operation: 'oauth-operation'
-      });
-    }
-    
-    const success = await this.googleOAuthManager.revokeTokens(userId);
-    if (!success) {
-      throw ErrorFactory.domain.serviceError('GoogleOAuthManager', 'Token revocation failed');
-    }
-  }
-
-  async requiresOAuth(userId: string): Promise<boolean> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      return true; // Assume OAuth required if manager not available
-    }
-    
-    return await this.googleOAuthManager.requiresOAuth(userId);
   }
 
 
@@ -225,7 +146,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   }> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError('ContactsDomainService', 'Google client not available');
     }
 
@@ -238,7 +159,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
         personFields: validatedParams.personFields || ['names', 'emailAddresses', 'phoneNumbers']
       });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/people/v1/people/me/connections',
         query: {
@@ -280,7 +201,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   async createContact(userId: string, contact: ContactInput): Promise<Contact> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
         operation: 'contacts-operation'
@@ -303,7 +224,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
         birthdays: contact.birthdays
       };
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/people/v1/people:createContact',
         data: contactData
@@ -340,7 +261,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   async getContact(contactId: string): Promise<Contact> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
         operation: 'contacts-operation'
@@ -350,7 +271,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     try {
       this.logInfo('Getting contact', { contactId });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/people/v1/people/get',
         query: {
@@ -391,7 +312,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   async updateContact(contactId: string, contact: ContactInput, updatePersonFields?: string): Promise<Contact> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
         operation: 'contacts-operation'
@@ -410,7 +331,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
         birthdays: contact.birthdays
       };
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'PATCH',
         endpoint: '/people/v1/people/updateContact',
         query: {
@@ -451,7 +372,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   async deleteContact(resourceName: string): Promise<void> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
         operation: 'contacts-operation'
@@ -461,7 +382,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     try {
       this.logInfo('Deleting contact', { resourceName });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'DELETE',
         endpoint: '/people/v1/people/deleteContact',
         query: { resourceName }
@@ -563,7 +484,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   }> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
         operation: 'contacts-operation'
@@ -576,7 +497,7 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
         pageSize: params.pageSize || 100
       });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/people/v1/people/me/connections',
         query: {
@@ -609,21 +530,181 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   }
 
   /**
+   * Batch get contacts by resource names
+   * Can retrieve up to 200 contacts in a single call (vs N individual calls)
+   */
+  async batchGetContacts(userId: string, params: {
+    resourceNames: string[];
+    personFields?: string[];
+  }): Promise<Array<Contact>> {
+    this.assertReady();
+
+    if (!this.googleAPIClient) {
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
+    }
+
+    if (!params.resourceNames || params.resourceNames.length === 0) {
+      throw ErrorFactory.domain.validationFailed('At least one resource name is required');
+    }
+
+    if (params.resourceNames.length > 200) {
+      throw ErrorFactory.domain.validationFailed('Cannot get more than 200 contacts at once');
+    }
+
+    try {
+      // Get valid tokens for user
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
+      if (!token) {
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
+      }
+
+      this.logInfo('Batch getting contacts', {
+        count: params.resourceNames.length
+      });
+
+      const personFields = params.personFields || ['names', 'emailAddresses', 'phoneNumbers', 'addresses', 'organizations', 'photos'];
+
+      const response = await this.googleAPIClient.makeRequest({
+        method: 'GET',
+        endpoint: '/people/v1/people:batchGet',
+        query: {
+          resourceNames: params.resourceNames,
+          personFields: personFields.join(',')
+        }
+      });
+
+      const contacts = response.data.responses?.map((item: any) => ({
+        resourceName: item.person?.resourceName,
+        etag: item.person?.etag,
+        metadata: {
+          sources: item.person?.metadata?.sources || [],
+          objectType: item.person?.metadata?.objectType || 'PERSON'
+        },
+        names: item.person?.names,
+        emailAddresses: item.person?.emailAddresses,
+        phoneNumbers: item.person?.phoneNumbers,
+        addresses: item.person?.addresses,
+        organizations: item.person?.organizations,
+        photos: item.person?.photos
+      })) || [];
+
+      this.logInfo('Batch get contacts completed', {
+        count: contacts.length
+      });
+
+      return contacts;
+    } catch (error) {
+      this.logError('Failed to batch get contacts', error, {
+        count: params.resourceNames.length
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * List other contacts (autocomplete suggestions)
+   * These are contacts from user interactions but not explicitly saved
+   */
+  async listOtherContacts(userId: string, params?: {
+    pageSize?: number;
+    pageToken?: string;
+    readMask?: string;
+  }): Promise<{
+    otherContacts: Array<{
+      resourceName: string;
+      etag: string;
+      metadata: {
+        sources: Array<{
+          type: string;
+          id: string;
+        }>;
+      };
+      names?: Array<{
+        displayName?: string;
+        givenName?: string;
+        familyName?: string;
+      }>;
+      emailAddresses?: Array<{
+        value: string;
+        type?: string;
+      }>;
+      phoneNumbers?: Array<{
+        value: string;
+        type?: string;
+      }>;
+    }>;
+    nextPageToken?: string;
+    totalSize?: number;
+  }> {
+    this.assertReady();
+
+    if (!this.googleAPIClient) {
+      throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
+        service: 'ContactsDomainService',
+        operation: 'contacts-operation'
+      });
+    }
+
+    try {
+      // Get valid tokens for user
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
+      if (!token) {
+        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
+      }
+
+      this.logInfo('Listing other contacts', {
+        pageSize: params?.pageSize || 100
+      });
+
+      const response = await this.googleAPIClient.makeRequest({
+        method: 'GET',
+        endpoint: '/people/v1/otherContacts',
+        query: {
+          pageSize: params?.pageSize || 100,
+          pageToken: params?.pageToken,
+          readMask: params?.readMask || 'names,emailAddresses,phoneNumbers'
+        }
+      });
+
+      const result = {
+        otherContacts: response.data.otherContacts || [],
+        nextPageToken: response.data.nextPageToken,
+        totalSize: response.data.totalSize
+      };
+
+      this.logInfo('Other contacts listed successfully', {
+        count: result.otherContacts.length,
+        totalSize: result.totalSize
+      });
+
+      return result;
+    } catch (error) {
+      this.logError('Failed to list other contacts', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get service health information
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
-      const healthy = this.isReady() && this.initialized && !!this.googleClient;
+      const healthy = this.isReady() && this.initialized && !!this.googleAPIClient;
       const details = {
         initialized: this.initialized,
-        hasGoogleClient: !!this.googleClient,
-        authenticated: this.googleClient?.isAuthenticated() || false
+        hasGoogleClient: !!this.googleAPIClient,
+        authenticated: this.googleAPIClient?.isAuthenticated() || false
       };
 
       return { healthy, details };
     } catch (error) {
-      return { 
-        healthy: false, 
+      return {
+        healthy: false,
         details: { error: error instanceof Error ? error.message : 'Unknown error' }
       };
     }

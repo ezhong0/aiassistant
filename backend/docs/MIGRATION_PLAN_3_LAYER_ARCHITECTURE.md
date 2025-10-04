@@ -1065,7 +1065,7 @@ TOTAL: 3,000 + 53,300 + 10,900 = 67,200 tokens
 
 ### Cost Comparison
 
-At OpenAI GPT-4o-mini pricing: $0.15/1M input, $0.60/1M output
+At OpenAI GPT-5 Nano pricing: $0.15/1M input, $0.60/1M output
 
 **Current**:
 - 100K tokens × $0.15/1M = $0.015 per query

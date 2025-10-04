@@ -29,6 +29,7 @@
     "test:ai-e2e": "E2E_TESTING=true node --max-old-space-size=2048 --expose-gc node_modules/.bin/jest tests/e2e/ai-powered-e2e.test.ts --runInBand --testTimeout=180000",
     "test:whole-inbox": "E2E_TESTING=true node --max-old-space-size=2048 --expose-gc node_modules/.bin/jest tests/e2e/workflows/whole-inbox-e2e.test.ts --runInBand --testTimeout=60000",
     "test:whole-inbox:report": "npm run test:whole-inbox && open tests/e2e/reports/html/*.html",
+    "e2e:generate-simple": "E2E_TESTING=true npx ts-node tests/e2e/scripts/generate-simple-inbox.ts",
     "e2e:generate-inbox": "npx ts-node tests/e2e/scripts/generate-inbox.ts",
     "e2e:test-command": "npx ts-node tests/e2e/scripts/test-command.ts",
     "e2e:list-inboxes": "npx ts-node tests/e2e/scripts/list-inboxes.ts",

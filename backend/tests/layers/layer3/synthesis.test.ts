@@ -5,13 +5,13 @@
  */
 
 import { SynthesisService } from '../../../src/layers/layer3-synthesis/synthesis.service';
-import { GenericAIService } from '../../../src/services/generic-ai.service';
+import { AIDomainService } from '../../../src/services/domain/ai-domain.service';
 import { ExecutionGraph } from '../../../src/layers/layer1-decomposition/execution-graph.types';
 import { ExecutionResults } from '../../../src/layers/layer2-execution/execution.types';
 
 describe('Layer 3: SynthesisService', () => {
   let synthesizer: SynthesisService;
-  let mockAIService: jest.Mocked<GenericAIService>;
+  let mockAIService: jest.Mocked<AIDomainService>;
 
   beforeEach(() => {
     mockAIService = {
@@ -70,7 +70,7 @@ describe('Layer 3: SynthesisService', () => {
       mockAIService.chat.mockResolvedValue({
         content: 'You have 3 urgent emails requiring attention. The most urgent is from boss@company.com.',
         metadata: {
-          model: 'gpt-4',
+          model: 'gpt-5-mini',
           tokensUsed: { prompt: 500, completion: 50, total: 550 },
           executionTime: 1500,
         },
@@ -139,7 +139,7 @@ describe('Layer 3: SynthesisService', () => {
       mockAIService.chat.mockResolvedValue({
         content: 'Found 1 high-priority thread about a project discussion.',
         metadata: {
-          model: 'gpt-4',
+          model: 'gpt-5-mini',
           tokensUsed: { prompt: 400, completion: 40, total: 440 },
           executionTime: 1200,
         },
@@ -213,7 +213,7 @@ describe('Layer 3: SynthesisService', () => {
       mockAIService.chat.mockResolvedValue({
         content: '- Team Meeting\n- Lunch',
         metadata: {
-          model: 'gpt-4',
+          model: 'gpt-5-mini',
           tokensUsed: { prompt: 300, completion: 20, total: 320 },
           executionTime: 800,
         },
@@ -285,7 +285,7 @@ describe('Layer 3: SynthesisService', () => {
       mockAIService.chat.mockResolvedValue({
         content: 'Found 50 emails matching your search.',
         metadata: {
-          model: 'gpt-4',
+          model: 'gpt-5-mini',
           tokensUsed: { prompt: 600, completion: 30, total: 630 },
           executionTime: 1000,
         },
@@ -361,7 +361,7 @@ describe('Layer 3: SynthesisService', () => {
       mockAIService.chat.mockResolvedValue({
         content: 'Analysis complete.',
         metadata: {
-          model: 'gpt-4',
+          model: 'gpt-5-mini',
           tokensUsed: { prompt: 8000, completion: 100, total: 8100 },
           executionTime: 3000,
         },

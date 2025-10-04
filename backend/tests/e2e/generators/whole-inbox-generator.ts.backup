@@ -270,6 +270,7 @@ export class WholeInboxGenerator extends BaseService {
 
   /**
    * Generate emails for a specific pattern
+   * Generates in small batches for maximum quality and realistic content
    */
   private async generateEmailsForPattern(
     pattern: EmailPattern,
@@ -278,82 +279,193 @@ export class WholeInboxGenerator extends BaseService {
     endDate: Date,
     userProfile: UserProfile
   ): Promise<Email[]> {
-    const prompt = `
-    Generate ${count} realistic ${pattern.type} emails for a ${userProfile.role} in the ${userProfile.industry} industry.
-    
-    User Profile:
-    - Role: ${userProfile.role}
-    - Industry: ${userProfile.industry}
-    - Communication Style: ${userProfile.communicationStyle}
-    - Urgency Level: ${userProfile.urgencyLevel}
-    - Email Volume: ${userProfile.emailVolume}
-    
-    Email Pattern:
-    - Type: ${pattern.type}
-    - Response Time: ${pattern.characteristics.responseTime}
-    - Priority: ${pattern.characteristics.priority}
-    - Follow-up Required: ${pattern.characteristics.followUpRequired}
-    - Thread Length: ${pattern.characteristics.threadLength}
-    - Complexity: ${pattern.characteristics.complexity}
-    
-    Time Range: ${startDate.toISOString()} to ${endDate.toISOString()}
-    
-    Generate realistic emails with:
-    - Realistic subject lines
-    - Realistic sender names and companies
-    - Realistic email content
-    - Appropriate timestamps within the time range
-    - Realistic email metadata (read status, labels, importance)
-    - Proper urgency levels
-    - Realistic email categories
-    
-    Return as JSON array with this structure:
-    [
-      {
-        "subject": "realistic subject",
-        "sender": {
-          "name": "Sender Name",
-          "email": "sender@company.com",
-          "company": "Company Name",
-          "role": "Sender Role"
-        },
-        "recipients": {
-          "to": ["recipient@company.com"],
-          "cc": ["cc@company.com"],
-          "bcc": []
-        },
-        "content": {
-          "body": "realistic email content",
-          "summary": "brief summary",
-          "attachments": []
-        },
-        "metadata": {
-          "urgency": "high",
-          "category": "urgent",
-          "readStatus": "unread",
-          "importance": "high"
+    const allEmails: Email[] = [];
+    const BATCH_SIZE = 8; // Generate 8 emails per AI call for quality
+    const batches = Math.ceil(count / BATCH_SIZE);
+
+    this.logInfo(`Generating ${count} ${pattern.type} emails in ${batches} batches`);
+
+    for (let batchIndex = 0; batchIndex < batches; batchIndex++) {
+      const batchCount = Math.min(BATCH_SIZE, count - (batchIndex * BATCH_SIZE));
+
+      this.logInfo(`  Batch ${batchIndex + 1}/${batches}: Generating ${batchCount} emails...`);
+
+      try {
+        const batchEmails = await this.generateEmailBatch(
+          pattern,
+          batchCount,
+          startDate,
+          endDate,
+          userProfile,
+          batchIndex
+        );
+
+        allEmails.push(...batchEmails);
+        this.logInfo(`  ✓ Generated ${batchEmails.length} emails (total: ${allEmails.length}/${count})`);
+
+        // Small delay to avoid rate limits
+        if (batchIndex < batches - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
+      } catch (error) {
+        this.logError(`Failed to generate batch ${batchIndex + 1}`, { error: error.message });
+        // Continue with next batch
       }
-    ]
-    `;
+    }
+
+    return allEmails;
+  }
+
+  /**
+   * Generate a single batch of emails with detailed, realistic content
+   */
+  private async generateEmailBatch(
+    pattern: EmailPattern,
+    count: number,
+    startDate: Date,
+    endDate: Date,
+    userProfile: UserProfile,
+    batchIndex: number
+  ): Promise<Email[]> {
+    const prompt = `Generate ${count} highly realistic ${pattern.type} emails for a ${userProfile.role} in the ${userProfile.industry} industry.
+
+**CRITICAL REQUIREMENTS:**
+1. Each email MUST have a FULL, DETAILED body (3-10 paragraphs, 200-500 words)
+2. Email bodies must be contextually realistic and specific to the subject
+3. Include realistic greetings, signatures, and professional formatting
+4. Use realistic company names, project names, and specific details
+5. Include realistic email chains (references to previous conversations)
+
+**User Profile:**
+- Role: ${userProfile.role}
+- Industry: ${userProfile.industry}
+- Communication Style: ${userProfile.communicationStyle}
+- Urgency Level: ${userProfile.urgencyLevel}
+
+**Email Pattern:**
+- Type: ${pattern.type}
+- Priority: ${pattern.characteristics.priority}
+- Complexity: ${pattern.characteristics.complexity}
+
+**Content Guidelines for ${pattern.type} emails:**
+${this.getPatternGuidelines(pattern.type)}
+
+Return ONLY a valid JSON array (no markdown, no code blocks) with this EXACT structure:
+[
+  {
+    "subject": "Specific, realistic subject line",
+    "sender": {
+      "name": "Full Name",
+      "email": "realistic.email@company.com",
+      "company": "Specific Company Name",
+      "role": "Specific Job Title"
+    },
+    "recipients": {
+      "to": ["you@yourcompany.com"],
+      "cc": [],
+      "bcc": []
+    },
+    "content": {
+      "body": "FULL EMAIL BODY - MUST BE 200-500 WORDS with realistic greeting, multiple paragraphs discussing the topic in detail, specific asks or information, and professional closing with signature. Example:\n\nHi [Name],\n\n[3-5 detailed paragraphs about the email topic with specific details, names, dates, numbers, etc.]\n\nBest regards,\n[Sender Name]\n[Title]\n[Company]",
+      "summary": "One sentence summary",
+      "attachments": []
+    },
+    "metadata": {
+      "urgency": "${pattern.characteristics.priority}",
+      "category": "${pattern.type}",
+      "readStatus": "unread",
+      "importance": "${pattern.characteristics.priority}"
+    }
+  }
+]`;
 
     try {
       const response = await this.aiService.generateResponse(prompt);
-      const emailData = JSON.parse(response);
-      
+
+      // Clean response - remove markdown code blocks if present
+      let cleanedResponse = response.trim();
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\n/, '').replace(/\n```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\n/, '').replace(/\n```$/, '');
+      }
+
+      const emailData = JSON.parse(cleanedResponse);
+
+      if (!Array.isArray(emailData)) {
+        throw new Error('AI response is not an array');
+      }
+
+      // Validate email bodies
+      const validatedData = emailData.filter(email => {
+        if (!email.content?.body || email.content.body.length < 100) {
+          this.logWarn(`Skipping email with insufficient body content: "${email.subject}"`);
+          return false;
+        }
+        return true;
+      });
+
+      if (validatedData.length < emailData.length) {
+        this.logWarn(`Filtered out ${emailData.length - validatedData.length} emails with poor quality`);
+      }
+
       // Convert to Gmail API format
-      return emailData.map((email: any, index: number) => {
+      return validatedData.map((email: any, index: number) => {
         const timestamp = this.generateRealisticTimestamp(startDate, endDate, pattern.characteristics.responseTime);
         const date = new Date(timestamp);
         const rfc2822Date = this.formatDateToRFC2822(date);
-        
-        return this.createGmailFormatEmail(email, index, pattern.type, rfc2822Date);
+
+        return this.createGmailFormatEmail(email, batchIndex * 8 + index, pattern.type, rfc2822Date);
       });
 
     } catch (error) {
-      this.logError(`Failed to generate emails for pattern ${pattern.type}`, { error: error.message });
+      this.logError(`Failed to generate email batch`, { error: error.message });
       return [];
     }
+  }
+
+  /**
+   * Get content guidelines for specific email patterns
+   */
+  private getPatternGuidelines(patternType: string): string {
+    const guidelines: Record<string, string> = {
+      urgent: `- Mention specific deadlines, critical issues, or time-sensitive matters
+- Include phrases like "ASAP", "urgent", "critical", "deadline"
+- Reference specific projects, clients, or incidents requiring immediate attention
+- Use urgent but professional tone`,
+
+      meeting: `- Include specific meeting times, dates, and locations (or Zoom links)
+- List attendees or teams involved
+- Provide clear agenda items or discussion topics
+- Include preparation materials or pre-read requirements`,
+
+      'follow-up': `- Reference previous conversations or emails
+- Include action items from previous discussions
+- Mention specific people who need to respond
+- Set clear next steps or deadlines`,
+
+      newsletter: `- Include company updates, industry news, or announcements
+- Use bullet points and sections
+- Include links to resources (use example.com URLs)
+- Professional marketing tone`,
+
+      project: `- Discuss specific project milestones, deliverables, or blockers
+- Reference team members, timelines, and dependencies
+- Include status updates and next steps
+- Mention specific tools, technologies, or methodologies`,
+
+      notification: `- System alerts, automated messages, or service updates
+- Clear subject indicating the type of notification
+- Concise, informational content
+- May include verification codes, alerts, or status changes`,
+
+      social: `- Informal but professional tone
+- Team building, company events, or casual updates
+- May include invitations or social announcements
+- Warmer, friendlier language`
+    };
+
+    return guidelines[patternType] || '- Create realistic, professional email content relevant to the pattern type';
   }
 
   /**
@@ -839,7 +951,7 @@ export class WholeInboxGenerator extends BaseService {
         timezone: 'America/New_York',
         workingHours: { start: '08:00', end: '18:00' }
       },
-      emailCount: 500,
+      emailCount: 100, // Reduced for quality - use getExecutiveTemplateFullScale() for 500 emails
       timeRange: {
         start: '2024-01-01T00:00:00Z',
         end: '2024-12-31T23:59:59Z'
@@ -917,7 +1029,7 @@ export class WholeInboxGenerator extends BaseService {
         timezone: 'America/New_York',
         workingHours: { start: '09:00', end: '17:00' }
       },
-      emailCount: 300,
+      emailCount: 60, // Reduced for quality - use getManagerTemplateFullScale() for 300 emails
       timeRange: {
         start: '2024-01-01T00:00:00Z',
         end: '2024-12-31T23:59:59Z'
@@ -995,7 +1107,7 @@ export class WholeInboxGenerator extends BaseService {
         timezone: 'America/New_York',
         workingHours: { start: '09:00', end: '17:00' }
       },
-      emailCount: 150,
+      emailCount: 40, // Reduced for quality - use getIndividualTemplateFullScale() for 150 emails
       timeRange: {
         start: '2024-01-01T00:00:00Z',
         end: '2024-12-31T23:59:59Z'
@@ -1085,7 +1197,7 @@ export class WholeInboxGenerator extends BaseService {
         timezone: 'America/New_York',
         workingHours: { start: '09:00', end: '17:00' }
       },
-      emailCount: 400,
+      emailCount: 80, // Reduced for quality - use getMixedRoleTemplateFullScale() for 400 emails
       timeRange: {
         start: '2024-01-01T00:00:00Z',
         end: '2024-12-31T23:59:59Z'
@@ -1146,9 +1258,81 @@ export class WholeInboxGenerator extends BaseService {
   }
 
   /**
+   * Get quick test template (20 emails for fast testing)
+   */
+  getQuickTestTemplate(): InboxTemplate {
+    return {
+      userProfile: {
+        role: 'executive',
+        industry: 'technology',
+        communicationStyle: 'formal',
+        urgencyLevel: 'high',
+        emailVolume: 'high',
+        preferences: {
+          responseTime: 'within_hour',
+          priorityLevel: 'high',
+          followUpRequired: true,
+          meetingPreferences: ['morning', 'afternoon'],
+          communicationChannels: ['email', 'calendar']
+        },
+        timezone: 'America/New_York',
+        workingHours: { start: '08:00', end: '18:00' }
+      },
+      emailCount: 20, // Quick test - generates in ~2 minutes
+      timeRange: {
+        start: '2024-10-01T00:00:00Z',
+        end: '2024-10-03T23:59:59Z'
+      },
+      emailPatterns: [
+        {
+          type: 'urgent',
+          frequency: 0.4,
+          characteristics: {
+            responseTime: 'immediate',
+            priority: 'high',
+            followUpRequired: true,
+            threadLength: 'short',
+            complexity: 'moderate'
+          },
+          templates: []
+        },
+        {
+          type: 'meeting',
+          frequency: 0.35,
+          characteristics: {
+            responseTime: 'within_hour',
+            priority: 'high',
+            followUpRequired: false,
+            threadLength: 'medium',
+            complexity: 'simple'
+          },
+          templates: []
+        },
+        {
+          type: 'project',
+          frequency: 0.25,
+          characteristics: {
+            responseTime: 'within_day',
+            priority: 'medium',
+            followUpRequired: true,
+            threadLength: 'long',
+            complexity: 'complex'
+          },
+          templates: []
+        }
+      ],
+      relationships: [],
+      categories: []
+    };
+  }
+
+  /**
    * Get template by role
    */
   getTemplate(role: string): InboxTemplate | undefined {
+    if (role === 'quick-test') {
+      return this.getQuickTestTemplate();
+    }
     return this.templates.get(role);
   }
 
@@ -1156,6 +1340,6 @@ export class WholeInboxGenerator extends BaseService {
    * List available templates
    */
   getAvailableTemplates(): string[] {
-    return Array.from(this.templates.keys());
+    return ['quick-test', ...Array.from(this.templates.keys())];
   }
 }

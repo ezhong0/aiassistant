@@ -8,7 +8,7 @@
  */
 
 import { AgentFactory } from '../src/framework/agent-factory';
-import { serviceManager } from '../src/services/service-manager';
+import { scriptContainer } from './utils/container-helper';
 import logger from '../src/utils/logger';
 
 interface MemoryTestResult {
@@ -201,17 +201,17 @@ class MemoryCleanupTester {
 
     try {
       // Get initial stats
-      const initialStats = serviceManager.getServiceStats();
+      const initialStats = scriptContainer.getServiceStats();
       logger.info('Initial ServiceManager stats', { stats: initialStats });
 
       // Wait for cleanup to potentially run
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Force cleanup
-      await serviceManager.forceCleanup();
+      await scriptContainer.forceCleanup();
 
       // Get final stats
-      const finalStats = serviceManager.getServiceStats();
+      const finalStats = scriptContainer.getServiceStats();
       logger.info('Final ServiceManager stats', { stats: finalStats });
 
       const memoryAfter = this.getMemoryUsage();

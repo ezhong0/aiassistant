@@ -50,17 +50,11 @@ const AuthSchema = z.object({
 
 // External Services
 const ServicesSchema = z.object({
-  database: z.object({
-    url: z.string().optional(),
-    poolSize: z.number().positive().default(10),
-    timeout: z.number().positive().default(30000),
-  }).optional(),
-  
   redis: z.object({
     url: z.string().optional(),
     timeout: z.number().positive().default(5000),
   }).optional(),
-  
+
   openai: z.object({
     apiKey: z.string().optional(),
     timeout: z.number().positive().default(30000),
@@ -354,11 +348,6 @@ export class UnifiedConfigService extends BaseService {
           },
         },
         services: {
-          database: {
-            url: process.env.DATABASE_URL,
-            poolSize: process.env.DATABASE_POOL_SIZE ? parseInt(process.env.DATABASE_POOL_SIZE) : undefined,
-            timeout: process.env.DATABASE_TIMEOUT ? parseInt(process.env.DATABASE_TIMEOUT) : undefined,
-          },
           redis: {
             url: process.env.REDIS_URL,
             timeout: process.env.REDIS_TIMEOUT ? parseInt(process.env.REDIS_TIMEOUT) : undefined,
@@ -476,7 +465,6 @@ export class UnifiedConfigService extends BaseService {
       port: this.config.environment.PORT,
       hasGoogleAuth: !!(this.config.auth.google?.clientId && this.config.auth.google?.clientSecret),
       hasOpenAI: !!this.config.services.openai?.apiKey,
-      hasDatabase: !!this.config.services.database?.url,
       hasRedis: !!this.config.services.redis?.url,
       aiModels: Object.keys(this.config.ai.models),
       rateLimiting: this.config.security.rateLimiting.enabled,
@@ -567,10 +555,6 @@ export class UnifiedConfigService extends BaseService {
     return this.config.auth.google;
   }
 
-  get databaseUrl(): string | undefined {
-    return this.config.services.database?.url;
-  }
-
   get redisUrl(): string | undefined {
     return this.config.services.redis?.url;
   }
@@ -610,7 +594,6 @@ export class UnifiedConfigService extends BaseService {
         features: {
           googleAuth: !!this.googleAuth?.clientId,
           openai: !!this.openaiApiKey,
-          database: !!this.databaseUrl,
           redis: !!this.redisUrl,
         },
         issues,

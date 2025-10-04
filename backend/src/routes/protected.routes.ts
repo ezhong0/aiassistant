@@ -1,15 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import express, { Response } from 'express';
+import express, { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { validateRequest } from '../middleware/validation.middleware';
-import { 
-  createAuthenticateToken, 
-  createOptionalAuth, 
-  requirePermissions, 
-  requireOwnership,
-  rateLimitAuth,
-  AuthenticatedRequest, 
-} from '../middleware/auth.middleware';
+import {
+  createSupabaseAuth,
+  createOptionalSupabaseAuth,
+  SupabaseAuthenticatedRequest,
+} from '../middleware/supabase-auth.middleware';
 import { Permission } from '../types/auth.types';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
 import { validateAndSendResponse } from '../utils/response-validation.util';
@@ -20,11 +17,80 @@ import type { AppContainer } from '../di';
  */
 export function createProtectedRoutes(container: AppContainer) {
   const router = express.Router();
-  
-  // Create middleware with injected dependencies
-  const authService = container.resolve('authService');
-  const authenticateToken = createAuthenticateToken(authService);
-  const optionalAuth = createOptionalAuth(authService);
+
+  // Create Supabase auth middleware
+  const supabaseJwtSecret = process.env.SUPABASE_JWT_SECRET;
+  if (!supabaseJwtSecret) {
+    throw new Error('SUPABASE_JWT_SECRET is required for protected routes');
+  }
+
+  const authenticateToken = createSupabaseAuth(supabaseJwtSecret);
+  const optionalAuth = createOptionalSupabaseAuth(supabaseJwtSecret);
+
+  // Simple ownership middleware - checks if userId param matches authenticated user
+  const requireOwnership = (paramName: string) => {
+    return (req: SupabaseAuthenticatedRequest, res: Response, next: NextFunction) => {
+      const userId = req.params[paramName];
+      if (req.user?.id !== userId) {
+        res.status(403).json({
+          success: false,
+          error: 'Access denied',
+          message: 'You can only access your own resources',
+        });
+        return;
+      }
+      next();
+    };
+  };
+
+  // Simple permissions middleware - checks user permissions in app_metadata
+  const requirePermissions = (permissions: Permission[]) => {
+    return (req: SupabaseAuthenticatedRequest, res: Response, next: NextFunction) => {
+      const userPermissions = (req.supabasePayload?.app_metadata?.permissions || []) as Permission[];
+
+      const hasAllPermissions = permissions.every(p => userPermissions.includes(p));
+
+      if (!hasAllPermissions) {
+        res.status(403).json({
+          success: false,
+          error: 'Insufficient permissions',
+          message: `Required permissions: ${permissions.join(', ')}`,
+        });
+        return;
+      }
+      next();
+    };
+  };
+
+  // Simple rate limiting middleware
+  const rateLimitAuth = (maxRequests: number, windowMs: number) => {
+    const requests = new Map<string, number[]>();
+
+    return (req: SupabaseAuthenticatedRequest, res: Response, next: NextFunction) => {
+      const userId = req.user?.id;
+      if (!userId) {
+        next();
+        return;
+      }
+
+      const now = Date.now();
+      const userRequests = requests.get(userId) || [];
+      const recentRequests = userRequests.filter(time => now - time < windowMs);
+
+      if (recentRequests.length >= maxRequests) {
+        res.status(429).json({
+          success: false,
+          error: 'Rate limit exceeded',
+          message: `Too many requests. Limit: ${maxRequests} per ${windowMs}ms`,
+        });
+        return;
+      }
+
+      recentRequests.push(now);
+      requests.set(userId, recentRequests);
+      next();
+    };
+  };
 
 // Validation schemas
 const profileUpdateSchema = z.object({
@@ -63,23 +129,23 @@ const dashboardQuerySchema = z.object({
  * GET /protected/profile
  * Get user profile - requires authentication
  */
-router.get('/profile', 
+router.get('/profile',
   authenticateToken,
   validateRequest({ query: emptyQuerySchema }),
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!; // TypeScript knows this exists due to authenticateToken middleware
-    
-    
-    
+
+
+
     res.json({
       success: true,
       data: {
         user: {
-          id: user.userId,
+          id: user.id,
           email: user.email,
-          name: user.name,
-          picture: user.picture,
+          name: user.metadata?.name,
+          picture: user.metadata?.picture,
         },
         metadata: {
           lastAccess: new Date().toISOString(),
@@ -88,7 +154,7 @@ router.get('/profile',
       },
     });
   } catch (error) {
-    
+
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -100,30 +166,30 @@ router.get('/profile',
  * PUT /protected/profile
  * Update user profile - requires authentication
  */
-router.put('/profile', 
+router.put('/profile',
   authenticateToken,
   validateRequest({ body: profileUpdateSchema }),
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
     const { name, picture } = req.validatedBody as z.infer<typeof profileUpdateSchema>;
-    
+
     // Validation is now handled by Zod schema
-    
+
     res.json({
       success: true,
       data: {
         user: {
-          id: user.userId,
+          id: user.id,
           email: user.email,
-          name: name || user.name,
-          picture: picture || user.picture,
+          name: name || user.metadata?.name,
+          picture: picture || user.metadata?.picture,
         },
         message: 'Profile updated successfully',
       },
     });
   } catch (error) {
-    
+
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -135,25 +201,25 @@ router.put('/profile',
  * GET /protected/users/:userId
  * Get specific user data - requires authentication and ownership
  */
-router.get('/users/:userId', 
-  authenticateToken, 
+router.get('/users/:userId',
+  authenticateToken,
   validateRequest({ params: userIdParamSchema }),
   requireOwnership('userId'),
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
       const { userId } = req.params;
-      
-      
-      
+
+
+
       res.json({
         success: true,
         data: {
           user: {
-            id: user.userId,
+            id: user.id,
             email: user.email,
-            name: user.name,
-            picture: user.picture,
+            name: user.metadata?.name,
+            picture: user.metadata?.picture,
           },
           permissions: ['READ_PROFILE', 'UPDATE_PROFILE'],
           settings: {
@@ -163,7 +229,7 @@ router.get('/users/:userId',
         },
       });
     } catch (error) {
-      
+
       res.status(500).json({
         success: false,
         error: 'Internal server error',
@@ -176,25 +242,25 @@ router.get('/users/:userId',
  * GET /protected/admin/users
  * Admin endpoint - requires authentication and admin permissions
  */
-router.get('/admin/users', 
+router.get('/admin/users',
   authenticateToken,
   requirePermissions([Permission.ADMIN_ACCESS]),
   validateRequest({ query: adminUsersQuerySchema }),
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
-      
-      
-      
+
+
+
       // In a real app, you'd fetch users from database
       res.json({
         success: true,
         data: {
           users: [
             {
-              id: user.userId,
+              id: user.id,
               email: user.email,
-              name: user.name,
+              name: user.metadata?.name,
               role: 'admin',
               lastLogin: new Date().toISOString(),
             },
@@ -205,7 +271,7 @@ router.get('/admin/users',
         },
       });
     } catch (error) {
-      
+
       res.status(500).json({
         success: false,
         error: 'Internal server error',
@@ -218,25 +284,25 @@ router.get('/admin/users',
  * GET /protected/dashboard
  * Dashboard with optional authentication - shows different content for authenticated users
  */
-router.get('/dashboard', 
-  optionalAuth, 
+router.get('/dashboard',
+  optionalAuth,
   validateRequest({ query: dashboardQuerySchema }),
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
   try {
     const user = req.user;
-    
+
     if (user) {
-      
-      
+
+
       res.json({
         success: true,
         data: {
-          welcome: `Welcome back, ${user.name}!`,
+          welcome: `Welcome back, ${user.metadata?.name || user.email}!`,
           user: {
-            id: user.userId,
+            id: user.id,
             email: user.email,
-            name: user.name,
-            picture: user.picture,
+            name: user.metadata?.name,
+            picture: user.metadata?.picture,
           },
           personalizedContent: [
             'Your recent activity',
@@ -247,8 +313,8 @@ router.get('/dashboard',
         },
       });
     } else {
-      
-      
+
+
       res.json({
         success: true,
         data: {
@@ -264,7 +330,7 @@ router.get('/dashboard',
       });
     }
   } catch (error) {
-    
+
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -276,33 +342,33 @@ router.get('/dashboard',
  * POST /protected/api-heavy
  * Rate-limited endpoint for heavy API operations
  */
-router.post('/api-heavy', 
+router.post('/api-heavy',
   authenticateToken,
   validateRequest({ body: apiHeavyRequestSchema }),
   rateLimitAuth(10, 60 * 1000), // 10 requests per minute
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
       const { operation, parameters } = req.validatedBody as z.infer<typeof apiHeavyRequestSchema>;
-      
-      
+
+
       // Simulate heavy processing
       (globalThis as any).setTimeout(() => {
         const responseData = {
           success: true,
           data: {
             result: 'Heavy operation completed',
-            processedBy: user.userId,
+            processedBy: user.id,
             timestamp: new Date().toISOString(),
           },
         };
-        
+
         // ✅ Validate response with Zod schema
         validateAndSendResponse(res, SuccessResponseSchema, responseData);
       }, 1000);
-      
+
     } catch (error) {
-      
+
       const errorData = {
         success: false,
         error: 'Internal server error',
@@ -317,17 +383,17 @@ router.post('/api-heavy',
  * GET /protected/health
  * Health check for protected routes - requires authentication
  */
-router.get('/health', 
-  authenticateToken, 
+router.get('/health',
+  authenticateToken,
   validateRequest({ query: emptyQuerySchema }),
-  (req: AuthenticatedRequest, res: Response) => {
+  (req: SupabaseAuthenticatedRequest, res: Response) => {
   const user = req.user!;
-  
+
   res.json({
     success: true,
     data: {
       status: 'Protected routes are healthy',
-      authenticatedUser: user.userId,
+      authenticatedUser: user.id,
       timestamp: new Date().toISOString(),
       middleware: {
         authentication: 'working',

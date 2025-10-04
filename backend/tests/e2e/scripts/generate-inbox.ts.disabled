@@ -19,12 +19,44 @@ import { WholeInboxGenerator, InboxData } from '../generators/whole-inbox-genera
 
 async function main() {
   const args = process.argv.slice(2);
-  const role = (args[0] || 'executive') as 'executive' | 'manager' | 'individual' | 'mixed';
+
+  if (args[0] === '--help' || args[0] === '-h') {
+    console.log('Generate Inbox - Create realistic test inboxes with AI');
+    console.log('');
+    console.log('Usage: npm run e2e:generate-inbox [role] [outputFile]');
+    console.log('');
+    console.log('Roles:');
+    console.log('  quick-test    20 emails (2-3 min, ~$0.10) - Fast testing');
+    console.log('  individual    40 emails (5-8 min, ~$0.20) - Individual contributor');
+    console.log('  manager       60 emails (8-12 min, ~$0.30) - Manager');
+    console.log('  executive    100 emails (12-18 min, ~$0.50) - Executive');
+    console.log('  mixed         80 emails (10-15 min, ~$0.40) - Mixed role');
+    console.log('');
+    console.log('Examples:');
+    console.log('  npm run e2e:generate-inbox quick-test');
+    console.log('  npm run e2e:generate-inbox executive my-inbox.json');
+    console.log('');
+    console.log('Note: All emails include full, realistic bodies (200-500 words each)');
+    console.log('      Generation uses OpenAI GPT-5 for maximum realism');
+    process.exit(0);
+  }
+
+  const role = (args[0] || 'quick-test') as 'executive' | 'manager' | 'individual' | 'mixed' | 'quick-test';
   const outputFile = args[1] || `inbox-${role}-${Date.now()}.json`;
 
-  console.log('🚀 Generating inbox...');
+  console.log('🚀 Generating realistic inbox with AI...');
   console.log(`   Role: ${role}`);
   console.log(`   Output: ${outputFile}`);
+  console.log('');
+  console.log('⏰ Time estimates:');
+  const estimates: Record<string, string> = {
+    'quick-test': '2-3 minutes (~20 emails with full bodies)',
+    'individual': '5-8 minutes (~40 emails with full bodies)',
+    'manager': '8-12 minutes (~60 emails with full bodies)',
+    'executive': '12-18 minutes (~100 emails with full bodies)',
+    'mixed': '10-15 minutes (~80 emails with full bodies)'
+  };
+  console.log(`   ${estimates[role] || 'Unknown'}`);
   console.log('');
 
   try {
@@ -43,12 +75,13 @@ async function main() {
     console.log(`📋 Loading ${role} template...`);
     const template = inboxGenerator.getTemplate(role);
     if (!template) {
-      throw new Error(`Unknown role: ${role}. Valid roles: executive, manager, individual, mixed`);
+      throw new Error(`Unknown role: ${role}. Valid roles: quick-test, executive, manager, individual, mixed`);
     }
 
     // Generate inbox
-    console.log(`📧 Generating ${template.emailCount} emails...`);
-    console.log('   This may take 1-2 minutes...');
+    console.log(`📧 Generating ${template.emailCount} emails with full realistic bodies...`);
+    console.log('   Each email will have 200-500 words of content');
+    console.log('   Generating in batches of 8 for maximum quality...');
     console.log('');
 
     const startTime = Date.now();

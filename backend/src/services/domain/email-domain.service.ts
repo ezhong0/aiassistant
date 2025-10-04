@@ -1,32 +1,33 @@
 import { ErrorFactory, ERROR_CATEGORIES, APIClientError } from '../../errors';
 import { BaseService } from '../base-service';
-import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
 import { IEmailDomainService, EmailThread, EmailLabel } from './interfaces/email-domain.interface';
-import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
-import { OAuthContext } from '../../types/oauth.types';
+import { SupabaseTokenProvider } from '../supabase-token-provider';
 
 /**
  * Email Domain Service - High-level email operations using standardized API client
- * 
+ *
  * This service provides domain-specific email operations that wrap the Google Gmail API.
  * It handles email sending, searching, retrieval, and management with a clean interface
  * that's easy to use from agents and other services.
- * 
+ *
  * Features:
  * - Send emails with rich formatting and attachments
  * - Search emails with advanced query capabilities
  * - Retrieve email details and threads
  * - Manage email drafts and replies
  * - Handle attachments and file operations
- * - OAuth2 authentication management
+ *
+ * OAuth is handled by Supabase Auth. This service fetches Google tokens from Supabase.
+ * Dependencies are injected via constructor for better testability and explicit dependency management.
  */
 export class EmailDomainService extends BaseService implements Partial<IEmailDomainService> {
-  private googleClient: GoogleAPIClient | null = null;
-
-  constructor(private readonly googleOAuthManager: GoogleOAuthManager) {
+  constructor(
+    private readonly supabaseTokenProvider: SupabaseTokenProvider,
+    private readonly googleAPIClient: GoogleAPIClient
+  ) {
     super('EmailDomainService');
   }
 
@@ -36,10 +37,6 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   protected async onInitialize(): Promise<void> {
     try {
       this.logInfo('Initializing Email Domain Service');
-      
-      // Get Google API client
-      this.googleClient = await getAPIClient<GoogleAPIClient>('google');
-      
       this.logInfo('Email Domain Service initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize Email Domain Service', error);
@@ -52,74 +49,10 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.googleClient = null;
       this.logInfo('Email Domain Service destroyed');
     } catch (error) {
       this.logError('Error destroying Email Domain Service', error);
     }
-  }
-
-  /**
-   * OAuth management methods
-   */
-  async initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-    
-    const { authUrl, state } = await this.googleOAuthManager.generateAuthUrl(context);
-    return { authUrl, state };
-  }
-
-  async completeOAuth(userId: string, code: string, state: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-    
-    const result = await this.googleOAuthManager.exchangeCodeForTokens(code, state);
-    if (!result.success) {
-      throw ErrorFactory.external.google.authFailed(result.error || 'OAuth completion failed');
-    }
-  }
-
-  async refreshTokens(userId: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-    
-    const success = await this.googleOAuthManager.refreshTokens(userId);
-    if (!success) {
-      throw ErrorFactory.external.google.authFailed('Token refresh failed');
-    }
-  }
-
-  async revokeTokens(userId: string): Promise<void> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      throw ErrorFactory.domain.serviceError(this.name, 'GoogleOAuthManager not available');
-    }
-    
-    const success = await this.googleOAuthManager.revokeTokens(userId);
-    if (!success) {
-      throw ErrorFactory.external.google.authFailed('Token revocation failed');
-    }
-  }
-
-  async requiresOAuth(userId: string): Promise<boolean> {
-    this.assertReady();
-    
-    if (!this.googleOAuthManager) {
-      return true; // Assume OAuth required if manager not available
-    }
-    
-    return await this.googleOAuthManager.requiresOAuth(userId);
   }
 
 
@@ -142,19 +75,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }): Promise<{ messageId: string; threadId: string }> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError('EmailDomainService', 'Google client not available');
     }
 
     try {
-      // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
+      // Get Google access token from Supabase for this user
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.sendEmail, params);
@@ -168,7 +96,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       // Build email message in RFC 2822 format
       const message = this.buildEmailMessage(validatedParams as any);
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/send',
         data: { raw: message }
@@ -218,13 +146,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }>> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError('EmailDomainService', 'Google client not available');
     }
 
     try {
       // Get valid tokens for user
-      const token = await this.googleOAuthManager!.getValidTokens(userId);
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
       if (!token) {
         throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
       }
@@ -241,7 +170,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       });
 
       // First, get message IDs
-      const listResponse = await this.googleClient.makeRequest({
+      const listResponse = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/gmail/v1/users/me/messages/list',
         query: {
@@ -258,7 +187,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       // Get detailed information for each message
       const emailPromises = listResponse.data.messages.map(async (message: any) => {
         try {
-          const detailResponse = await this.googleClient!.makeRequest({
+          const detailResponse = await this.googleAPIClient!.makeRequest({
             method: 'GET',
             endpoint: '/gmail/v1/users/me/messages/get',
             query: {
@@ -340,7 +269,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError('EmailDomainService', 'Google client not available');
     }
 
@@ -350,7 +279,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
 
       this.logInfo('Getting email details', { messageId: validatedParams.messageId });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/gmail/v1/users/me/messages/get',
         query: {
@@ -428,7 +357,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }): Promise<{ messageId: string; threadId: string }> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
@@ -454,7 +383,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         inReplyTo
       });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/send',
         data: { raw: replyMessage }
@@ -483,14 +412,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async getEmailThread(threadId: string): Promise<EmailThread> {
     this.assertReady();
     
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Getting email thread', { threadId });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/gmail/v1/users/me/threads/get',
         query: {
@@ -677,14 +606,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async archiveEmail(params: { messageId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Archiving email', { messageId: params.messageId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -706,14 +635,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async markRead(params: { messageId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Marking email as read', { messageId: params.messageId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -735,14 +664,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async markUnread(params: { messageId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Marking email as unread', { messageId: params.messageId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -764,14 +693,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async starEmail(params: { messageId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Starring email', { messageId: params.messageId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -793,14 +722,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async unstarEmail(params: { messageId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Unstarring email', { messageId: params.messageId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -822,14 +751,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async createLabel(params: { name: string; color?: string }): Promise<EmailLabel> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Creating label', { name: params.name });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/labels',
         data: {
@@ -861,14 +790,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async addLabel(params: { messageId: string; labelId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Adding label to email', { messageId: params.messageId, labelId: params.labelId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -890,14 +819,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   async removeLabel(params: { messageId: string; labelId: string }): Promise<void> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Removing label from email', { messageId: params.messageId, labelId: params.labelId });
 
-      await this.googleClient.makeRequest({
+      await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/modify',
         query: { id: params.messageId },
@@ -922,14 +851,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }> {
     this.assertReady();
 
-    if (!this.googleClient) {
+    if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
     }
 
     try {
       this.logInfo('Downloading attachment', { messageId: params.messageId, attachmentId: params.attachmentId });
 
-      const response = await this.googleClient.makeRequest({
+      const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
         endpoint: '/gmail/v1/users/me/messages/attachments',
         query: {
@@ -960,15 +889,125 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   }
 
   /**
+   * Batch modify emails (add/remove labels in bulk)
+   * Can modify up to 1000 messages in a single call
+   */
+  async batchModifyEmails(userId: string, params: {
+    messageIds: string[];
+    addLabelIds?: string[];
+    removeLabelIds?: string[];
+  }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleAPIClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    if (!params.messageIds || params.messageIds.length === 0) {
+      throw ErrorFactory.domain.validationFailed('At least one message ID is required');
+    }
+
+    if (params.messageIds.length > 1000) {
+      throw ErrorFactory.domain.validationFailed('Cannot modify more than 1000 messages at once');
+    }
+
+    try {
+      // Get valid tokens for user
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
+      if (!token) {
+        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
+      }
+
+      this.logInfo('Batch modifying emails', {
+        count: params.messageIds.length,
+        addingLabels: params.addLabelIds?.length || 0,
+        removingLabels: params.removeLabelIds?.length || 0
+      });
+
+      await this.googleAPIClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/batchModify',
+        data: {
+          ids: params.messageIds,
+          addLabelIds: params.addLabelIds,
+          removeLabelIds: params.removeLabelIds
+        }
+      });
+
+      this.logInfo('Batch modify completed successfully', {
+        modifiedCount: params.messageIds.length
+      });
+    } catch (error) {
+      this.logError('Failed to batch modify emails', error, {
+        count: params.messageIds.length
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Batch delete emails (permanently delete in bulk)
+   * Can delete up to 1000 messages in a single call
+   */
+  async batchDeleteEmails(userId: string, params: {
+    messageIds: string[];
+  }): Promise<void> {
+    this.assertReady();
+
+    if (!this.googleAPIClient) {
+      throw ErrorFactory.domain.serviceError(this.name, 'Google client not available');
+    }
+
+    if (!params.messageIds || params.messageIds.length === 0) {
+      throw ErrorFactory.domain.validationFailed('At least one message ID is required');
+    }
+
+    if (params.messageIds.length > 1000) {
+      throw ErrorFactory.domain.validationFailed('Cannot delete more than 1000 messages at once');
+    }
+
+    try {
+      // Get valid tokens for user
+      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+      const token = tokens.access_token;
+      if (!token) {
+        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
+      }
+
+      this.logInfo('Batch deleting emails', {
+        count: params.messageIds.length
+      });
+
+      await this.googleAPIClient.makeRequest({
+        method: 'POST',
+        endpoint: '/gmail/v1/users/me/messages/batchDelete',
+        data: {
+          ids: params.messageIds
+        }
+      });
+
+      this.logInfo('Batch delete completed successfully', {
+        deletedCount: params.messageIds.length
+      });
+    } catch (error) {
+      this.logError('Failed to batch delete emails', error, {
+        count: params.messageIds.length
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get service health information
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
-      const healthy = this.isReady() && this.initialized && !!this.googleClient;
+      const healthy = this.isReady() && this.initialized && !!this.googleAPIClient;
       const details = {
         initialized: this.initialized,
-        hasGoogleClient: !!this.googleClient,
-        authenticated: this.googleClient?.isAuthenticated() || false
+        hasGoogleClient: !!this.googleAPIClient,
+        authenticated: this.googleAPIClient?.isAuthenticated() || false
       };
 
       return { healthy, details };

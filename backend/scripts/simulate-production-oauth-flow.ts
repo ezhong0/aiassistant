@@ -7,7 +7,7 @@ import path from 'path';
 const envPath = path.resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath });
 
-import { initializeServices, serviceManager } from '../src/services/service-manager';
+import { initializeServices, scriptContainer } from './utils/container-helper';
 import { TokenStorageService } from '../src/services/token-storage.service';
 import { TokenManager } from '../src/services/token-manager';
 import logger from '../src/utils/logger';
@@ -20,8 +20,8 @@ async function simulateProductionOAuthFlow() {
     await initializeServices();
     
     // Get services
-    const tokenStorageService = serviceManager.getService<TokenStorageService>('tokenStorageService');
-    const tokenManager = serviceManager.getService<TokenManager>('tokenManager');
+    const tokenStorageService = scriptContainer.getService<TokenStorageService>('tokenStorageService');
+    const tokenManager = scriptContainer.getService<TokenManager>('tokenManager');
     
     if (!tokenStorageService || !tokenManager) {
       throw new Error('Required services not available');

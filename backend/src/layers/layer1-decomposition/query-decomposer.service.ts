@@ -7,7 +7,7 @@
 
 import { BaseService } from '../../services/base-service';
 import { DecompositionInput, ExecutionGraph } from './execution-graph.types';
-import { GenericAIService } from '../../services/generic-ai.service';
+import { AIDomainService } from '../../services/domain/ai-domain.service';
 import { DecompositionPromptBuilder } from './decomposition-prompt-builder';
 import { ExecutionGraphValidator } from './execution-graph-validator';
 import { ErrorFactory } from '../../errors/error-factory';
@@ -16,7 +16,7 @@ export class QueryDecomposerService extends BaseService {
   private promptBuilder: DecompositionPromptBuilder;
   private validator: ExecutionGraphValidator;
 
-  constructor(private aiService: GenericAIService) {
+  constructor(private aiService: AIDomainService) {
     super('QueryDecomposerService');
     this.promptBuilder = new DecompositionPromptBuilder(aiService);
     this.validator = new ExecutionGraphValidator();

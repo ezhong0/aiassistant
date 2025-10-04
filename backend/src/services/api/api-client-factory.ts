@@ -38,12 +38,11 @@ import logger from '../../utils/logger';
  * ```
  */
 export class APIClientFactory extends BaseService {
-  private static instance: APIClientFactory;
   private clients: Map<string, APIClientInstance> = new Map();
   private registrations: Map<string, APIClientRegistration> = new Map();
   private config: APIClientFactoryConfig;
 
-  private constructor(config: APIClientFactoryConfig = {}) {
+  constructor(config: APIClientFactoryConfig = {}) {
     super('APIClientFactory');
     this.config = {
       defaultConfig: {
@@ -66,16 +65,6 @@ export class APIClientFactory extends BaseService {
       enableGlobalRateLimit: false,
       ...config
     };
-  }
-
-  /**
-   * Get singleton instance
-   */
-  static getInstance(config?: APIClientFactoryConfig): APIClientFactory {
-    if (!APIClientFactory.instance) {
-      APIClientFactory.instance = new APIClientFactory(config);
-    }
-    return APIClientFactory.instance;
   }
 
   /**
@@ -432,6 +421,3 @@ export class APIClientFactory extends BaseService {
     this.logInfo('Factory configuration updated', { newConfig });
   }
 }
-
-// Export singleton instance
-export const apiClientFactory = APIClientFactory.getInstance();

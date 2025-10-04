@@ -7,11 +7,11 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { QueryDecomposerService } from '../../../src/layers/layer1-decomposition/query-decomposer.service';
 import { DecompositionInput, ExecutionGraph } from '../../../src/layers/layer1-decomposition/execution-graph.types';
-import { GenericAIService } from '../../../src/services/generic-ai.service';
+import { AIDomainService } from '../../../src/services/domain/ai-domain.service';
 
 describe('Layer 1: QueryDecomposerService', () => {
   let decomposer: QueryDecomposerService;
-  let mockAIService: jest.Mocked<GenericAIService>;
+  let mockAIService: jest.Mocked<AIDomainService>;
 
   beforeEach(() => {
     // Create mock AI service
@@ -65,7 +65,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(mockGraph),
         parsed: mockGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 500, processingTime: 800, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 500, processingTime: 800, success: true }
       });
 
       const input: DecompositionInput = {
@@ -163,7 +163,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(mockGraph),
         parsed: mockGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 2500, processingTime: 1200, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 2500, processingTime: 1200, success: true }
       });
 
       const input: DecompositionInput = {
@@ -226,7 +226,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(mockGraph),
         parsed: mockGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 600, processingTime: 700, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 600, processingTime: 700, success: true }
       });
 
       const input: DecompositionInput = {
@@ -292,7 +292,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(mockGraph),
         parsed: mockGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 1200, processingTime: 900, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 1200, processingTime: 900, success: true }
       });
 
       const input: DecompositionInput = {
@@ -368,7 +368,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(mockGraph),
         parsed: mockGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 1500, processingTime: 1000, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 1500, processingTime: 1000, success: true }
       });
 
       const input: DecompositionInput = {
@@ -451,7 +451,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(mockGraph),
         parsed: mockGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 1800, processingTime: 1100, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 1800, processingTime: 1100, success: true }
       });
 
       const input: DecompositionInput = {
@@ -517,7 +517,7 @@ describe('Layer 1: QueryDecomposerService', () => {
         content: JSON.stringify(invalidGraph),
         parsed: invalidGraph,
         context: '',
-        metadata: { model: 'gpt-4o-mini', tokens: 500, processingTime: 800, success: true }
+        metadata: { model: 'gpt-5-nano', tokens: 500, processingTime: 800, success: true }
       });
 
       const input: DecompositionInput = {

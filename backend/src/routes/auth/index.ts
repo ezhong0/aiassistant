@@ -2,26 +2,18 @@
  * Authentication Routes Index
  *
  * Aggregates all authentication-related routes:
- * - OAuth flows (Google, Slack)
- * - Token management (refresh, logout, validate)
  * - Debug endpoints (dev environment only)
+ *
+ * NOTE: OAuth is handled by Supabase Auth, not backend routes
  */
 
 import express from 'express';
-import { createOAuthRoutes } from './oauth.routes';
-import { createTokenRoutes } from './token.routes';
 import { createDebugRoutes } from './debug';
 import logger from '../../utils/logger';
 import type { AppContainer } from '../../di';
 
 export function createAuthRoutes(container: AppContainer) {
   const router = express.Router();
-
-  // Mount OAuth routes with container
-  router.use('/', createOAuthRoutes(container));
-
-  // Mount token management routes
-  router.use('/', createTokenRoutes(container));
 
 // Mount debug routes (only in development/test environments)
 if (process.env.NODE_ENV !== 'production') {

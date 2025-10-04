@@ -7,19 +7,22 @@ import { AIDomainService } from '../../services/domain/ai-domain.service';
 
 /**
  * Register domain-specific business logic services
- * 
+ *
  * These services provide high-level operations for specific domains
  * like email, calendar, contacts, etc.
+ *
+ * OAuth is handled by Supabase Auth. Domain services use SupabaseTokenProvider
+ * to fetch Google provider tokens from Supabase.
  */
 export function registerDomainServices(container: AppContainer): void {
   container.register({
-    // Email domain service (depends on googleOAuthManager)
+    // Email domain service (depends on supabaseTokenProvider, googleAPIClient)
     emailDomainService: asClass(EmailDomainService).singleton(),
 
-    // Calendar domain service (depends on googleOAuthManager)
+    // Calendar domain service (depends on supabaseTokenProvider, googleAPIClient)
     calendarDomainService: asClass(CalendarDomainService).singleton(),
 
-    // Contacts domain service (depends on googleOAuthManager)
+    // Contacts domain service (depends on supabaseTokenProvider, googleAPIClient)
     contactsDomainService: asClass(ContactsDomainService).singleton(),
 
     // AI domain service (OpenAI integration)

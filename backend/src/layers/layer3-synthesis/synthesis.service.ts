@@ -9,10 +9,10 @@ import { BaseService } from '../../services/base-service';
 import { ExecutionGraph } from '../layer1-decomposition/execution-graph.types';
 import { ExecutionResults } from '../layer2-execution/execution.types';
 import { SynthesisResult, UserPreferences, ResourceUsage, StructuredFindings } from './synthesis.types';
-import { GenericAIService } from '../../services/generic-ai.service';
+import { AIDomainService } from '../../services/domain/ai-domain.service';
 
 export class SynthesisService extends BaseService {
-  constructor(private aiService: GenericAIService) {
+  constructor(private aiService: AIDomainService) {
     super('SynthesisService');
   }
 

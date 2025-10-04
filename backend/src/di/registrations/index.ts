@@ -5,18 +5,20 @@ import { registerDomainServices } from './domain-services';
 import { registerAIServices } from './ai-services';
 import { registerMiddlewareServices } from './middleware-services';
 import { registerLayerServices } from './layer-services';
+import { registerFrameworkServices } from './framework-services';
 import logger from '../../utils/logger';
 
 /**
  * Register all application services in the DI container
  *
  * Services are registered in dependency order:
- * 1. Core infrastructure (database, cache, encryption)
- * 2. Authentication (OAuth, tokens)
- * 3. Domain services (email, calendar, contacts)
- * 4. AI services (OpenAI, circuit breaker)
- * 5. Layer services (3-layer architecture)
- * 6. Middleware services
+ * 1. Core infrastructure (cache, encryption, API clients)
+ * 2. Framework services (tool registry, operation executor)
+ * 3. Authentication (Supabase OAuth)
+ * 4. Domain services (email, calendar, contacts)
+ * 5. AI services (OpenAI, circuit breaker)
+ * 6. Layer services (3-layer architecture)
+ * 7. Middleware services
  *
  * Awilix automatically resolves dependencies based on constructor parameters.
  */
@@ -28,6 +30,7 @@ export function registerAllServices(container: AppContainer): AppContainer {
 
   // Register in order (though awilix handles dependency resolution automatically)
   registerCoreServices(container);
+  registerFrameworkServices(container);
   registerAuthServices(container);
   registerDomainServices(container);
   registerAIServices(container);

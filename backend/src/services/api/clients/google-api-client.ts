@@ -230,7 +230,7 @@ export class GoogleAPIClient extends BaseAPIClient {
    */
   private getMethodFromRequest(request: APIRequest, service: string): any {
     const endpoint = request.endpoint;
-    
+
     // Gmail API methods
     if (service === 'gmail') {
       if (endpoint.includes('/messages/send')) {
@@ -243,9 +243,13 @@ export class GoogleAPIClient extends BaseAPIClient {
         return this.gmail.users.threads.get;
       } else if (endpoint.includes('/messages/attachments')) {
         return this.gmail.users.messages.attachments.get;
+      } else if (endpoint.includes('/messages/batchModify')) {
+        return this.gmail.users.messages.batchModify;
+      } else if (endpoint.includes('/messages/batchDelete')) {
+        return this.gmail.users.messages.batchDelete;
       }
     }
-    
+
     // Calendar API methods
     if (service === 'calendar') {
       if (endpoint.includes('/events/insert')) {
@@ -258,13 +262,15 @@ export class GoogleAPIClient extends BaseAPIClient {
         return this.calendar.events.patch;
       } else if (endpoint.includes('/events/delete')) {
         return this.calendar.events.delete;
+      } else if (endpoint.includes('/events/quickAdd')) {
+        return this.calendar.events.quickAdd;
       } else if (endpoint.includes('/freebusy/query')) {
         return this.calendar.freebusy.query;
       } else if (endpoint.includes('/calendarList/list')) {
         return this.calendar.calendarList.list;
       }
     }
-    
+
     // People API methods
     if (service === 'people') {
       if (endpoint.includes('/people/me/connections')) {
@@ -275,9 +281,13 @@ export class GoogleAPIClient extends BaseAPIClient {
         return this.people.people.updateContact;
       } else if (endpoint.includes('/people/deleteContact')) {
         return this.people.people.deleteContact;
+      } else if (endpoint.includes('/people:batchGet')) {
+        return this.people.people.getBatchGet;
+      } else if (endpoint.includes('/otherContacts')) {
+        return this.people.otherContacts.list;
       }
     }
-    
+
     throw new Error(`Unsupported Google API endpoint: ${endpoint}`);
   }
 

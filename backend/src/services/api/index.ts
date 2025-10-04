@@ -10,7 +10,7 @@
  */
 
 export { BaseAPIClient } from './base-api-client';
-export { APIClientFactory, apiClientFactory } from './api-client-factory';
+export { APIClientFactory } from './api-client-factory';
 
 // Export specific API clients
 export { GoogleAPIClient, OpenAIClient } from './clients';

@@ -13,7 +13,7 @@
  * - Integration between all cache services
  */
 
-import { ServiceManager } from '../src/services/service-manager';
+import { ServiceManager } from './utils/container-helper';
 import { CacheService } from '../src/services/cache.service';
 import { CalendarCacheService } from '../src/services/calendar/calendar-cache.service';
 import { CacheInvalidationService } from '../src/services/cache-invalidation.service';
@@ -31,11 +31,11 @@ interface TestResult {
 }
 
 class CacheConsistencyTester {
-  private serviceManager: ServiceManager;
+  private scriptContainer: ServiceManager;
   private results: TestResult[] = [];
 
   constructor() {
-    this.serviceManager = ServiceManager.getInstance();
+    this.scriptContainer = ServiceManager.getInstance();
   }
 
   async runAllTests(): Promise<void> {
@@ -69,22 +69,22 @@ class CacheConsistencyTester {
     try {
       // Initialize core services first
       const cacheService = new CacheService();
-      await this.serviceManager.registerService('cacheService', cacheService);
+      await this.scriptContainer.registerService('cacheService', cacheService);
 
       const calendarCacheService = new CalendarCacheService();
-      await this.serviceManager.registerService('calendarCacheService', calendarCacheService);
+      await this.scriptContainer.registerService('calendarCacheService', calendarCacheService);
 
       const invalidationService = new CacheInvalidationService();
-      await this.serviceManager.registerService('cacheInvalidationService', invalidationService);
+      await this.scriptContainer.registerService('cacheInvalidationService', invalidationService);
 
       const consistencyService = new CacheConsistencyService();
-      await this.serviceManager.registerService('cacheConsistencyService', consistencyService);
+      await this.scriptContainer.registerService('cacheConsistencyService', consistencyService);
 
       const warmingService = new CacheWarmingService();
-      await this.serviceManager.registerService('cacheWarmingService', warmingService);
+      await this.scriptContainer.registerService('cacheWarmingService', warmingService);
 
       const monitoringService = new CachePerformanceMonitoringService();
-      await this.serviceManager.registerService('cachePerformanceMonitoringService', monitoringService);
+      await this.scriptContainer.registerService('cachePerformanceMonitoringService', monitoringService);
 
       const duration = Date.now() - startTime;
 
@@ -115,7 +115,7 @@ class CacheConsistencyTester {
     const startTime = Date.now();
 
     try {
-      const cacheService = this.serviceManager.getService<CacheService>('cacheService');
+      const cacheService = this.scriptContainer.getService<CacheService>('cacheService');
       if (!cacheService) {
         throw new Error('CacheService not available');
       }
@@ -169,7 +169,7 @@ class CacheConsistencyTester {
     const startTime = Date.now();
 
     try {
-      const calendarCache = this.serviceManager.getService<CalendarCacheService>('calendarCacheService');
+      const calendarCache = this.scriptContainer.getService<CalendarCacheService>('calendarCacheService');
       if (!calendarCache) {
         throw new Error('CalendarCacheService not available');
       }
@@ -221,7 +221,7 @@ class CacheConsistencyTester {
     const startTime = Date.now();
 
     try {
-      const invalidationService = this.serviceManager.getService<CacheInvalidationService>('cacheInvalidationService');
+      const invalidationService = this.scriptContainer.getService<CacheInvalidationService>('cacheInvalidationService');
       if (!invalidationService) {
         throw new Error('CacheInvalidationService not available');
       }
@@ -273,7 +273,7 @@ class CacheConsistencyTester {
     const startTime = Date.now();
 
     try {
-      const consistencyService = this.serviceManager.getService<CacheConsistencyService>('cacheConsistencyService');
+      const consistencyService = this.scriptContainer.getService<CacheConsistencyService>('cacheConsistencyService');
       if (!consistencyService) {
         throw new Error('CacheConsistencyService not available');
       }
@@ -353,7 +353,7 @@ class CacheConsistencyTester {
     const startTime = Date.now();
 
     try {
-      const warmingService = this.serviceManager.getService<CacheWarmingService>('cacheWarmingService');
+      const warmingService = this.scriptContainer.getService<CacheWarmingService>('cacheWarmingService');
       if (!warmingService) {
         throw new Error('CacheWarmingService not available');
       }
@@ -410,9 +410,9 @@ class CacheConsistencyTester {
 
     try {
       // Simulate a scenario where calendar event is created and should invalidate related caches
-      const invalidationService = this.serviceManager.getService<CacheInvalidationService>('cacheInvalidationService');
-      const consistencyService = this.serviceManager.getService<CacheConsistencyService>('cacheConsistencyService');
-      const warmingService = this.serviceManager.getService<CacheWarmingService>('cacheWarmingService');
+      const invalidationService = this.scriptContainer.getService<CacheInvalidationService>('cacheInvalidationService');
+      const consistencyService = this.scriptContainer.getService<CacheConsistencyService>('cacheConsistencyService');
+      const warmingService = this.scriptContainer.getService<CacheWarmingService>('cacheWarmingService');
 
       if (!invalidationService || !consistencyService || !warmingService) {
         throw new Error('Required services not available');
@@ -482,7 +482,7 @@ class CacheConsistencyTester {
     const startTime = Date.now();
 
     try {
-      const monitoringService = this.serviceManager.getService<CachePerformanceMonitoringService>('cachePerformanceMonitoringService');
+      const monitoringService = this.scriptContainer.getService<CachePerformanceMonitoringService>('cachePerformanceMonitoringService');
       if (!monitoringService) {
         throw new Error('CachePerformanceMonitoringService not available');
       }

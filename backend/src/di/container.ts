@@ -29,21 +29,23 @@ export interface Cradle {
   logger: typeof logger;
 
   // Core Infrastructure Services
-  databaseService: import('../services/database.service').DatabaseService;
   cacheService: import('../services/cache.service').CacheService;
   encryptionService: import('../services/encryption.service').EncryptionService;
   sentryService: import('../services/sentry.service').SentryService;
   errorHandlingService: import('../services/error-handling.service').ErrorHandlingService;
+  featureFlagsService: import('../services/feature-flags.service').FeatureFlagsService;
 
-  // Auth Services
-  authService: import('../services/auth.service').AuthService;
-  tokenStorageService: import('../services/token-storage.service').TokenStorageService;
-  tokenManager: import('../services/token-manager').TokenManager;
-  authStatusService: import('../services/auth-status.service').AuthStatusService;
-  oauthStateService: import('../services/oauth-state.service').OAuthStateService;
+  // API Client Services
+  apiClientFactory: import('../services/api/api-client-factory').APIClientFactory;
+  googleAPIClient: import('../services/api/clients/google-api-client').GoogleAPIClient;
+  openAIClient: import('../services/api/clients/openai-api-client').OpenAIClient;
 
-  // OAuth Managers
-  googleOAuthManager: import('../services/oauth/google-oauth-manager').GoogleOAuthManager;
+  // Framework Services
+  toolRegistry: import('../framework/tool-registry').ToolRegistry;
+  operationExecutor: import('../services/domain/strategies/operation-executor').OperationExecutor;
+
+  // Auth Services (Supabase handles OAuth)
+  supabaseTokenProvider: import('../services/supabase-token-provider').SupabaseTokenProvider;
 
   // Middleware
   errorHandler: import('../middleware/errorHandler').ErrorHandlerMiddleware;
@@ -56,8 +58,7 @@ export interface Cradle {
   aiDomainService: import('../services/domain/ai-domain.service').AIDomainService;
 
   // AI Services
-  genericAIService: import('../services/generic-ai.service').GenericAIService;
-  aiService: import('../services/generic-ai.service').GenericAIService; // Alias for genericAIService
+  aiService: import('../services/domain/ai-domain.service').AIDomainService; // Alias for aiDomainService
   aiCircuitBreakerService: import('../services/ai-circuit-breaker.service').AIServiceCircuitBreaker;
 
   // Middleware Services

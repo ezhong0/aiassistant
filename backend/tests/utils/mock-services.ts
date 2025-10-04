@@ -6,43 +6,8 @@
  */
 
 import { jest } from '@jest/globals';
-import type { DatabaseService } from '../../src/services/database.service';
 import type { CacheService } from '../../src/services/cache.service';
 import type { EncryptionService } from '../../src/services/encryption.service';
-
-/**
- * Create a mock DatabaseService with common methods
- */
-export function createMockDatabaseService(overrides?: Partial<DatabaseService>): jest.Mocked<DatabaseService> {
-  const mock = {
-    // BaseService methods
-    name: 'databaseService',
-    initialized: true,
-    destroyed: false,
-    isReady: jest.fn<() => boolean>().mockReturnValue(true),
-    initialize: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    destroy: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    getHealth: jest.fn<() => { healthy: boolean }>().mockReturnValue({ healthy: true }),
-
-    // DatabaseService methods
-    query: jest.fn<(...args: any[]) => Promise<any>>().mockResolvedValue({ rows: [], rowCount: 0 }),
-    getClient: jest.fn<() => Promise<any>>().mockResolvedValue({} as any),
-    transaction: jest.fn<(callback: (client: any) => Promise<any>) => Promise<any>>().mockImplementation(async (callback) => {
-      return callback({} as any);
-    }),
-
-    // Token-related methods
-    storeUserTokens: jest.fn<(tokens: any) => Promise<void>>().mockResolvedValue(undefined),
-    getUserTokens: jest.fn<(userId: string) => Promise<any>>().mockResolvedValue(null),
-    deleteUserTokens: jest.fn<(userId: string) => Promise<void>>().mockResolvedValue(undefined),
-    updateUserTokenRefreshToken: jest.fn<(userId: string, refreshToken: string | null) => Promise<void>>().mockResolvedValue(undefined),
-    cleanupExpiredTokens: jest.fn<() => Promise<number>>().mockResolvedValue(0),
-
-    ...overrides,
-  } as unknown as jest.Mocked<DatabaseService>;
-
-  return mock;
-}
 
 /**
  * Create a mock CacheService with common methods
@@ -134,10 +99,10 @@ export function createMockConfig(overrides?: Record<string, unknown>): Record<st
  * @example
  * ```typescript
  * const { service, mocks } = createServiceWithMocks(
- *   TokenStorageService,
+ *   TokenManager,
  *   {
- *     databaseService: createMockDatabaseService(),
- *     cacheService: createMockCacheService(),
+ *     tokenRepository: createMockTokenRepository(),
+ *     authService: createMockAuthService(),
  *     encryptionService: createMockEncryptionService(),
  *     config: createMockConfig(),
  *   }

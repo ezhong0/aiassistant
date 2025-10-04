@@ -28,7 +28,7 @@ export interface ToolDefinition {
   description: string;
   parameters: Record<string, ToolParameterSchema>;
   requiredParameters: string[];
-  domains: Array<'email' | 'calendar' | 'contacts' | 'slack'>;
+  domains: Array<'email' | 'calendar' | 'contacts'>;
   serviceMethod: string;
   requiresAuth: boolean;
   requiresConfirmation: boolean;
@@ -43,49 +43,58 @@ export interface ToolDefinition {
 /**
  * Unified Tool Registry
  * Single source of truth for all tool definitions
+ *
+ * Now properly managed by DI container for better testability and lifecycle management.
  */
 export class ToolRegistry {
-  private static tools: Map<string, ToolDefinition> = new Map();
+  private tools: Map<string, ToolDefinition> = new Map();
+
+  /**
+   * Constructor - initializes with default tools
+   */
+  constructor() {
+    this.registerDefaultTools();
+  }
 
   /**
    * Register a tool definition
    */
-  static registerTool(tool: ToolDefinition): void {
+  registerTool(tool: ToolDefinition): void {
     this.tools.set(tool.name, tool);
   }
 
   /**
    * Get tool definition by name
    */
-  static getTool(name: string): ToolDefinition | undefined {
+  getTool(name: string): ToolDefinition | undefined {
     return this.tools.get(name);
   }
 
   /**
    * Get all tools for a domain
    */
-  static getToolsForDomain(domain: string): ToolDefinition[] {
+  getToolsForDomain(domain: string): ToolDefinition[] {
     return Array.from(this.tools.values()).filter(tool => tool.domains.includes(domain as any));
   }
 
   /**
    * Get all registered tools
    */
-  static getAllTools(): ToolDefinition[] {
+  getAllTools(): ToolDefinition[] {
     return Array.from(this.tools.values());
   }
 
   /**
    * Get tool names for a domain
    */
-  static getToolNamesForDomain(domain: string): string[] {
+  getToolNamesForDomain(domain: string): string[] {
     return this.getToolsForDomain(domain).map(tool => tool.name);
   }
 
   /**
    * Generate tool definitions string for prompts
    */
-  static generateToolDefinitionsForDomain(domain: string): string {
+  generateToolDefinitionsForDomain(domain: string): string {
     const tools = this.getToolsForDomain(domain);
     if (tools.length === 0) {
       return 'No tools available for this domain.';
@@ -107,7 +116,7 @@ export class ToolRegistry {
   /**
    * Generate tool metadata for agent capabilities
    */
-  static generateToolMetadataForDomain(domain: string): Array<{
+  generateToolMetadataForDomain(domain: string): Array<{
     name: string;
     description: string;
     parameters: Record<string, unknown>;
@@ -130,7 +139,7 @@ export class ToolRegistry {
   /**
    * Validate tool parameters against schema
    */
-  static validateToolParameters(toolName: string, parameters: Record<string, unknown>): {
+  validateToolParameters(toolName: string, parameters: Record<string, unknown>): {
     valid: boolean;
     errors: string[];
   } {
@@ -168,7 +177,7 @@ export class ToolRegistry {
   /**
    * Get type string for parameter schema
    */
-  private static getTypeString(schema: ToolParameterSchema): string {
+  private getTypeString(schema: ToolParameterSchema): string {
     if (schema.enum) {
       return schema.enum.join(' | ');
     }
@@ -187,9 +196,9 @@ export class ToolRegistry {
   /**
    * Convert tool parameters to OpenAPI schema format
    */
-  private static convertToOpenAPISchema(parameters: Record<string, ToolParameterSchema>): Record<string, any> {
+  private convertToOpenAPISchema(parameters: Record<string, ToolParameterSchema>): Record<string, any> {
     const result: Record<string, any> = {};
-    
+
     for (const [name, schema] of Object.entries(parameters)) {
       result[name] = {
         type: schema.type,
@@ -200,16 +209,16 @@ export class ToolRegistry {
         ...(schema.properties && { properties: this.convertToOpenAPISchema(schema.properties) }),
       };
     }
-    
+
     return result;
   }
 
   /**
    * Validate parameter value against schema
    */
-  private static validateParameterValue(
-    paramName: string, 
-    value: unknown, 
+  private validateParameterValue(
+    paramName: string,
+    value: unknown,
     schema: ToolParameterSchema,
   ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
@@ -280,14 +289,14 @@ export class ToolRegistry {
 
     return { valid: errors.length === 0, errors };
   }
-}
 
-/**
- * Tool definitions for all domains
- */
-
-// Email Tools
-ToolRegistry.registerTool({
+  /**
+   * Register all default tools
+   * Called during construction to populate the registry with standard tools
+   */
+  private registerDefaultTools(): void {
+    // Email Tools
+    this.registerTool({
   name: 'send_email',
   description: 'Send an email to one or more recipients',
   parameters: {
@@ -309,7 +318,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'search_emails',
   description: 'Search for emails using a query (supports cross-account search)',
   parameters: {
@@ -334,7 +343,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'get_email',
   description: 'Get a specific email by message ID',
   parameters: {
@@ -352,7 +361,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'reply_to_email',
   description: 'Reply to a specific email',
   parameters: {
@@ -371,7 +380,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'get_email_thread',
   description: 'Get an email thread by thread ID',
   parameters: {
@@ -389,7 +398,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'archive_email',
   description: 'Archive an email (move to archive, remove from inbox)',
   parameters: {
@@ -407,7 +416,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'mark_read',
   description: 'Mark an email as read',
   parameters: {
@@ -425,7 +434,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'mark_unread',
   description: 'Mark an email as unread',
   parameters: {
@@ -443,7 +452,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'star_email',
   description: 'Star an email (add star/flag for importance)',
   parameters: {
@@ -461,7 +470,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'unstar_email',
   description: 'Remove star from an email',
   parameters: {
@@ -479,7 +488,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'create_label',
   description: 'Create a new email label/category',
   parameters: {
@@ -498,7 +507,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'add_label_to_email',
   description: 'Add a label to an email',
   parameters: {
@@ -517,7 +526,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'remove_label_from_email',
   description: 'Remove a label from an email',
   parameters: {
@@ -536,7 +545,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'get_attachment',
   description: 'Download an email attachment',
   parameters: {
@@ -555,8 +564,65 @@ ToolRegistry.registerTool({
   ],
 });
 
+this.registerTool({
+  name: 'batch_modify_emails',
+  description: 'Batch modify emails (add/remove labels to up to 1000 emails at once)',
+  parameters: {
+    messageIds: {
+      type: 'array',
+      description: 'Array of message IDs to modify (max 1000)',
+      required: true,
+      items: { type: 'string', description: 'Message ID' }
+    },
+    addLabelIds: {
+      type: 'array',
+      description: 'Label IDs to add',
+      items: { type: 'string', description: 'Label ID' }
+    },
+    removeLabelIds: {
+      type: 'array',
+      description: 'Label IDs to remove',
+      items: { type: 'string', description: 'Label ID' }
+    },
+  },
+  requiredParameters: ['messageIds'],
+  domains: ['email'],
+  serviceMethod: 'batchModifyEmails',
+  requiresAuth: true,
+  requiresConfirmation: true,
+  isCritical: false,
+  examples: [
+    'Archive all emails from the newsletter',
+    'Mark all unread emails from yesterday as read',
+    'Add "Important" label to all emails from the CEO',
+  ],
+});
+
+this.registerTool({
+  name: 'batch_delete_emails',
+  description: 'Batch delete emails permanently (up to 1000 emails at once)',
+  parameters: {
+    messageIds: {
+      type: 'array',
+      description: 'Array of message IDs to delete (max 1000)',
+      required: true,
+      items: { type: 'string', description: 'Message ID' }
+    },
+  },
+  requiredParameters: ['messageIds'],
+  domains: ['email'],
+  serviceMethod: 'batchDeleteEmails',
+  requiresAuth: true,
+  requiresConfirmation: true,
+  isCritical: true,
+  examples: [
+    'Delete all spam emails from last month',
+    'Permanently delete all newsletters',
+  ],
+});
+
 // Calendar Tools
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'create_event',
   description: 'Create a new calendar event',
   parameters: {
@@ -579,7 +645,27 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
+  name: 'quick_add_event',
+  description: 'Quick add calendar event using natural language (e.g., "Meeting with John tomorrow at 2pm")',
+  parameters: {
+    text: { type: 'string', description: 'Natural language event description', required: true },
+    calendarId: { type: 'string', description: 'Calendar ID (optional, defaults to primary)' },
+  },
+  requiredParameters: ['text'],
+  domains: ['calendar'],
+  serviceMethod: 'quickAddEvent',
+  requiresAuth: true,
+  requiresConfirmation: true,
+  isCritical: false,
+  examples: [
+    'Meeting with John tomorrow at 2pm',
+    'Lunch next Friday at noon',
+    'Team standup every Monday at 9am',
+  ],
+});
+
+this.registerTool({
   name: 'list_events',
   description: 'List calendar events in a date range (supports multiple calendars)',
   parameters: {
@@ -604,7 +690,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'get_event',
   description: 'Get a specific calendar event by ID',
   parameters: {
@@ -623,7 +709,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'update_event',
   description: 'Update an existing calendar event',
   parameters: {
@@ -649,7 +735,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'delete_event',
   description: 'Delete a calendar event',
   parameters: {
@@ -668,7 +754,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'check_availability',
   description: 'Check availability for attendees',
   parameters: {
@@ -688,7 +774,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'find_available_slots',
   description: 'Find available time slots for a meeting',
   parameters: {
@@ -709,7 +795,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'list_calendars',
   description: 'List available calendars',
   parameters: {},
@@ -725,7 +811,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'respond_to_event',
   description: 'Respond to a calendar event invitation (accept, decline, or tentative)',
   parameters: {
@@ -752,7 +838,7 @@ ToolRegistry.registerTool({
 });
 
 // Contact Tools
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'search_contacts',
   description: 'Search for contacts by name or email',
   parameters: {
@@ -770,7 +856,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'get_contact',
   description: 'Get a specific contact by ID',
   parameters: {
@@ -788,7 +874,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'list_contacts',
   description: 'List all contacts',
   parameters: {
@@ -806,7 +892,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'create_contact',
   description: 'Create a new contact',
   parameters: {
@@ -826,7 +912,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'update_contact',
   description: 'Update an existing contact',
   parameters: {
@@ -849,7 +935,7 @@ ToolRegistry.registerTool({
   ],
 });
 
-ToolRegistry.registerTool({
+this.registerTool({
   name: 'delete_contact',
   description: 'Delete a contact',
   parameters: {
@@ -867,157 +953,51 @@ ToolRegistry.registerTool({
   ],
 });
 
-// Slack Tools
-ToolRegistry.registerTool({
-  name: 'send_message',
-  description: 'Send a message to a Slack channel',
+this.registerTool({
+  name: 'batch_get_contacts',
+  description: 'Batch get contacts by resource names (retrieve up to 200 contacts in one call)',
   parameters: {
-    channel: { type: 'string', description: 'Channel ID or name', required: true },
-    text: { type: 'string', description: 'Message text', required: true },
-    threadTs: { type: 'string', description: 'Thread timestamp for replies' },
+    resourceNames: {
+      type: 'array',
+      description: 'Array of contact resource names (max 200)',
+      required: true,
+      items: { type: 'string', description: 'Resource name' }
+    },
+    personFields: {
+      type: 'array',
+      description: 'Fields to include in response',
+      items: { type: 'string', description: 'Field name' }
+    },
   },
-  requiredParameters: ['channel', 'text'],
-  domains: ['slack'],
-  serviceMethod: 'sendMessage',
+  requiredParameters: ['resourceNames'],
+  domains: ['email', 'calendar'],
+  serviceMethod: 'batchGetContacts',
   requiresAuth: true,
   requiresConfirmation: false,
   isCritical: false,
   examples: [
-    'Send a message to the #general channel',
-    'Post an update to the team about the project',
+    'Get details for multiple contacts at once',
+    'Retrieve contact information for a list of people',
   ],
 });
 
-ToolRegistry.registerTool({
-  name: 'get_channel_history',
-  description: 'Get recent messages from a Slack channel',
+this.registerTool({
+  name: 'list_other_contacts',
+  description: 'List other contacts (autocomplete suggestions from email interactions)',
   parameters: {
-    channel: { type: 'string', description: 'Channel ID or name', required: true },
-    limit: { type: 'number', description: 'Maximum number of messages to retrieve' },
-  },
-  requiredParameters: ['channel'],
-  domains: ['slack'],
-  serviceMethod: 'getChannelHistory',
-  requiresAuth: true,
-  requiresConfirmation: false,
-  isCritical: false,
-  examples: [
-    'Read the latest messages from the #general channel',
-    'Get the last 20 messages from #project-updates',
-  ],
-});
-
-ToolRegistry.registerTool({
-  name: 'get_thread_replies',
-  description: 'Get replies to a specific thread',
-  parameters: {
-    channel: { type: 'string', description: 'Channel ID or name', required: true },
-    threadTs: { type: 'string', description: 'Thread timestamp', required: true },
-  },
-  requiredParameters: ['channel', 'threadTs'],
-  domains: ['slack'],
-  serviceMethod: 'getThreadReplies',
-  requiresAuth: true,
-  requiresConfirmation: false,
-  isCritical: false,
-  examples: [
-    'Get the conversation thread about yesterday\'s meeting',
-    'Show all replies to the project update message',
-  ],
-});
-
-ToolRegistry.registerTool({
-  name: 'get_user_info',
-  description: 'Get information about a Slack user',
-  parameters: {
-    userId: { type: 'string', description: 'User ID', required: true },
-  },
-  requiredParameters: ['userId'],
-  domains: ['slack'],
-  serviceMethod: 'getUserInfo',
-  requiresAuth: true,
-  requiresConfirmation: false,
-  isCritical: false,
-  examples: [
-    'Find information about user John in Slack',
-    'Get details for user ID U1234567890',
-  ],
-});
-
-ToolRegistry.registerTool({
-  name: 'list_users',
-  description: 'List users in the Slack workspace',
-  parameters: {
-    limit: { type: 'number', description: 'Maximum number of users to retrieve' },
+    pageSize: { type: 'number', description: 'Maximum number of results' },
+    pageToken: { type: 'string', description: 'Page token for pagination' },
   },
   requiredParameters: [],
-  domains: ['slack'],
-  serviceMethod: 'listUsers',
+  domains: ['email', 'calendar'],
+  serviceMethod: 'listOtherContacts',
   requiresAuth: true,
   requiresConfirmation: false,
   isCritical: false,
   examples: [
-    'Check who is in the workspace',
-    'List all team members in Slack',
+    'Show me people I\'ve emailed recently',
+    'List contact suggestions for autocomplete',
   ],
 });
-
-ToolRegistry.registerTool({
-  name: 'upload_file',
-  description: 'Upload a file to a Slack channel',
-  parameters: {
-    channel: { type: 'string', description: 'Channel ID or name', required: true },
-    filename: { type: 'string', description: 'File name', required: true },
-    content: { type: 'string', description: 'File content', required: true },
-    title: { type: 'string', description: 'File title' },
-  },
-  requiredParameters: ['channel', 'filename', 'content'],
-  domains: ['slack'],
-  serviceMethod: 'uploadFile',
-  requiresAuth: true,
-  requiresConfirmation: false,
-  isCritical: false,
-  examples: [
-    'Upload the project file to the #design channel',
-    'Share the report document with the team',
-  ],
-});
-
-ToolRegistry.registerTool({
-  name: 'update_message',
-  description: 'Update an existing Slack message',
-  parameters: {
-    channel: { type: 'string', description: 'Channel ID or name', required: true },
-    ts: { type: 'string', description: 'Message timestamp', required: true },
-    text: { type: 'string', description: 'New message text', required: true },
-  },
-  requiredParameters: ['channel', 'ts', 'text'],
-  domains: ['slack'],
-  serviceMethod: 'updateMessage',
-  requiresAuth: true,
-  requiresConfirmation: false,
-  isCritical: false,
-  examples: [
-    'Update my previous message with new information',
-    'Correct the typo in the project update',
-  ],
-});
-
-ToolRegistry.registerTool({
-  name: 'delete_message',
-  description: 'Delete a Slack message',
-  parameters: {
-    channel: { type: 'string', description: 'Channel ID or name', required: true },
-    ts: { type: 'string', description: 'Message timestamp', required: true },
-  },
-  requiredParameters: ['channel', 'ts'],
-  domains: ['slack'],
-  serviceMethod: 'deleteMessage',
-  requiresAuth: true,
-  requiresConfirmation: true,
-  isCritical: false,
-  examples: [
-    'Delete the message I just sent',
-    'Remove the incorrect information from the channel',
-  ],
-});
+  }
+}

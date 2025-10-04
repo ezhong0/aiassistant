@@ -7,8 +7,7 @@ This directory contains unit tests for the application. Unit tests focus on test
 ```
 tests/unit/
 ├── services/           # Service layer tests
-│   ├── crypto.util.test.ts
-│   └── token-storage.service.test.ts
+│   └── crypto.util.test.ts
 ├── middleware/         # Middleware tests
 │   └── rate-limiting.middleware.test.ts
 ├── utils/             # Utility function tests
@@ -40,13 +39,7 @@ npm run test:coverage -- tests/unit
 - Tests error handling for invalid inputs
 - Verifies key management behavior
 
-### 2. TokenStorageService Tests (`services/token-storage.service.test.ts`)
-- Tests token storage and retrieval operations
-- Mocks database and cache dependencies
-- Validates error handling and edge cases
-- Tests concurrent operations
-
-### 3. Rate Limiting Middleware Tests (`middleware/rate-limiting.middleware.test.ts`)
+### 2. Rate Limiting Middleware Tests (`middleware/rate-limiting.middleware.test.ts`)
 - Tests rate limiting logic and thresholds
 - Validates header generation
 - Tests error handling and edge cases

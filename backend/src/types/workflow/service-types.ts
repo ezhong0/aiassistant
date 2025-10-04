@@ -15,18 +15,11 @@ export enum ServiceType {
   TOKEN_MANAGER = 'tokenManager',
   WORKFLOW_TOKEN = 'workflowTokenService',
 
-  // Storage and database services
-  DATABASE = 'databaseService',
-  TOKEN_STORAGE = 'tokenStorageService',
+  // Storage services
   CACHE = 'cacheService',
 
-  // Authentication and security
-  AUTH = 'authService',
+  // Authentication and security (Supabase handles OAuth)
   CRYPTO = 'cryptoService',
-
-  // OAuth managers
-  GOOGLE_OAUTH_MANAGER = 'googleOAuthManager',
-  SLACK_OAUTH_MANAGER = 'slackOAuthManager',
 
   // Utility services
   EMAIL_VALIDATION = 'emailValidationService',
@@ -72,28 +65,23 @@ export type AgentOperation<T extends AgentType> = T extends keyof typeof AGENT_C
 export const SERVICE_DEPENDENCIES = {
   [ServiceType.GENERIC_AI]: [],
   [ServiceType.CONTEXT_MANAGER]: [ServiceType.CACHE],
-  [ServiceType.TOKEN_MANAGER]: [ServiceType.TOKEN_STORAGE, ServiceType.AUTH, ServiceType.CACHE],
+  [ServiceType.TOKEN_MANAGER]: [ServiceType.CACHE],
   [ServiceType.WORKFLOW_TOKEN]: [ServiceType.TOKEN_MANAGER],
-  [ServiceType.DATABASE]: [],
-  [ServiceType.TOKEN_STORAGE]: [ServiceType.DATABASE, ServiceType.CRYPTO],
   [ServiceType.CACHE]: [],
-  [ServiceType.AUTH]: [ServiceType.DATABASE],
   [ServiceType.CRYPTO]: [],
-  [ServiceType.GOOGLE_OAUTH_MANAGER]: [ServiceType.AUTH, ServiceType.TOKEN_MANAGER],
-  [ServiceType.SLACK_OAUTH_MANAGER]: [ServiceType.TOKEN_MANAGER],
   [ServiceType.EMAIL_VALIDATION]: [],
   [ServiceType.RATE_LIMITER]: [ServiceType.CACHE],
-  [ServiceType.AUDIT_LOGGER]: [ServiceType.DATABASE]
+  [ServiceType.AUDIT_LOGGER]: []
 } as const;
 
 /**
  * Agent to service mapping for automatic service resolution
  */
 export const AGENT_SERVICE_MAPPING = {
-  [AgentType.EMAIL]: [ServiceType.GOOGLE_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
-  [AgentType.CALENDAR]: [ServiceType.GOOGLE_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
-  [AgentType.CONTACT]: [ServiceType.GOOGLE_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
-  [AgentType.SLACK]: [ServiceType.SLACK_OAUTH_MANAGER, ServiceType.TOKEN_MANAGER],
+  [AgentType.EMAIL]: [ServiceType.TOKEN_MANAGER],
+  [AgentType.CALENDAR]: [ServiceType.TOKEN_MANAGER],
+  [AgentType.CONTACT]: [ServiceType.TOKEN_MANAGER],
+  [AgentType.SLACK]: [ServiceType.TOKEN_MANAGER],
   [AgentType.MASTER]: [ServiceType.GENERIC_AI, ServiceType.CONTEXT_MANAGER, ServiceType.WORKFLOW_TOKEN],
   [AgentType.ORCHESTRATOR]: [ServiceType.GENERIC_AI, ServiceType.CONTEXT_MANAGER]
 } as const;
@@ -102,17 +90,12 @@ export const AGENT_SERVICE_MAPPING = {
  * Service initialization priority (lower numbers initialize first)
  */
 export const SERVICE_INIT_PRIORITY = {
-  [ServiceType.DATABASE]: 1,
   [ServiceType.CRYPTO]: 1,
   [ServiceType.CACHE]: 2,
-  [ServiceType.AUTH]: 3,
-  [ServiceType.TOKEN_STORAGE]: 4,
-  [ServiceType.TOKEN_MANAGER]: 5,
-  [ServiceType.WORKFLOW_TOKEN]: 6,
+  [ServiceType.TOKEN_MANAGER]: 3,
+  [ServiceType.WORKFLOW_TOKEN]: 4,
   [ServiceType.GENERIC_AI]: 3,
   [ServiceType.CONTEXT_MANAGER]: 4,
-  [ServiceType.GOOGLE_OAUTH_MANAGER]: 7,
-  [ServiceType.SLACK_OAUTH_MANAGER]: 7,
   [ServiceType.EMAIL_VALIDATION]: 3,
   [ServiceType.RATE_LIMITER]: 4,
   [ServiceType.AUDIT_LOGGER]: 5

@@ -6,10 +6,10 @@
  */
 
 import { DecompositionInput, ExecutionGraph } from './execution-graph.types';
-import { GenericAIService } from '../../services/generic-ai.service';
+import { AIDomainService } from '../../services/domain/ai-domain.service';
 
 export class DecompositionPromptBuilder {
-  constructor(private aiService: GenericAIService) {}
+  constructor(private aiService: AIDomainService) {}
 
   /**
    * Build and execute the decomposition prompt
@@ -26,7 +26,7 @@ export class DecompositionPromptBuilder {
         options: {
           temperature: 0.1, // Low temperature for consistent structured output
           maxTokens: 3000, // Bounded output
-          model: 'gpt-4o-mini'
+          model: 'gpt-5-nano'
         }
       },
       schema,
