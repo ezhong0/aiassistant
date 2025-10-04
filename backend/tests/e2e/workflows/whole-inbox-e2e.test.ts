@@ -1,38 +1,80 @@
 /**
  * End-to-End Test Suite for Whole Inbox Testing
- * 
+ *
  * Demonstrates comprehensive E2E testing with whole inbox mocking.
  * Tests complete user workflows with realistic data.
  */
 
 import { GenericAIService } from '../../src/services/generic-ai.service';
-import { WholeInboxGenerator, InboxData, InboxTemplate } from './generators/whole-inbox-generator';
-import { UnifiedMockManager } from './mocks/unified-mock-manager';
+import { WholeInboxGenerator, InboxData, InboxTemplate } from '../generators/whole-inbox-generator';
+import { UnifiedMockManager } from '../mocks/unified-mock-manager';
 import { AIDomainService } from '../../src/services/domain/ai-domain.service';
+import { OrchestratorService } from '../../src/layers/orchestrator.service';
+import { QueryDecomposerService } from '../../src/layers/layer1-decomposition/query-decomposer.service';
+import { ExecutionCoordinatorService } from '../../src/layers/layer2-execution/execution-coordinator.service';
+import { SynthesisService } from '../../src/layers/layer3-synthesis/synthesis.service';
+import { EmailDomainService } from '../../src/services/domain/email-domain.service';
+import { GoogleOAuthManager } from '../../src/services/oauth/google-oauth-manager';
+import { getAPIClient } from '../../src/services/api';
+import { GoogleAPIClient } from '../../src/services/api/clients/google-api-client';
 
 describe('End-to-End Testing with Whole Inbox Mocking', () => {
   let inboxGenerator: WholeInboxGenerator;
   let mockManager: UnifiedMockManager;
   let aiService: GenericAIService;
   let aiDomainService: AIDomainService;
-  
+  let orchestrator: OrchestratorService;
+  let googleClient: GoogleAPIClient;
+
   let executiveInbox: InboxData;
   let managerInbox: InboxData;
   let individualInbox: InboxData;
 
   beforeAll(async () => {
-    // Initialize services
+    // Initialize AI services
     aiDomainService = new AIDomainService();
     await aiDomainService.initialize();
-    
+
     aiService = new GenericAIService(aiDomainService);
     await aiService.initialize();
-    
+
+    // Initialize inbox generator
     inboxGenerator = new WholeInboxGenerator(aiService);
     await inboxGenerator.initialize();
-    
+
+    // Initialize mock manager
     mockManager = UnifiedMockManager.getInstance();
     await mockManager.initialize();
+
+    // Initialize Google API client
+    googleClient = await getAPIClient<GoogleAPIClient>('google');
+
+    // IMPORTANT: Set mock manager on Google client for E2E testing
+    googleClient.setMockManager(mockManager);
+
+    // Initialize 3-layer orchestrator
+    const queryDecomposer = new QueryDecomposerService(aiDomainService);
+    await queryDecomposer.initialize();
+
+    const executionCoordinator = new ExecutionCoordinatorService(aiDomainService);
+    await executionCoordinator.initialize();
+
+    const synthesisService = new SynthesisService(aiDomainService);
+    await synthesisService.initialize();
+
+    orchestrator = new OrchestratorService(
+      queryDecomposer,
+      executionCoordinator,
+      synthesisService
+    );
+    await orchestrator.initialize();
+  }, 30000); // 30 second timeout for initialization
+
+  afterAll(async () => {
+    // Clear mock manager from Google client
+    if (googleClient) {
+      googleClient.clearMockManager();
+    }
   });
 
   beforeEach(async () => {
@@ -62,16 +104,18 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
 
   describe('Executive Inbox Workflows', () => {
     it('should handle urgent email triage workflow', async () => {
-      // Setup executive inbox
-      await mockManager.setupMockContext(executiveInbox, executiveInbox.metadata.userProfile);
-      
       const userQuery = "Show me all urgent emails that need immediate attention";
-      
-      // Execute workflow (this would call your actual orchestrator)
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: executiveInbox,
-        userProfile: executiveInbox.metadata.userProfile
-      });
+
+      // Execute workflow using real orchestrator
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: executiveInbox,
+          userProfile: executiveInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       // Verify results
       expect(result).toBeDefined();
@@ -92,14 +136,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
     });
 
     it('should handle meeting coordination workflow', async () => {
-      await mockManager.setupMockContext(executiveInbox, executiveInbox.metadata.userProfile);
-      
       const userQuery = "Find all emails about the Q4 planning meeting and show me the current status";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: executiveInbox,
-        userProfile: executiveInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: executiveInbox,
+          userProfile: executiveInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -111,14 +158,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
     });
 
     it('should handle complex information gathering workflow', async () => {
-      await mockManager.setupMockContext(executiveInbox, executiveInbox.metadata.userProfile);
-      
       const userQuery = "I need to understand the status of all projects mentioned in emails from the last month. Show me what's been completed, what's in progress, and what needs attention";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: executiveInbox,
-        userProfile: executiveInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: executiveInbox,
+          userProfile: executiveInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -132,14 +182,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
 
   describe('Manager Inbox Workflows', () => {
     it('should handle team follow-up management workflow', async () => {
-      await mockManager.setupMockContext(managerInbox, managerInbox.metadata.userProfile);
-      
       const userQuery = "Show me all follow-up emails from my team members that I haven't responded to";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: managerInbox,
-        userProfile: managerInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: managerInbox,
+          userProfile: managerInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -150,14 +203,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
     });
 
     it('should handle project status coordination workflow', async () => {
-      await mockManager.setupMockContext(managerInbox, managerInbox.metadata.userProfile);
-      
       const userQuery = "What's the current status of all active projects? Show me any blockers or issues";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: managerInbox,
-        userProfile: managerInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: managerInbox,
+          userProfile: managerInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -171,14 +227,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
 
   describe('Individual Contributor Workflows', () => {
     it('should handle task management workflow', async () => {
-      await mockManager.setupMockContext(individualInbox, individualInbox.metadata.userProfile);
-      
       const userQuery = "Show me all task-related emails and what I need to work on this week";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: individualInbox,
-        userProfile: individualInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: individualInbox,
+          userProfile: individualInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -189,14 +248,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
     });
 
     it('should handle meeting preparation workflow', async () => {
-      await mockManager.setupMockContext(individualInbox, individualInbox.metadata.userProfile);
-      
       const userQuery = "I have a meeting tomorrow about the new feature. Show me all related emails and prepare a summary";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: individualInbox,
-        userProfile: individualInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: individualInbox,
+          userProfile: individualInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -209,14 +271,17 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
 
   describe('Cross-Domain Workflows', () => {
     it('should handle email-to-calendar coordination workflow', async () => {
-      await mockManager.setupMockContext(executiveInbox, executiveInbox.metadata.userProfile);
-      
       const userQuery = "Find all emails about meetings this week and show me what's on my calendar";
-      
-      const result = await executeE2EWorkflow(userQuery, {
-        inboxData: executiveInbox,
-        userProfile: executiveInbox.metadata.userProfile
-      });
+
+      const result = await executeE2EWorkflow(
+        userQuery,
+        {
+          inboxData: executiveInbox,
+          userProfile: executiveInbox.metadata.userProfile
+        },
+        orchestrator,
+        mockManager
+      );
       
       expect(result).toBeDefined();
       expect(result.response).toBeDefined();
@@ -254,24 +319,26 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
       
       for (const template of templates) {
         if (!template) continue;
-        
+
         const inbox = await inboxGenerator.generateCompleteInbox(template);
-        await mockManager.setupMockContext(inbox, template.userProfile);
-        
-        const startTime = Date.now();
-        const result = await executeE2EWorkflow("Show me urgent emails", {
-          inboxData: inbox,
-          userProfile: template.userProfile
-        });
-        const executionTime = Date.now() - startTime;
-        
+
+        const result = await executeE2EWorkflow(
+          "Show me urgent emails",
+          {
+            inboxData: inbox,
+            userProfile: template.userProfile
+          },
+          orchestrator,
+          mockManager
+        );
+
         results.push({
           role: template.userProfile.role,
           emailCount: inbox.emails.length,
-          executionTime
+          executionTime: result.executionTime
         });
-        
-        expect(executionTime).toBeLessThan(15000); // 15 seconds max regardless of size
+
+        expect(result.executionTime).toBeLessThan(15000); // 15 seconds max regardless of size
       }
       
       // Log performance results
@@ -279,8 +346,6 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
     });
 
     it('should generate realistic and diverse email content', async () => {
-      await mockManager.setupMockContext(executiveInbox, executiveInbox.metadata.userProfile);
-      
       // Verify email diversity
       const subjects = executiveInbox.emails.map(email => {
         const subjectHeader = email.payload.headers.find(h => h.name.toLowerCase() === 'subject');
@@ -310,20 +375,59 @@ describe('End-to-End Testing with Whole Inbox Mocking', () => {
 });
 
 /**
- * Mock E2E workflow execution
- * In real implementation, this would call your actual orchestrator
+ * E2E workflow execution using real orchestrator
+ * Executes the full 3-layer architecture with mocked API responses
  */
-async function executeE2EWorkflow(userQuery: string, context: any): Promise<any> {
-  // This is a mock implementation
-  // In real implementation, this would:
-  // 1. Call your orchestrator service
-  // 2. Execute the 3-layer architecture
-  // 3. Return the complete result
-  
-  return {
-    response: `Mock response for: ${userQuery}`,
-    executionTime: Math.random() * 5000 + 1000, // 1-6 seconds
-    tokensUsed: Math.random() * 1000 + 500, // 500-1500 tokens
-    apiCalls: mockManager.getApiCallRecords()
-  };
+async function executeE2EWorkflow(
+  userQuery: string,
+  context: { inboxData: InboxData; userProfile: any },
+  orchestratorInstance: OrchestratorService,
+  mockManagerInstance: UnifiedMockManager
+): Promise<{
+  response: string;
+  executionTime: number;
+  tokensUsed: number;
+  apiCalls: any[];
+  metadata?: any;
+}> {
+  const startTime = Date.now();
+
+  // Setup mock context with inbox data
+  await mockManagerInstance.setupMockContext(context.inboxData, context.userProfile);
+
+  // Clear previous API call records
+  mockManagerInstance.clearApiCallRecords();
+
+  try {
+    // Execute through the real 3-layer orchestrator
+    const result = await orchestratorInstance.processUserInput(
+      userQuery,
+      'test-user-id',
+      [], // Empty conversation history for simplicity
+      undefined // No previous state
+    );
+
+    const executionTime = Date.now() - startTime;
+
+    // Get API calls made during execution
+    const apiCalls = mockManagerInstance.getApiCallRecords();
+
+    return {
+      response: result.message,
+      executionTime,
+      tokensUsed: result.metadata?.tokensUsed || 0,
+      apiCalls,
+      metadata: result.metadata
+    };
+  } catch (error: any) {
+    const executionTime = Date.now() - startTime;
+
+    return {
+      response: `Error: ${error.message}`,
+      executionTime,
+      tokensUsed: 0,
+      apiCalls: mockManagerInstance.getApiCallRecords(),
+      metadata: { error: error.message }
+    };
+  }
 }

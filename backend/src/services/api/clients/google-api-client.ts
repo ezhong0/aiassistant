@@ -11,23 +11,43 @@ import { GoogleErrorTransformer } from '../../../errors/transformers';
 
 /**
  * Google API Client - Handles all Google services (Gmail, Calendar, Contacts)
- * 
+ *
  * This client provides a unified interface for all Google APIs including:
  * - Gmail API
- * - Google Calendar API  
+ * - Google Calendar API
  * - Google Contacts API
  * - Google Drive API (if needed)
- * 
+ *
  * It uses the Google APIs client library with OAuth2 authentication.
+ *
+ * E2E Testing Support:
+ * - Set mockManager to enable request interception during tests
  */
 export class GoogleAPIClient extends BaseAPIClient {
   private auth: any;
   private gmail: any;
   private calendar: any;
   private people: any;
+  private mockManager: any = null; // UnifiedMockManager for E2E testing
 
   constructor(config: APIClientConfig) {
     super('GoogleAPIClient', config);
+  }
+
+  /**
+   * Set mock manager for E2E testing
+   */
+  setMockManager(mockManager: any): void {
+    this.mockManager = mockManager;
+    this.logInfo('Mock manager enabled for E2E testing');
+  }
+
+  /**
+   * Clear mock manager
+   */
+  clearMockManager(): void {
+    this.mockManager = null;
+    this.logInfo('Mock manager disabled');
   }
 
   /**
@@ -101,16 +121,47 @@ export class GoogleAPIClient extends BaseAPIClient {
    * Perform Google API request
    */
   protected async performRequest<T>(
-    request: APIRequest, 
+    request: APIRequest,
     requestId: string
   ): Promise<APIResponse<T>> {
     const startTime = Date.now();
-    
+
     try {
-      // Determine which Google service to use based on endpoint
+      // Use mock manager if set (E2E testing mode)
+      if (this.mockManager) {
+        this.logDebug('Using mock manager for request', {
+          requestId,
+          endpoint: request.endpoint,
+          method: request.method
+        });
+
+        const mockResponse = await this.mockManager.interceptRequest('GoogleAPIClient', {
+          endpoint: request.endpoint,
+          method: request.method,
+          data: request.data,
+          query: request.query,
+          headers: request.headers
+        });
+
+        const executionTime = Date.now() - startTime;
+
+        return {
+          data: mockResponse.data as T,
+          statusCode: mockResponse.status,
+          headers: mockResponse.headers || {},
+          metadata: {
+            requestId,
+            timestamp: new Date().toISOString(),
+            executionTime,
+            ...(mockResponse.metadata && { mockSource: mockResponse.metadata.mockSource })
+          }
+        };
+      }
+
+      // Normal mode: use real Google APIs
       const service = this.getServiceFromEndpoint(request.endpoint);
       const method = this.getMethodFromRequest(request, service);
-      
+
       this.logDebug('Making Google API request', {
         requestId,
         service,
@@ -139,7 +190,7 @@ export class GoogleAPIClient extends BaseAPIClient {
       };
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      
+
       this.logError('Google API request failed', error, {
         requestId,
         endpoint: request.endpoint,
