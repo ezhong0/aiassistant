@@ -15,9 +15,7 @@ export * from './email-domain.interface';
 // Type-only exports for better tree-shaking
 export type {
   IDomainService,
-  IOAuthEnabledDomainService,
-  HealthStatus,
-  OAuthTokenData
+  HealthStatus
 } from './base-domain.interface';
 
 export type {

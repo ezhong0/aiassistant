@@ -3,7 +3,7 @@
  * Focused interface for calendar-related operations
  */
 
-import { IOAuthEnabledDomainService } from './base-domain.interface';
+import { IDomainService } from './base-domain.interface';
 
 /**
  * Calendar event recurrence pattern
@@ -186,7 +186,7 @@ export interface QuickAddEventParams {
  * Calendar Domain Service Interface
  * Handles all calendar-related operations with automatic OAuth management
  */
-export interface ICalendarDomainService extends IOAuthEnabledDomainService {
+export interface ICalendarDomainService extends IDomainService {
   // ===== Event Operations =====
 
   /**

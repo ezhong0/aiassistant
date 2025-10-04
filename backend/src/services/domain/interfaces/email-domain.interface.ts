@@ -1,9 +1,11 @@
 /**
  * Email Domain Service Interface
  * Focused interface for email-related operations
+ *
+ * Note: OAuth is handled by Supabase Auth. Use SupabaseTokenProvider to fetch tokens.
  */
 
-import { IOAuthEnabledDomainService } from './base-domain.interface';
+import { IDomainService } from './base-domain.interface';
 
 /**
  * Email attachment definition
@@ -164,9 +166,9 @@ export interface EmailLabel {
 
 /**
  * Email Domain Service Interface
- * Handles all email-related operations with automatic OAuth management
+ * Handles all email-related operations (authentication via Supabase)
  */
-export interface IEmailDomainService extends IOAuthEnabledDomainService {
+export interface IEmailDomainService extends IDomainService {
   // ===== Email Operations =====
 
   /**

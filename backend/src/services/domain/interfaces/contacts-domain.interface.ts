@@ -3,7 +3,7 @@
  * Focused interface for contact-related operations
  */
 
-import { IOAuthEnabledDomainService } from './base-domain.interface';
+import { IDomainService } from './base-domain.interface';
 
 /**
  * Contact phone number
@@ -279,7 +279,7 @@ export interface ContactListParams {
  * Contacts Domain Service Interface
  * Handles all contact-related operations with automatic OAuth management
  */
-export interface IContactsDomainService extends IOAuthEnabledDomainService {
+export interface IContactsDomainService extends IDomainService {
   // ===== Contact Operations =====
 
   /**

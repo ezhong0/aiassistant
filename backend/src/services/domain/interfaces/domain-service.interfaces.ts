@@ -3,10 +3,12 @@
  *
  * This module defines interfaces for all domain services, enabling dependency
  * injection and loose coupling between components.
+ *
+ * Note: OAuth is handled by Supabase Auth. Domain services use SupabaseTokenProvider
+ * to fetch Google provider tokens from Supabase.
  */
 
 import { APIClientError } from '../../../errors';
-import { OAuthContext } from '../../../types/oauth.types';
 
 // Base domain service interface
 export interface IDomainService {
@@ -17,14 +19,7 @@ export interface IDomainService {
 
 // Email domain service interface
 export interface IEmailDomainService extends IDomainService {
-  // OAuth management
-  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
-  completeOAuth(userId: string, code: string, state: string): Promise<void>;
-  refreshTokens(userId: string): Promise<void>;
-  revokeTokens(userId: string): Promise<void>;
-  requiresOAuth(userId: string): Promise<boolean>;
-  
-  // Domain operations (with automatic authentication)
+  // Domain operations (authentication via Supabase)
   sendEmail(userId: string, params: {
     to: string;
     subject: string;
@@ -108,14 +103,7 @@ export interface IEmailDomainService extends IDomainService {
 
 // Calendar domain service interface
 export interface ICalendarDomainService extends IDomainService {
-  // OAuth management
-  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
-  completeOAuth(userId: string, code: string, state: string): Promise<void>;
-  refreshTokens(userId: string): Promise<void>;
-  revokeTokens(userId: string): Promise<void>;
-  requiresOAuth(userId: string): Promise<boolean>;
-  
-  // Domain operations (with automatic authentication)
+  // Domain operations (authentication via Supabase)
   createEvent(userId: string, params: {
     summary: string;
     description?: string;
@@ -243,14 +231,7 @@ export interface ICalendarDomainService extends IDomainService {
 
 // Contacts domain service interface
 export interface IContactsDomainService extends IDomainService {
-  // OAuth management
-  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
-  completeOAuth(userId: string, code: string, state: string): Promise<void>;
-  refreshTokens(userId: string): Promise<void>;
-  revokeTokens(userId: string): Promise<void>;
-  requiresOAuth(userId: string): Promise<boolean>;
-  
-  // Domain operations (with automatic authentication)
+  // Domain operations (authentication via Supabase)
   listContacts(userId: string, params: {
     pageSize?: number;
     pageToken?: string;
@@ -511,16 +492,10 @@ export interface IContactsDomainService extends IDomainService {
   }>;
 }
 
-// Slack domain service interface
+// Slack domain service interface (REMOVED - Slack bot deprecated)
+// If Slack is needed in future, it will use Supabase OAuth
 export interface ISlackDomainService extends IDomainService {
-  // OAuth management
-  initializeOAuth(userId: string, context: OAuthContext): Promise<{ authUrl: string; state: string }>;
-  completeOAuth(userId: string, code: string, state: string): Promise<void>;
-  refreshTokens(userId: string): Promise<void>;
-  revokeTokens(userId: string): Promise<void>;
-  requiresOAuth(userId: string): Promise<boolean>;
-  
-  // Domain operations (with automatic authentication)
+  // Domain operations (authentication via Supabase)
   sendMessage(userId: string, params: {
     channel: string;
     text?: string;

@@ -1,9 +1,10 @@
 /**
  * Base Domain Service Interface
  * Core interface that all domain services must implement
+ *
+ * Note: OAuth is handled by Supabase Auth. Domain services use SupabaseTokenProvider
+ * to fetch Google provider tokens from Supabase.
  */
-
-import { OAuthContext } from '../../../types/oauth.types';
 
 /**
  * Health status information
@@ -11,24 +12,6 @@ import { OAuthContext } from '../../../types/oauth.types';
 export interface HealthStatus {
   healthy: boolean;
   details?: Record<string, unknown>;
-}
-
-/**
- * OAuth initialization result
- */
-export interface OAuthResult {
-  authUrl: string;
-  state: string;
-}
-
-/**
- * OAuth token data
- */
-export interface OAuthTokenData {
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt?: Date;
-  scope?: string[];
 }
 
 /**
@@ -50,35 +33,4 @@ export interface IDomainService {
    * Get health status of the service
    */
   getHealth(): HealthStatus;
-}
-
-/**
- * OAuth-enabled domain service interface
- * For services that require OAuth authentication
- */
-export interface IOAuthEnabledDomainService extends IDomainService {
-  /**
-   * Initialize OAuth flow for a user
-   */
-  initializeOAuth(userId: string, context: OAuthContext): Promise<OAuthResult>;
-
-  /**
-   * Complete OAuth flow with authorization code
-   */
-  completeOAuth(userId: string, code: string, state: string): Promise<void>;
-
-  /**
-   * Refresh OAuth tokens for a user
-   */
-  refreshTokens(userId: string): Promise<void>;
-
-  /**
-   * Revoke OAuth tokens for a user
-   */
-  revokeTokens(userId: string): Promise<void>;
-
-  /**
-   * Check if user requires OAuth authentication
-   */
-  requiresOAuth(userId: string): Promise<boolean>;
 }
