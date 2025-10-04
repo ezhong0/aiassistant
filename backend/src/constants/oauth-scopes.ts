@@ -65,7 +65,7 @@ export class ScopeManager {
    * Validate if requested scopes are allowed
    */
   static validateScopes(provider: 'google', requestedScopes: string[]): boolean {
-    const allowedScopes = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
+    const allowedScopes: string[] = [...OAUTH_SCOPES.GOOGLE.FULL_ACCESS];
     return requestedScopes.every(scope => allowedScopes.includes(scope));
   }
 }

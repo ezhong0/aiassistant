@@ -116,7 +116,7 @@ export class CrossReferenceStrategy extends BaseStrategy {
       // Handle different data formats
       if (data.items && Array.isArray(data.items)) {
         allItems.push(...data.items.map(item => ({
-          ...item,
+          ...(typeof item === 'object' && item !== null ? item : {}),
           source_node: sourceId
         })));
       } else if (data.threads && Array.isArray(data.threads)) {

@@ -104,8 +104,12 @@ export function createChatRoutes(container: AppContainer) {
         });
 
         // Add user message to conversation history
-        const updatedHistory = [
-          ...currentContext.conversationHistory,
+        const updatedHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string; timestamp: number }> = [
+          ...currentContext.conversationHistory.map(msg => ({
+            role: msg.role || 'user' as 'system' | 'user' | 'assistant',
+            content: msg.content || '',
+            timestamp: msg.timestamp || Date.now()
+          })),
           {
             role: 'user' as const,
             content: message,

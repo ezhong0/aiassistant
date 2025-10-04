@@ -220,5 +220,25 @@ export class GenericAIService extends BaseService {
     }
   }
 
+  /**
+   * Chat completion - convenience method
+   */
+  async chat(params: {
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    maxTokens?: number;
+    temperature?: number;
+    model?: string;
+  }): Promise<{ content: string; role: string }> {
+    const result = await this.aiDomainService.generateChatCompletion({
+      messages: params.messages,
+      maxTokens: params.maxTokens,
+      temperature: params.temperature,
+      model: params.model
+    });
 
+    return {
+      content: result.message.content,
+      role: result.message.role
+    };
+  }
 }

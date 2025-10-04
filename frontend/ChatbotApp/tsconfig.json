@@ -4,13 +4,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    },
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "jsx": "react-native",
-    "moduleResolution": "node",
-    "strict": true,
-    "resolveJsonModule": true
+    }
   },
   "include": [
     "**/*.ts",

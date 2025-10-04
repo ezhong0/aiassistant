@@ -246,7 +246,7 @@ export interface IEmailDomainService extends IOAuthEnabledDomainService {
   /**
    * Create email label
    */
-  createLabel(userId: string, name: string, color?: string): Promise<EmailLabel>;
+  createLabel(params: { name: string; color?: string }): Promise<EmailLabel>;
 
   /**
    * Update email label
@@ -299,7 +299,7 @@ export interface IEmailDomainService extends IOAuthEnabledDomainService {
   /**
    * Archive email
    */
-  archiveEmail(messageId: string): Promise<void>;
+  archiveEmail(params: { messageId: string }): Promise<void>;
 
   /**
    * Delete email

@@ -288,7 +288,7 @@ export interface ICalendarDomainService extends IOAuthEnabledDomainService {
   /**
    * Respond to calendar invitation
    */
-  respondToEvent(eventId: string, response: 'accepted' | 'declined' | 'tentative', calendarId?: string): Promise<void>;
+  respondToEvent(userId: string, params: { eventId: string; response: 'accepted' | 'declined' | 'tentative'; calendarId?: string }): Promise<void>;
 
   /**
    * Get event instances (for recurring events)

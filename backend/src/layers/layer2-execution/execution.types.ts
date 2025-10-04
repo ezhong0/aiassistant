@@ -14,7 +14,7 @@ export type InformationNodeType =
   | 'semantic_analysis';
 
 // Re-export for convenience
-export { InformationNode };
+export type { InformationNode };
 
 /**
  * Result from executing a single node

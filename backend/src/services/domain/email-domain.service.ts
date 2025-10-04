@@ -4,7 +4,7 @@ import { getAPIClient } from '../api';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
 import { AuthCredentials } from '../../types/api/api-client.types';
 import { ValidationHelper, EmailValidationSchemas } from '../../validation/api-client.validation';
-import { IEmailDomainService, EmailThread } from './interfaces/email-domain.interface';
+import { IEmailDomainService, EmailThread, EmailLabel } from './interfaces/email-domain.interface';
 import { GoogleOAuthManager } from '../oauth/google-oauth-manager';
 import { OAuthContext } from '../../types/oauth.types';
 
@@ -819,7 +819,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Create a new label
    */
-  async createLabel(params: { name: string; color?: string }): Promise<{ id: string; name: string }> {
+  async createLabel(params: { name: string; color?: string }): Promise<EmailLabel> {
     this.assertReady();
 
     if (!this.googleClient) {
@@ -840,12 +840,13 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         }
       });
 
-      const result = {
+      const result: EmailLabel = {
         id: response.data.id,
-        name: response.data.name
+        name: response.data.name,
+        type: 'user' as const
       };
 
-      this.logInfo('Label created successfully', result);
+      this.logInfo('Label created successfully', { labelId: result.id, labelName: result.name });
 
       return result;
     } catch (error) {

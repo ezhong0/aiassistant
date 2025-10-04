@@ -216,45 +216,28 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   );
 };
 
-/* 
-USAGE EXAMPLES:
---------------
-Basic usage:
-<AssistantMessage
-  message="Found **3 emails** from Sarah Chen this week"
-  timestamp={Date.now()}
-/>
-
-With markdown:
-<AssistantMessage
-  message="Here are your recent emails:\n\n**Important:** *Budget review* needed\n- Meeting notes\n- Q4 proposal\n\nUse `get_emails` to fetch more"
-  timestamp={Date.now()}
-/>
-
-With custom content:
-<AssistantMessage
-  message="Found emails"
-  timestamp={Date.now()}
-  customContent={
-    <View>
-      <Text>Email List:</Text>
-      {/* Custom email list component */}
-    </View>
-  }
-/>
-*/
-
-/* 
-STYLING EXPLANATION:
--------------------
-- Aligned left (alignSelf: 'flex-start') for assistant messages
-- Max width 85% (vs 80% for user) to accommodate longer responses
-- Background uses messageReceived color for differentiation from user messages
-- Avatar on left side (28px) with AI initials, customizable via prop
-- Markdown parsing supports **bold**, *italic*, and `code` formatting
-- Code blocks get subtle background styling with monospace font
-- Action buttons appear below message content when onPress is provided
-- Smooth fade-in animation with configurable delay
-- Avatar stays fixed during message bubble animations
-- Typography optimized for readability with chat-specific font sizes
-*/
+/**
+ * USAGE EXAMPLES:
+ * --------------
+ * Basic usage:
+ * <AssistantMessage message="Found **3 emails** from Sarah Chen this week" timestamp={Date.now()} />
+ *
+ * With markdown:
+ * <AssistantMessage message="Here are your recent emails..." timestamp={Date.now()} />
+ *
+ * With custom content:
+ * <AssistantMessage message="Found emails" timestamp={Date.now()} customContent={yourComponent} />
+ *
+ * STYLING EXPLANATION:
+ * -------------------
+ * - Aligned left (alignSelf: 'flex-start') for assistant messages
+ * - Max width 85% (vs 80% for user) to accommodate longer responses
+ * - Background uses messageReceived color for differentiation from user messages
+ * - Avatar on left side (28px) with AI initials, customizable via prop
+ * - Markdown parsing supports **bold**, *italic*, and `code` formatting
+ * - Code blocks get subtle background styling with monospace font
+ * - Action buttons appear below message content when onPress is provided
+ * - Smooth fade-in animation with configurable delay
+ * - Avatar stays fixed during message bubble animations
+ * - Typography optimized for readability with chat-specific font sizes
+ */

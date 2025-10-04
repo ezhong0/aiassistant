@@ -258,8 +258,12 @@ export class WholeInboxGenerator extends BaseService {
       emails.push(...patternEmails);
     }
 
-    // Sort emails by timestamp
-    emails.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Sort emails by internal date
+    emails.sort((a, b) => {
+      const dateA = parseInt(a.internalDate);
+      const dateB = parseInt(b.internalDate);
+      return dateA - dateB;
+    });
 
     return emails;
   }
@@ -359,7 +363,8 @@ export class WholeInboxGenerator extends BaseService {
     const id = this.generateMessageId();
     const threadId = this.generateThreadId();
     const historyId = this.generateHistoryId();
-    const internalDate = Date.now().toString();
+    const dateObj = new Date(rfc2822Date);
+    const internalDate = dateObj.getTime().toString();
     
     // Determine labels based on pattern and metadata
     const labels = this.determineLabels(emailData.metadata, patternType);
@@ -535,24 +540,31 @@ export class WholeInboxGenerator extends BaseService {
   }
 
   /**
-   * Generate unique message ID
+   * Generate unique message ID (16-character hex string like Gmail)
    */
   private generateMessageId(): string {
-    return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return Math.random().toString(16).substring(2, 18);
   }
 
   /**
-   * Generate unique thread ID
+   * Generate unique thread ID (16-character hex string like Gmail)
    */
   private generateThreadId(): string {
-    return `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return Math.random().toString(16).substring(2, 18);
+  }
+
+  /**
+   * Generate unique history ID (numeric string like Gmail)
+   */
+  private generateHistoryId(): string {
+    return Math.floor(Math.random() * 1000000000).toString();
   }
 
   /**
    * Generate unique attachment ID
    */
   private generateAttachmentId(): string {
-    return `attachment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `ANGjdJ${Math.random().toString(36).substring(2, 15)}`; // Gmail-like format
   }
 
   /**
@@ -690,23 +702,39 @@ export class WholeInboxGenerator extends BaseService {
    * Check if two emails are related
    */
   private areEmailsRelated(email1: Email, email2: Email): boolean {
+    // Extract sender from headers
+    const sender1 = this.getHeaderValue(email1, 'From');
+    const sender2 = this.getHeaderValue(email2, 'From');
+
     // Same sender
-    if (email1.sender.email === email2.sender.email) return true;
-    
+    if (sender1 === sender2) return true;
+
     // Similar subject (basic pattern matching)
-    const subject1 = email1.subject.toLowerCase();
-    const subject2 = email2.subject.toLowerCase();
-    
+    const subject1 = this.getHeaderValue(email1, 'Subject').toLowerCase();
+    const subject2 = this.getHeaderValue(email2, 'Subject').toLowerCase();
+
     if (subject1.includes('re:') && subject2.includes('re:')) {
       const baseSubject1 = subject1.replace(/^re:\s*/, '');
       const baseSubject2 = subject2.replace(/^re:\s*/, '');
       if (baseSubject1 === baseSubject2) return true;
     }
-    
-    // Same company
-    if (email1.sender.company === email2.sender.company) return true;
-    
+
+    // Same company (check if in metadata)
+    if (email1.metadata?.sender?.company && email2.metadata?.sender?.company) {
+      if (email1.metadata.sender.company === email2.metadata.sender.company) return true;
+    }
+
     return false;
+  }
+
+  /**
+   * Get header value from email
+   */
+  private getHeaderValue(email: Email, headerName: string): string {
+    const header = email.payload.headers.find(h =>
+      h.name.toLowerCase() === headerName.toLowerCase()
+    );
+    return header?.value || '';
   }
 
   /**
@@ -714,22 +742,25 @@ export class WholeInboxGenerator extends BaseService {
    */
   private async generateCalendarData(template: InboxTemplate, emails: Email[]): Promise<CalendarEvent[]> {
     const calendarEvents: CalendarEvent[] = [];
-    
+
     // Find emails that mention meetings or events
-    const meetingEmails = emails.filter(email => 
-      email.subject.toLowerCase().includes('meeting') ||
-      email.subject.toLowerCase().includes('call') ||
-      email.subject.toLowerCase().includes('event') ||
-      email.content.body.toLowerCase().includes('meeting')
-    );
-    
+    const meetingEmails = emails.filter(email => {
+      const subject = this.getHeaderValue(email, 'Subject').toLowerCase();
+      const body = email.metadata?.content?.body?.toLowerCase() || '';
+
+      return subject.includes('meeting') ||
+             subject.includes('call') ||
+             subject.includes('event') ||
+             body.includes('meeting');
+    });
+
     for (const email of meetingEmails.slice(0, 20)) { // Limit to 20 events
       const event = await this.generateCalendarEventFromEmail(email, template.userProfile);
       if (event) {
         calendarEvents.push(event);
       }
     }
-    
+
     return calendarEvents;
   }
 
@@ -737,12 +768,16 @@ export class WholeInboxGenerator extends BaseService {
    * Generate calendar event from email
    */
   private async generateCalendarEventFromEmail(email: Email, userProfile: UserProfile): Promise<CalendarEvent | null> {
+    const subject = this.getHeaderValue(email, 'Subject');
+    const sender = this.getHeaderValue(email, 'From');
+    const body = email.metadata?.content?.body || '';
+
     const prompt = `
     Generate a realistic calendar event based on this email:
-    
-    Email Subject: ${email.subject}
-    Email Content: ${email.content.body}
-    Sender: ${email.sender.name} (${email.sender.email})
+
+    Email Subject: ${subject}
+    Email Content: ${body}
+    Sender: ${sender}
     User Profile: ${userProfile.role} in ${userProfile.industry}
     
     Generate a calendar event with:

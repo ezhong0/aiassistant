@@ -24,9 +24,11 @@ export interface ConnectedAccount {
 export interface ThemeColors {
   background: string;
   backgroundSecondary: string;
-  surface: string;
-  surfaceSecondary: string;
-  surfaceTertiary: string;
+  surface?: string;
+  surfaceSecondary?: string;
+  surfaceTertiary?: string;
+  surfaceSubtle?: string;
+  surfaceElevated?: string;
   primary: string;
   primaryHover: string;
   primaryLight: string;
@@ -44,6 +46,21 @@ export interface ThemeColors {
   error: string;
   warning: string;
   info: string;
+  work?: string;
+  personal?: string;
+  disconnected?: string;
+  inputBackground?: string;
+  inputBorder?: string;
+  inputText?: string;
+  inputPlaceholder?: string;
+  buttonPrimary?: string;
+  buttonPrimaryText?: string;
+  buttonSecondary?: string;
+  buttonSecondaryText?: string;
+  buttonDisabled?: string;
+  buttonDisabledText?: string;
+  ghostButtonHover?: string;
+  ghostButtonActive?: string;
 }
 
 export interface Theme {

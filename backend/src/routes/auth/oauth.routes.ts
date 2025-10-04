@@ -28,7 +28,6 @@ export function createOAuthRoutes(container: AppContainer) {
   // Resolve services once from container
   const authService = container.resolve<AuthService>('authService');
   const tokenStorageService = container.resolve<TokenStorageService>('tokenStorageService');
-  const slackDomainService = container.resolve('slackDomainService');
 
 // Query schemas
 const debugQuerySchema = z.object({
@@ -397,47 +396,6 @@ router.get('/callback',
       // Check if this was a reconnect from auth dashboard
       const returnTo = slackContext?.returnTo;
       const wasAuthDashboard = returnTo === 'auth_dashboard';
-
-      // Send success notification to Slack
-      try {
-        const slackService = slackDomainService;
-        if (slackService && userId_slack) {
-          await slackService.sendMessage(userId_slack, {
-            channel: userId_slack,
-            text: wasAuthDashboard
-              ? '✅ Successfully reconnected! Your Google connection has been refreshed.'
-              : '✅ Successfully connected! You can now use email and calendar features.',
-            blocks: wasAuthDashboard ? [
-                {
-                  type: 'section',
-                  text: {
-                    type: 'mrkdwn',
-                    text: '✅ *Successfully Reconnected!*\n\nYour Google connection has been refreshed. You can now use email and calendar features.'
-                  }
-                },
-                {
-                  type: 'actions',
-                  elements: [
-                    {
-                      type: 'button',
-                      text: {
-                        type: 'plain_text',
-                        text: '🔐 View Connections'
-                      },
-                      action_id: 'view_auth_dashboard',
-                      value: 'show'
-                    }
-                  ]
-                }
-              ] : undefined
-          });
-        }
-      } catch (error) {
-        logger.error('Failed to send Slack notification', error as Error, {
-          operation: 'slack_notification_error',
-          metadata: { userId: userId_slack }
-        });
-      }
 
       return res.send(`
         <html>

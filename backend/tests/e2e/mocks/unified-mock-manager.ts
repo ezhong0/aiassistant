@@ -194,13 +194,22 @@ export class UnifiedMockManager extends BaseService {
 
   /**
    * Mock Gmail search with pagination support
+   * Returns Gmail API v1 messages.list format
    */
   private mockGmailSearch(query: string, maxResults: number = 100, pageToken?: string): APIResponse {
     if (!this.inboxData) {
-      return this.getDefaultResponse({ endpoint: '/gmail/v1/users/me/messages', method: 'GET' });
+      return {
+        data: { messages: [], resultSizeEstimate: 0 },
+        status: 200,
+        metadata: {
+          requestId: this.generateRequestId(),
+          timestamp: new Date().toISOString(),
+          mockSource: 'gmail-search-empty'
+        }
+      };
     }
 
-    const matchingEmails = this.inboxData.emails.filter(email => 
+    const matchingEmails = this.inboxData.emails.filter(email =>
       this.emailMatchesQuery(email, query)
     );
 
@@ -209,14 +218,10 @@ export class UnifiedMockManager extends BaseService {
     const endIndex = Math.min(startIndex + maxResults, matchingEmails.length);
     const paginatedEmails = matchingEmails.slice(startIndex, endIndex);
 
+    // Gmail API messages.list returns ONLY id and threadId (minimal format)
     const messages = paginatedEmails.map(email => ({
       id: email.id,
-      threadId: email.threadId,
-      snippet: email.snippet,
-      labelIds: email.labelIds,
-      sizeEstimate: email.sizeEstimate,
-      historyId: email.historyId,
-      internalDate: email.internalDate
+      threadId: email.threadId
     }));
 
     const response: any = {
@@ -242,27 +247,43 @@ export class UnifiedMockManager extends BaseService {
 
   /**
    * Mock Gmail get message
+   * Returns full Gmail API v1 message format
    */
   private mockGmailGetMessage(endpoint: string): APIResponse {
     if (!this.inboxData) {
-      return this.getDefaultResponse({ endpoint, method: 'GET' });
-    }
-
-    const messageId = endpoint.split('/').pop();
-    const email = this.inboxData.emails.find(e => e.id === messageId);
-
-    if (!email) {
       return {
-        data: { error: 'Message not found' },
-        status: 404,
+        data: { error: { message: 'No inbox data available', code: 500 } },
+        status: 500,
         metadata: {
           requestId: this.generateRequestId(),
           timestamp: new Date().toISOString(),
-          mockSource: 'gmail-get-message'
+          mockSource: 'gmail-get-message-error'
         }
       };
     }
 
+    const messageId = endpoint.split('/').pop()?.split('?')[0]; // Remove query params
+    const email = this.inboxData.emails.find(e => e.id === messageId);
+
+    if (!email) {
+      return {
+        data: {
+          error: {
+            message: `Message not found: ${messageId}`,
+            code: 404,
+            status: 'NOT_FOUND'
+          }
+        },
+        status: 404,
+        metadata: {
+          requestId: this.generateRequestId(),
+          timestamp: new Date().toISOString(),
+          mockSource: 'gmail-get-message-not-found'
+        }
+      };
+    }
+
+    // Return complete Gmail message object (format=full)
     return {
       data: {
         id: email.id,
@@ -430,6 +451,8 @@ export class UnifiedMockManager extends BaseService {
         mockSource: 'gmail-send-message'
       }
     };
+  }
+
   /**
    * Mock Calendar list events
    */
@@ -497,25 +520,56 @@ export class UnifiedMockManager extends BaseService {
    * Mock Contacts search
    */
   private mockContactsSearch(query: string): APIResponse {
+    if (!this.inboxData) {
+      return {
+        data: { results: [] },
+        status: 200,
+        metadata: {
+          requestId: this.generateRequestId(),
+          timestamp: new Date().toISOString(),
+          mockSource: 'contacts-search-empty'
+        }
+      };
+    }
+
+    // Helper to extract sender info from headers
+    const getSenderInfo = (email: Email) => {
+      const fromHeader = email.payload.headers.find(h => h.name.toLowerCase() === 'from');
+      if (!fromHeader) return null;
+
+      const match = fromHeader.value.match(/(?:"?([^"]*)"?\s)?<?([^>]+)>?/);
+      return {
+        name: match?.[1] || email.metadata?.sender?.name || '',
+        email: match?.[2] || email.metadata?.sender?.email || fromHeader.value
+      };
+    };
+
     // Generate realistic contact data based on inbox emails
-    const contacts = this.inboxData?.emails
-      .filter(email => 
-        email.sender.name.toLowerCase().includes(query.toLowerCase()) ||
-        email.sender.email.toLowerCase().includes(query.toLowerCase())
-      )
-      .slice(0, 10)
-      .map(email => ({
-        resourceName: `people/${this.generateContactId()}`,
-        names: [{
-          displayName: email.sender.name,
-          givenName: email.sender.name.split(' ')[0],
-          familyName: email.sender.name.split(' ').slice(1).join(' ')
-        }],
-        emailAddresses: [{
-          value: email.sender.email,
-          type: 'work'
-        }]
-      })) || [];
+    const uniqueContacts = new Map<string, any>();
+
+    this.inboxData.emails.forEach(email => {
+      const senderInfo = getSenderInfo(email);
+      if (!senderInfo) return;
+
+      const queryLower = query.toLowerCase();
+      if (senderInfo.name.toLowerCase().includes(queryLower) ||
+          senderInfo.email.toLowerCase().includes(queryLower)) {
+
+        if (!uniqueContacts.has(senderInfo.email)) {
+          uniqueContacts.set(senderInfo.email, {
+            resourceName: `people/${this.generateContactId()}`,
+            names: [{
+              displayName: senderInfo.name || senderInfo.email
+            }],
+            emailAddresses: [{
+              value: senderInfo.email
+            }]
+          });
+        }
+      }
+    });
+
+    const contacts = Array.from(uniqueContacts.values()).slice(0, 10);
 
     return {
       data: {
@@ -528,6 +582,13 @@ export class UnifiedMockManager extends BaseService {
         mockSource: 'contacts-search'
       }
     };
+  }
+
+  /**
+   * Generate unique contact ID
+   */
+  private generateContactId(): string {
+    return `c${Math.random().toString(36).substring(2, 15)}`;
   }
 
   /**
@@ -588,30 +649,119 @@ export class UnifiedMockManager extends BaseService {
   /**
    * Check if email matches search query
    */
+  /**
+   * Parse and match Gmail query syntax
+   * Supports: is:unread, is:read, from:email, to:email, subject:text, has:attachment, label:name
+   */
   private emailMatchesQuery(email: Email, query: string): boolean {
+    if (!query) return true;
+
     const queryLower = query.toLowerCase();
-    
-    // Check subject from headers
-    const subjectHeader = email.payload.headers.find(h => h.name.toLowerCase() === 'subject');
-    if (subjectHeader && subjectHeader.value.toLowerCase().includes(queryLower)) return true;
-    
-    // Check sender from headers
-    const fromHeader = email.payload.headers.find(h => h.name.toLowerCase() === 'from');
-    if (fromHeader && fromHeader.value.toLowerCase().includes(queryLower)) return true;
-    
-    // Check snippet
-    if (email.snippet.toLowerCase().includes(queryLower)) return true;
-    
-    // Check labels
-    if (email.labelIds.some(label => label.toLowerCase().includes(queryLower))) return true;
-    
-    // Check metadata for internal categorization
-    if (email.metadata.category.toLowerCase().includes(queryLower)) return true;
-    
-    // Check body content from metadata
-    if (email.metadata.content.body.toLowerCase().includes(queryLower)) return true;
-    
-    return false;
+
+    // Helper to extract header value
+    const getHeader = (name: string): string => {
+      const header = email.payload.headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+      return header?.value || '';
+    };
+
+    // Extract operators from query
+    const operators = {
+      isUnread: /is:unread/i.test(query),
+      isRead: /is:read/i.test(query),
+      isImportant: /is:important/i.test(query),
+      isStarred: /is:starred/i.test(query),
+      hasAttachment: /has:attachment/i.test(query),
+      from: query.match(/from:(\S+)/i)?.[1],
+      to: query.match(/to:(\S+)/i)?.[1],
+      subject: query.match(/subject:"([^"]+)"|subject:(\S+)/i)?.[1] || query.match(/subject:(\S+)/i)?.[1],
+      label: query.match(/label:(\S+)/i)?.[1],
+    };
+
+    // Remove operators from query to get plain text search
+    const plainText = query
+      .replace(/is:\w+/gi, '')
+      .replace(/from:\S+/gi, '')
+      .replace(/to:\S+/gi, '')
+      .replace(/subject:"[^"]+"|subject:\S+/gi, '')
+      .replace(/has:\w+/gi, '')
+      .replace(/label:\S+/gi, '')
+      .trim()
+      .toLowerCase();
+
+    // Check is:unread
+    if (operators.isUnread && !email.labelIds.includes('UNREAD')) {
+      return false;
+    }
+
+    // Check is:read
+    if (operators.isRead && email.labelIds.includes('UNREAD')) {
+      return false;
+    }
+
+    // Check is:important
+    if (operators.isImportant && !email.labelIds.includes('IMPORTANT')) {
+      return false;
+    }
+
+    // Check is:starred
+    if (operators.isStarred && !email.labelIds.includes('STARRED')) {
+      return false;
+    }
+
+    // Check has:attachment
+    if (operators.hasAttachment) {
+      const hasAttachment = email.payload.parts?.some(part => part.filename && part.filename.length > 0);
+      if (!hasAttachment) return false;
+    }
+
+    // Check from:
+    if (operators.from) {
+      const from = getHeader('From').toLowerCase();
+      if (!from.includes(operators.from.toLowerCase())) {
+        return false;
+      }
+    }
+
+    // Check to:
+    if (operators.to) {
+      const to = getHeader('To').toLowerCase();
+      if (!to.includes(operators.to.toLowerCase())) {
+        return false;
+      }
+    }
+
+    // Check subject:
+    if (operators.subject) {
+      const subject = getHeader('Subject').toLowerCase();
+      if (!subject.includes(operators.subject.toLowerCase())) {
+        return false;
+      }
+    }
+
+    // Check label:
+    if (operators.label) {
+      const labelMatch = email.labelIds.some(label =>
+        label.toLowerCase() === operators.label?.toLowerCase()
+      );
+      if (!labelMatch) return false;
+    }
+
+    // Check plain text search (searches in subject, from, snippet, body)
+    if (plainText) {
+      const subject = getHeader('Subject').toLowerCase();
+      const from = getHeader('From').toLowerCase();
+      const snippet = email.snippet.toLowerCase();
+      const body = email.metadata?.content?.body?.toLowerCase() || '';
+
+      const matches = subject.includes(plainText) ||
+                     from.includes(plainText) ||
+                     snippet.includes(plainText) ||
+                     body.includes(plainText);
+
+      if (!matches) return false;
+    }
+
+    return true;
   }
 
   /**
