@@ -106,11 +106,15 @@ export class SynthesisService extends BaseService {
     let totalTokens = 0;
     let totalLlmCalls = 0;
     let nodesFailed = 0;
+    let totalTimeSeconds = 0;
 
     for (const result of results.nodeResults.values()) {
       totalTokens += result.tokens_used || 0;
       if (result.data?.metadata?.llm_calls) {
         totalLlmCalls += result.data.metadata.llm_calls as number;
+      }
+      if (result.data?.metadata?.execution_time_ms) {
+        totalTimeSeconds += (result.data.metadata.execution_time_ms as number) / 1000;
       }
       if (!result.success) {
         nodesFailed++;
@@ -120,7 +124,7 @@ export class SynthesisService extends BaseService {
     return {
       total_tokens: totalTokens,
       total_llm_calls: totalLlmCalls,
-      total_time_seconds: 0, // TODO: Track timing
+      total_time_seconds: totalTimeSeconds,
       total_cost_usd: totalTokens * 0.00000015, // Rough estimate
       nodes_executed: results.nodeResults.size,
       nodes_failed: nodesFailed

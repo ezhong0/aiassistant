@@ -227,16 +227,7 @@ export class CalendarDomainService extends BaseDomainService implements Partial<
    * Quick add calendar event using natural language
    * Example: "Meeting with John tomorrow at 2pm" or "Lunch next Friday at noon"
    */
-  async quickAddEvent(userId: string, params: {
-    text: string;
-    calendarId?: string;
-  }): Promise<{
-    id: string;
-    summary: string;
-    start: Date;
-    end: Date;
-    htmlLink?: string;
-  }> {
+  async quickAddEvent(userId: string, params: import('./interfaces/calendar-domain.interface').QuickAddEventParams): Promise<import('./interfaces/calendar-domain.interface').CalendarEvent> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -265,11 +256,16 @@ export class CalendarDomainService extends BaseDomainService implements Partial<
         credentials
       });
 
-      const result = {
+      const result: import('./interfaces/calendar-domain.interface').CalendarEvent = {
         id: response.data.id,
         summary: response.data.summary,
         start: new Date(response.data.start.dateTime || response.data.start.date),
         end: new Date(response.data.end.dateTime || response.data.end.date),
+        created: new Date(response.data.created || Date.now()),
+        updated: new Date(response.data.updated || Date.now()),
+        status: response.data.status || 'confirmed',
+        visibility: response.data.visibility || 'default',
+        transparency: response.data.transparency || 'opaque',
         htmlLink: response.data.htmlLink
       };
 

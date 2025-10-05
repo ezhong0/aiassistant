@@ -1,7 +1,7 @@
 import { BaseService } from '../base-service';
-import { 
-  APIClientFactoryConfig, 
-  APIClientRegistration, 
+import {
+  APIClientFactoryConfig,
+  APIClientRegistration,
   APIClientInstance,
   APIClientConfig,
   APIHealthStatus
@@ -42,31 +42,30 @@ export class APIClientFactory extends BaseService {
   private registrations: Map<string, APIClientRegistration> = new Map();
   private config: APIClientFactoryConfig;
 
-  constructor(config: APIClientFactoryConfig = {}) {
+  constructor(configParam: APIClientFactoryConfig = {}) {
     super('APIClientFactory');
 
-    // BREAKING CHANGE: All defaults come from centralized Config
-    // No more hardcoded magic numbers
+    // Default configuration for API clients
     this.config = {
       defaultConfig: {
-        timeout: config.defaultConfig?.timeout ?? Config.apiClient.timeout,
+        timeout: configParam.defaultConfig?.timeout ?? 30000,
         retry: {
-          maxAttempts: config.defaultConfig?.retry?.maxAttempts ?? Config.apiClient.retry.maxAttempts,
-          baseDelay: config.defaultConfig?.retry?.baseDelay ?? Config.apiClient.retry.baseDelay,
-          maxDelay: config.defaultConfig?.retry?.maxDelay ?? Config.apiClient.retry.maxDelay,
-          backoffMultiplier: config.defaultConfig?.retry?.backoffMultiplier ?? Config.apiClient.retry.backoffMultiplier,
-          jitter: config.defaultConfig?.retry?.jitter ?? Config.apiClient.retry.jitter,
-          strategy: config.defaultConfig?.retry?.strategy ?? 'EXPONENTIAL_BACKOFF'
+          maxAttempts: configParam.defaultConfig?.retry?.maxAttempts ?? 3,
+          baseDelay: configParam.defaultConfig?.retry?.baseDelay ?? 1000,
+          maxDelay: configParam.defaultConfig?.retry?.maxDelay ?? 10000,
+          backoffMultiplier: configParam.defaultConfig?.retry?.backoffMultiplier ?? 2,
+          jitter: configParam.defaultConfig?.retry?.jitter ?? true,
+          strategy: configParam.defaultConfig?.retry?.strategy ?? 'EXPONENTIAL_BACKOFF'
         },
         circuitBreaker: {
-          failureThreshold: config.defaultConfig?.circuitBreaker?.failureThreshold ?? Config.apiClient.circuitBreaker.failureThreshold,
-          recoveryTimeout: config.defaultConfig?.circuitBreaker?.recoveryTimeout ?? Config.apiClient.circuitBreaker.recoveryTimeout,
-          successThreshold: config.defaultConfig?.circuitBreaker?.successThreshold ?? Config.apiClient.circuitBreaker.successThreshold,
-          timeout: config.defaultConfig?.circuitBreaker?.timeout ?? Config.apiClient.circuitBreaker.timeout
+          failureThreshold: configParam.defaultConfig?.circuitBreaker?.failureThreshold ?? 5,
+          recoveryTimeout: configParam.defaultConfig?.circuitBreaker?.recoveryTimeout ?? 60000,
+          successThreshold: configParam.defaultConfig?.circuitBreaker?.successThreshold ?? 2,
+          timeout: configParam.defaultConfig?.circuitBreaker?.timeout ?? 30000
         }
       },
-      enableGlobalRateLimit: config.enableGlobalRateLimit ?? false,
-      ...config
+      enableGlobalRateLimit: configParam.enableGlobalRateLimit ?? false,
+      ...configParam
     };
   }
 

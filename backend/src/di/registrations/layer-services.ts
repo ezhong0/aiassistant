@@ -31,7 +31,8 @@ import '../../layers/layer2-execution/strategies/cross-reference-strategy';
 import '../../layers/layer2-execution/strategies/semantic-analysis-strategy';
 
 // Strategy metadata store for auto-registration
-import { strategyMetadataStore, strategyTypeToString } from '../../layers/layer2-execution/strategy-metadata';
+import { strategyMetadataStore, strategyTypeToString, strategyTypeToNodeType } from '../../layers/layer2-execution/strategy-metadata';
+import { InformationNodeType } from '../../layers/layer2-execution/execution.types';
 
 /**
  * Register 3-layer architecture services
@@ -95,11 +96,11 @@ export function registerLayerServices(container: AppContainer): AppContainer {
     });
 
     // Resolve and register with StrategyRegistry
-    const strategyInstance = container.resolve(strategyKey);
-    const strategyName = strategyTypeToString(metadata.type);
-    registry.register(strategyName, strategyInstance);
+    const strategyInstance = container.resolve(strategyKey) as import('../../layers/layer2-execution/execution.types').StrategyExecutor;
+    const strategyNodeType = strategyTypeToNodeType(metadata.type) as InformationNodeType;
+    registry.register(strategyNodeType, strategyInstance);
 
-    console.log(`✅ Auto-registered strategy: ${metadata.name} (${strategyName})`);
+    console.log(`✅ Auto-registered strategy: ${metadata.name} (${strategyNodeType})`);
   }
 
   return container;

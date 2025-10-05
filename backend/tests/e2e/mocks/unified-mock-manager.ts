@@ -1,12 +1,45 @@
 /**
  * Unified Mock Manager for E2E Testing
- * 
+ *
  * Manages API mocking based on whole inbox data for comprehensive testing.
  * Provides realistic API responses that match the generated inbox data.
  */
 
-import { BaseService } from '../../services/base-service';
-import { InboxData, Email, CalendarEvent } from './whole-inbox-generator';
+import { GeneratedInbox, GeneratedEmail } from '../generators/hyper-realistic-inbox';
+
+// Gmail API compatible email structure
+interface Email {
+  id: string;
+  threadId: string;
+  snippet: string;
+  labelIds?: string[];
+  sizeEstimate?: number;
+  historyId?: string;
+  payload: {
+    headers: Array<{ name: string; value: string }>;
+    body?: { data: string };
+    parts?: Array<{ filename?: string; body?: { data: string } }>;
+  };
+  internalDate: string;
+  metadata?: any;
+}
+
+interface CalendarEvent {
+  id: string;
+  summary: string;
+  title?: string;
+  description?: string;
+  start: { dateTime: string };
+  end: { dateTime: string };
+  attendees?: Array<{ email: string; displayName?: string }>;
+  location?: string;
+  status?: string;
+}
+
+// Extended InboxData with calendar
+interface InboxData extends GeneratedInbox {
+  calendar?: CalendarEvent[];
+}
 
 export interface MockContext {
   inboxData: InboxData;
@@ -46,14 +79,14 @@ export interface ApiCallRecord {
 /**
  * Central API Mock Manager for E2E Testing
  */
-export class UnifiedMockManager extends BaseService {
+export class UnifiedMockManager {
   private static instance: UnifiedMockManager;
   private callRecords: ApiCallRecord[] = [];
-  private mockContext: MockContext = {};
+  private mockContext: MockContext | null = null;
   private inboxData: InboxData | null = null;
 
   constructor() {
-    super('UnifiedMockManager');
+    // Constructor
   }
 
   static getInstance(): UnifiedMockManager {
@@ -64,10 +97,55 @@ export class UnifiedMockManager extends BaseService {
   }
 
   /**
-   * Service initialization
+   * Initialize the mock manager
    */
-  protected async onInitialize(): Promise<void> {
+  async initialize(): Promise<void> {
     this.logInfo('UnifiedMockManager initialized');
+  }
+
+  /**
+   * Log info message
+   */
+  private logInfo(message: string, data?: any): void {
+    console.log(`[UnifiedMockManager] ${message}`, data || '');
+  }
+
+  /**
+   * Log error message
+   */
+  private logError(message: string, data?: any): void {
+    console.error(`[UnifiedMockManager ERROR] ${message}`, data || '');
+  }
+
+  /**
+   * Convert GeneratedEmail to Gmail API format
+   */
+  private convertToGmailFormat(email: GeneratedEmail): Email {
+    return {
+      id: email.id,
+      threadId: email.threadId,
+      snippet: email.body.substring(0, 100),
+      labelIds: ['INBOX'],
+      sizeEstimate: email.body.length,
+      historyId: '1',
+      payload: {
+        headers: [
+          { name: 'From', value: email.from },
+          { name: 'To', value: email.to },
+          { name: 'Subject', value: email.subject },
+          { name: 'Date', value: email.sentDate.toISOString() },
+          ...(email.cc ? [{ name: 'Cc', value: email.cc.join(', ') }] : []),
+        ],
+        body: {
+          data: Buffer.from(email.body).toString('base64'),
+        },
+      },
+      internalDate: email.sentDate.getTime().toString(),
+      metadata: {
+        labels: email.label,
+        groundTruth: email.label,
+      },
+    };
   }
 
   /**
@@ -80,8 +158,20 @@ export class UnifiedMockManager extends BaseService {
       userProfile,
       currentTime: new Date()
     };
-    
-    this.logInfo(`Mock context setup with ${inboxData.emails.length} emails and ${inboxData.calendar.length} calendar events`);
+
+    const calendarCount = inboxData.calendar?.length || 0;
+    this.logInfo(`Mock context setup with ${inboxData.emails.length} emails and ${calendarCount} calendar events`);
+  }
+
+  /**
+   * Load inbox data from generated inbox
+   */
+  async loadInbox(inbox: GeneratedInbox): Promise<void> {
+    const inboxData: InboxData = {
+      ...inbox,
+      calendar: [], // Empty calendar for now
+    };
+    await this.setupMockContext(inboxData, {});
   }
 
   /**
@@ -209,7 +299,9 @@ export class UnifiedMockManager extends BaseService {
       };
     }
 
-    const matchingEmails = this.inboxData.emails.filter(email =>
+    // Convert all GeneratedEmails to Email format for filtering
+    const convertedEmails = this.inboxData.emails.map(e => this.convertToGmailFormat(e));
+    const matchingEmails = convertedEmails.filter(email =>
       this.emailMatchesQuery(email, query)
     );
 
@@ -284,16 +376,17 @@ export class UnifiedMockManager extends BaseService {
     }
 
     // Return complete Gmail message object (format=full)
+    const gmailEmail = this.convertToGmailFormat(email);
     return {
       data: {
-        id: email.id,
-        threadId: email.threadId,
-        labelIds: email.labelIds,
-        snippet: email.snippet,
-        sizeEstimate: email.sizeEstimate,
-        historyId: email.historyId,
-        internalDate: email.internalDate,
-        payload: email.payload
+        id: gmailEmail.id,
+        threadId: gmailEmail.threadId,
+        labelIds: ['INBOX'],
+        snippet: gmailEmail.snippet,
+        sizeEstimate: gmailEmail.snippet.length,
+        historyId: '1',
+        internalDate: gmailEmail.internalDate,
+        payload: gmailEmail.payload
       },
       status: 200,
       metadata: {
@@ -313,9 +406,9 @@ export class UnifiedMockManager extends BaseService {
     }
 
     const threadId = endpoint.split('/').pop();
-    const threadEmails = this.inboxData.emails.filter(email => email.threadId === threadId);
+    const threadEmailsRaw = this.inboxData.emails.filter(email => email.threadId === threadId);
 
-    if (threadEmails.length === 0) {
+    if (threadEmailsRaw.length === 0) {
       return {
         data: { error: 'Thread not found' },
         status: 404,
@@ -326,6 +419,9 @@ export class UnifiedMockManager extends BaseService {
         }
       };
     }
+
+    // Convert to Gmail format
+    const threadEmails = threadEmailsRaw.map(e => this.convertToGmailFormat(e));
 
     // Sort emails by date
     threadEmails.sort((a, b) => {
@@ -338,14 +434,14 @@ export class UnifiedMockManager extends BaseService {
       data: {
         id: threadId,
         snippet: threadEmails[0].snippet,
-        historyId: threadEmails[0].historyId,
+        historyId: threadEmails[0].historyId || '1',
         messages: threadEmails.map(email => ({
           id: email.id,
           threadId: email.threadId,
-          labelIds: email.labelIds,
+          labelIds: email.labelIds || ['INBOX'],
           snippet: email.snippet,
-          sizeEstimate: email.sizeEstimate,
-          historyId: email.historyId,
+          sizeEstimate: email.sizeEstimate || 0,
+          historyId: email.historyId || '1',
           internalDate: email.internalDate,
           payload: email.payload
         }))
@@ -367,7 +463,9 @@ export class UnifiedMockManager extends BaseService {
       return this.getDefaultResponse({ endpoint: '/gmail/v1/users/me/threads', method: 'GET' });
     }
 
-    const matchingEmails = this.inboxData.emails.filter(email => 
+    // Convert and filter
+    const convertedEmails = this.inboxData.emails.map(e => this.convertToGmailFormat(e));
+    const matchingEmails = convertedEmails.filter(email =>
       this.emailMatchesQuery(email, query)
     );
 
@@ -547,7 +645,8 @@ export class UnifiedMockManager extends BaseService {
     // Generate realistic contact data based on inbox emails
     const uniqueContacts = new Map<string, any>();
 
-    this.inboxData.emails.forEach(email => {
+    this.inboxData.emails.forEach(genEmail => {
+      const email = this.convertToGmailFormat(genEmail);
       const senderInfo = getSenderInfo(email);
       if (!senderInfo) return;
 
@@ -582,13 +681,6 @@ export class UnifiedMockManager extends BaseService {
         mockSource: 'contacts-search'
       }
     };
-  }
-
-  /**
-   * Generate unique contact ID
-   */
-  private generateContactId(): string {
-    return `c${Math.random().toString(36).substring(2, 15)}`;
   }
 
   /**
@@ -689,22 +781,22 @@ export class UnifiedMockManager extends BaseService {
       .toLowerCase();
 
     // Check is:unread
-    if (operators.isUnread && !email.labelIds.includes('UNREAD')) {
+    if (operators.isUnread && !(email.labelIds || []).includes('UNREAD')) {
       return false;
     }
 
     // Check is:read
-    if (operators.isRead && email.labelIds.includes('UNREAD')) {
+    if (operators.isRead && (email.labelIds || []).includes('UNREAD')) {
       return false;
     }
 
     // Check is:important
-    if (operators.isImportant && !email.labelIds.includes('IMPORTANT')) {
+    if (operators.isImportant && !(email.labelIds || []).includes('IMPORTANT')) {
       return false;
     }
 
     // Check is:starred
-    if (operators.isStarred && !email.labelIds.includes('STARRED')) {
+    if (operators.isStarred && !(email.labelIds || []).includes('STARRED')) {
       return false;
     }
 
@@ -740,7 +832,7 @@ export class UnifiedMockManager extends BaseService {
 
     // Check label:
     if (operators.label) {
-      const labelMatch = email.labelIds.some(label =>
+      const labelMatch = (email.labelIds || []).some(label =>
         label.toLowerCase() === operators.label?.toLowerCase()
       );
       if (!labelMatch) return false;
@@ -750,7 +842,7 @@ export class UnifiedMockManager extends BaseService {
     if (plainText) {
       const subject = getHeader('Subject').toLowerCase();
       const from = getHeader('From').toLowerCase();
-      const snippet = email.snippet.toLowerCase();
+      const snippet = (email.snippet || '').toLowerCase();
       const body = email.metadata?.content?.body?.toLowerCase() || '';
 
       const matches = subject.includes(plainText) ||

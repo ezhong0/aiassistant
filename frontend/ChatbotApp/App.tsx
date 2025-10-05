@@ -1,3 +1,16 @@
+/**
+ * Main App Component - Redesigned & Enhanced
+ *
+ * Features:
+ * - Conversation persistence with AsyncStorage
+ * - Offline-first with sync queue
+ * - Enhanced message components
+ * - Better loading/empty/error states
+ * - Accessibility support
+ * - Network status monitoring
+ * - Auto-retry failed messages
+ */
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
@@ -11,16 +24,26 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Alert,
+  Clipboard,
 } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
-import { designSystem } from './src/design-system';
-import { Message, ExampleQuery } from './src/types';
-import MessageBubble from './src/components/Message';
-import { apiService, ChatContext } from './src/services/api.service';
-import { supabase } from './src/config/supabase';
 import type { Session } from '@supabase/supabase-js';
+
+// Services
+import { supabase, isAuthEnabled } from './src/config/supabase';
+import { apiService } from './src/services/api.service';
+import { storageService, StoredMessage } from './src/services/storage.service';
+import { offlineService, NetworkStatus } from './src/services/offline.service';
+
+// Components
+import EnhancedMessage from './src/components/EnhancedMessage';
+import EmptyState from './src/components/EmptyState';
+import LoadingIndicator from './src/components/LoadingIndicator';
+
+// Design System & Types
+import { designSystem } from './src/design-system';
+import { ExampleQuery } from './src/types';
 
 const EXAMPLE_QUERIES: ExampleQuery[] = [
   { id: '1', text: 'Show me urgent emails', icon: '⚡' },
@@ -29,130 +52,294 @@ const EXAMPLE_QUERIES: ExampleQuery[] = [
   { id: '4', text: 'Upcoming deadlines this week', icon: '📋' },
 ];
 
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: '1',
-    text: 'Hello! How can I help you today?',
-    sender: 'assistant',
-    timestamp: new Date(),
-  },
-];
-
 const { colors, spacing, typography } = designSystem;
 
 const App = () => {
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  // State
+  const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [context, setContext] = useState<ChatContext>({ conversationHistory: [] });
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const flatListRef = useRef<FlatList>(null);
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({
+    isConnected: true,
+    isInternetReachable: null,
+    type: null,
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
 
+  const flatListRef = useRef<FlatList>(null);
   const themeColors = isDarkMode ? colors.dark : colors.light;
 
-  // Initialize Supabase session
+  // Initialize services on mount
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
+    const init = async () => {
+      try {
+        // If Supabase is not configured, skip auth and go straight to chat
+        if (!isAuthEnabled) {
+          console.log('Authentication disabled - Supabase not configured');
+          setSession({ user: null } as any); // Fake session to skip auth screen
+          setAuthLoading(false);
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
+          // Initialize API service
+          await apiService.initialize();
 
-    // Initialize API service
-    apiService.initialize().catch(error => {
-      console.error('Failed to initialize API service:', error);
+          // Initialize offline service
+          await offlineService.initialize();
+
+          // Subscribe to network status
+          const unsubscribe = offlineService.subscribe(status => {
+            setNetworkStatus(status);
+          });
+
+          // Load persisted messages
+          const stored = await storageService.getMessages();
+          setMessages(stored);
+
+          return () => {
+            unsubscribe();
+            offlineService.destroy();
+          };
+        }
+
+        // Initialize Supabase session
+        const { data: { session } } = await supabase!.auth.getSession();
+        setSession(session);
+
+        // Initialize API service
+        await apiService.initialize();
+
+        // Initialize offline service
+        await offlineService.initialize();
+
+        // Subscribe to network status
+        const unsubscribe = offlineService.subscribe(status => {
+          setNetworkStatus(status);
+        });
+
+        // Load persisted messages
+        if (session) {
+          const stored = await storageService.getMessages();
+          setMessages(stored);
+
+          // Sync pending messages
+          if (offlineService.isNetworkOnline()) {
+            syncPendingMessages();
+          }
+        }
+
+        setAuthLoading(false);
+
+        return () => {
+          unsubscribe();
+          offlineService.destroy();
+        };
+      } catch (error) {
+        console.error('Initialization error:', error);
+        setAuthLoading(false);
+      }
+    };
+
+    init();
+
+    // Listen for auth changes (only if Supabase is configured)
+    if (!isAuthEnabled) {
+      return;
+    }
+
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+
+      if (session) {
+        // Load messages when user signs in
+        const stored = await storageService.getMessages();
+        setMessages(stored);
+      } else {
+        // Clear messages when user signs out
+        setMessages([]);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleSendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
-
-    const userMessageId = uuidv4();
-    const userMessage: Message = {
-      id: userMessageId,
-      text: text.trim(),
-      sender: 'user',
-      timestamp: new Date(),
-      status: 'sending',
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
-    setIsLoading(true);
-
-    try {
-      // Update user message status to sent
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === userMessageId ? { ...msg, status: 'sent' as const } : msg
-        )
-      );
-
-      // Send message to backend
-      const response = await apiService.sendMessage(text.trim(), context);
-
-      // Update context with response
-      setContext(response.context);
-
-      // Add assistant response
-      const assistantMessage: Message = {
-        id: uuidv4(),
-        text: response.message,
-        sender: 'assistant',
-        timestamp: new Date(),
-        status: 'sent',
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Scroll to bottom
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
-    } catch (error) {
-      console.error('Failed to send message:', error);
-
-      // Update user message status to failed
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === userMessageId ? { ...msg, status: 'failed' as const } : msg
-        )
-      );
-
-      // Show error message
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to send message. Please try again.',
-        [
-          {
-            text: 'Retry',
-            onPress: () => handleSendMessage(text.trim()),
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ]
-      );
-    } finally {
-      setIsLoading(false);
     }
-  }, [context, isLoading]);
+  }, [messages.length]);
 
+  // Sync pending messages
+  const syncPendingMessages = async () => {
+    if (isSyncing || !networkStatus.isConnected) return;
+
+    setIsSyncing(true);
+    try {
+      const result = await offlineService.syncPendingMessages();
+
+      if (result.succeeded > 0 || result.failed > 0) {
+        // Reload messages from storage
+        const stored = await storageService.getMessages();
+        setMessages(stored);
+
+        if (result.failed > 0) {
+          Alert.alert(
+            'Some messages failed',
+            `${result.failed} message(s) failed to send. They have been marked for retry.`
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Handle send message
+  const handleSendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isLoading) return;
+
+      const messageId = uuidv4();
+      const userMessage: StoredMessage = {
+        id: messageId,
+        text: text.trim(),
+        sender: 'user',
+        timestamp: Date.now(),
+        status: 'sending',
+      };
+
+      // Save to storage
+      await storageService.saveMessage(userMessage);
+
+      // Update UI immediately (optimistic update)
+      setMessages(prev => [...prev, userMessage]);
+      setInputText('');
+      setIsLoading(true);
+
+      try {
+        if (!networkStatus.isConnected) {
+          // Offline - queue for later
+          await offlineService.queueMessage(userMessage);
+          await storageService.updateMessageStatus(messageId, 'sending');
+
+          // Update UI
+          setMessages(prev =>
+            prev.map(msg => (msg.id === messageId ? { ...msg, status: 'sending' as const } : msg))
+          );
+
+          Alert.alert(
+            'Offline',
+            'Your message will be sent when you\'re back online.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // Online - send immediately
+          const truncated = await storageService.getTruncatedMessages();
+          const conversationHistory = truncated.map(msg => ({
+            role: msg.sender as 'user' | 'assistant' | 'system',
+            content: msg.text,
+            timestamp: msg.timestamp,
+          }));
+
+          const response = await apiService.sendMessage(text.trim(), {
+            conversationHistory,
+          });
+
+          // Mark user message as sent
+          await storageService.updateMessageStatus(messageId, 'sent');
+
+          // Save assistant response
+          const assistantMessage: StoredMessage = {
+            id: uuidv4(),
+            text: response.message,
+            sender: 'assistant',
+            timestamp: Date.now(),
+            status: 'sent',
+          };
+          await storageService.saveMessage(assistantMessage);
+
+          // Update UI
+          const stored = await storageService.getMessages();
+          setMessages(stored);
+        }
+      } catch (error) {
+        console.error('Send message error:', error);
+
+        // Mark as failed
+        await storageService.updateMessageStatus(messageId, 'failed');
+
+        // Update UI
+        setMessages(prev =>
+          prev.map(msg => (msg.id === messageId ? { ...msg, status: 'failed' as const } : msg))
+        );
+
+        // Show error
+        Alert.alert(
+          'Failed to send',
+          error instanceof Error ? error.message : 'An error occurred',
+          [
+            {
+              text: 'Retry',
+              onPress: () => handleRetryMessage(messageId),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isLoading, networkStatus.isConnected]
+  );
+
+  // Handle retry failed message
+  const handleRetryMessage = async (messageId: string) => {
+    try {
+      await offlineService.retryFailedMessage(messageId);
+
+      // Reload messages
+      const stored = await storageService.getMessages();
+      setMessages(stored);
+
+      // Try to sync
+      if (networkStatus.isConnected) {
+        syncPendingMessages();
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to retry message');
+    }
+  };
+
+  // Handle delete message
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      await storageService.deleteMessage(messageId);
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete message');
+    }
+  };
+
+  // Handle copy message
+  const handleCopyMessage = (text: string) => {
+    Clipboard.setString(text);
+    Alert.alert('Copied', 'Message copied to clipboard');
+  };
+
+  // Handle example query
   const handleExampleQuery = (query: ExampleQuery) => {
     handleSendMessage(query.text);
   };
 
+  // Auth handlers
   const handleSignIn = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
@@ -162,7 +349,6 @@ const App = () => {
     setIsLoading(true);
     try {
       await apiService.signInWithPassword(email, password);
-      // Session will be updated via onAuthStateChange listener
     } catch (error) {
       Alert.alert('Sign In Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
@@ -188,30 +374,30 @@ const App = () => {
   };
 
   const handleSignOut = async () => {
+    if (!isAuthEnabled) {
+      Alert.alert('Info', 'Authentication is not configured');
+      return;
+    }
+
     try {
       await apiService.signOut();
-      setMessages(INITIAL_MESSAGES);
-      setContext({ conversationHistory: [] });
+      await storageService.clearMessages();
+      setMessages([]);
     } catch (error) {
       Alert.alert('Error', 'Failed to sign out');
     }
   };
 
-  // Show loading screen
+  // Loading screen
   if (authLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={themeColors.primary} />
-          <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
-            Loading...
-          </Text>
-        </View>
+        <EmptyState type="loading" isDarkMode={isDarkMode} />
       </SafeAreaView>
     );
   }
 
-  // Show auth screen if not signed in
+  // Auth screen
   if (!session) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
@@ -228,7 +414,7 @@ const App = () => {
               Welcome to Assistant
             </Text>
             <Text style={[styles.authSubtitle, { color: themeColors.textSecondary }]}>
-              Sign in to continue
+              Your AI-powered email & calendar assistant
             </Text>
 
             <TextInput
@@ -247,6 +433,9 @@ const App = () => {
               autoCapitalize="none"
               keyboardType="email-address"
               editable={!isLoading}
+              accessible={true}
+              accessibilityLabel="Email input"
+              accessibilityHint="Enter your email address"
             />
 
             <TextInput
@@ -264,6 +453,9 @@ const App = () => {
               placeholderTextColor={themeColors.textSecondary}
               secureTextEntry
               editable={!isLoading}
+              accessible={true}
+              accessibilityLabel="Password input"
+              accessibilityHint="Enter your password"
             />
 
             <TouchableOpacity
@@ -274,18 +466,22 @@ const App = () => {
               ]}
               onPress={handleSignIn}
               disabled={isLoading}
+              accessible={true}
+              accessibilityLabel="Sign in button"
+              accessibilityRole="button"
             >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text style={styles.authButtonText}>Sign In</Text>
-              )}
+              <Text style={styles.authButtonText}>
+                {isLoading ? 'Signing in...' : 'Sign In'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.authSecondaryButton]}
+              style={styles.authSecondaryButton}
               onPress={handleSignUp}
               disabled={isLoading}
+              accessible={true}
+              accessibilityLabel="Create account button"
+              accessibilityRole="button"
             >
               <Text style={[styles.authSecondaryButtonText, { color: themeColors.primary }]}>
                 Create Account
@@ -297,7 +493,7 @@ const App = () => {
     );
   }
 
-  // Main chat interface (when authenticated)
+  // Main chat interface
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       <StatusBar
@@ -306,50 +502,65 @@ const App = () => {
         translucent={false}
       />
 
-      {/* Header with sign out */}
+      {/* Header */}
       <View style={[styles.header, { borderBottomColor: themeColors.border }]}>
-        <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>
-          Assistant
-        </Text>
-        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
-          <Text style={[styles.signOutText, { color: themeColors.primary }]}>
-            Sign Out
-          </Text>
-        </TouchableOpacity>
+        <View>
+          <Text style={[styles.headerTitle, { color: themeColors.textPrimary }]}>Assistant</Text>
+          {/* Network Status */}
+          {!networkStatus.isConnected && (
+            <Text style={[styles.offlineBadge, { color: themeColors.error }]}>Offline</Text>
+          )}
+          {isSyncing && (
+            <Text style={[styles.syncingBadge, { color: themeColors.warning }]}>Syncing...</Text>
+          )}
+        </View>
+        {isAuthEnabled && (
+          <TouchableOpacity
+            onPress={handleSignOut}
+            style={styles.signOutButton}
+            accessible={true}
+            accessibilityLabel="Sign out"
+            accessibilityRole="button"
+          >
+            <Text style={[styles.signOutText, { color: themeColors.primary }]}>Sign Out</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      
-      <KeyboardAvoidingView 
+
+      <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Messages List */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <MessageBubble
-              message={item}
-              colors={themeColors}
-              style={styles.messageBubble}
-            />
-          )}
-          contentContainerStyle={styles.messagesContainer}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-        />
+        {messages.length === 0 ? (
+          <EmptyState
+            type={networkStatus.isConnected ? 'first-conversation' : 'offline'}
+            isDarkMode={isDarkMode}
+            onAction={networkStatus.isConnected ? undefined : syncPendingMessages}
+          />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={messages}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <EnhancedMessage
+                message={item}
+                isDarkMode={isDarkMode}
+                onRetry={handleRetryMessage}
+                onDelete={handleDeleteMessage}
+                onCopy={handleCopyMessage}
+              />
+            )}
+            contentContainerStyle={styles.messagesContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          />
+        )}
 
         {/* Loading Indicator */}
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={themeColors.primary} />
-            <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
-              Thinking...
-            </Text>
-          </View>
-        )}
+        {isLoading && <LoadingIndicator type="typing" isDarkMode={isDarkMode} />}
 
         {/* Input Area */}
         <View style={[styles.inputContainer, { backgroundColor: themeColors.background }]}>
@@ -369,6 +580,9 @@ const App = () => {
             onSubmitEditing={() => handleSendMessage(inputText)}
             multiline
             editable={!isLoading}
+            accessible={true}
+            accessibilityLabel="Message input"
+            accessibilityHint="Type your message here"
           />
           <TouchableOpacity
             style={[
@@ -378,25 +592,22 @@ const App = () => {
             ]}
             onPress={() => handleSendMessage(inputText)}
             disabled={!inputText.trim() || isLoading}
+            accessible={true}
+            accessibilityLabel="Send message"
+            accessibilityRole="button"
           >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={[styles.sendButtonText, { color: 'white' }]}>
-                Send
-              </Text>
-            )}
+            <Text style={styles.sendButtonText}>{isLoading ? '...' : 'Send'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Example Queries */}
-        {messages.length <= 1 && (
-          <ScrollView 
-            horizontal 
+        {messages.length === 0 && networkStatus.isConnected && (
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.exampleQueriesContainer}
           >
-            {EXAMPLE_QUERIES.map((query) => (
+            {EXAMPLE_QUERIES.map(query => (
               <TouchableOpacity
                 key={query.id}
                 style={[
@@ -404,6 +615,9 @@ const App = () => {
                   { backgroundColor: themeColors.backgroundSecondary },
                 ]}
                 onPress={() => handleExampleQuery(query)}
+                accessible={true}
+                accessibilityLabel={`Try example: ${query.text}`}
+                accessibilityRole="button"
               >
                 <Text style={[styles.exampleQueryText, { color: themeColors.textPrimary }]}>
                   {query.icon} {query.text}
@@ -415,7 +629,7 @@ const App = () => {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -426,10 +640,7 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flexGrow: 1,
-    padding: spacing.md,
-  },
-  messageBubble: {
-    marginVertical: spacing.xs,
+    paddingVertical: spacing.md,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -460,6 +671,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   sendButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -477,22 +689,6 @@ const styles = StyleSheet.create({
   },
   exampleQueryText: {
     fontSize: 16,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  loadingText: {
-    marginLeft: spacing.sm,
-    fontSize: 14,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   authContainer: {
     flex: 1,
@@ -558,6 +754,16 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
+  },
+  offlineBadge: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  syncingBadge: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   signOutButton: {
     padding: spacing.sm,

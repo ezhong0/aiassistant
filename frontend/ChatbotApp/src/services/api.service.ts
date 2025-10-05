@@ -1,8 +1,11 @@
 import { supabase } from '../config/supabase';
 
-const API_BASE_URL = __DEV__
-  ? 'http://localhost:3000/api'
-  : 'https://your-production-url.com/api';
+// const API_BASE_URL = __DEV__
+//   ? 'http://localhost:3000/api'
+//   : 'https://aiassistant-production-5333.up.railway.app/api';
+
+// For testing Railway on physical device:
+const API_BASE_URL = 'https://aiassistant-production-5333.up.railway.app/api';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
@@ -38,6 +41,12 @@ class ApiService {
    * Supabase handles session restoration automatically via AsyncStorage
    */
   async initialize(): Promise<void> {
+    // Check if Supabase is configured
+    if (!supabase) {
+      console.log('Supabase not configured - authentication disabled');
+      return;
+    }
+
     // Check if we have an existing session
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
@@ -51,6 +60,7 @@ class ApiService {
    * Get current session token from Supabase
    */
   private async getAccessToken(): Promise<string | null> {
+    if (!supabase) return null;
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token || null;
   }
@@ -59,6 +69,7 @@ class ApiService {
    * Check if user is authenticated
    */
   async isAuthenticated(): Promise<boolean> {
+    if (!supabase) return false;
     const { data: { session } } = await supabase.auth.getSession();
     return !!session;
   }
@@ -67,6 +78,7 @@ class ApiService {
    * Get current user
    */
   async getCurrentUser() {
+    if (!supabase) return null;
     const { data: { user } } = await supabase.auth.getUser();
     return user;
   }
@@ -75,6 +87,7 @@ class ApiService {
    * Sign in with email and password
    */
   async signInWithPassword(email: string, password: string) {
+    if (!supabase) throw new Error('Supabase not configured');
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -88,6 +101,7 @@ class ApiService {
    * Sign up with email and password
    */
   async signUp(email: string, password: string) {
+    if (!supabase) throw new Error('Supabase not configured');
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -101,6 +115,7 @@ class ApiService {
    * Sign in with Google OAuth
    */
   async signInWithGoogle() {
+    if (!supabase) throw new Error('Supabase not configured');
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -117,6 +132,7 @@ class ApiService {
    * Sign out
    */
   async signOut() {
+    if (!supabase) throw new Error('Supabase not configured');
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }
@@ -125,6 +141,7 @@ class ApiService {
    * Refresh the session
    */
   async refreshSession() {
+    if (!supabase) throw new Error('Supabase not configured');
     const { data, error } = await supabase.auth.refreshSession();
     if (error) throw error;
     return data;
@@ -140,15 +157,16 @@ class ApiService {
     // Get fresh access token from Supabase session
     const accessToken = await this.getAccessToken();
 
-    if (!accessToken) {
-      throw new Error('Not authenticated - please sign in');
-    }
-
+    // Allow requests without auth if Supabase is not configured
+    // Backend should handle anonymous requests or have its own auth
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
       ...(options.headers as Record<string, string> || {}),
     };
+
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,

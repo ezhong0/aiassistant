@@ -290,17 +290,17 @@ export interface IContactsDomainService extends IDomainService {
   /**
    * Get contact details
    */
-  getContact(contactId: string): Promise<Contact>;
+  getContact(userId: string, contactId: string): Promise<Contact>;
 
   /**
    * Update contact
    */
-  updateContact(contactId: string, contact: ContactInput, updatePersonFields?: string): Promise<Contact>;
+  updateContact(userId: string, contactId: string, contact: ContactInput, updatePersonFields?: string): Promise<Contact>;
 
   /**
    * Delete contact
    */
-  deleteContact(contactId: string): Promise<void>;
+  deleteContact(userId: string, contactId: string): Promise<void>;
 
   /**
    * List contacts
@@ -379,14 +379,10 @@ export interface IContactsDomainService extends IDomainService {
   /**
    * Get multiple contacts
    */
-  batchGetContacts(contactIds: string[], readMask?: string): Promise<{
-    responses: Array<{
-      httpStatusCode: number;
-      person?: Contact;
-      requestedResourceName: string;
-      status?: any;
-    }>;
-  }>;
+  batchGetContacts(userId: string, params: {
+    resourceNames: string[];
+    personFields?: string[];
+  }): Promise<Array<Contact>>;
 
   /**
    * Update multiple contacts

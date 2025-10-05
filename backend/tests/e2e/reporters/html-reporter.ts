@@ -10,8 +10,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { InboxData, Email } from '../generators/whole-inbox-generator';
+import { GeneratedInbox, GeneratedEmail } from '../generators/hyper-realistic-inbox';
 import { ApiCallRecord } from '../mocks/unified-mock-manager';
+
+// Type aliases for backward compatibility
+type InboxData = GeneratedInbox;
+type Email = GeneratedEmail;
 
 export interface TestResult {
   name: string;

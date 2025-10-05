@@ -88,7 +88,7 @@ export class BatchThreadReadStrategy extends BaseStrategy {
   ): Promise<ThreadSummary> {
     try {
       // Get thread content
-      const thread = await this.emailService.getEmailThread(threadId);
+      const thread = await this.emailService.getEmailThread(userId, threadId);
 
       // Build thread content for analysis
       const threadContent = this.formatThreadForAnalysis(thread, userId);

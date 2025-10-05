@@ -184,17 +184,17 @@ export interface IEmailDomainService extends IDomainService {
   /**
    * Get email details by ID
    */
-  getEmail(messageId: string): Promise<EmailDetails>;
+  getEmail(userId: string, messageId: string): Promise<EmailDetails>;
 
   /**
    * Reply to an email
    */
-  replyToEmail(params: EmailReplyParams): Promise<EmailSendResult>;
+  replyToEmail(userId: string, params: EmailReplyParams): Promise<EmailSendResult>;
 
   /**
    * Get email thread
    */
-  getEmailThread(threadId: string): Promise<EmailThread>;
+  getEmailThread(userId: string, threadId: string): Promise<EmailThread>;
 
   /**
    * Forward an email
@@ -248,7 +248,7 @@ export interface IEmailDomainService extends IDomainService {
   /**
    * Create email label
    */
-  createLabel(params: { name: string; color?: string }): Promise<EmailLabel>;
+  createLabel(userId: string, params: { name: string; color?: string }): Promise<EmailLabel>;
 
   /**
    * Update email label
@@ -301,7 +301,7 @@ export interface IEmailDomainService extends IDomainService {
   /**
    * Archive email
    */
-  archiveEmail(params: { messageId: string }): Promise<void>;
+  archiveEmail(userId: string, params: { messageId: string }): Promise<void>;
 
   /**
    * Delete email

@@ -12,12 +12,16 @@ import { QueryDecomposerService } from './layer1-decomposition/query-decomposer.
 import { ExecutionCoordinatorService } from './layer2-execution/execution-coordinator.service';
 import { SynthesisService } from './layer3-synthesis/synthesis.service';
 import { ConversationMessage } from './layer1-decomposition/execution-graph.types';
+import { UserContextService } from '../services/user-context.service';
+import { UserPreferencesService } from '../services/user-preferences.service';
 
 export class OrchestratorService extends BaseService {
   constructor(
     private queryDecomposer: QueryDecomposerService,
     private executionCoordinator: ExecutionCoordinatorService,
-    private synthesisService: SynthesisService
+    private synthesisService: SynthesisService,
+    private userContextService: UserContextService,
+    private userPreferencesService: UserPreferencesService
   ) {
     super('OrchestratorService');
   }
@@ -228,32 +232,16 @@ export class OrchestratorService extends BaseService {
 
   /**
    * Get user context (accounts, timezone, etc.)
-   *
-   * BREAKING CHANGE: This now requires UserContextService to be injected
-   * No more fake data - must have real user context from database
    */
   private async getUserContext(userId: string) {
-    // This should be injected as a service dependency
-    // For now, throw an error to force proper implementation
-    throw new Error(
-      'getUserContext must be implemented with UserContextService. ' +
-      'Inject UserContextService in constructor and fetch real user context from database.'
-    );
+    return await this.userContextService.getUserContext(userId);
   }
 
   /**
    * Get user preferences for synthesis
-   *
-   * BREAKING CHANGE: This now requires UserPreferencesService to be injected
-   * No more fake data - must have real user preferences from database
    */
   private async getUserPreferences(userId: string) {
-    // This should be injected as a service dependency
-    // For now, throw an error to force proper implementation
-    throw new Error(
-      'getUserPreferences must be implemented with UserPreferencesService. ' +
-      'Inject UserPreferencesService in constructor and fetch real preferences from database.'
-    );
+    return await this.userPreferencesService.getPreferences(userId);
   }
 
   getHealth() {

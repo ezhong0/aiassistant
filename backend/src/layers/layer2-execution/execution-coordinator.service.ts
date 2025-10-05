@@ -243,7 +243,7 @@ export class ExecutionCoordinatorService extends BaseService {
     return {
       healthy: true,
       service: 'ExecutionCoordinatorService',
-      status: 'stub'
+      status: 'operational'
     };
   }
 }

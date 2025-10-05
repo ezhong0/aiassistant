@@ -45,7 +45,18 @@ export type StrategyTypeSymbol = typeof StrategyType[keyof typeof StrategyType];
  */
 export function strategyTypeToString(type: StrategyTypeSymbol): string {
   const entry = Object.entries(StrategyType).find(([, value]) => value === type);
-  return entry ? entry[0].toLowerCase() : 'unknown';
+  if (!entry) return 'unknown';
+
+  // Convert METADATA_FILTER -> metadata_filter
+  return entry[0].toLowerCase().replace(/_/g, '_');
+}
+
+/**
+ * Get InformationNodeType from StrategyTypeSymbol
+ */
+export function strategyTypeToNodeType(type: StrategyTypeSymbol): string {
+  const symbol = Symbol.keyFor(type);
+  return symbol || 'unknown';
 }
 
 /**

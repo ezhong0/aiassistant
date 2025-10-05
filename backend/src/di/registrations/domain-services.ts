@@ -1,4 +1,4 @@
-import { asClass } from 'awilix';
+import { asClass, aliasTo } from 'awilix';
 import { AppContainer } from '../container';
 import { EmailDomainService } from '../../services/domain/email-domain.service';
 import { CalendarDomainService } from '../../services/domain/calendar-domain.service';
@@ -27,5 +27,11 @@ export function registerDomainServices(container: AppContainer): void {
 
     // AI domain service (OpenAI integration)
     aiDomainService: asClass(AIDomainService).singleton(),
+
+    // Aliases for strategy injection (strategies use shorter parameter names)
+    emailService: aliasTo('emailDomainService'),
+    calendarService: aliasTo('calendarDomainService'),
+    contactsService: aliasTo('contactsDomainService'),
+    aiService: aliasTo('aiDomainService'),
   });
 }

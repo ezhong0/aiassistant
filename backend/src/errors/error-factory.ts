@@ -331,6 +331,22 @@ export class DomainErrorFactory {
       },
     );
   }
+
+  /**
+   * Validation failed
+   */
+  static validationFailed(message: string, details?: Record<string, unknown>): DomainError {
+    return new DomainError(
+      `Validation failed: ${message}`,
+      ERROR_CODES.VALIDATION_ERROR,
+      {
+        service: 'validation',
+        metadata: details,
+        retryable: false,
+        userFriendly: true,
+      },
+    );
+  }
 }
 
 /**

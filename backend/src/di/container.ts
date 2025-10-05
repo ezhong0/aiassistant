@@ -57,6 +57,11 @@ export interface Cradle {
   contactsDomainService: import('../services/domain/contacts-domain.service').ContactsDomainService;
   aiDomainService: import('../services/domain/ai-domain.service').AIDomainService;
 
+  // Aliases for strategy injection (strategies use shorter names)
+  emailService: import('../services/domain/email-domain.service').EmailDomainService;
+  calendarService: import('../services/domain/calendar-domain.service').CalendarDomainService;
+  contactsService: import('../services/domain/contacts-domain.service').ContactsDomainService;
+
   // AI Services
   aiService: import('../services/domain/ai-domain.service').AIDomainService; // Alias for aiDomainService
   aiCircuitBreakerService: import('../services/ai-circuit-breaker.service').AIServiceCircuitBreaker;
@@ -66,6 +71,8 @@ export interface Cradle {
 
   // 3-Layer Architecture Services
   strategyRegistry: import('../layers/layer2-execution/strategy-registry').StrategyRegistry;
+  decompositionPromptBuilder: import('../layers/layer1-decomposition/decomposition-prompt-builder').DecompositionPromptBuilder;
+  executionGraphValidator: import('../layers/layer1-decomposition/execution-graph-validator').ExecutionGraphValidator;
   queryDecomposer: import('../layers/layer1-decomposition/query-decomposer.service').QueryDecomposerService;
   executionCoordinator: import('../layers/layer2-execution/execution-coordinator.service').ExecutionCoordinatorService;
   synthesisService: import('../layers/layer3-synthesis/synthesis.service').SynthesisService;
