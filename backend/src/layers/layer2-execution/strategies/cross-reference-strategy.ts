@@ -14,7 +14,13 @@
 import { BaseStrategy } from './base-strategy';
 import { NodeResult, CrossReferenceParams, CrossReferenceResult } from '../execution.types';
 import { IAIDomainService, StructuredSchema } from '../../../services/domain/interfaces/ai-domain.interface';
+import { Strategy, StrategyType } from '../strategy-metadata';
 
+@Strategy({
+  type: StrategyType.CROSS_REFERENCE,
+  name: 'Cross Reference',
+  description: 'Combines and ranks results from multiple nodes using LLM',
+})
 export class CrossReferenceStrategy extends BaseStrategy {
   readonly type = 'cross_reference';
 

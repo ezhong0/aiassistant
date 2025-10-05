@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './supabase-auth.middleware';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
+import { Config } from '../config/service-config';
 
 interface RequestLogData {
   requestId: string;
@@ -9,14 +10,14 @@ interface RequestLogData {
   url: string;
   path: string;
   ip: string;
-  userAgent?: string | undefined;
-  userId?: string | undefined;
-  body?: unknown | undefined;
-  query?: unknown | undefined;
-  params?: unknown | undefined;
-  headers?: Record<string, string> | undefined;
+  userAgent?: string;
+  userId?: string;
+  body?: unknown;
+  query?: unknown;
+  params?: unknown;
+  headers?: Record<string, string>;
   timestamp: string;
-  contentLength?: number | undefined;
+  contentLength?: number;
 }
 
 interface ResponseLogData {
@@ -29,35 +30,44 @@ interface ResponseLogData {
   timestamp: string;
 }
 
-/**
- * Enhanced request/response logging middleware for API endpoints
- */
-export const apiLoggingMiddleware = (options: {
+interface LoggingOptions {
   logBody?: boolean;
   logHeaders?: boolean;
   logQuery?: boolean;
   logParams?: boolean;
   maxBodyLength?: number;
   sensitiveFields?: string[];
-} = {}) => {
+  samplingRate?: number; // 0.0 - 1.0 for request sampling
+}
+
+/**
+ * Structured API logging middleware with configurable log levels and sampling
+ *
+ * Uses centralized Config for defaults, supports per-route overrides
+ */
+export const apiLoggingMiddleware = (options: LoggingOptions = {}) => {
   const {
-    logBody = true,
+    logBody = Config.logging.enableRequestLogging,
     logHeaders = false,
     logQuery = true,
     logParams = true,
-    maxBodyLength = 10000,
-    sensitiveFields = ['password', 'token', 'authorization', 'cookie', 'access_token', 'refresh_token'],
+    maxBodyLength = Config.logging.maxBodyLength,
+    sensitiveFields = Config.logging.sensitiveFields,
+    samplingRate = 1.0, // 100% by default
   } = options;
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const startTime = Date.now();
     const requestId = uuidv4();
-    
-    // Add request ID to request object for use in other middleware/routes
+
+    // Add request ID to request object
     req.requestId = requestId;
     req.startTime = startTime;
 
-    // Prepare request log data
+    // Sampling: Skip logging for some requests (always log errors)
+    const shouldLog = Math.random() < samplingRate;
+
+    // Build request log data
     const requestLogData: RequestLogData = {
       requestId,
       method: req.method,
@@ -65,20 +75,19 @@ export const apiLoggingMiddleware = (options: {
       path: req.path,
       ip: req.ip || req.connection.remoteAddress || 'unknown',
       userAgent: req.get('User-Agent'),
-      userId: (req as AuthenticatedRequest).user?.userId || undefined,
+      userId: (req as AuthenticatedRequest).user?.userId,
       timestamp: new Date().toISOString(),
     };
 
-    // Add optional data based on configuration
     if (logBody && req.body) {
       requestLogData.body = sanitizeObject(req.body, sensitiveFields, maxBodyLength);
     }
 
-    if (logQuery && req.query && Object.keys(req.query).length > 0) {
+    if (logQuery && Object.keys(req.query).length > 0) {
       requestLogData.query = sanitizeObject(req.query, sensitiveFields);
     }
 
-    if (logParams && req.params && Object.keys(req.params).length > 0) {
+    if (logParams && Object.keys(req.params).length > 0) {
       requestLogData.params = sanitizeObject(req.params, sensitiveFields);
     }
 
@@ -87,17 +96,19 @@ export const apiLoggingMiddleware = (options: {
     }
 
     if (req.get('Content-Length')) {
-      requestLogData.contentLength = parseInt(req.get('Content-Length') || '0', 10);
+      requestLogData.contentLength = parseInt(req.get('Content-Length')!, 10);
     }
 
-    // Log the incoming request - TEMPORARILY DISABLED
-    // logger.info('API Request', {
-    //   correlationId: requestId,
-    //   userId: (req as AuthenticatedRequest).user?.userId,
-    //   sessionId: req.headers['x-session-id'] as string,
-    //   operation: 'api_request_start',
-    //   metadata: requestLogData
-    // });
+    // Log request (respects config and sampling)
+    if (shouldLog && Config.logging.enableRequestLogging) {
+      logger.log(Config.logging.level, 'API Request', {
+        correlationId: requestId,
+        userId: (req as AuthenticatedRequest).user?.userId,
+        sessionId: req.headers['x-session-id'] as string,
+        operation: 'api_request_start',
+        metadata: requestLogData
+      });
+    }
 
     // Override res.json to capture response data
     const originalJson = res.json;
@@ -128,13 +139,12 @@ export const apiLoggingMiddleware = (options: {
         timestamp: new Date().toISOString(),
       };
 
-      // Add response content length if available
       const contentLength = res.get('Content-Length');
       if (contentLength) {
         responseLogData.contentLength = parseInt(contentLength, 10);
       }
 
-      // Extract success/error info from response body if it's JSON
+      // Extract success/error info from response body
       if (responseData && typeof responseData === 'object') {
         const data = responseData as any;
         responseLogData.success = data.success;
@@ -143,59 +153,40 @@ export const apiLoggingMiddleware = (options: {
         }
       }
 
-      // Determine log level based on status code and response time
       const logLevel = getLogLevel(res.statusCode, responseTime);
-      
-      const logMessage = `API Response - ${req.method} ${req.path} - ${res.statusCode} - ${responseTime}ms`;
+      const logMessage = `API ${req.method} ${req.path} - ${res.statusCode} - ${responseTime}ms`;
 
-      // TEMPORARILY DISABLED - Only log errors
-      if (logLevel === 'error') {
-        logger.error(logMessage, {
-          error: 'API Response Error',
+      // Log based on level (respects config and sampling)
+      const shouldLogResponse = (shouldLog || res.statusCode >= 400) && shouldLogAtLevel(logLevel);
+
+      if (shouldLogResponse && Config.logging.enableResponseLogging) {
+        logger[logLevel](logMessage, {
           correlationId: requestId,
           userId: (req as AuthenticatedRequest).user?.userId,
           sessionId: req.headers['x-session-id'] as string,
-          operation: 'api_response_error',
+          operation: `api_response_${logLevel}`,
           metadata: {
             ...responseLogData,
-            responseBody: logBody ? sanitizeObject(responseData, sensitiveFields, maxBodyLength) : undefined,
+            ...(logBody ? { responseBody: sanitizeObject(responseData, sensitiveFields, maxBodyLength) } : {}),
           },
         });
       }
-      // Disabled: warn and info logging
-      // } else if (logLevel === 'warn') {
-      //   logger.warn(logMessage, {
-      //     correlationId: requestId,
-      //     userId: (req as AuthenticatedRequest).user?.userId,
-      //     sessionId: req.headers['x-session-id'] as string,
-      //     operation: 'api_response_warn',
-      //     metadata: responseLogData
-      //   });
-      // } else {
-      //   logger.info(logMessage, {
-      //     correlationId: requestId,
-      //     userId: (req as AuthenticatedRequest).user?.userId,
-      //     sessionId: req.headers['x-session-id'] as string,
-      //     operation: 'api_response_success',
-      //     metadata: responseLogData
-      //   });
-      // }
 
-      // TEMPORARILY DISABLED - Slow request logging
-      // if (responseTime > 5000) { // Slow requests > 5 seconds
-      //   logger.warn('Slow API Response', {
-      //     correlationId: requestId,
-      //     userId: (req as AuthenticatedRequest).user?.userId,
-      //     sessionId: req.headers['x-session-id'] as string,
-      //     operation: 'slow_api_response',
-      //     metadata: {
-      //       method: req.method,
-      //       path: req.path,
-      //       responseTime,
-      //       statusCode: res.statusCode
-      //     }
-      //   });
-      // }
+      // Slow query logging (separate from response logging)
+      if (responseTime > Config.logging.slowQueryThreshold && Config.logging.enableSlowQueryLogging) {
+        logger.warn('Slow API Response', {
+          correlationId: requestId,
+          userId: (req as AuthenticatedRequest).user?.userId,
+          sessionId: req.headers['x-session-id'] as string,
+          operation: 'slow_api_response',
+          metadata: {
+            method: req.method,
+            path: req.path,
+            responseTime,
+            statusCode: res.statusCode
+          }
+        });
+      }
     };
 
     // Attach listeners for response completion
@@ -270,16 +261,24 @@ const sanitizeHeaders = (
  * Determine log level based on status code and response time
  */
 const getLogLevel = (statusCode: number, responseTime: number): 'info' | 'warn' | 'error' => {
-  if (statusCode >= 500) {
-    return 'error';
-  }
-  
-  if (statusCode >= 400 || responseTime > 10000) {
-    return 'warn';
-  }
-  
+  if (statusCode >= 500) return 'error';
+  if (statusCode >= 400) return 'warn';
+  if (responseTime > Config.logging.slowQueryThreshold) return 'warn';
   return 'info';
 };
 
-
+/**
+ * Determine if we should log at this level based on config
+ */
+const shouldLogAtLevel = (level: 'info' | 'warn' | 'error'): boolean => {
+  const configLevel = Config.logging.level;
+  const levels: Record<string, number> = {
+    error: 0,
+    warn: 1,
+    info: 2,
+    debug: 3,
+    trace: 4,
+  };
+  return levels[level] <= levels[configLevel];
+};
 

@@ -15,7 +15,13 @@ import { BaseStrategy } from './base-strategy';
 import { NodeResult, BatchThreadParams, BatchThreadResult, ThreadSummary } from '../execution.types';
 import { IEmailDomainService } from '../../../services/domain/interfaces/email-domain.interface';
 import { IAIDomainService, StructuredSchema } from '../../../services/domain/interfaces/ai-domain.interface';
+import { Strategy, StrategyType } from '../strategy-metadata';
 
+@Strategy({
+  type: StrategyType.BATCH_THREAD_READ,
+  name: 'Batch Thread Read',
+  description: 'Reads and analyzes email threads in parallel batches using LLM',
+})
 export class BatchThreadReadStrategy extends BaseStrategy {
   readonly type = 'batch_thread_read';
 

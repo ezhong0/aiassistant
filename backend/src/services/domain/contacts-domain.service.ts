@@ -1,7 +1,6 @@
 import { ErrorFactory, ERROR_CATEGORIES } from '../../errors';
-import { BaseService } from '../base-service';
+import { BaseDomainService } from './base-domain.service';
 import { GoogleAPIClient } from '../api/clients/google-api-client';
-import { AuthCredentials } from '../../types/api/api-client.types';
 import { APIClientError } from '../../errors';
 import { ValidationHelper, ContactsValidationSchemas } from '../../validation/api-client.validation';
 import { IContactsDomainService, Contact, ContactInput } from './interfaces/contacts-domain.interface';
@@ -23,12 +22,12 @@ import { SupabaseTokenProvider } from '../supabase-token-provider';
  * OAuth is handled by Supabase Auth. This service fetches Google tokens from Supabase.
  * Dependencies are injected via constructor for better testability and explicit dependency management.
  */
-export class ContactsDomainService extends BaseService implements Partial<IContactsDomainService> {
+export class ContactsDomainService extends BaseDomainService implements Partial<IContactsDomainService> {
   constructor(
-    private readonly supabaseTokenProvider: SupabaseTokenProvider,
-    private readonly googleAPIClient: GoogleAPIClient
+    supabaseTokenProvider: SupabaseTokenProvider,
+    googleAPIClient: GoogleAPIClient
   ) {
-    super('ContactsDomainService');
+    super('ContactsDomainService', supabaseTokenProvider, googleAPIClient);
   }
 
   /**
@@ -55,23 +54,6 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
   }
 
-  /**
-   * Helper: Get OAuth2 credentials for a user
-   * @private
-   */
-  private async getGoogleCredentials(userId: string): Promise<AuthCredentials> {
-    const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-
-    if (!tokens.access_token) {
-      throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
-    }
-
-    return {
-      type: 'oauth2',
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token
-    };
-  }
 
   /**
    * List contacts (with automatic authentication)
@@ -724,24 +706,4 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
   }
 
-  /**
-   * Get service health information
-   */
-  getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
-    try {
-      const healthy = this.isReady() && this.initialized && !!this.googleAPIClient;
-      const details = {
-        initialized: this.initialized,
-        hasGoogleClient: !!this.googleAPIClient,
-        authenticated: this.googleAPIClient?.isAuthenticated() || false
-      };
-
-      return { healthy, details };
-    } catch (error) {
-      return {
-        healthy: false,
-        details: { error: error instanceof Error ? error.message : 'Unknown error' }
-      };
-    }
-  }
 }

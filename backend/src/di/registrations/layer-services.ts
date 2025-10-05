@@ -23,18 +23,23 @@ import { SynthesisService } from '../../layers/layer3-synthesis/synthesis.servic
 import { OrchestratorService } from '../../layers/orchestrator.service';
 import { StrategyRegistry } from '../../layers/layer2-execution/strategy-registry';
 
-// Phase 2: Strategy Executors
-import { MetadataFilterStrategy } from '../../layers/layer2-execution/strategies/metadata-filter-strategy';
-import { KeywordSearchStrategy } from '../../layers/layer2-execution/strategies/keyword-search-strategy';
-import { BatchThreadReadStrategy } from '../../layers/layer2-execution/strategies/batch-thread-read-strategy';
-import { CrossReferenceStrategy } from '../../layers/layer2-execution/strategies/cross-reference-strategy';
-import { SemanticAnalysisStrategy } from '../../layers/layer2-execution/strategies/semantic-analysis-strategy';
+// Phase 2: Strategy Executors (import to trigger decorators)
+import '../../layers/layer2-execution/strategies/metadata-filter-strategy';
+import '../../layers/layer2-execution/strategies/keyword-search-strategy';
+import '../../layers/layer2-execution/strategies/batch-thread-read-strategy';
+import '../../layers/layer2-execution/strategies/cross-reference-strategy';
+import '../../layers/layer2-execution/strategies/semantic-analysis-strategy';
+
+// Strategy metadata store for auto-registration
+import { strategyMetadataStore, strategyTypeToString } from '../../layers/layer2-execution/strategy-metadata';
 
 /**
  * Register 3-layer architecture services
  *
- * Note: These are stub implementations during Phase 0.
- * They will be completed in subsequent phases.
+ * Strategy auto-registration:
+ * - Strategies use @Strategy decorator to self-register
+ * - No manual registration needed for new strategies
+ * - Zero-config approach for adding strategies
  */
 export function registerLayerServices(container: AppContainer): AppContainer {
   // Strategy Registry (singleton)
@@ -79,28 +84,23 @@ export function registerLayerServices(container: AppContainer): AppContainer {
     }),
   });
 
-  // Phase 2: Register strategy executors
-  container.register({
-    metadataFilterStrategy: asClass(MetadataFilterStrategy, { lifetime: Lifetime.SINGLETON }),
-    keywordSearchStrategy: asClass(KeywordSearchStrategy, { lifetime: Lifetime.SINGLETON }),
-    batchThreadReadStrategy: asClass(BatchThreadReadStrategy, { lifetime: Lifetime.SINGLETON }),
-    crossReferenceStrategy: asClass(CrossReferenceStrategy, { lifetime: Lifetime.SINGLETON }),
-    semanticAnalysisStrategy: asClass(SemanticAnalysisStrategy, { lifetime: Lifetime.SINGLETON }),
-  });
-
-  // Register strategies with the StrategyRegistry
+  // Phase 2: Auto-register strategies from metadata store
   const registry = container.resolve<StrategyRegistry>('strategyRegistry');
-  const metadataFilter = container.resolve<MetadataFilterStrategy>('metadataFilterStrategy');
-  const keywordSearch = container.resolve<KeywordSearchStrategy>('keywordSearchStrategy');
-  const batchThreadRead = container.resolve<BatchThreadReadStrategy>('batchThreadReadStrategy');
-  const crossReference = container.resolve<CrossReferenceStrategy>('crossReferenceStrategy');
-  const semanticAnalysis = container.resolve<SemanticAnalysisStrategy>('semanticAnalysisStrategy');
 
-  registry.register('metadata_filter', metadataFilter);
-  registry.register('keyword_search', keywordSearch);
-  registry.register('batch_thread_read', batchThreadRead);
-  registry.register('cross_reference', crossReference);
-  registry.register('semantic_analysis', semanticAnalysis);
+  for (const metadata of strategyMetadataStore.getAll()) {
+    // Register strategy class with DI container
+    const strategyKey = `${strategyTypeToString(metadata.type)}Strategy`;
+    container.register({
+      [strategyKey]: asClass(metadata.constructor, { lifetime: Lifetime.SINGLETON }),
+    });
+
+    // Resolve and register with StrategyRegistry
+    const strategyInstance = container.resolve(strategyKey);
+    const strategyName = strategyTypeToString(metadata.type);
+    registry.register(strategyName, strategyInstance);
+
+    console.log(`✅ Auto-registered strategy: ${metadata.name} (${strategyName})`);
+  }
 
   return container;
 }

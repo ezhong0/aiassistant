@@ -228,40 +228,32 @@ export class OrchestratorService extends BaseService {
 
   /**
    * Get user context (accounts, timezone, etc.)
+   *
+   * BREAKING CHANGE: This now requires UserContextService to be injected
+   * No more fake data - must have real user context from database
    */
   private async getUserContext(userId: string) {
-    // TODO: Fetch from database/user service
-    // For now, return default context
-    return {
-      timezone: 'America/Los_Angeles',
-      email_accounts: [
-        {
-          id: 'primary',
-          email: `user_${userId}@example.com`,
-          primary: true
-        }
-      ],
-      calendars: [
-        {
-          id: 'primary',
-          name: 'Primary Calendar',
-          primary: true
-        }
-      ]
-    };
+    // This should be injected as a service dependency
+    // For now, throw an error to force proper implementation
+    throw new Error(
+      'getUserContext must be implemented with UserContextService. ' +
+      'Inject UserContextService in constructor and fetch real user context from database.'
+    );
   }
 
   /**
    * Get user preferences for synthesis
+   *
+   * BREAKING CHANGE: This now requires UserPreferencesService to be injected
+   * No more fake data - must have real user preferences from database
    */
   private async getUserPreferences(userId: string) {
-    // TODO: Fetch from user settings
-    // For now, return default preferences
-    return {
-      tone: 'professional' as const,
-      format_preference: 'mixed' as const,
-      verbosity: 'brief' as const
-    };
+    // This should be injected as a service dependency
+    // For now, throw an error to force proper implementation
+    throw new Error(
+      'getUserPreferences must be implemented with UserPreferencesService. ' +
+      'Inject UserPreferencesService in constructor and fetch real preferences from database.'
+    );
   }
 
   getHealth() {

@@ -44,25 +44,28 @@ export class APIClientFactory extends BaseService {
 
   constructor(config: APIClientFactoryConfig = {}) {
     super('APIClientFactory');
+
+    // BREAKING CHANGE: All defaults come from centralized Config
+    // No more hardcoded magic numbers
     this.config = {
       defaultConfig: {
-        timeout: 30000,
+        timeout: config.defaultConfig?.timeout ?? Config.apiClient.timeout,
         retry: {
-          maxAttempts: 3,
-          baseDelay: 1000,
-          maxDelay: 10000,
-          backoffMultiplier: 2,
-          jitter: true,
-          strategy: 'EXPONENTIAL_BACKOFF' as any
+          maxAttempts: config.defaultConfig?.retry?.maxAttempts ?? Config.apiClient.retry.maxAttempts,
+          baseDelay: config.defaultConfig?.retry?.baseDelay ?? Config.apiClient.retry.baseDelay,
+          maxDelay: config.defaultConfig?.retry?.maxDelay ?? Config.apiClient.retry.maxDelay,
+          backoffMultiplier: config.defaultConfig?.retry?.backoffMultiplier ?? Config.apiClient.retry.backoffMultiplier,
+          jitter: config.defaultConfig?.retry?.jitter ?? Config.apiClient.retry.jitter,
+          strategy: config.defaultConfig?.retry?.strategy ?? 'EXPONENTIAL_BACKOFF'
         },
         circuitBreaker: {
-          failureThreshold: 5,
-          recoveryTimeout: 60000,
-          successThreshold: 3,
-          timeout: 30000
+          failureThreshold: config.defaultConfig?.circuitBreaker?.failureThreshold ?? Config.apiClient.circuitBreaker.failureThreshold,
+          recoveryTimeout: config.defaultConfig?.circuitBreaker?.recoveryTimeout ?? Config.apiClient.circuitBreaker.recoveryTimeout,
+          successThreshold: config.defaultConfig?.circuitBreaker?.successThreshold ?? Config.apiClient.circuitBreaker.successThreshold,
+          timeout: config.defaultConfig?.circuitBreaker?.timeout ?? Config.apiClient.circuitBreaker.timeout
         }
       },
-      enableGlobalRateLimit: false,
+      enableGlobalRateLimit: config.enableGlobalRateLimit ?? false,
       ...config
     };
   }

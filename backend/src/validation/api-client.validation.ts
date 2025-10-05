@@ -163,98 +163,34 @@ export const CalendarValidationSchemas = {
   }),
 };
 
-// Contacts validation schemas
+// Import shared schemas for DRY
+import { ContactBaseFieldsSchema } from './shared-validation-schemas';
+
+// Contacts validation schemas (DRY - reuse shared schemas)
 export const ContactsValidationSchemas = {
   listContacts: z.object({
     ...BaseValidationSchemas.pagination.shape,
     personFields: z.array(z.string()).optional(),
     sortOrder: z.enum(['LAST_NAME_ASCENDING', 'LAST_NAME_DESCENDING', 'FIRST_NAME_ASCENDING', 'FIRST_NAME_DESCENDING']).optional(),
   }),
-  
-  createContact: z.object({
-    names: z.array(z.object({
-      givenName: z.string().max(100, 'Given name too long').optional(),
-      familyName: z.string().max(100, 'Family name too long').optional(),
-      middleName: z.string().max(100, 'Middle name too long').optional(),
-    })).optional(),
-    emailAddresses: z.array(z.object({
-      value: BaseValidationSchemas.email,
-      type: z.string().optional(),
-      displayName: z.string().max(100, 'Display name too long').optional(),
-    })).optional(),
-    phoneNumbers: z.array(z.object({
-      value: z.string().min(1, 'Phone number is required'),
-      type: z.string().optional(),
-    })).optional(),
-    addresses: z.array(z.object({
-      streetAddress: z.string().max(200, 'Street address too long').optional(),
-      city: z.string().max(100, 'City too long').optional(),
-      region: z.string().max(100, 'Region too long').optional(),
-      postalCode: z.string().max(20, 'Postal code too long').optional(),
-      country: z.string().max(100, 'Country too long').optional(),
-      type: z.string().optional(),
-    })).optional(),
-    organizations: z.array(z.object({
-      name: z.string().max(200, 'Organization name too long').optional(),
-      title: z.string().max(200, 'Title too long').optional(),
-      type: z.string().optional(),
-    })).optional(),
-    birthdays: z.array(z.object({
-      date: z.object({
-        year: z.number().int().min(1900).max(2100).optional(),
-        month: z.number().int().min(1).max(12).optional(),
-        day: z.number().int().min(1).max(31).optional(),
-      }).optional(),
-    })).optional(),
-  }),
-  
+
+  // DRY: Use shared schema
+  createContact: ContactBaseFieldsSchema,
+
   getContact: z.object({
     resourceName: z.string().min(1, 'Resource name is required'),
     personFields: z.array(z.string()).optional(),
   }),
-  
-  updateContact: z.object({
+
+  // DRY: Extend shared schema with resourceName
+  updateContact: ContactBaseFieldsSchema.extend({
     resourceName: z.string().min(1, 'Resource name is required'),
-    names: z.array(z.object({
-      givenName: z.string().max(100, 'Given name too long').optional(),
-      familyName: z.string().max(100, 'Family name too long').optional(),
-      middleName: z.string().max(100, 'Middle name too long').optional(),
-    })).optional(),
-    emailAddresses: z.array(z.object({
-      value: BaseValidationSchemas.email,
-      type: z.string().optional(),
-      displayName: z.string().max(100, 'Display name too long').optional(),
-    })).optional(),
-    phoneNumbers: z.array(z.object({
-      value: z.string().min(1, 'Phone number is required'),
-      type: z.string().optional(),
-    })).optional(),
-    addresses: z.array(z.object({
-      streetAddress: z.string().max(200, 'Street address too long').optional(),
-      city: z.string().max(100, 'City too long').optional(),
-      region: z.string().max(100, 'Region too long').optional(),
-      postalCode: z.string().max(20, 'Postal code too long').optional(),
-      country: z.string().max(100, 'Country too long').optional(),
-      type: z.string().optional(),
-    })).optional(),
-    organizations: z.array(z.object({
-      name: z.string().max(200, 'Organization name too long').optional(),
-      title: z.string().max(200, 'Title too long').optional(),
-      type: z.string().optional(),
-    })).optional(),
-    birthdays: z.array(z.object({
-      date: z.object({
-        year: z.number().int().min(1900).max(2100).optional(),
-        month: z.number().int().min(1).max(12).optional(),
-        day: z.number().int().min(1).max(31).optional(),
-      }).optional(),
-    })).optional(),
   }),
-  
+
   deleteContact: z.object({
     resourceName: z.string().min(1, 'Resource name is required'),
   }),
-  
+
   searchContacts: z.object({
     query: z.string().min(1, 'Search query is required'),
     ...BaseValidationSchemas.pagination.shape,

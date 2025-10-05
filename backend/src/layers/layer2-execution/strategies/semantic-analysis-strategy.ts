@@ -15,7 +15,13 @@
 import { BaseStrategy } from './base-strategy';
 import { NodeResult, SemanticAnalysisParams, SemanticAnalysisResult } from '../execution.types';
 import { IAIDomainService, StructuredSchema } from '../../../services/domain/interfaces/ai-domain.interface';
+import { Strategy, StrategyType } from '../strategy-metadata';
 
+@Strategy({
+  type: StrategyType.SEMANTIC_ANALYSIS,
+  name: 'Semantic Analysis',
+  description: 'Analyzes items for intent, urgency, and semantic properties using LLM',
+})
 export class SemanticAnalysisStrategy extends BaseStrategy {
   readonly type = 'semantic_analysis';
 

@@ -15,7 +15,13 @@ import { BaseStrategy } from './base-strategy';
 import { NodeResult, MetadataFilterParams, MetadataFilterResult } from '../execution.types';
 import { IEmailDomainService } from '../../../services/domain/interfaces/email-domain.interface';
 import { ICalendarDomainService } from '../../../services/domain/interfaces/calendar-domain.interface';
+import { Strategy, StrategyType } from '../strategy-metadata';
 
+@Strategy({
+  type: StrategyType.METADATA_FILTER,
+  name: 'Metadata Filter',
+  description: 'Filters emails/calendar events by metadata like date, sender, labels (no LLM needed)',
+})
 export class MetadataFilterStrategy extends BaseStrategy {
   readonly type = 'metadata_filter';
 

@@ -14,7 +14,13 @@ import { BaseStrategy } from './base-strategy';
 import { NodeResult, KeywordSearchParams, MetadataFilterResult } from '../execution.types';
 import { IEmailDomainService } from '../../../services/domain/interfaces/email-domain.interface';
 import { ICalendarDomainService } from '../../../services/domain/interfaces/calendar-domain.interface';
+import { Strategy, StrategyType } from '../strategy-metadata';
 
+@Strategy({
+  type: StrategyType.KEYWORD_SEARCH,
+  name: 'Keyword Search',
+  description: 'Searches emails/documents using keyword matching and Gmail search syntax',
+})
 export class KeywordSearchStrategy extends BaseStrategy {
   readonly type = 'keyword_search';
 
