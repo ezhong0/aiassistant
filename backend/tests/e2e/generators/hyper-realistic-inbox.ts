@@ -66,8 +66,6 @@ import {
 
 import {
   getRandomEmailTemplate,
-  generateGreeting,
-  generateClosing,
 } from './realistic-email-templates';
 
 /**
@@ -368,18 +366,8 @@ export async function generateHyperRealisticInbox(
     // Generate content with realistic formatting
     const sentDate = daysAgo(Math.floor(Math.random() * 14), currentDate);
 
-    // Build email body with natural variation
-    const greeting = generateGreeting(sender.type);
-    const closing = generateClosing(sender.type);
-
-    const bodyParts: string[] = [];
-    if (greeting) bodyParts.push(greeting);
-    bodyParts.push(template.body);
-    if (closing) bodyParts.push(''); // Empty line before closing
-    if (closing) bodyParts.push(closing);
-    bodyParts.push(sender.name);
-
-    const emailBody = bodyParts.join('\n\n');
+    // Templates already include greetings/closings, just add sender name
+    const emailBody = `${template.body}\n\n${sender.name}`;
 
     const temporal = calculateTemporalContext(sentDate, currentDate);
 
