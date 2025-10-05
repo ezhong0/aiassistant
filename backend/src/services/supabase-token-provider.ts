@@ -45,11 +45,11 @@ export class SupabaseTokenProvider extends BaseService {
   private readonly supabaseUrl: string;
   private readonly supabaseServiceKey: string;
 
-  constructor(supabaseUrl?: string, supabaseServiceKey?: string) {
+  constructor(supabaseUrl: string, supabaseServiceKey: string) {
     super('SupabaseTokenProvider');
 
-    this.supabaseUrl = supabaseUrl || process.env.SUPABASE_URL || '';
-    this.supabaseServiceKey = supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    this.supabaseUrl = supabaseUrl;
+    this.supabaseServiceKey = supabaseServiceKey;
 
     if (!this.supabaseUrl || !this.supabaseServiceKey) {
       throw new Error('Supabase URL and Service Role Key are required');

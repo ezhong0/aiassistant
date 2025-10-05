@@ -106,8 +106,10 @@ const App = () => {
         }
 
         // Initialize Supabase session
-        const { data: { session } } = await supabase!.auth.getSession();
-        setSession(session);
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          setSession(session);
+        }
 
         // Initialize API service
         await apiService.initialize();
@@ -150,20 +152,22 @@ const App = () => {
       return;
     }
 
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
+    if (supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        setSession(session);
 
-      if (session) {
-        // Load messages when user signs in
-        const stored = await storageService.getMessages();
-        setMessages(stored);
-      } else {
-        // Clear messages when user signs out
-        setMessages([]);
-      }
-    });
+        if (session) {
+          // Load messages when user signs in
+          const stored = await storageService.getMessages();
+          setMessages(stored);
+        } else {
+          // Clear messages when user signs out
+          setMessages([]);
+        }
+      });
 
-    return () => subscription.unsubscribe();
+      return () => subscription.unsubscribe();
+    }
   }, []);
 
   // Scroll to bottom when messages change

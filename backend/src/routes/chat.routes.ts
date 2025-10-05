@@ -83,7 +83,7 @@ export function createChatRoutes(container: AppContainer) {
       const logContext = createLogContext(req, { operation: 'chat_message' });
 
       try {
-        const { message, context } = req.validatedBody as z.infer<typeof chatMessageRequestSchema>;
+        const { message, context } = req.body as z.infer<typeof chatMessageRequestSchema>;
         const userId = req.user!.id; // Guaranteed by authenticateSupabase middleware
 
         // Initialize context if not provided

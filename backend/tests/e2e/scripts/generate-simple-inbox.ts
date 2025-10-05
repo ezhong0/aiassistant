@@ -15,6 +15,7 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AIDomainService } from '../../../src/services/domain/ai-domain.service';
+import { OpenAIClient } from '../../../src/services/api/clients/openai-api-client';
 import { SimpleRealisticInboxGenerator, SimpleInbox } from '../generators/simple-realistic-inbox';
 
 // Load environment variables
@@ -77,7 +78,15 @@ async function main() {
   try {
     // Initialize services
     console.log('⚙️  Initializing AI services...');
-    const aiDomainService = new AIDomainService();
+    const openAIClient = new OpenAIClient({
+      baseUrl: 'https://api.openai.com/v1',
+      timeout: 60000,
+      retry: {
+        maxAttempts: 3,
+      },
+    });
+    await openAIClient.initialize();
+    const aiDomainService = new AIDomainService(openAIClient);
     await aiDomainService.initialize();
 
     const aiService = new SimpleAIService(aiDomainService);

@@ -27,6 +27,11 @@ export interface Cradle {
   // Configuration and logging
   config: typeof unifiedConfig;
   logger: typeof logger;
+  
+  // Supabase configuration
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
+  supabaseAnonKey: string;
 
   // Core Infrastructure Services
   cacheService: import('../services/cache.service').CacheService;
@@ -46,6 +51,10 @@ export interface Cradle {
 
   // Auth Services (Supabase handles OAuth)
   supabaseTokenProvider: import('../services/supabase-token-provider').SupabaseTokenProvider;
+  
+  // User Services
+  userContextService: import('../services/user-context.service').UserContextService;
+  userPreferencesService: import('../services/user-preferences.service').UserPreferencesService;
 
   // Middleware
   errorHandler: import('../middleware/errorHandler').ErrorHandlerMiddleware;
@@ -101,6 +110,10 @@ export function createAppContainer(): AppContainer {
   container.register({
     config: asValue(unifiedConfig),
     logger: asValue(logger),
+    // Supabase configuration values - use environment variables directly
+    supabaseUrl: asValue(process.env.SUPABASE_URL || ''),
+    supabaseServiceRoleKey: asValue(process.env.SUPABASE_SERVICE_ROLE_KEY || ''),
+    supabaseAnonKey: asValue(process.env.SUPABASE_ANON_KEY || ''),
   });
 
   logger.info('DI Container created', {

@@ -64,6 +64,12 @@ import {
   EMAIL_SCENARIOS,
 } from './language-patterns';
 
+import {
+  getRandomEmailTemplate,
+  generateGreeting,
+  generateClosing,
+} from './realistic-email-templates';
+
 /**
  * Generated email with full metadata
  */
@@ -356,16 +362,29 @@ export async function generateHyperRealisticInbox(
     const sendersArray = Array.from(relationshipGraph.senders.values());
     const sender = sendersArray[Math.floor(Math.random() * sendersArray.length)];
 
-    // Generate content
+    // Get realistic template based on sender type
+    const template = getRandomEmailTemplate(sender.type);
+
+    // Generate content with realistic formatting
     const sentDate = daysAgo(Math.floor(Math.random() * 14), currentDate);
-    const content = generateEmailContent({
-      senderType: sender.type,
-      sentiment: 'neutral',
-      mainTopic: 'project update',
-      context: `Quick update on the project. Everything is on track.`,
-    });
+
+    // Build email body with natural variation
+    const greeting = generateGreeting(sender.type);
+    const closing = generateClosing(sender.type);
+
+    const bodyParts: string[] = [];
+    if (greeting) bodyParts.push(greeting);
+    bodyParts.push(template.body);
+    if (closing) bodyParts.push(''); // Empty line before closing
+    if (closing) bodyParts.push(closing);
+    bodyParts.push(sender.name);
+
+    const emailBody = bodyParts.join('\n\n');
 
     const temporal = calculateTemporalContext(sentDate, currentDate);
+
+    // Extract questions from email body
+    const questions = template.body.match(/^.+\?$/gm) || [];
 
     const label: AdvancedEmailLabel = {
       emailId,
@@ -373,13 +392,13 @@ export async function generateHyperRealisticInbox(
       sentTimestamp: sentDate,
       ageInDays: temporal.ageInDays,
       isOverdue: false,
-      urgencyType: 'never',
+      urgencyType: template.urgency === 'high' ? 'became_urgent' : 'never',
       threadPosition: 'first',
       threadLength: 1,
       positionInThread: 1,
       isDroppedBall: false,
       lastResponseFrom: 'sender',
-      userNeedsToRespond: false,
+      userNeedsToRespond: template.hasQuestion || template.requiresAction || false,
       containsCommitment: false,
       commitmentType: 'none',
       commitmentStatus: 'none',
@@ -392,30 +411,30 @@ export async function generateHyperRealisticInbox(
       emailFrequencyWithSender: sender.emailFrequency,
       typicalResponseTime: sender.typicalResponseTime,
       isVIP: sender.isVIP,
-      containsQuestions: false,
-      questionCount: 0,
-      questions: [],
-      requiresDecision: false,
-      hasActionItems: false,
-      actionItems: [],
-      sentiment: 'neutral',
-      isFollowUp: false,
+      containsQuestions: template.hasQuestion || questions.length > 0,
+      questionCount: questions.length,
+      questions: questions.slice(0, 3), // First 3 questions
+      requiresDecision: template.requiresDecision || false,
+      hasActionItems: template.requiresAction || false,
+      actionItems: template.requiresAction ? ['Review and respond'] : [],
+      sentiment: template.urgency === 'high' ? 'urgent' : 'neutral',
+      isFollowUp: template.subject.startsWith('Re:') || template.subject.includes('following up'),
       followUpIteration: 0,
       referencesOlderEmail: false,
       olderEmailIds: [],
       followUpKeywords: [],
-      isUrgent: false,
-      isImportant: sender.importance >= 7,
-      requiresResponse: false,
-      calculatedPriority: sender.importance,
+      isUrgent: template.urgency === 'high' || template.hasDeadline || false,
+      isImportant: sender.importance >= 7 || template.requiresAction || template.urgency === 'high',
+      requiresResponse: template.hasQuestion || template.requiresAction || false,
+      calculatedPriority: sender.importance + (template.requiresAction ? 2 : 0) + (template.urgency === 'high' ? 2 : 0),
       category: 'signal',
-      subcategory: 'update',
-      topics: ['project'],
+      subcategory: 'work',
+      topics: [template.subject.toLowerCase().split(' ')[0].replace('re:', '').trim()],
       isEscalated: false,
-      blocksOthers: false,
-      hasAttachments: false,
+      blocksOthers: template.requiresDecision || false,
+      hasAttachments: template.hasAttachment || false,
       isDeceptiveNoise: false,
-      requiresImmediateAction: false,
+      requiresImmediateAction: template.hasDeadline || template.urgency === 'high',
     };
 
     const email: GeneratedEmail = {
@@ -423,10 +442,10 @@ export async function generateHyperRealisticInbox(
       threadId,
       from: sender.email,
       to: 'user@company.com',
-      subject: content.subject,
-      body: formatEmailText(content, sender.name),
+      subject: template.subject,
+      body: emailBody,
       sentDate,
-      hasAttachments: false,
+      hasAttachments: template.hasAttachment || false,
       label,
     };
 

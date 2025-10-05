@@ -48,11 +48,13 @@ class ApiService {
     }
 
     // Check if we have an existing session
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      console.log('Existing Supabase session found');
-    } else {
-      console.log('No Supabase session - user needs to sign in');
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('Existing Supabase session found');
+      } else {
+        console.log('No Supabase session - user needs to sign in');
+      }
     }
   }
 

@@ -152,7 +152,7 @@ router.put('/profile',
   (req: SupabaseAuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
-    const { name, picture } = req.validatedBody as z.infer<typeof profileUpdateSchema>;
+    const { name, picture } = req.body as z.infer<typeof profileUpdateSchema>;
 
     // Validation is now handled by Zod schema
 
@@ -329,7 +329,7 @@ router.post('/api-heavy',
   (req: SupabaseAuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;
-      const { operation, parameters } = req.validatedBody as z.infer<typeof apiHeavyRequestSchema>;
+      const { operation, parameters } = req.body as z.infer<typeof apiHeavyRequestSchema>;
 
 
       // Simulate heavy processing

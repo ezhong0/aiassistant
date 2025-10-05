@@ -60,6 +60,12 @@ const ServicesSchema = z.object({
     timeout: z.number().positive().default(30000),
     maxRetries: z.number().min(0).max(5).default(2),
   }).optional(),
+
+  supabase: z.object({
+    url: z.string().optional(),
+    serviceRoleKey: z.string().optional(),
+    anonKey: z.string().optional(),
+  }).optional(),
 });
 
 // AI Configuration
@@ -357,6 +363,11 @@ export class UnifiedConfigService extends BaseService {
             timeout: process.env.OPENAI_TIMEOUT ? parseInt(process.env.OPENAI_TIMEOUT) : undefined,
             maxRetries: process.env.OPENAI_MAX_RETRIES ? parseInt(process.env.OPENAI_MAX_RETRIES) : undefined,
           },
+          supabase: {
+            url: process.env.SUPABASE_URL,
+            serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+            anonKey: process.env.SUPABASE_ANON_KEY,
+          },
         },
         ai: {
           models: {
@@ -557,6 +568,18 @@ export class UnifiedConfigService extends BaseService {
 
   get redisUrl(): string | undefined {
     return this.config.services.redis?.url;
+  }
+
+  get supabaseUrl(): string | undefined {
+    return this.config.services.supabase?.url;
+  }
+
+  get supabaseServiceRoleKey(): string | undefined {
+    return this.config.services.supabase?.serviceRoleKey;
+  }
+
+  get supabaseAnonKey(): string | undefined {
+    return this.config.services.supabase?.anonKey;
   }
 
   /**

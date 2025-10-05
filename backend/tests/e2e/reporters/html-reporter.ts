@@ -513,11 +513,11 @@ export class E2EHTMLReporter {
           <div class="inbox-stats-grid">
             <div class="inbox-stat">
               <div class="inbox-stat-label">User Role</div>
-              <div class="inbox-stat-value">${this.escapeHtml(inboxData.metadata.userProfile.role)}</div>
+              <div class="inbox-stat-value">${this.escapeHtml((inboxData as any).metadata?.userProfile?.role || inboxData.persona || 'N/A')}</div>
             </div>
             <div class="inbox-stat">
               <div class="inbox-stat-label">Industry</div>
-              <div class="inbox-stat-value">${this.escapeHtml(inboxData.metadata.userProfile.industry)}</div>
+              <div class="inbox-stat-value">${this.escapeHtml((inboxData as any).metadata?.userProfile?.industry || 'N/A')}</div>
             </div>
             <div class="inbox-stat">
               <div class="inbox-stat-label">Total Emails</div>
@@ -525,15 +525,15 @@ export class E2EHTMLReporter {
             </div>
             <div class="inbox-stat">
               <div class="inbox-stat-label">Calendar Events</div>
-              <div class="inbox-stat-value">${inboxData.calendar.length}</div>
+              <div class="inbox-stat-value">${(inboxData as any).calendar?.length || 0}</div>
             </div>
             <div class="inbox-stat">
               <div class="inbox-stat-label">Time Range</div>
-              <div class="inbox-stat-value">${this.formatDateShort(inboxData.metadata.timeRange.start)}</div>
+              <div class="inbox-stat-value">${this.formatDateShort((inboxData as any).metadata?.timeRange?.start || inboxData.currentDate)}</div>
             </div>
             <div class="inbox-stat">
               <div class="inbox-stat-label">Communication Style</div>
-              <div class="inbox-stat-value">${this.escapeHtml(inboxData.metadata.userProfile.communicationStyle)}</div>
+              <div class="inbox-stat-value">${this.escapeHtml((inboxData as any).metadata?.userProfile?.communicationStyle || 'N/A')}</div>
             </div>
           </div>
         </div>
@@ -681,12 +681,12 @@ export class E2EHTMLReporter {
         </div>
       </div>
       <div class="email-labels">
-        ${email.labelIds.map(label => {
+        ${((email as any).labelIds || []).map((label: string) => {
           const labelClass = label === 'UNREAD' ? 'unread' : label === 'IMPORTANT' ? 'important' : '';
           return `<span class="label-badge ${labelClass}">${label}</span>`;
         }).join('')}
       </div>
-      <div class="email-snippet">${this.escapeHtml(email.snippet)}</div>
+      <div class="email-snippet">${this.escapeHtml((email as any).snippet || email.body?.substring(0, 100) || '')}</div>
     </div>`;
   }
 
@@ -694,7 +694,17 @@ export class E2EHTMLReporter {
    * Get header value from email
    */
   private getHeaderValue(email: Email, headerName: string): string {
-    const header = email.payload.headers.find(h =>
+    // Handle both GeneratedEmail and Gmail API Email formats
+    const headers = (email as any).payload?.headers;
+    if (!headers) {
+      // Fallback for GeneratedEmail format
+      if (headerName.toLowerCase() === 'from') return (email as any).from || '';
+      if (headerName.toLowerCase() === 'to') return (email as any).to || '';
+      if (headerName.toLowerCase() === 'subject') return (email as any).subject || '';
+      return '';
+    }
+
+    const header = headers.find((h: any) =>
       h.name.toLowerCase() === headerName.toLowerCase()
     );
     return header?.value || '';

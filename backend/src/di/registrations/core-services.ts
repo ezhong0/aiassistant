@@ -9,6 +9,8 @@ import { APIClientFactory } from '../../services/api/api-client-factory';
 import { registerAllAPIClients } from '../../services/api/api-client-registry';
 import { GoogleAPIClient } from '../../services/api/clients/google-api-client';
 import { OpenAIClient } from '../../services/api/clients/openai-api-client';
+import { UserContextService } from '../../services/user-context.service';
+import { UserPreferencesService } from '../../services/user-preferences.service';
 
 /**
  * Register core infrastructure services
@@ -43,12 +45,22 @@ export function registerCoreServices(container: AppContainer): void {
       // Register all clients on first access
       registerAllAPIClients(apiClientFactory);
       return apiClientFactory.getClient('google');
-    }).singleton(),
+    }).singleton() as any,
 
     // OpenAI API Client - for AI operations
     openAIClient: asFunction(({ apiClientFactory }) => {
       // Clients are already registered by googleAPIClient initialization
       return apiClientFactory.getClient('openai');
+    }).singleton() as any,
+
+    // User Context Service - manages user context and preferences
+    userContextService: asFunction(({ cacheService, supabaseUrl, supabaseServiceRoleKey }) => {
+      return new UserContextService(cacheService, supabaseUrl, supabaseServiceRoleKey);
+    }).singleton(),
+
+    // User Preferences Service - manages user preferences
+    userPreferencesService: asFunction(({ cacheService, supabaseUrl, supabaseServiceRoleKey }) => {
+      return new UserPreferencesService(cacheService, supabaseUrl, supabaseServiceRoleKey);
     }).singleton(),
   });
 }
