@@ -76,7 +76,6 @@ export {
   ErrorTransformer,
   GoogleErrorTransformer,
   OpenAIErrorTransformer,
-  SlackErrorTransformer,
   HTTPErrorTransformer,
 } from './transformers';
 

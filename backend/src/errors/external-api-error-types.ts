@@ -67,26 +67,6 @@ export interface OpenAIError extends HTTPErrorResponse {
 }
 
 /**
- * Slack API error structure
- */
-export interface SlackAPIError extends HTTPErrorResponse {
-  response?: {
-    status?: number;
-    data?: {
-      ok?: boolean;
-      error?: string;
-      warning?: string;
-    };
-    headers?: Record<string, string | string[]>;
-  };
-  data?: {
-    ok?: boolean;
-    error?: string;
-    warning?: string;
-  };
-}
-
-/**
  * Type guard to check if error has HTTP response structure
  */
 export function hasHTTPResponse(error: unknown): error is HTTPErrorResponse {
@@ -109,11 +89,4 @@ export function isGoogleAPIError(error: unknown): error is GoogleAPIError {
  */
 export function isOpenAIError(error: unknown): error is OpenAIError {
   return hasHTTPResponse(error) && typeof error === 'object' && 'error' in error;
-}
-
-/**
- * Type guard for Slack API errors
- */
-export function isSlackAPIError(error: unknown): error is SlackAPIError {
-  return hasHTTPResponse(error);
 }

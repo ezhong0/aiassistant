@@ -16,6 +16,8 @@ import { asClass, Lifetime } from 'awilix';
 
 // Layer services (stubs for now, to be implemented in Phase 1-5)
 import { QueryDecomposerService } from '../../layers/layer1-decomposition/query-decomposer.service';
+import { DecompositionPromptBuilder } from '../../layers/layer1-decomposition/decomposition-prompt-builder';
+import { ExecutionGraphValidator } from '../../layers/layer1-decomposition/execution-graph-validator';
 import { ExecutionCoordinatorService } from '../../layers/layer2-execution/execution-coordinator.service';
 import { SynthesisService } from '../../layers/layer3-synthesis/synthesis.service';
 import { OrchestratorService } from '../../layers/orchestrator.service';
@@ -42,8 +44,14 @@ export function registerLayerServices(container: AppContainer): AppContainer {
     }),
   });
 
-  // Layer 1: Query Decomposer
+  // Layer 1: Query Decomposer and helpers
   container.register({
+    decompositionPromptBuilder: asClass(DecompositionPromptBuilder, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    executionGraphValidator: asClass(ExecutionGraphValidator, {
+      lifetime: Lifetime.SINGLETON,
+    }),
     queryDecomposer: asClass(QueryDecomposerService, {
       lifetime: Lifetime.SINGLETON,
     }),

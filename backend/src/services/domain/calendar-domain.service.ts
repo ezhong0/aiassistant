@@ -55,6 +55,23 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
   }
 
+  /**
+   * Helper: Get OAuth2 credentials for a user
+   * @private
+   */
+  private async getGoogleCredentials(userId: string): Promise<AuthCredentials> {
+    const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+
+    if (!tokens.access_token) {
+      throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
+    }
+
+    return {
+      type: 'oauth2',
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token
+    };
+  }
 
   /**
    * Create a calendar event (with automatic authentication)
@@ -150,16 +167,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(CalendarValidationSchemas.createEvent, event);
 
@@ -188,7 +198,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
           calendarId: validatedParams.calendarId || 'primary',
           sendUpdates: 'all'
         },
-        data: eventData
+        data: eventData,
+        credentials
       });
 
       const result = {
@@ -254,12 +265,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
       this.logInfo('Quick adding calendar event', {
         text: params.text,
@@ -272,7 +279,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         query: {
           calendarId: params.calendarId || 'primary',
           text: params.text
-        }
+        },
+        credentials
       });
 
       const result = {
@@ -333,16 +341,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Listing calendar events', {
         calendarId: params.calendarId || 'primary',
         timeMin: params.timeMin,
@@ -361,7 +362,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
           singleEvents: params.singleEvents !== false,
           orderBy: params.orderBy || 'startTime',
           q: params.q
-        }
+        },
+        credentials
       });
 
       const events = response.data.items?.map((event: any) => ({
@@ -391,7 +393,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
   /**
    * Get a specific calendar event
    */
-  async getEvent(eventId: string, calendarId: string = 'primary'): Promise<{
+  async getEvent(userId: string, eventId: string, calendarId: string = 'primary'): Promise<{
     id: string;
     summary: string;
     description?: string;
@@ -447,6 +449,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Getting calendar event', { eventId, calendarId });
 
       const response = await this.googleAPIClient.makeRequest({
@@ -455,7 +460,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         query: {
           calendarId,
           eventId
-        }
+        },
+        credentials
       });
 
       const result = {
@@ -579,16 +585,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Updating calendar event', {
         eventId: eventId,
         calendarId: calendarId || 'primary'
@@ -611,7 +610,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
           eventId: eventId,
           sendUpdates: 'all'
         },
-        data: eventData
+        data: eventData,
+        credentials
       });
 
       const result = {
@@ -661,6 +661,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Deleting calendar event', { eventId, calendarId });
 
       await this.googleAPIClient.makeRequest({
@@ -670,7 +673,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
           calendarId,
           eventId,
           sendUpdates: 'all'
-        }
+        },
+        credentials
       });
 
       this.logInfo('Calendar event deleted successfully', { eventId });
@@ -704,16 +708,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Checking availability', {
         timeMin: params.timeMin,
         timeMax: params.timeMax,
@@ -727,7 +724,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
           timeMin: params.timeMin,
           timeMax: params.timeMax,
           items: (params.calendarIds || ['primary']).map(id => ({ id }))
-        }
+        },
+        credentials
       });
 
       const busyTimes = response.data.calendars || {};
@@ -777,16 +775,9 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Finding available time slots', {
         startDate: params.startDate,
         endDate: params.endDate,
@@ -800,7 +791,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
           timeMin: params.startDate,
           timeMax: params.endDate,
           items: (params.calendarIds || ['primary']).map(id => ({ id }))
-        }
+        },
+        credentials
       });
 
       const busyTimes = response.data.calendars || {};
@@ -897,21 +889,15 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
-      
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Listing user calendars');
 
       const response = await this.googleAPIClient.makeRequest({
         method: 'GET',
-        endpoint: '/calendar/v3/calendarList/list'
+        endpoint: '/calendar/v3/calendarList/list',
+        credentials
       });
 
       const calendars = response.data.items?.map((calendar: any) => ({
@@ -953,12 +939,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
       this.logInfo('Responding to calendar event invitation', {
         eventId: params.eventId,
@@ -967,7 +949,7 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
       });
 
       // Get the current event
-      const event = await this.getEvent(params.eventId, params.calendarId || 'primary');
+      const event = await this.getEvent(userId, params.eventId, params.calendarId || 'primary');
 
       // Find the current user's attendee entry
       const attendees = event.attendees || [];
@@ -1003,7 +985,8 @@ export class CalendarDomainService extends BaseService implements Partial<ICalen
         },
         data: {
           attendees: updatedAttendees
-        }
+        },
+        credentials
       });
 
       this.logInfo('Event response sent successfully', {

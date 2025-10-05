@@ -121,25 +121,28 @@ export interface AuthCredentials {
 export interface APIRequest {
   /** HTTP method */
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
-  
+
   /** API endpoint (relative to base URL) */
   endpoint: string;
-  
+
   /** Query parameters */
   query?: Record<string, any>;
-  
+
   /** Request body data */
   data?: any;
-  
+
   /** Request headers (merged with default headers) */
   headers?: Record<string, string>;
-  
+
   /** Whether authentication is required (default: true) */
   requiresAuth?: boolean;
-  
+
   /** Request timeout override */
   timeout?: number;
-  
+
+  /** Per-request credentials (overrides client-level authentication) */
+  credentials?: AuthCredentials;
+
   /** Additional request options */
   options?: RequestOptions;
 }

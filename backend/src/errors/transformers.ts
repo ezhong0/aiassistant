@@ -1,14 +1,14 @@
 /**
  * External API Error Transformers
  *
- * Transforms external API errors (Google, OpenAI, Slack) into our unified AppError system.
+ * Transforms external API errors (Google, OpenAI) into our unified AppError system.
  * These transformers are used at the boundary between external services and our application.
  */
 
 import { APIClientError } from './specialized-errors';
 import { ERROR_CODES } from './error-codes';
 import { ERROR_CATEGORIES } from '../utils/app-error';
-import type { GoogleAPIError, OpenAIError, SlackAPIError, HTTPErrorResponse } from './external-api-error-types';
+import type { GoogleAPIError, OpenAIError, HTTPErrorResponse } from './external-api-error-types';
 
 /**
  * Context for error transformation
@@ -150,67 +150,6 @@ export class OpenAIErrorTransformer {
 }
 
 /**
- * Slack API Error Transformer
- */
-export class SlackErrorTransformer {
-  /**
-   * Transform Slack API error to APIClientError
-   */
-  static transform(error: unknown, context: TransformContext): APIClientError {
-    const err = error as SlackAPIError;
-    const status = err?.response?.status || err?.status;
-    const errorData = err?.response?.data || err?.data;
-    const slackError = (errorData as { error?: string })?.error;
-    const message = err?.message || slackError || 'Slack API error';
-
-    // Map Slack error codes
-    let errorCode: typeof ERROR_CODES[keyof typeof ERROR_CODES] = ERROR_CODES.SLACK_API_ERROR;
-    let retryable = false;
-    let retryAfter: number | undefined;
-
-    // Slack-specific error codes
-    if (slackError === 'invalid_auth' || slackError === 'token_revoked' || slackError === 'not_authed') {
-      errorCode = ERROR_CODES.SLACK_AUTH_FAILED;
-      retryable = false;
-    } else if (slackError === 'rate_limited' || status === 429) {
-      errorCode = ERROR_CODES.SLACK_RATE_LIMIT;
-      retryable = true;
-      const retryHeader = err?.response?.headers?.['retry-after'];
-      retryAfter = parseInt(typeof retryHeader === 'string' ? retryHeader : (retryHeader?.[0] || '60')) || 60;
-    } else if (slackError === 'channel_not_found') {
-      errorCode = ERROR_CODES.SLACK_CHANNEL_NOT_FOUND;
-      retryable = false;
-    } else if (slackError === 'missing_scope' || slackError === 'no_permission') {
-      errorCode = ERROR_CODES.SLACK_PERMISSION_DENIED;
-      retryable = false;
-    } else if (status >= 500) {
-      retryable = true;
-      retryAfter = 30;
-    }
-
-    return new APIClientError(
-      message,
-      errorCode,
-      {
-        serviceName: context.serviceName,
-        endpoint: context.endpoint,
-        method: context.method,
-        requestId: context.requestId,
-        category: ERROR_CATEGORIES.EXTERNAL,
-        statusCode: status,
-        responseData: errorData as Record<string, unknown>,
-        originalError: err as Error,
-        retryable,
-        retryAfter,
-        metadata: {
-          slackError,
-        },
-      },
-    );
-  }
-}
-
-/**
  * Generic HTTP Error Transformer
  * For APIs that don't have specific transformers
  */
@@ -291,10 +230,6 @@ export class ErrorTransformer {
 
     if (serviceName.includes('openai') || serviceName.includes('gpt')) {
       return OpenAIErrorTransformer.transform(error, context);
-    }
-
-    if (serviceName.includes('slack')) {
-      return SlackErrorTransformer.transform(error, context);
     }
 
     // Fallback to generic HTTP transformer

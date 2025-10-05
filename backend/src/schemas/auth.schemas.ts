@@ -37,13 +37,6 @@ export const AuthenticatedUserSchema = z.object({
   verifiedEmail: z.boolean().optional(),
 });
 
-// Slack OAuth schemas
-export const SlackTokensSchema = z.object({
-  access_token: z.string(),
-  team_id: z.string(),
-  user_id: z.string(),
-});
-
 // JWT schemas
 export const JWTPayloadSchema = z.object({
   userId: z.string(),
@@ -74,11 +67,6 @@ export const TokenRefreshResponseSchema = z.object({
 
 // OAuth callback schemas
 export const GoogleOAuthCallbackSchema = z.object({
-  code: z.string(),
-  state: z.string().optional(),
-});
-
-export const SlackOAuthCallbackSchema = z.object({
   code: z.string(),
   state: z.string().optional(),
 });

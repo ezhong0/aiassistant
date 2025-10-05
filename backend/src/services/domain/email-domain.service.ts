@@ -55,6 +55,23 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
   }
 
+  /**
+   * Helper: Get OAuth2 credentials for a user
+   * @private
+   */
+  private async getGoogleCredentials(userId: string): Promise<AuthCredentials> {
+    const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+
+    if (!tokens.access_token) {
+      throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
+    }
+
+    return {
+      type: 'oauth2',
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token
+    };
+  }
 
   /**
    * Send an email (with automatic authentication)
@@ -80,10 +97,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
-      // Get Google access token from Supabase for this user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.sendEmail, params);
 
@@ -99,7 +115,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/send',
-        data: { raw: message }
+        data: { raw: message },
+        credentials
       });
 
       const result = {
@@ -151,16 +168,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
-      // Authenticate with valid token
-      // Authentication handled automatically by OAuth manager
-      
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.searchEmails, params);
 
@@ -177,7 +187,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
           q: validatedParams.query,
           maxResults: validatedParams.maxResults || 10,
           includeSpamTrash: validatedParams.includeSpamTrash || false
-        }
+        },
+        credentials
       });
 
       if (!listResponse.data.messages || listResponse.data.messages.length === 0) {
@@ -194,7 +205,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
               id: message.id,
               format: 'metadata',
               metadataHeaders: ['Subject', 'From', 'To', 'Date']
-            }
+            },
+            credentials
           });
 
           const msg = detailResponse.data;
@@ -245,7 +257,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Get email details
    */
-  async getEmail(messageId: string): Promise<{
+  async getEmail(userId: string, messageId: string): Promise<{
     id: string;
     threadId: string;
     subject: string;
@@ -274,6 +286,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(EmailValidationSchemas.getEmail, { messageId });
 
@@ -285,7 +300,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: {
           id: validatedParams.messageId,
           format: 'full'
-        }
+        },
+        credentials
       });
 
       const message = response.data;
@@ -346,7 +362,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Reply to an email
    */
-  async replyToEmail(params: {
+  async replyToEmail(userId: string, params: {
     messageId: string;
     replyBody: string;
     attachments?: Array<{
@@ -362,11 +378,14 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Replying to email', { messageId: params.messageId });
 
       // Get the original email to extract headers
-      const originalEmail = await this.getEmail(params.messageId);
-      
+      const originalEmail = await this.getEmail(userId, params.messageId);
+
       // Extract headers for reply
       const subject = originalEmail.subject;
       const from = originalEmail.from;
@@ -386,7 +405,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
       const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/gmail/v1/users/me/messages/send',
-        data: { raw: replyMessage }
+        data: { raw: replyMessage },
+        credentials
       });
 
       const result = {
@@ -409,7 +429,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Get email thread
    */
-  async getEmailThread(threadId: string): Promise<EmailThread> {
+  async getEmailThread(userId: string, threadId: string): Promise<EmailThread> {
     this.assertReady();
     
     if (!this.googleAPIClient) {
@@ -417,6 +437,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Getting email thread', { threadId });
 
       const response = await this.googleAPIClient.makeRequest({
@@ -425,7 +448,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: {
           id: threadId,
           format: 'full'
-        }
+        },
+        credentials
       });
 
       const thread = response.data;
@@ -603,7 +627,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Archive an email (remove from inbox)
    */
-  async archiveEmail(params: { messageId: string }): Promise<void> {
+  async archiveEmail(userId: string, params: { messageId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -611,6 +635,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Archiving email', { messageId: params.messageId });
 
       await this.googleAPIClient.makeRequest({
@@ -619,7 +646,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           removeLabelIds: ['INBOX']
-        }
+        },
+        credentials
       });
 
       this.logInfo('Email archived successfully', { messageId: params.messageId });
@@ -632,7 +660,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Mark an email as read
    */
-  async markRead(params: { messageId: string }): Promise<void> {
+  async markRead(userId: string, params: { messageId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -640,6 +668,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Marking email as read', { messageId: params.messageId });
 
       await this.googleAPIClient.makeRequest({
@@ -648,7 +679,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           removeLabelIds: ['UNREAD']
-        }
+        },
+        credentials
       });
 
       this.logInfo('Email marked as read', { messageId: params.messageId });
@@ -661,7 +693,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Mark an email as unread
    */
-  async markUnread(params: { messageId: string }): Promise<void> {
+  async markUnread(userId: string, params: { messageId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -669,6 +701,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Marking email as unread', { messageId: params.messageId });
 
       await this.googleAPIClient.makeRequest({
@@ -677,7 +712,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           addLabelIds: ['UNREAD']
-        }
+        },
+        credentials
       });
 
       this.logInfo('Email marked as unread', { messageId: params.messageId });
@@ -690,7 +726,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Star an email
    */
-  async starEmail(params: { messageId: string }): Promise<void> {
+  async starEmail(userId: string, params: { messageId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -698,6 +734,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Starring email', { messageId: params.messageId });
 
       await this.googleAPIClient.makeRequest({
@@ -706,7 +745,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           addLabelIds: ['STARRED']
-        }
+        },
+        credentials
       });
 
       this.logInfo('Email starred successfully', { messageId: params.messageId });
@@ -719,7 +759,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Unstar an email
    */
-  async unstarEmail(params: { messageId: string }): Promise<void> {
+  async unstarEmail(userId: string, params: { messageId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -727,6 +767,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Unstarring email', { messageId: params.messageId });
 
       await this.googleAPIClient.makeRequest({
@@ -735,7 +778,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           removeLabelIds: ['STARRED']
-        }
+        },
+        credentials
       });
 
       this.logInfo('Email unstarred successfully', { messageId: params.messageId });
@@ -748,7 +792,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Create a new label
    */
-  async createLabel(params: { name: string; color?: string }): Promise<EmailLabel> {
+  async createLabel(userId: string, params: { name: string; color?: string }): Promise<EmailLabel> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -756,6 +800,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Creating label', { name: params.name });
 
       const response = await this.googleAPIClient.makeRequest({
@@ -766,7 +813,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
           labelListVisibility: 'labelShow',
           messageListVisibility: 'show',
           ...(params.color && { color: { backgroundColor: params.color } })
-        }
+        },
+        credentials
       });
 
       const result: EmailLabel = {
@@ -787,7 +835,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Add a label to an email
    */
-  async addLabel(params: { messageId: string; labelId: string }): Promise<void> {
+  async addLabel(userId: string, params: { messageId: string; labelId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -795,6 +843,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Adding label to email', { messageId: params.messageId, labelId: params.labelId });
 
       await this.googleAPIClient.makeRequest({
@@ -803,7 +854,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           addLabelIds: [params.labelId]
-        }
+        },
+        credentials
       });
 
       this.logInfo('Label added successfully', { messageId: params.messageId, labelId: params.labelId });
@@ -816,7 +868,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Remove a label from an email
    */
-  async removeLabel(params: { messageId: string; labelId: string }): Promise<void> {
+  async removeLabel(userId: string, params: { messageId: string; labelId: string }): Promise<void> {
     this.assertReady();
 
     if (!this.googleAPIClient) {
@@ -824,6 +876,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Removing label from email', { messageId: params.messageId, labelId: params.labelId });
 
       await this.googleAPIClient.makeRequest({
@@ -832,7 +887,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: { id: params.messageId },
         data: {
           removeLabelIds: [params.labelId]
-        }
+        },
+        credentials
       });
 
       this.logInfo('Label removed successfully', { messageId: params.messageId, labelId: params.labelId });
@@ -845,7 +901,7 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
   /**
    * Download an email attachment
    */
-  async downloadAttachment(params: { messageId: string; attachmentId: string }): Promise<{
+  async downloadAttachment(userId: string, params: { messageId: string; attachmentId: string }): Promise<{
     data: string;
     size: number;
   }> {
@@ -856,6 +912,9 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Downloading attachment', { messageId: params.messageId, attachmentId: params.attachmentId });
 
       const response = await this.googleAPIClient.makeRequest({
@@ -864,7 +923,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         query: {
           messageId: params.messageId,
           id: params.attachmentId
-        }
+        },
+        credentials
       });
 
       const result = {
@@ -912,12 +972,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
       this.logInfo('Batch modifying emails', {
         count: params.messageIds.length,
@@ -932,7 +988,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
           ids: params.messageIds,
           addLabelIds: params.addLabelIds,
           removeLabelIds: params.removeLabelIds
-        }
+        },
+        credentials
       });
 
       this.logInfo('Batch modify completed successfully', {
@@ -968,12 +1025,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
       this.logInfo('Batch deleting emails', {
         count: params.messageIds.length
@@ -984,7 +1037,8 @@ export class EmailDomainService extends BaseService implements Partial<IEmailDom
         endpoint: '/gmail/v1/users/me/messages/batchDelete',
         data: {
           ids: params.messageIds
-        }
+        },
+        credentials
       });
 
       this.logInfo('Batch delete completed successfully', {

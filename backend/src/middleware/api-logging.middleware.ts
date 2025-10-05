@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from './auth.middleware';
+import { AuthenticatedRequest } from './supabase-auth.middleware';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 

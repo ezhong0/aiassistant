@@ -13,13 +13,12 @@ import { ExecutionGraphValidator } from './execution-graph-validator';
 import { ErrorFactory } from '../../errors/error-factory';
 
 export class QueryDecomposerService extends BaseService {
-  private promptBuilder: DecompositionPromptBuilder;
-  private validator: ExecutionGraphValidator;
-
-  constructor(private aiService: AIDomainService) {
+  constructor(
+    private aiService: AIDomainService,
+    private promptBuilder: DecompositionPromptBuilder,
+    private validator: ExecutionGraphValidator
+  ) {
     super('QueryDecomposerService');
-    this.promptBuilder = new DecompositionPromptBuilder(aiService);
-    this.validator = new ExecutionGraphValidator();
   }
 
   /**

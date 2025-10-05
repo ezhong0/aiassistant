@@ -33,21 +33,6 @@ export const CommonValidators = {
   jwtToken: z.string().min(1, 'JWT token is required'),
 
   /**
-   * Slack team ID validation
-   */
-  slackTeamId: z.string().regex(/^T[A-Z0-9]{8,10}$/, 'Invalid Slack team ID format'),
-
-  /**
-   * Slack user ID validation
-   */
-  slackUserId: z.string().regex(/^U[A-Z0-9]{8,10}$/, 'Invalid Slack user ID format'),
-
-  /**
-   * Slack channel ID validation
-   */
-  slackChannelId: z.string().regex(/^[CDG][A-Z0-9]{8,10}$/, 'Invalid Slack channel ID format'),
-
-  /**
    * Email validation
    */
   email: z.string().email('Invalid email format'),
@@ -87,25 +72,9 @@ export const GoogleOAuthCallbackQuerySchema = z.object({
 );
 
 /**
- * Slack OAuth callback query parameters
- */
-export const SlackOAuthCallbackQuerySchema = z.object({
-  code: CommonValidators.oauthCode.optional(),
-  state: CommonValidators.oauthState.optional(),
-  error: z.string().optional(),
-  error_description: z.string().optional(),
-}).refine(
-  data => data.code || data.error,
-  { message: 'Either code or error must be present' },
-);
-
-/**
  * OAuth initiation query parameters
  */
 export const OAuthInitQuerySchema = z.object({
-  user_id: CommonValidators.slackUserId.optional(),
-  team_id: CommonValidators.slackTeamId.optional(),
-  channel_id: CommonValidators.slackChannelId.optional(),
   return_url: CommonValidators.url.optional(),
 });
 
@@ -126,7 +95,7 @@ export const TokenRefreshRequestSchema = z.object({
  */
 export const TokenRevocationRequestSchema = z.object({
   user_id: CommonValidators.userId,
-  provider: z.enum(['google', 'slack'], { message: 'Provider must be google or slack' }),
+  provider: z.enum(['google'], { message: 'Provider must be google' }),
 });
 
 /**
@@ -218,30 +187,6 @@ export class ValidationUtils {
   }
 
   /**
-   * Validate Slack event signature
-   */
-  static validateSlackSignature(signature: string, timestamp: string, body: string, secret: string): boolean {
-
-    // Check timestamp is within 5 minutes
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (Math.abs(currentTime - parseInt(timestamp)) > 300) {
-      return false;
-    }
-
-    // Create expected signature
-    const sigBasestring = `v0:${timestamp}:${body}`;
-    const expectedSignature = `v0=${createHmac('sha256', secret)
-      .update(sigBasestring)
-      .digest('hex')}`;
-
-    // Compare signatures
-    return timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature),
-    );
-  }
-
-  /**
    * Sanitize user input for logging
    */
   static sanitizeForLogging(data: unknown): unknown {
@@ -270,7 +215,6 @@ export class ValidationUtils {
 // ============================================================================
 
 export type GoogleOAuthCallbackQuery = z.infer<typeof GoogleOAuthCallbackQuerySchema>;
-export type SlackOAuthCallbackQuery = z.infer<typeof SlackOAuthCallbackQuerySchema>;
 export type OAuthInitQuery = z.infer<typeof OAuthInitQuerySchema>;
 export type TokenRefreshRequest = z.infer<typeof TokenRefreshRequestSchema>;
 export type TokenRevocationRequest = z.infer<typeof TokenRevocationRequestSchema>;

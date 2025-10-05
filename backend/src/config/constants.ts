@@ -268,32 +268,6 @@ export const SEARCH_CONSTANTS = {
 } as const;
 
 /**
- * Slack integration constants
- */
-export const SLACK_CONSTANTS = {
-  /** Maximum message results per request */
-  MAX_MESSAGE_LIMIT: 100,
-  
-  /** Default message limit */
-  DEFAULT_MESSAGE_LIMIT: 20,
-  
-  /** Maximum query length for Slack operations */
-  MAX_QUERY_LENGTH: 200,
-  
-  /** Slack API timeout in milliseconds */
-  API_TIMEOUT_MS: 15000,
-  
-  /** Maximum thread participants */
-  MAX_THREAD_PARTICIPANTS: 50,
-  
-  /** Draft detection timeout in milliseconds */
-  DRAFT_DETECTION_TIMEOUT_MS: 5000,
-  
-  /** Confirmation workflow timeout in milliseconds */
-  CONFIRMATION_TIMEOUT_MS: 300000, // 5 minutes
-} as const;
-
-/**
  * Logging constants
  */
 export const LOGGING_CONSTANTS = {

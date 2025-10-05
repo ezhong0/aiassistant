@@ -528,62 +528,6 @@ export class ExternalAPIErrorFactory {
   };
 
   /**
-   * Slack API Errors
-   */
-  static slack = {
-    authFailed: (): APIClientError => {
-      return new APIClientError(
-        'Slack authentication failed',
-        ERROR_CODES.SLACK_AUTH_FAILED,
-        {
-          serviceName: 'slack',
-          category: ERROR_CATEGORIES.EXTERNAL,
-          retryable: false,
-        },
-      );
-    },
-
-    rateLimit: (): APIClientError => {
-      return new APIClientError(
-        'Slack API rate limit exceeded',
-        ERROR_CODES.SLACK_RATE_LIMIT,
-        {
-          serviceName: 'slack',
-          category: ERROR_CATEGORIES.EXTERNAL,
-          retryable: true,
-          retryAfter: 60,
-        },
-      );
-    },
-
-    channelNotFound: (channelId: string): APIClientError => {
-      return new APIClientError(
-        `Slack channel not found: ${channelId}`,
-        ERROR_CODES.SLACK_CHANNEL_NOT_FOUND,
-        {
-          serviceName: 'slack',
-          category: ERROR_CATEGORIES.EXTERNAL,
-          metadata: { channelId },
-          retryable: false,
-        },
-      );
-    },
-
-    permissionDenied: (action: string): APIClientError => {
-      return new APIClientError(
-        `Insufficient Slack permissions for action: ${action}`,
-        ERROR_CODES.SLACK_PERMISSION_DENIED,
-        {
-          serviceName: 'slack',
-          category: ERROR_CATEGORIES.EXTERNAL,
-          metadata: { action },
-          retryable: false,
-        },
-      );
-    },
-  };
-
-  /**
    * Generic external service error
    */
   static generic(serviceName: string, message: string): APIClientError {

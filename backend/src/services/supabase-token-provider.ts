@@ -119,15 +119,6 @@ export class SupabaseTokenProvider extends BaseService {
   }
 
   /**
-   * Refresh Google tokens for a user
-   * NOTE: Supabase handles token refresh automatically, so this just fetches fresh tokens
-   */
-  async refreshGoogleTokens(supabaseUserId: string): Promise<GoogleProviderTokens> {
-    // Supabase auto-refreshes tokens, so we just fetch the latest
-    return this.getGoogleTokens(supabaseUserId);
-  }
-
-  /**
    * Check if user has valid Google tokens
    */
   async hasGoogleTokens(supabaseUserId: string): Promise<boolean> {

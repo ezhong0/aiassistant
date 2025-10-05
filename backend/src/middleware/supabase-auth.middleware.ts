@@ -30,6 +30,19 @@ export interface SupabaseJWTPayload {
 }
 
 /**
+ * Generic authenticated request (for backward compatibility)
+ * @deprecated Use SupabaseAuthenticatedRequest instead
+ */
+export interface AuthenticatedRequest extends Request {
+  user?: {
+    userId: string;
+    email?: string;
+    [key: string]: any;
+  };
+  token?: string;
+}
+
+/**
  * Extended Express request with Supabase user
  */
 export interface SupabaseAuthenticatedRequest extends Request {

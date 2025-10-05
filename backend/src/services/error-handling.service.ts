@@ -185,7 +185,3 @@ export class ErrorHandlingService extends BaseService {
     this.errorThresholds.set(errorCode, threshold);
   }
 }
-
-// Export singleton instance for Express middleware use
-// eslint-disable-next-line custom-rules/enforce-dependency-injection
-export const errorHandlingService = new ErrorHandlingService();

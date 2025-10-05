@@ -80,8 +80,7 @@ export function isRateLimitError(error: unknown): boolean {
     error.code === ERROR_CODES.RATE_LIMIT_EXCEEDED ||
     error.code === ERROR_CODES.RATE_LIMIT_QUOTA_EXCEEDED ||
     error.code === ERROR_CODES.GOOGLE_RATE_LIMIT ||
-    error.code === ERROR_CODES.OPENAI_RATE_LIMIT ||
-    error.code === ERROR_CODES.SLACK_RATE_LIMIT
+    error.code === ERROR_CODES.OPENAI_RATE_LIMIT
   );
 }
 
@@ -107,7 +106,6 @@ export function isAuthError(error: unknown): boolean {
     ERROR_CODES.NOT_AUTHENTICATED,
     ERROR_CODES.GOOGLE_AUTH_FAILED,
     ERROR_CODES.OPENAI_AUTH_FAILED,
-    ERROR_CODES.SLACK_AUTH_FAILED,
   ];
 
   return (authCodes as readonly ErrorCode[]).includes(error.code);

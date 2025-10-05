@@ -55,6 +55,23 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
   }
 
+  /**
+   * Helper: Get OAuth2 credentials for a user
+   * @private
+   */
+  private async getGoogleCredentials(userId: string): Promise<AuthCredentials> {
+    const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
+
+    if (!tokens.access_token) {
+      throw ErrorFactory.api.unauthorized('OAuth required - call initializeOAuth first');
+    }
+
+    return {
+      type: 'oauth2',
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token
+    };
+  }
 
   /**
    * List contacts (with automatic authentication)
@@ -151,6 +168,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       // Validate input parameters
       const validatedParams = ValidationHelper.validate(ContactsValidationSchemas.listContacts, params);
 
@@ -167,7 +187,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
           pageToken: validatedParams.pageToken,
           personFields: (validatedParams.personFields || ['names', 'emailAddresses', 'phoneNumbers']).join(','),
           sortOrder: validatedParams.sortOrder || 'LAST_NAME_ASCENDING'
-        }
+        },
+        credentials
       });
 
       const result = {
@@ -209,6 +230,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Creating contact', {
         hasNames: !!(contact.names?.length),
         hasEmails: !!(contact.emailAddresses?.length),
@@ -227,7 +251,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
       const response = await this.googleAPIClient.makeRequest({
         method: 'POST',
         endpoint: '/people/v1/people:createContact',
-        data: contactData
+        data: contactData,
+        credentials
       });
 
       const result = {
@@ -258,9 +283,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   /**
    * Get a specific contact
    */
-  async getContact(contactId: string): Promise<Contact> {
+  async getContact(userId: string, contactId: string): Promise<Contact> {
     this.assertReady();
-    
+
     if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
@@ -269,6 +294,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Getting contact', { contactId });
 
       const response = await this.googleAPIClient.makeRequest({
@@ -277,7 +305,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
         query: {
           resourceName: contactId,
           personFields: ['names', 'emailAddresses', 'phoneNumbers', 'addresses', 'organizations', 'photos'].join(',')
-        }
+        },
+        credentials
       });
 
       const result = {
@@ -309,9 +338,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   /**
    * Update a contact
    */
-  async updateContact(contactId: string, contact: ContactInput, updatePersonFields?: string): Promise<Contact> {
+  async updateContact(userId: string, contactId: string, contact: ContactInput, updatePersonFields?: string): Promise<Contact> {
     this.assertReady();
-    
+
     if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
@@ -320,6 +349,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Updating contact', { contactId });
 
       const contactData = {
@@ -338,7 +370,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
           resourceName: contactId,
           updatePersonFields: 'names,emailAddresses,phoneNumbers,addresses,organizations,birthdays'
         },
-        data: contactData
+        data: contactData,
+        credentials
       });
 
       const result = {
@@ -369,9 +402,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
   /**
    * Delete a contact
    */
-  async deleteContact(resourceName: string): Promise<void> {
+  async deleteContact(userId: string, resourceName: string): Promise<void> {
     this.assertReady();
-    
+
     if (!this.googleAPIClient) {
       throw ErrorFactory.domain.serviceUnavailable('google-api-client', {
         service: 'ContactsDomainService',
@@ -380,12 +413,16 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Deleting contact', { resourceName });
 
       await this.googleAPIClient.makeRequest({
         method: 'DELETE',
         endpoint: '/people/v1/people/deleteContact',
-        query: { resourceName }
+        query: { resourceName },
+        credentials
       });
 
       this.logInfo('Contact deleted successfully', { resourceName });
@@ -492,6 +529,9 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
+
       this.logInfo('Searching contacts', {
         query: params.query,
         pageSize: params.pageSize || 100
@@ -505,7 +545,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
           pageToken: params.pageToken,
           personFields: ['names', 'emailAddresses', 'phoneNumbers'].join(','),
           query: params.query
-        }
+        },
+        credentials
       });
 
       const result = {
@@ -555,12 +596,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
       this.logInfo('Batch getting contacts', {
         count: params.resourceNames.length
@@ -574,7 +611,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
         query: {
           resourceNames: params.resourceNames,
           personFields: personFields.join(',')
-        }
+        },
+        credentials
       });
 
       const contacts = response.data.responses?.map((item: any) => ({
@@ -650,12 +688,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
     }
 
     try {
-      // Get valid tokens for user
-      const tokens = await this.supabaseTokenProvider.getGoogleTokens(userId);
-      const token = tokens.access_token;
-      if (!token) {
-        throw ErrorFactory.api.unauthorized('Google OAuth authentication required. Please call initializeOAuth first.');
-      }
+      // Get OAuth2 credentials for this user
+      const credentials = await this.getGoogleCredentials(userId);
 
       this.logInfo('Listing other contacts', {
         pageSize: params?.pageSize || 100
@@ -668,7 +702,8 @@ export class ContactsDomainService extends BaseService implements Partial<IConta
           pageSize: params?.pageSize || 100,
           pageToken: params?.pageToken,
           readMask: params?.readMask || 'names,emailAddresses,phoneNumbers'
-        }
+        },
+        credentials
       });
 
       const result = {

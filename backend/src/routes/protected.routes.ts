@@ -7,6 +7,7 @@ import {
   createOptionalSupabaseAuth,
   SupabaseAuthenticatedRequest,
 } from '../middleware/supabase-auth.middleware';
+import { createRateLimit } from '../middleware/rate-limiting.middleware';
 import { Permission } from '../types/auth.types';
 import { SuccessResponseSchema, ErrorResponseSchema } from '../schemas/api.schemas';
 import { validateAndSendResponse } from '../utils/response-validation.util';
@@ -26,6 +27,15 @@ export function createProtectedRoutes(container: AppContainer) {
 
   const authenticateToken = createSupabaseAuth(supabaseJwtSecret);
   const optionalAuth = createOptionalSupabaseAuth(supabaseJwtSecret);
+
+  // Rate limiting middleware for heavy operations
+  const rateLimitStore = container.resolve('rateLimitStore');
+  const heavyOperationRateLimit = createRateLimit(rateLimitStore, {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 10,
+    message: 'Too many heavy operations. Maximum 10 requests per minute.',
+    keyGenerator: (req) => (req as SupabaseAuthenticatedRequest).user?.id || req.ip || 'unknown',
+  });
 
   // Simple ownership middleware - checks if userId param matches authenticated user
   const requireOwnership = (paramName: string) => {
@@ -58,36 +68,6 @@ export function createProtectedRoutes(container: AppContainer) {
         });
         return;
       }
-      next();
-    };
-  };
-
-  // Simple rate limiting middleware
-  const rateLimitAuth = (maxRequests: number, windowMs: number) => {
-    const requests = new Map<string, number[]>();
-
-    return (req: SupabaseAuthenticatedRequest, res: Response, next: NextFunction) => {
-      const userId = req.user?.id;
-      if (!userId) {
-        next();
-        return;
-      }
-
-      const now = Date.now();
-      const userRequests = requests.get(userId) || [];
-      const recentRequests = userRequests.filter(time => now - time < windowMs);
-
-      if (recentRequests.length >= maxRequests) {
-        res.status(429).json({
-          success: false,
-          error: 'Rate limit exceeded',
-          message: `Too many requests. Limit: ${maxRequests} per ${windowMs}ms`,
-        });
-        return;
-      }
-
-      recentRequests.push(now);
-      requests.set(userId, recentRequests);
       next();
     };
   };
@@ -345,7 +325,7 @@ router.get('/dashboard',
 router.post('/api-heavy',
   authenticateToken,
   validateRequest({ body: apiHeavyRequestSchema }),
-  rateLimitAuth(10, 60 * 1000), // 10 requests per minute
+  heavyOperationRateLimit, // 10 requests per minute
   (req: SupabaseAuthenticatedRequest, res: Response) => {
     try {
       const user = req.user!;

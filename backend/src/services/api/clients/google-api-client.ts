@@ -20,11 +20,15 @@ import { GoogleErrorTransformer } from '../../../errors/transformers';
  *
  * It uses the Google APIs client library with OAuth2 authentication.
  *
+ * Security Note:
+ * - Uses per-request authentication to prevent concurrent request race conditions
+ * - Each request creates its own OAuth2 client with user-specific credentials
+ * - This ensures User A cannot see User B's data even under concurrent load
+ *
  * E2E Testing Support:
  * - Set mockManager to enable request interception during tests
  */
 export class GoogleAPIClient extends BaseAPIClient {
-  private auth: any;
   private gmail: any;
   private calendar: any;
   private people: any;
@@ -55,14 +59,11 @@ export class GoogleAPIClient extends BaseAPIClient {
    */
   protected async onInitialize(): Promise<void> {
     try {
-      // Initialize Google APIs client
-      this.auth = new google.auth.OAuth2();
-      
-      // Initialize service clients
+      // Initialize service clients (auth is per-request)
       this.gmail = google.gmail('v1');
       this.calendar = google.calendar('v3');
       this.people = google.people('v1');
-      
+
       this.logInfo('Google API client initialized successfully');
     } catch (error) {
       this.logError('Failed to initialize Google API client', error);
@@ -75,7 +76,6 @@ export class GoogleAPIClient extends BaseAPIClient {
    */
   protected async onDestroy(): Promise<void> {
     try {
-      this.auth = null;
       this.gmail = null;
       this.calendar = null;
       this.people = null;
@@ -87,6 +87,9 @@ export class GoogleAPIClient extends BaseAPIClient {
 
   /**
    * Perform Google OAuth2 authentication
+   *
+   * Note: This method is kept for backward compatibility with BaseAPIClient,
+   * but actual authentication is performed per-request to prevent race conditions.
    */
   protected async performAuthentication(credentials: AuthCredentials): Promise<void> {
     if (credentials.type !== 'oauth2') {
@@ -103,18 +106,9 @@ export class GoogleAPIClient extends BaseAPIClient {
       );
     }
 
-    try {
-      // Set credentials for OAuth2 client
-      this.auth.setCredentials({
-        access_token: credentials.accessToken,
-        refresh_token: credentials.refreshToken
-      });
-
-      this.logInfo('Google OAuth2 authentication successful');
-    } catch (error) {
-      this.logError('Google OAuth2 authentication failed', error);
-      throw GoogleErrorTransformer.transform(error, { serviceName: this.name });
-    }
+    // Credentials are stored in BaseAPIClient.authCredentials
+    // Actual per-request authentication happens in performRequest()
+    this.logInfo('Google OAuth2 credentials validated');
   }
 
   /**
@@ -158,6 +152,30 @@ export class GoogleAPIClient extends BaseAPIClient {
         };
       }
 
+      // Get credentials - prefer request-level, fallback to client-level
+      const credentials = request.credentials || this.authCredentials;
+
+      if (!credentials) {
+        throw GoogleErrorTransformer.transform(
+          new Error('No credentials provided for Google API request'),
+          { serviceName: this.name, endpoint: request.endpoint }
+        );
+      }
+
+      if (credentials.type !== 'oauth2' || !credentials.accessToken) {
+        throw GoogleErrorTransformer.transform(
+          new Error('Valid OAuth2 credentials with access token required'),
+          { serviceName: this.name, endpoint: request.endpoint }
+        );
+      }
+
+      // Create per-request OAuth2 client to prevent race conditions
+      const auth = new google.auth.OAuth2();
+      auth.setCredentials({
+        access_token: credentials.accessToken,
+        refresh_token: credentials.refreshToken
+      });
+
       // Normal mode: use real Google APIs
       const service = this.getServiceFromEndpoint(request.endpoint);
       const method = this.getMethodFromRequest(request, service);
@@ -169,9 +187,9 @@ export class GoogleAPIClient extends BaseAPIClient {
         method: request.method
       });
 
-      // Execute the request
+      // Execute the request with per-request auth
       const response = await method({
-        auth: this.auth,
+        auth,
         ...request.query,
         ...(request.data && { requestBody: request.data })
       });
@@ -315,21 +333,20 @@ export class GoogleAPIClient extends BaseAPIClient {
    */
   getHealth(): { healthy: boolean; details?: Record<string, unknown> } {
     try {
-      const healthy = this.isReady() && this.authenticated;
+      const healthy = this.isReady();
       const details = {
         initialized: this.initialized,
-        authenticated: this.authenticated,
-        hasAuth: !!this.auth,
         hasGmail: !!this.gmail,
         hasCalendar: !!this.calendar,
         hasPeople: !!this.people,
+        authMode: 'per-request',
         serviceName: this.name
       };
 
       return { healthy, details };
     } catch (error) {
-      return { 
-        healthy: false, 
+      return {
+        healthy: false,
         details: { error: error instanceof Error ? error.message : 'Unknown error' }
       };
     }
