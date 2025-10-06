@@ -99,8 +99,6 @@ export function registerLayerServices(container: AppContainer): AppContainer {
     const strategyInstance = container.resolve(strategyKey) as import('../../layers/layer2-execution/execution.types').StrategyExecutor;
     const strategyNodeType = strategyTypeToNodeType(metadata.type) as InformationNodeType;
     registry.register(strategyNodeType, strategyInstance);
-
-    console.log(`✅ Auto-registered strategy: ${metadata.name} (${strategyNodeType})`);
   }
 
   return container;

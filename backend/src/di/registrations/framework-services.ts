@@ -15,8 +15,6 @@ export function registerFrameworkServices(container: AppContainer): void {
     toolRegistry: asClass(ToolRegistry).singleton(),
 
     // Operation Executor - routes operations to strategies
-    // Email strategies removed - legacy OAuth pattern no longer used
-    // Domain operations now handled directly by domain services with Supabase OAuth
     operationExecutor: asClass(OperationExecutor).singleton(),
   });
 }

@@ -11,11 +11,15 @@ import * as path from 'path';
 import { runAutomatedTests } from './test-runner';
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 import { ChatbotResponse } from './multi-layer-evaluator';
+// import { createAppContainer } from '../../src/di/container'; // Uncomment when integrating with orchestrator
 
 /**
- * EXAMPLE: Improved chatbot function demonstrating best practices
+ * EXAMPLE: Chatbot function for e2e testing
  *
- * Replace this with your actual chatbot implementation
+ * To integrate with your real 3-layer orchestrator:
+ * 1. Replace this mock implementation with a call to your orchestrator
+ * 2. See SIMPLE_INTEGRATION.md for detailed instructions
+ * 3. The orchestrator will process queries using the test inbox data
  */
 async function yourChatbotFunction(
   inbox: GeneratedInbox,

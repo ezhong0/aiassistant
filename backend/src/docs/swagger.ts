@@ -428,6 +428,6 @@ export function setupSwagger(app: Application): void {
       customSiteTitle: 'Assistant App API Documentation',
     }));
     
-    console.log('📚 Swagger UI available at /docs');
+    // Swagger UI available at /docs
   }
 }

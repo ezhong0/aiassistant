@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from './supabase-auth.middleware';
+import { SupabaseAuthenticatedRequest } from './supabase-auth.middleware';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { Config } from '../config/service-config';
@@ -75,7 +75,7 @@ export const apiLoggingMiddleware = (options: LoggingOptions = {}) => {
       path: req.path,
       ip: req.ip || req.connection.remoteAddress || 'unknown',
       userAgent: req.get('User-Agent'),
-      userId: (req as AuthenticatedRequest).user?.userId,
+      userId: (req as SupabaseAuthenticatedRequest).user?.id,
       timestamp: new Date().toISOString(),
     };
 
@@ -103,7 +103,7 @@ export const apiLoggingMiddleware = (options: LoggingOptions = {}) => {
     if (shouldLog && Config.logging.enableRequestLogging) {
       logger.log(Config.logging.level, 'API Request', {
         correlationId: requestId,
-        userId: (req as AuthenticatedRequest).user?.userId,
+        userId: (req as SupabaseAuthenticatedRequest).user?.id,
         sessionId: req.headers['x-session-id'] as string,
         operation: 'api_request_start',
         metadata: requestLogData
@@ -162,7 +162,7 @@ export const apiLoggingMiddleware = (options: LoggingOptions = {}) => {
       if (shouldLogResponse && Config.logging.enableResponseLogging) {
         logger[logLevel](logMessage, {
           correlationId: requestId,
-          userId: (req as AuthenticatedRequest).user?.userId,
+          userId: (req as SupabaseAuthenticatedRequest).user?.id,
           sessionId: req.headers['x-session-id'] as string,
           operation: `api_response_${logLevel}`,
           metadata: {
@@ -176,7 +176,7 @@ export const apiLoggingMiddleware = (options: LoggingOptions = {}) => {
       if (responseTime > Config.logging.slowQueryThreshold && Config.logging.enableSlowQueryLogging) {
         logger.warn('Slow API Response', {
           correlationId: requestId,
-          userId: (req as AuthenticatedRequest).user?.userId,
+          userId: (req as SupabaseAuthenticatedRequest).user?.id,
           sessionId: req.headers['x-session-id'] as string,
           operation: 'slow_api_response',
           metadata: {

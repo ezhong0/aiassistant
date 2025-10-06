@@ -78,9 +78,7 @@ class StrategyMetadataStore {
 
   register(metadata: StrategyMetadata): void {
     if (this.strategies.has(metadata.type)) {
-      console.warn(
-        `Strategy ${strategyTypeToString(metadata.type)} already registered, overwriting`
-      );
+      // Strategy already registered, overwriting
     }
     this.strategies.set(metadata.type, metadata);
   }

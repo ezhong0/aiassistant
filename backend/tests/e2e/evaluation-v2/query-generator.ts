@@ -87,7 +87,7 @@ export async function generateQueries(
   );
 
   // Parse response
-  const responseContent = response.choices[0].message.content;
+  const responseContent = (response as any).choices[0].message.content;
   const queries = parseQueryGeneratorResponse(responseContent);
 
   return queries;

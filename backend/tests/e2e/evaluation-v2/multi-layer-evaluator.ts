@@ -122,7 +122,7 @@ export async function evaluateChatbotResponse(
   );
 
   // Parse evaluation
-  const responseContent = response.choices[0].message.content;
+  const responseContent = (response as any).choices[0].message.content;
   const evaluation = parseEvaluationResponse(responseContent, query.id);
 
   return evaluation;

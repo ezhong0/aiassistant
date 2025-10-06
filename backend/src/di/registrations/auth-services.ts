@@ -17,12 +17,10 @@ export function registerAuthServices(container: AppContainer): void {
     container.register({
       // Supabase token provider - fetches OAuth provider tokens from Supabase
       supabaseTokenProvider: asFunction(() => {
-        console.log('Creating SupabaseTokenProvider with:', { supabaseUrl, supabaseServiceRoleKey: 'SET' });
         return new SupabaseTokenProvider(supabaseUrl, supabaseServiceRoleKey);
       }).singleton(),
     });
   } else {
-    console.log('Supabase not configured - skipping SupabaseTokenProvider registration');
     // Register a no-op placeholder to prevent dependency resolution errors
     container.register({
       supabaseTokenProvider: asFunction(() => null).singleton(),
