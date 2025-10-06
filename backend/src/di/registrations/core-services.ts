@@ -40,20 +40,72 @@ export function registerCoreServices(container: AppContainer): void {
     featureFlagsService: asClass(FeatureFlagsService).singleton(),
 
     // API Client Factory - manages all third-party API clients
-    apiClientFactory: asClass(APIClientFactory).singleton(),
+    apiClientFactory: asFunction(() => {
+      const factory = new APIClientFactory();
+      // Register all API clients immediately
+      registerAllAPIClients(factory);
+      return factory;
+    }).singleton(),
 
     // Google API Client - for Gmail, Calendar, Contacts
-    googleAPIClient: asFunction(({ apiClientFactory }) => {
-      // Register all clients on first access
-      registerAllAPIClients(apiClientFactory);
-      return apiClientFactory.getClient('google');
-    }).singleton() as any,
+    googleAPIClient: asFunction(() => {
+      return new GoogleAPIClient({
+        baseUrl: 'https://www.googleapis.com',
+        timeout: 45000,
+        retry: {
+          maxAttempts: 5,
+          baseDelay: 1000,
+          maxDelay: 15000,
+          backoffMultiplier: 2,
+          jitter: true,
+          strategy: 'EXPONENTIAL_BACKOFF'
+        },
+        circuitBreaker: {
+          failureThreshold: 5,
+          recoveryTimeout: 60000,
+          successThreshold: 3,
+          timeout: 45000
+        },
+        defaultHeaders: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'AssistantApp/1.0'
+        }
+      });
+    }).singleton(),
 
     // OpenAI API Client - for AI operations
-    openAIClient: asFunction(({ apiClientFactory }) => {
-      // Clients are already registered by googleAPIClient initialization
-      return apiClientFactory.getClient('openai');
-    }).singleton() as any,
+    openAIClient: asFunction(() => {
+      const e2eTesting = process.env.E2E_TESTING === 'true';
+      const openAITimeout = e2eTesting ? 300000 : 60000;
+
+      return new OpenAIClient({
+        baseUrl: 'https://api.openai.com/v1',
+        timeout: openAITimeout,
+        retry: {
+          maxAttempts: 3,
+          baseDelay: 2000,
+          maxDelay: 20000,
+          backoffMultiplier: 2,
+          jitter: true,
+          strategy: 'EXPONENTIAL_BACKOFF'
+        },
+        circuitBreaker: {
+          failureThreshold: e2eTesting ? 10000 : 3,
+          recoveryTimeout: 120000,
+          successThreshold: 2,
+          timeout: openAITimeout
+        },
+        rateLimit: {
+          maxRequests: 50,
+          windowMs: 60000,
+          queueRequests: true
+        },
+        defaultHeaders: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'AssistantApp/1.0'
+        }
+      });
+    }).singleton(),
 
     // User Context Service - manages user context and preferences
     userContextService: asFunction(({ cacheService, supabaseUrl, supabaseServiceRoleKey }) => {

@@ -1,0 +1,2216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Test Report - run-1759730671535</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background: #f3f4f6;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; background: white; }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .subtitle { opacity: 0.9; font-size: 0.9rem; }
+
+    .content { padding: 2rem; }
+
+    /* Dashboard */
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: #f9fafb;
+      padding: 1.5rem;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .metric-card.success { border-left-color: #10b981; }
+    .metric-card.warning { border-left-color: #f59e0b; }
+    .metric-card.danger { border-left-color: #ef4444; }
+
+    .metric-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #6b7280;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .metric-subtext {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-top: 0.25rem;
+    }
+
+    /* Charts */
+    .chart-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    .chart-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1f2937;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    /* Critical Errors */
+    .critical-errors {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .critical-errors h3 {
+      color: #991b1b;
+      margin-bottom: 1rem;
+    }
+
+    .error-item {
+      background: white;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      border-radius: 4px;
+      border-left: 3px solid #ef4444;
+    }
+
+    /* Evaluation Cards */
+    .evaluation {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .evaluation.passed { border-left: 4px solid #10b981; }
+    .evaluation.failed { border-left: 4px solid #ef4444; }
+
+    .eval-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .eval-query {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .eval-score {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .score-success { color: #10b981; }
+    .score-warning { color: #f59e0b; }
+    .score-danger { color: #ef4444; }
+
+    .layer-scores {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .layer-score {
+      text-align: center;
+      padding: 0.75rem;
+      background: #f9fafb;
+      border-radius: 4px;
+    }
+
+    .layer-name {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+    }
+
+    .layer-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .recommendations {
+      background: #eff6ff;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .rec-item {
+      margin-bottom: 0.5rem;
+      padding-left: 1rem;
+      border-left: 2px solid #3b82f6;
+    }
+
+    .rec-priority {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    .priority-high { background: #fee2e2; color: #991b1b; }
+    .priority-medium { background: #fef3c7; color: #92400e; }
+    .priority-low { background: #e0e7ff; color: #3730a3; }
+
+    /* Collapsible */
+    .collapsible {
+      cursor: pointer;
+      user-select: none;
+      padding: 0.5rem 0;
+    }
+
+    .collapsible:hover { opacity: 0.7; }
+
+    .collapsible::before {
+      content: '▼ ';
+      display: inline-block;
+      margin-right: 0.5rem;
+      transition: transform 0.3s;
+    }
+
+    .collapsible.collapsed::before {
+      transform: rotate(-90deg);
+    }
+
+    .collapsible-content {
+      max-height: 5000px;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .collapsible-content.collapsed {
+      max-height: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧪 E2E Test Report</h1>
+      <div class="subtitle">Run ID: run-1759730671535 • 10/5/2025, 11:04:31 PM</div>
+    </header>
+
+    <div class="content">
+      <!-- Dashboard -->
+      <div class="dashboard">
+        <div class="metric-card warning">
+          <div class="metric-label">Pass Rate</div>
+          <div class="metric-value">16.1%</div>
+          <div class="metric-subtext">5/31 tests passed</div>
+        </div>
+
+        <div class="metric-card danger">
+          <div class="metric-label">Critical Errors</div>
+          <div class="metric-value">33</div>
+          <div class="metric-subtext">Must fix!</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Overall Score</div>
+          <div class="metric-value">54.7</div>
+          <div class="metric-subtext">Average across all tests</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Weakest Layer</div>
+          <div class="metric-value" style="font-size: 1.25rem; text-transform: capitalize;">ranking</div>
+          <div class="metric-subtext">25.8/100</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Total Time</div>
+          <div class="metric-value">138.2<span style="font-size: 1rem;">s</span></div>
+          <div class="metric-subtext">32 API calls</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Estimated Cost</div>
+          <div class="metric-value">$0.256</div>
+          <div class="metric-subtext">OpenAI API usage</div>
+        </div>
+      </div>
+
+      <!-- Layer Scores Chart -->
+      <div class="chart-section">
+        <h3 class="chart-title">Layer Performance Breakdown</h3>
+        <div class="chart-container">
+          <canvas id="layerScoresChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Critical Errors -->
+      
+      <div class="critical-errors">
+        <h3>🚨 Critical Errors (33)</h3>
+        
+          <div class="error-item">No urgent emails returned; core task unmet</div>
+        
+          <div class="error-item">No emails returned for a straightforward filter</div>
+        
+          <div class="error-item">No emails returned (critical miss)</div>
+        
+          <div class="error-item">No emails returned when correct set exists</div>
+        
+          <div class="error-item">No emails returned despite correct intent detection</div>
+        
+          <div class="error-item">No emails retrieved; missing 50 emails as per ground truth</div>
+        
+          <div class="error-item">No emails returned (email-11, email-16, email-30, email-46, email-19, email-3, email-10, email-43 not surfaced)</div>
+        
+          <div class="error-item">No emails returned for a straightforward sender-based query</div>
+        
+          <div class="error-item">Missed retrieval of all relevant emails (email IDs from ground truth not returned)</div>
+        
+          <div class="error-item">No emails retrieved; user asked for 50 results</div>
+        
+        
+          <div style="margin-top: 1rem; color: #6b7280;">
+            ...and 23 more
+          </div>
+        
+      </div>
+      
+
+      <!-- Test Results -->
+      <div class="chart-section">
+        <h3 class="chart-title collapsible" onclick="toggleCollapse('test-results')">
+          Test Results (31)
+        </h3>
+        <div id="test-results" class="collapsible-content">
+          
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">1. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">30</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No urgent emails returned; core task unmet</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval to apply isUrgent filter and return the 18 urgent emails (email-11, email-20, email-29, email-16, email-15, email-23, email-18, email-19, email-26, email-6, email-34, email-4, email-9, email-13, email-31, email-3, email-10, email-28)
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a validation step to ensure non-empty results; provide user feedback if no urgent emails exist and offer alternative filters (today, overdue) if applicable
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">2. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">85</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned for a straightforward filter</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval layer to actually fetch emails matching sender_name Michael Roberts and return at least the first page of results.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add robust error handling and user-facing message when no results are found; propose alternative search options (e.g., date range, keyword).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement quick-scan pre-checks to ensure inbox index contains the specified sender and that permissions are correct.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-low">LOW</span>
+              Log and monitor query failures with context (requested sender, user, timestamp) for faster debugging.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">3. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned (critical miss)</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval layer to return emails matching filters: isMeetingRequest and requiresResponse
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add end-to-end test with ground-truth email IDs to ensure exact matches are returned
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add user-facing message when no results are found, with tips or a fallback query
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">4. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned when correct set exists</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval layer to apply filters: status = unanswered AND sender_type = investor and return the correct email IDs [email-12, email-30, email-35, email-27] along with expectedCount and totalInbox stats.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add a validation step to ensure that if any results exist, at least the IDs and counts are populated; surface missing results with an error message if no data is found despite known matches.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Introduce quick sanity tests with ground-truth-like datasets to catch zero-results scenarios during QA.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">5. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned despite correct intent detection</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval logic to actually fetch emails matching contains_phrase:[&#039;following up&#039;,&#039;checking in&#039;,&#039;bumping this up&#039;,&#039;haven&#039;t heard back&#039;] and verify against ground truth IDs.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add unit/integration tests with the exact ground-truth email IDs to ensure retrieval returns the expected set for sample queries.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Enhance logging to show which phrases matched and which emails were evaluated, aiding debugging when results are empty.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Introduce a fallback: if initial retrieval yields no results, run a secondary check for synonyms or common misspellings and for VIP/escalated flags that may indicate high-priority follow-ups.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation passed">
+      <div class="eval-header">
+        <div class="eval-query">6. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">85</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails retrieved; missing 50 emails as per ground truth</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to fetch this_week commitments from emails and calendar events; ensure integration with related_emails_and_notes
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add sanity checks: if no emails are returned, surface a summary of why and retry with broader filters
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement quick-win filter to exclude obvious non-commitment messages (spam/noise) before ranking
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">7. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned (email-11, email-16, email-30, email-46, email-19, email-3, email-10, email-43 not surfaced)</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to apply phrase-based filters (I&#039;ll, I will, I’ll get back, I’ll send), date_before 7_days_ago, and ensure follow-up action detection; return at least an empty but informative response if no matches
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add robust error handling and user-facing messaging when no results are found, including potential next steps (e.g., broaden date range, search for related phrases)
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement a test set with ground-truth emails for commitment-related prompts to guard against regressions
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">8. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">80</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned for a straightforward sender-based query</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to return emails for sender_name exactly &#039;Sarah Chen&#039; and apply recency sort to deliver the most recent first.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add a fallback: if no results, respond with a helpful message and offer alternatives (e.g., search by sender email, search all emails, or widen date range).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement pre-filter sanity checks to ensure the query is mapped to active mailbox data before returning empty results.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation passed">
+      <div class="eval-header">
+        <div class="eval-query">9. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">85</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Missed retrieval of all relevant emails (email IDs from ground truth not returned)</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to apply topic and date filters correctly; ensure last_month range maps to actual date constraints and index search
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Pre-run validation to confirm that a non-empty result set is possible for known good queries; implement fallback messaging when no results found
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Enhance isEscalated/vip/urgency handling to surface critical emails even if filters miss them due to parsing edge cases
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-low">LOW</span>
+              Improve user feedback with suggested next steps (e.g., broaden search, adjust date range, search by subject/body synonyms)
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">10. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails retrieved; user asked for 50 results</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to apply has_attachment and topic/subject filters correctly (ensure API design related emails are matched). Validate query translation from natural language to filters.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement a fallback: if no matches found, return a friendly message with the computed counts and offer to broaden filters (e.g., remove topic constraint or check subject variants like &#039;API Design Review&#039;).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a pre-filter step to remove obvious non-attachments or non-relevant newsletters to improve precision.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">11. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Intent misclassification between calendar and email domain</li><li>No calendar events fetched</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement calendar intent recognition and extract date entity (date: today) to route to calendar data source
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add a fallback prompt when intent is misclassified, e.g., &#039;Would you like to see today’s calendar or your inbox?&#039;
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Integrate and test a calendar data retrieval pipeline; ensure real calendar events are returned when date: today is requested
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-low">LOW</span>
+              Enhance presentation with a brief summary if no events exist, and provide next-step actions
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">12. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned; user cannot obtain Zoom link</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement robust retrieval to fetch emails for the specified time/date and extract video_link from meeting invites; validate with a confirm step before response
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add explicit parsing for &#039;today&#039; context and timezone; ensure timezone-consistent comparison for meeting times
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Introduce a fallback: if no meeting link found, propose steps (e.g., ask user to confirm date/time or provide alternative access)
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation passed">
+      <div class="eval-header">
+        <div class="eval-query">13. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">25</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">30</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No availability response produced; returned empty email list instead</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement a dedicated availability-check response path. If the user intent is check_availability, return availability status or a probing question to confirm date/time, rather than querying emails.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Correctly route the from-input to calendar management subsystem and bypass email-list retrieval for availability queries.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              If following a mixed-domain pipeline, ensure a clear signal mapping: if an availability query is detected, do not fetch emails; present a calendar-friendly response layout.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">14. </div>
+        <div class="eval-score score-danger">55/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned for a query that should yield ~50 emails</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval layer to apply date and relation filters correctly; verify that &#039;today&#039; and &#039;this afternoon&#039; translate to exact timestamps and that emails are correctly tagged with topics/subjects matching &#039;Sprint Planning&#039;.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add end-to-end test cases for calendar-related queries with sample emails to guard against empty results when matches exist.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement a fallback: if retrieval returns zero, present a brief diagnostic message and attempt a broader search (e.g., by subject contains &#039;Sprint Planning&#039;) with a user-confirmed narrowing option.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">15. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">50</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned; failed to meet the core objective of summarizing the thread.</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement retrieval that filters by subject:&#039;Data sync issues&#039; and gathers all relevant emails; additionally incorporate urgency flags (isUrgent, isEscalated) to surface high-priority items.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Ensure the system outputs the required fields: summary, open_questions, next_steps. Generate a concise summary from the retrieved emails and extract any open questions and suggested next steps.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a validation step to catch empty retrieval results and provide a user-facing message suggesting retry or adjusting filters.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">16. </div>
+        <div class="eval-score score-danger">45/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails retrieved (emailIds: [])</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement retrieval that targets decision-related threads using filters: topic: &#039;User Service refactor&#039; OR subject:&#039;API Design Review - User Service Refactor&#039;, and include isDecision/decisionDate/participants if present.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Ensure isEscalated and isVIP flags are considered in urgency/priority pathways to avoid missing critical messages.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a secondary fallback: if exact topic filter yields nothing, widen search to related threads and look for explicit decision summaries.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">17. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Empty email_ids response; no emails retrieved or actionable reply generated</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval path to handle simple reply requests: if the user asks for a direct reply like &#039;I&#039;m on it&#039;, return a reply action with content_template &#039;I&#039;m on it&#039; and reply_type &#039;acknowledgement&#039; without requiring email list results.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add a fallback: when a simple reply is requested, bypass aggressive retrieval and generate the content directly; only perform retrieval if the user request explicitly involves selecting target emails.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              If retrieval is needed, ensure non-empty results by returning a minimal placeholder (e.g., all emails or the most urgent ones) and clearly indicate the scope.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">18. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned; action not performed</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Align the task modeling: map &#039;Reply saying I can do 2pm Tuesday&#039; to action { action: send_reply, content_template: &#039;I can do 2pm Tuesday&#039;, reply_type: &#039;availability_proposal&#039; } and bypass unnecessary retrieval when the intent is a direct reply.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              If retrieval is required for context, ensure the retrieved set matches ground-truth expectations or clearly define retrieval criteria for simple reply intents.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a safety check: if a direct reply action is detected, return the reply immediately instead of performing an empty or unrelated retrieval.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">19. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">40</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned when expected 50 emails in inbox</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement domain-context validation: if user query references calendar actions, route to calendar API; for email lists, route to email retrieval. Detect domain mismatch and ask clarifying question rather than proceeding.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add a fallback: if the intended domain is unclear, respond with a clarifying prompt (e.g., &#039;Do you want me to schedule a meeting or fetch emails?&#039;) to avoid silent misdirection.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              If proceeding with email retrieval, ensure alignment with ground truth: retrieve and return a full list when asked; add sanity checks to ensure non-empty and accurate results.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Include error-handling messages when no results are found, and provide next steps (e.g., &#039;Would you like me to search for emails from Jennifer Wu?&#039;)
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation passed">
+      <div class="eval-header">
+        <div class="eval-query">20. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">75</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No actionable response for a reschedule request; user asked to move a meeting, not to retrieve emails</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Route calendar-related requests to a calendar/action subsystem. Do not return an email_list when the user intent is to reschedule a meeting. Implement a dedicated response with a confirmation prompt and updated event time (2:00pm today -&gt; 4:00pm).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              If the system must surface emails, limit surface to those directly related to the meeting being rescheduled (e.g., emails containing meeting invites or updates). Return those with appropriate filters.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add an explicit turn to confirm missing context: &#039;I can move your meeting from 2:00 PM to 4:00 PM today. Please confirm.&#039;
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">21. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails retrieved despite ground truth indicating 50 matches</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Investigate and fix retrieval pipeline to apply filters: (topic:sprint OR subject:&#039;Sprint Planning&#039;) AND status:completed. Ensure 50 emails are returned and wired to archive action.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add explicit verification step after retrieval: if no emails found, inform user and suggest adjusting filters or show count and sample IDs.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add an escalation/priority flag detection (e.g., isEscalated, vip) to ensure high-priority items are not missed when archiving.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-low">LOW</span>
+              Implement pre-filter spam/noise filtering to prevent noisy items (e.g., newsletters) from appearing in bulk actions.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">22. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">40</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned; no marking performed.</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement retrieval pipeline to apply filters: sender_type:direct_report and date_range:this_week; ensure expectedEmailIds are returned when present.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Return a bulk_mark action with mark &#039;starred&#039; and list of email IDs; confirm action status to user.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a validation step to ensure non-empty results are surfaced; provide user with option to adjust filters.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">23. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned; 0 results when 50 were expected.</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement retrieval: fetch all emails, compute per-sender response rate, filter for response_rate == 0%, ensure not to miss escalations or VIPs unless specified.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Validate data source: ensure totalEmailsInInbox matches retrieved set; check for label-based filtering correctness.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Integrate critical mail types: escalated, VIP, or dropped-ball markers into the 0% responder filter as configurable flags.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-low">LOW</span>
+              Add informative summary header: total inbox, number of 0% responders, and sample sender_list with last_received_date.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">24. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Missed all relevant emails (no results returned).</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval layer to correctly apply advanced boolean queries: (sender: Michael Roberts OR sender: Jennifer Wu) AND (topic: fundraising OR contains:[&#039;term sheet&#039;,&#039;fundraise&#039;,&#039;round&#039;]) AND exclude:newsletter. Implement robust parsing, indexing checks, and unit tests with the ground-truth set.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add explicit error handling and user feedback when no results are found, including a hint to broaden filters or check for mislabels (e.g., newsletters incorrectly tagged).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Introduce a lightweight ranking pass even when results are sparse to provide partial matches and guidance on filtering (e.g., show counts per sender or per keyword).
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">25. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">85</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned for the specified sender (emailIds: []).</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to fetch all emails from sender_name: Sarah Chen (ensure index on sender_name and thread/grouping). Validate counts against ground truth (50 emails) during testing.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement robust empty-state handling with a helpful message when no emails match the filter, and log root cause for empty results.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add a lightweight sanity check: after retrieval, verify result count matches expected inbox snapshot (in this test, 50 emails); if mismatch, trigger fallback to alternative matching or warn the user.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              If possible, return at least a sample of threads (sample_threads) even when complete retrieval is expensive, to provide partial insight while full results load.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">26. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No draft_text produced for user query</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Route draft_email requests directly to content generation path; bypass retrieval when intent is drafting.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Improve intent classification to distinguish between &#039;email_list&#039; queries and &#039;draft_email&#039; queries; ensure output type is &#039;draft_text&#039; with actual content.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement a default diplomatic decline draft template that can be customized with recipient name and partnership specifics.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">27. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">10</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">50</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No results produced for a scheduling task; empty email list contributes nothing</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement a proper mutual-availability retrieval flow: parse participants (user, Michael Roberts), duration (1h), time_range (next_week), and constraints (avoid_focus_blocks). Query calendars or existing inbox/calendar events to derive available slots; return a structured list of slots or at least candidate emails to coordinate.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add escalation/priority handling: detect P0/escalated items and ensure they are surfaced if relevant to scheduling constraints; ensure critical items are not missed in the retrieval phase.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Return actionable next steps in the presentation: e.g., &#039;Here are 3 available 1-hour slots next week. Do you want me to book one?&#039;.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-low">LOW</span>
+              Include a fallback: if no mutual slots available, propose alternatives or ask for more preferences.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">28. </div>
+        <div class="eval-score score-danger">55/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned for a clearly defined bulk archive request</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval pipeline to apply filters: ensure you fetch emails with label:newsletter and date_range:last_month before returning results
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add a meaningful status response when no results are found (e.g., &#039;No newsletters found for last month; attempting to archive empty set&#039; or prompt to adjust filters)
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add basic validation that at least one email matches before attempting bulk archive; provide partial success feedback if some fail
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement audit trail: log which emails were archived, or indicate if an error occurred during archiving
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation passed">
+      <div class="eval-header">
+        <div class="eval-query">29. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Retrieval returned empty result; no emails due within 3 days were surfaced.</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval layer to actually fetch commitments due within 3 days (ensure data source for emails/commitments is integrated and queryable). Validate with test datasets reflecting due_within:3_days.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement a robust isEscalated/priority flag handling to ensure P0 items are included and surfaced before non-critical items.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add fallback: if no commitments found, present a helpful empty-state message and suggest checking filters or expanding window.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">30. </div>
+        <div class="eval-score score-warning">62/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">75</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">50</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">60</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned (emailIds empty)</li><li>No saved query/template created</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement saved-query creation path: output a structured payload with name, filters, and a confirmation. Example: { action: &#039;save_query&#039;, name: &#039;daily triage&#039;, query_definition: { filters: [&#039;isUrgent&#039;, &#039;sender_type:(investor OR direct_report)&#039;] } }
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Ensure retrieval path is invoked when saving a query and return at least a sample of matching emails or a count, plus total inbox stats on success.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Add additional validation for missing or conflicting filters and prompt user for clarifications (e.g., time window).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Log and monitor failures to fetch emails to quickly detect systemic issues in retrieval layer.
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">31. </div>
+        <div class="eval-score score-warning">60/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">20</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">70</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>No emails returned (emailIds: [])</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Investigate and fix retrieval pipeline to return identified_inactive_contacts (use is_inactive and last_contact_date filters). Ensure matching email IDs are returned (e.g., email-11, email-17, email-20, ...).
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Add explicit error handling with a fallback suggestion (e.g., show top N inactive contacts with placeholders) when retrieval yields zero results.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Incorporate ranking by importance once retrieval succeeds; ensure VIP/escalated items appear at top as per ground truth metrics.
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Apply pre-filter for noise (spam/ newsletters) to avoid ranking noise in results.
+            </div>
+          
+        </div>
+      
+    </div>
+        </div>
+      </div>
+
+      <!-- Performance Metrics -->
+      <div class="chart-section">
+        <h3 class="chart-title">⏱️ Performance Metrics</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Avg Query Time</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">0ms</div>
+          </div>
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Avg Evaluation Time</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">6839ms</div>
+          </div>
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Inbox</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">50 emails</div>
+          </div>
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Persona</div>
+            <div style="font-size: 1.5rem; font-weight: 600; text-transform: capitalize;">founder</div>
+          </div>
+        </div>
+
+        
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Layer scores chart
+    const ctx = document.getElementById('layerScoresChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Query Understanding', 'Retrieval', 'Ranking', 'Presentation', 'Overall'],
+        datasets: [{
+          label: 'Score',
+          data: [
+            68.7,
+            28.5,
+            25.8,
+            62.6,
+            54.7
+          ],
+          backgroundColor: [
+            'rgba(102, 126, 234, 0.8)',
+            'rgba(118, 75, 162, 0.8)',
+            'rgba(237, 100, 166, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(59, 130, 246, 0.8)'
+          ],
+          borderColor: [
+            'rgba(102, 126, 234, 1)',
+            'rgba(118, 75, 162, 1)',
+            'rgba(237, 100, 166, 1)',
+            'rgba(16, 185, 129, 1)',
+            'rgba(59, 130, 246, 1)'
+          ],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              callback: function(value) {
+                return value + '/100';
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Score: ' + context.parsed.y + '/100';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    function toggleCollapse(id) {
+      const element = document.getElementById(id);
+      const trigger = element.previousElementSibling;
+      element.classList.toggle('collapsed');
+      trigger.classList.toggle('collapsed');
+    }
+  </script>
+</body>
+</html>

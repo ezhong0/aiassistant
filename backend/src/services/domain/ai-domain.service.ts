@@ -232,28 +232,45 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         stream: params.stream
       };
 
+      // Check if using GPT-5 reasoning models
+      const model = validatedParams.model || 'gpt-5-nano';
+      const isGPT5Model = model.startsWith('gpt-5');
+
+      // Map temperature to reasoning_effort for GPT-5 models
+      const reasoningEffort = isGPT5Model
+        ? (validatedParams.temperature >= 0.7 ? 'medium' : validatedParams.temperature >= 0.4 ? 'low' : 'minimal')
+        : undefined;
+
       this.logInfo('Generating chat completion', {
         messageCount: validatedParams.messages.length,
-        model: validatedParams.model || 'gpt-5-mini',
-        temperature: validatedParams.temperature || 0.7
+        model,
+        ...(isGPT5Model ? { reasoningEffort } : { temperature: validatedParams.temperature || 0.7 })
       });
+
+      const requestData: any = {
+        model,
+        messages: validatedParams.messages,
+        max_completion_tokens: validatedParams.maxTokens,
+        top_p: validatedParams.topP,
+        frequency_penalty: validatedParams.frequencyPenalty,
+        presence_penalty: validatedParams.presencePenalty,
+        stop: validatedParams.stop,
+        functions: validatedParams.functions,
+        function_call: validatedParams.functionCall,
+        stream: validatedParams.stream
+      };
+
+      // Use reasoning_effort for GPT-5, temperature for other models
+      if (isGPT5Model) {
+        requestData.reasoning_effort = reasoningEffort;
+      } else {
+        requestData.temperature = validatedParams.temperature || 0.7;
+      }
 
       const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/chat/completions',
-        data: {
-          model: validatedParams.model || 'gpt-5-nano',
-          messages: validatedParams.messages,
-          temperature: validatedParams.temperature || 0.7,
-          max_tokens: validatedParams.maxTokens,
-          top_p: validatedParams.topP,
-          frequency_penalty: validatedParams.frequencyPenalty,
-          presence_penalty: validatedParams.presencePenalty,
-          stop: validatedParams.stop,
-          functions: validatedParams.functions,
-          function_call: validatedParams.functionCall,
-          stream: validatedParams.stream
-        }
+        data: requestData
       });
 
       const result = {
@@ -335,25 +352,42 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     try {
       const startTime = Date.now();
 
+      // Check if using GPT-5 reasoning models
+      const model = params.model || 'gpt-5-nano';
+      const isGPT5Model = model.startsWith('gpt-5');
+
+      // Map temperature to reasoning_effort for GPT-5 models
+      const reasoningEffort = isGPT5Model
+        ? (params.temperature && params.temperature >= 0.7 ? 'medium' : params.temperature && params.temperature >= 0.4 ? 'low' : 'minimal')
+        : undefined;
+
       this.logInfo('Generating text completion', {
         promptLength: params.prompt.length,
-        model: params.model || 'gpt-5-nano',
-        temperature: params.temperature || 0.7
+        model,
+        ...(isGPT5Model ? { reasoningEffort } : { temperature: params.temperature || 0.7 })
       });
+
+      const requestData: any = {
+        model,
+        prompt: params.prompt,
+        max_completion_tokens: params.maxTokens,
+        top_p: params.topP,
+        frequency_penalty: params.frequencyPenalty,
+        presence_penalty: params.presencePenalty,
+        stop: params.stop
+      };
+
+      // Use reasoning_effort for GPT-5, temperature for other models
+      if (isGPT5Model) {
+        requestData.reasoning_effort = reasoningEffort;
+      } else {
+        requestData.temperature = params.temperature || 0.7;
+      }
 
       const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/completions',
-        data: {
-          model: params.model || 'gpt-5-nano',
-          prompt: params.prompt,
-          temperature: params.temperature || 0.7,
-          max_tokens: params.maxTokens,
-          top_p: params.topP,
-          frequency_penalty: params.frequencyPenalty,
-          presence_penalty: params.presencePenalty,
-          stop: params.stop
-        }
+        data: requestData
       });
 
       const result = {
@@ -685,31 +719,48 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     }
 
     try {
+      // Check if using GPT-5 reasoning models
+      const model = params.model || 'gpt-5-nano';
+      const isGPT5Model = model.startsWith('gpt-5');
+
+      // Map temperature to reasoning_effort for GPT-5 models
+      const reasoningEffort = isGPT5Model
+        ? (params.temperature && params.temperature >= 0.7 ? 'medium' : params.temperature && params.temperature >= 0.4 ? 'low' : 'minimal')
+        : undefined;
+
       this.logInfo('Generating structured data', {
         schemaType: params.schema.type,
         propertiesCount: Object.keys(params.schema.properties || {}).length,
-        temperature: params.temperature || 0.1,
+        ...(isGPT5Model ? { reasoningEffort } : { temperature: params.temperature || 0.1 }),
         promptBuilder: params.metadata?.promptBuilder || 'unknown'
       });
+
+      const requestData: any = {
+        model,
+        messages: [
+          { role: 'system', content: params.systemPrompt || 'Generate structured response' },
+          { role: 'user', content: params.prompt }
+        ],
+        max_completion_tokens: params.maxTokens || 1000,
+        functions: [{
+          name: 'structured_response',
+          description: params.schema.description || 'Generate structured response',
+          parameters: params.schema
+        }],
+        function_call: { name: 'structured_response' }
+      };
+
+      // Use reasoning_effort for GPT-5, temperature for other models
+      if (isGPT5Model) {
+        requestData.reasoning_effort = reasoningEffort;
+      } else {
+        requestData.temperature = params.temperature || 0.1;
+      }
 
       const response = await this.openAIClient.makeRequest({
         method: 'POST',
         endpoint: '/chat/completions',
-        data: {
-          model: params.model || 'gpt-5-nano',
-          messages: [
-            { role: 'system', content: params.systemPrompt || 'Generate structured response' },
-            { role: 'user', content: params.prompt }
-          ],
-          temperature: params.temperature || 0.1,
-          max_tokens: params.maxTokens || 1000,
-          functions: [{
-            name: 'structured_response',
-            description: params.schema.description || 'Generate structured response',
-            parameters: params.schema
-          }],
-          function_call: { name: 'structured_response' }
-        },
+        data: requestData,
         options: {
           metadata: {
             promptBuilder: params.metadata?.promptBuilder || 'unknown'

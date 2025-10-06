@@ -548,7 +548,7 @@ Load Balancer (Round Robin / Least Connections)
 | **DI Container** | Awilix | Dependency injection |
 | **Database** | PostgreSQL (Supabase) | User data, OAuth tokens |
 | **Cache** | Redis (optional) | Performance optimization |
-| **AI** | OpenAI GPT-4o | LLM processing |
+| **AI** | OpenAI GPT-5 (nano/mini) | LLM processing |
 | **Auth** | Supabase Auth | OAuth 2.0 management |
 | **Validation** | Zod | Runtime schema validation |
 | **Logging** | Winston | Structured logging |

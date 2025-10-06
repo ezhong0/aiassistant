@@ -15,7 +15,7 @@ import { ErrorFactory } from '../../errors/error-factory';
 export class QueryDecomposerService extends BaseService {
   constructor(
     private aiService: AIDomainService,
-    private promptBuilder: DecompositionPromptBuilder,
+    private decompositionPromptBuilder: DecompositionPromptBuilder,
     private validator: ExecutionGraphValidator
   ) {
     super('QueryDecomposerService');
@@ -54,7 +54,7 @@ export class QueryDecomposerService extends BaseService {
       this.validateInput(input);
 
       // Execute decomposition prompt
-      const graph = await this.promptBuilder.execute(input);
+      const graph = await this.decompositionPromptBuilder.execute(input);
 
       // Validate the generated graph
       const validationResult = this.validator.validate(graph);

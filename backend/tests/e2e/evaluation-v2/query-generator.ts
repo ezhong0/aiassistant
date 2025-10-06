@@ -76,9 +76,9 @@ export async function generateQueries(
 
   const response = await callLLMWithRetry(() =>
     llmClient.chat.completions.create({
-      model: 'gpt-4o', // Using gpt-4o instead of gpt-5-mini (no reasoning tokens overhead)
-      max_tokens: 4000,
-      temperature: 0.8, // Higher temp for diversity
+      model: 'gpt-5-mini', // Using gpt-5-mini for query generation (reasoning model)
+      max_completion_tokens: 16000, // Very high limit for reasoning + JSON output
+      reasoning_effort: 'minimal', // Minimal reasoning for JSON generation tasks
       messages: [{
         role: 'user',
         content: prompt,

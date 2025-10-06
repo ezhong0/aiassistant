@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E2E Test Report - run-1759728718829</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background: #f3f4f6;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; background: white; }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+    }
+
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .subtitle { opacity: 0.9; font-size: 0.9rem; }
+
+    .content { padding: 2rem; }
+
+    /* Dashboard */
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: #f9fafb;
+      padding: 1.5rem;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .metric-card.success { border-left-color: #10b981; }
+    .metric-card.warning { border-left-color: #f59e0b; }
+    .metric-card.danger { border-left-color: #ef4444; }
+
+    .metric-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #6b7280;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .metric-subtext {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-top: 0.25rem;
+    }
+
+    /* Charts */
+    .chart-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      border: 1px solid #e5e7eb;
+    }
+
+    .chart-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1f2937;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    /* Critical Errors */
+    .critical-errors {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .critical-errors h3 {
+      color: #991b1b;
+      margin-bottom: 1rem;
+    }
+
+    .error-item {
+      background: white;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      border-radius: 4px;
+      border-left: 3px solid #ef4444;
+    }
+
+    /* Evaluation Cards */
+    .evaluation {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .evaluation.passed { border-left: 4px solid #10b981; }
+    .evaluation.failed { border-left: 4px solid #ef4444; }
+
+    .eval-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .eval-query {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .eval-score {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .score-success { color: #10b981; }
+    .score-warning { color: #f59e0b; }
+    .score-danger { color: #ef4444; }
+
+    .layer-scores {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .layer-score {
+      text-align: center;
+      padding: 0.75rem;
+      background: #f9fafb;
+      border-radius: 4px;
+    }
+
+    .layer-name {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+    }
+
+    .layer-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .recommendations {
+      background: #eff6ff;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .rec-item {
+      margin-bottom: 0.5rem;
+      padding-left: 1rem;
+      border-left: 2px solid #3b82f6;
+    }
+
+    .rec-priority {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    .priority-high { background: #fee2e2; color: #991b1b; }
+    .priority-medium { background: #fef3c7; color: #92400e; }
+    .priority-low { background: #e0e7ff; color: #3730a3; }
+
+    /* Collapsible */
+    .collapsible {
+      cursor: pointer;
+      user-select: none;
+      padding: 0.5rem 0;
+    }
+
+    .collapsible:hover { opacity: 0.7; }
+
+    .collapsible::before {
+      content: '▼ ';
+      display: inline-block;
+      margin-right: 0.5rem;
+      transition: transform 0.3s;
+    }
+
+    .collapsible.collapsed::before {
+      transform: rotate(-90deg);
+    }
+
+    .collapsible-content {
+      max-height: 5000px;
+      overflow: hidden;
+      transition: max-height 0.3s ease-out;
+    }
+
+    .collapsible-content.collapsed {
+      max-height: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🧪 E2E Test Report</h1>
+      <div class="subtitle">Run ID: run-1759728718829 • 10/5/2025, 10:31:58 PM</div>
+    </header>
+
+    <div class="content">
+      <!-- Dashboard -->
+      <div class="dashboard">
+        <div class="metric-card warning">
+          <div class="metric-label">Pass Rate</div>
+          <div class="metric-value">0.0%</div>
+          <div class="metric-subtext">0/4 tests passed</div>
+        </div>
+
+        <div class="metric-card danger">
+          <div class="metric-label">Critical Errors</div>
+          <div class="metric-value">5</div>
+          <div class="metric-subtext">Must fix!</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Overall Score</div>
+          <div class="metric-value">27.5</div>
+          <div class="metric-subtext">Average across all tests</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Weakest Layer</div>
+          <div class="metric-value" style="font-size: 1.25rem; text-transform: capitalize;">retrieval</div>
+          <div class="metric-subtext">0.0/100</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Total Time</div>
+          <div class="metric-value">30.1<span style="font-size: 1rem;">s</span></div>
+          <div class="metric-subtext">5 API calls</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Estimated Cost</div>
+          <div class="metric-value">$0.040</div>
+          <div class="metric-subtext">OpenAI API usage</div>
+        </div>
+      </div>
+
+      <!-- Layer Scores Chart -->
+      <div class="chart-section">
+        <h3 class="chart-title">Layer Performance Breakdown</h3>
+        <div class="chart-container">
+          <canvas id="layerScoresChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Critical Errors -->
+      
+      <div class="critical-errors">
+        <h3>🚨 Critical Errors (5)</h3>
+        
+          <div class="error-item">Failed to retrieve any emails</div>
+        
+          <div class="error-item">Failed to retrieve any emails</div>
+        
+          <div class="error-item">Failed to retrieve any relevant emails</div>
+        
+          <div class="error-item">Did not retrieve any emails</div>
+        
+          <div class="error-item">Failed to provide a summary</div>
+        
+        
+      </div>
+      
+
+      <!-- Test Results -->
+      <div class="chart-section">
+        <h3 class="chart-title collapsible" onclick="toggleCollapse('test-results')">
+          Test Results (4)
+        </h3>
+        <div id="test-results" class="collapsible-content">
+          
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">1. </div>
+        <div class="eval-score score-danger">40/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">80</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">50</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Failed to retrieve any emails</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix retrieval logic to handle sender type filtering
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">2. </div>
+        <div class="eval-score score-danger">20/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">70</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">50</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Failed to retrieve any emails</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Fix the email retrieval function to ensure it connects to the database and retrieves relevant emails
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Implement error handling to inform users when no emails are found
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">3. </div>
+        <div class="eval-score score-danger">20/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">60</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">50</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Failed to retrieve any relevant emails</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Enhance entity recognition to accurately identify and filter by topics discussed in meetings
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Implement a fallback mechanism to suggest alternative actions or queries when no results are found
+            </div>
+          
+        </div>
+      
+    </div>
+    <div class="evaluation failed">
+      <div class="eval-header">
+        <div class="eval-query">4. </div>
+        <div class="eval-score score-danger">30/100</div>
+      </div>
+
+      <div class="layer-scores">
+        <div class="layer-score">
+          <div class="layer-name">Understanding</div>
+          <div class="layer-value">40</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Retrieval</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Ranking</div>
+          <div class="layer-value">0</div>
+        </div>
+        <div class="layer-score">
+          <div class="layer-name">Presentation</div>
+          <div class="layer-value">10</div>
+        </div>
+      </div>
+
+      
+        <div style="background: #fef2f2; padding: 0.75rem; border-radius: 4px; margin: 1rem 0;">
+          <strong style="color: #991b1b;">Critical Errors:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem; color: #991b1b;">
+            <li>Did not retrieve any emails</li><li>Failed to provide a summary</li>
+          </ul>
+        </div>
+      
+
+      
+        <div class="recommendations">
+          <strong>💡 Recommendations:</strong>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Improve intent recognition to handle status update queries
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-high">HIGH</span>
+              Ensure retrieval logic fetches relevant emails for the given context
+            </div>
+          
+            <div class="rec-item">
+              <span class="rec-priority priority-medium">MEDIUM</span>
+              Adjust presentation layer to provide summaries when needed
+            </div>
+          
+        </div>
+      
+    </div>
+        </div>
+      </div>
+
+      <!-- Performance Metrics -->
+      <div class="chart-section">
+        <h3 class="chart-title">⏱️ Performance Metrics</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Avg Query Time</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">0ms</div>
+          </div>
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Avg Evaluation Time</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">11094ms</div>
+          </div>
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Inbox</div>
+            <div style="font-size: 1.5rem; font-weight: 600;">50 emails</div>
+          </div>
+          <div>
+            <div style="color: #6b7280; font-size: 0.875rem;">Persona</div>
+            <div style="font-size: 1.5rem; font-weight: 600; text-transform: capitalize;">founder</div>
+          </div>
+        </div>
+
+        
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Layer scores chart
+    const ctx = document.getElementById('layerScoresChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Query Understanding', 'Retrieval', 'Ranking', 'Presentation', 'Overall'],
+        datasets: [{
+          label: 'Score',
+          data: [
+            62.5,
+            0.0,
+            0.0,
+            40.0,
+            27.5
+          ],
+          backgroundColor: [
+            'rgba(102, 126, 234, 0.8)',
+            'rgba(118, 75, 162, 0.8)',
+            'rgba(237, 100, 166, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(59, 130, 246, 0.8)'
+          ],
+          borderColor: [
+            'rgba(102, 126, 234, 1)',
+            'rgba(118, 75, 162, 1)',
+            'rgba(237, 100, 166, 1)',
+            'rgba(16, 185, 129, 1)',
+            'rgba(59, 130, 246, 1)'
+          ],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: {
+              callback: function(value) {
+                return value + '/100';
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Score: ' + context.parsed.y + '/100';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    function toggleCollapse(id) {
+      const element = document.getElementById(id);
+      const trigger = element.previousElementSibling;
+      element.classList.toggle('collapsed');
+      trigger.classList.toggle('collapsed');
+    }
+  </script>
+</body>
+</html>

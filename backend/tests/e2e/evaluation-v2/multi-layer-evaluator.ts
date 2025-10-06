@@ -111,9 +111,9 @@ export async function evaluateChatbotResponse(
   // Call evaluator LLM with retry logic
   const response = await callLLMWithRetry(() =>
     llmClient.chat.completions.create({
-      model: 'gpt-4o', // Using gpt-4o for evaluation (consistent scoring, no reasoning overhead)
-      max_tokens: 3000,
-      temperature: 0.3, // Lower temp for consistent evaluation
+      model: 'gpt-5-nano', // Using gpt-5-nano for evaluation (reasoning model)
+      max_completion_tokens: 6000, // Higher limit for reasoning + output
+      reasoning_effort: 'minimal', // Use minimal effort for evaluation to save tokens
       messages: [{
         role: 'user',
         content: prompt,
