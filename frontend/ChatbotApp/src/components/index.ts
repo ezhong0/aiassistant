@@ -4,5 +4,6 @@
  */
 
 export { ChatInput } from './ChatInput';
-export { ChatInterfaceEnhanced } from './ChatInterfaceEnhanced';
-export * from './design-system';
+export { ChatInterface } from './ChatInterface';
+export { default as MessageBubble } from './MessageBubble';
+export * from '../design-system/components';

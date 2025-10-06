@@ -1,7 +1,7 @@
 import { asClass, asFunction } from 'awilix';
 import { AppContainer } from '../container';
 import { RateLimitStore } from '../../middleware/rate-limiting.middleware';
-import { createErrorHandler, createNotFoundHandler } from '../../middleware/errorHandler';
+import { createErrorHandler, createNotFoundHandler } from '../../middleware/error-handler.middleware';
 
 /**
  * Register middleware-related services

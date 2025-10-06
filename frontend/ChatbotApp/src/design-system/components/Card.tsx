@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ViewProps } from 'react-native';
-import { designSystem } from '../../design-system';
-import type { ShadowDepth } from '../../design-system';
+import { designSystem } from '../index';
+import type { ShadowDepth } from '../index';
 
 interface CardProps extends ViewProps {
   children: React.ReactNode;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text as RNText, TextProps } from 'react-native';
-import { designSystem } from '../../design-system';
-import type { TextSize } from '../../design-system';
+import { designSystem } from '../index';
+import type { TextSize } from '../index';
 
 interface CustomTextProps extends TextProps {
   variant?: 'display' | 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'bodyMedium' | 'caption' | 'captionMedium' | 'label' | 'labelSmall' | 'chatMessage' | 'chatTime';

@@ -27,6 +27,11 @@ export interface TestRunConfig {
   generateQueryCount?: number;
   queryCategories?: string[];
 
+  // Parallel execution settings
+  parallelExecution?: boolean; // Enable parallel evaluation (default: false)
+  batchSize?: number; // Number of queries to evaluate in parallel (default: 5)
+  maxConcurrentRequests?: number; // Max API calls in flight (default: 10)
+
   // Your chatbot function
   chatbotFunction: (inbox: GeneratedInbox, query: string) => Promise<ChatbotResponse>;
 }
@@ -139,30 +144,102 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
   // 4. Evaluate each response
   console.log('\n⚖️  Step 4: Evaluating responses...');
   const evaluations: EvaluationReport[] = [];
-  const rateLimiter = new RateLimiter(1200); // 50 requests/min = 1.2s interval
 
-  for (let i = 0; i < chatbotResponses.length; i++) {
-    const { query, response } = chatbotResponses[i];
-    console.log(`   [${i + 1}/${chatbotResponses.length}] Evaluating "${query.query}"`);
+  // Determine execution mode
+  const useParallel = config.parallelExecution ?? false;
+  const batchSize = config.batchSize ?? 5;
 
-    try {
-      await rateLimiter.throttle();
-      const evalStart = Date.now();
-      const evaluation = await evaluateChatbotResponse(query, inbox, response, anthropic);
-      const evalTime = Date.now() - evalStart;
-      evaluationTimes.push(evalTime);
-      apiCalls++; // Evaluation API call
+  if (useParallel) {
+    console.log(`   Running in PARALLEL mode (batch size: ${batchSize})`);
 
-      evaluations.push(evaluation);
+    // Create batches
+    const batches = chunk(chatbotResponses, batchSize);
+    let processedCount = 0;
 
-      const status = evaluation.passed ? '✅' : '❌';
-      console.log(`      ${status} Score: ${evaluation.overallScore}/100 (${evalTime}ms)`);
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      const batchNum = batchIndex + 1;
+      const totalBatches = batches.length;
 
-      if (evaluation.diagnosis.criticalErrors.length > 0) {
-        console.log(`      ⚠️  Critical: ${evaluation.diagnosis.criticalErrors[0]}`);
+      console.log(`\n   Batch ${batchNum}/${totalBatches} (${batch.length} queries):`);
+
+      // Process batch in parallel with rate limiting
+      const batchResults = await Promise.all(
+        batch.map(async ({ query, response }, index) => {
+          const overallIndex = processedCount + index;
+
+          try {
+            const evalStart = Date.now();
+
+            // Stagger requests within batch to respect rate limits
+            await sleep(index * 200); // 200ms stagger between parallel requests
+
+            const evaluation = await evaluateChatbotResponse(query, inbox, response, anthropic);
+            const evalTime = Date.now() - evalStart;
+
+            const status = evaluation.passed ? '✅' : '❌';
+            console.log(`      [${overallIndex + 1}/${chatbotResponses.length}] ${status} "${query.query.substring(0, 50)}..." - ${evaluation.overallScore}/100 (${evalTime}ms)`);
+
+            return {
+              evaluation,
+              evalTime,
+              success: true,
+            };
+          } catch (error) {
+            console.log(`      [${overallIndex + 1}/${chatbotResponses.length}] ❌ "${query.query.substring(0, 50)}..." - Error: ${error}`);
+            return {
+              evaluation: null,
+              evalTime: 0,
+              success: false,
+            };
+          }
+        })
+      );
+
+      // Collect results
+      for (const result of batchResults) {
+        if (result.success && result.evaluation) {
+          evaluations.push(result.evaluation);
+          evaluationTimes.push(result.evalTime);
+          apiCalls++;
+        }
       }
-    } catch (error) {
-      console.log(`      ❌ Evaluation error: ${error}`);
+
+      processedCount += batch.length;
+
+      // Brief pause between batches to respect rate limits
+      if (batchIndex < batches.length - 1) {
+        await sleep(1000);
+      }
+    }
+  } else {
+    // Sequential execution (original behavior)
+    console.log(`   Running in SEQUENTIAL mode`);
+    const rateLimiter = new RateLimiter(1200); // 50 requests/min = 1.2s interval
+
+    for (let i = 0; i < chatbotResponses.length; i++) {
+      const { query, response } = chatbotResponses[i];
+      console.log(`   [${i + 1}/${chatbotResponses.length}] Evaluating "${query.query}"`);
+
+      try {
+        await rateLimiter.throttle();
+        const evalStart = Date.now();
+        const evaluation = await evaluateChatbotResponse(query, inbox, response, anthropic);
+        const evalTime = Date.now() - evalStart;
+        evaluationTimes.push(evalTime);
+        apiCalls++; // Evaluation API call
+
+        evaluations.push(evaluation);
+
+        const status = evaluation.passed ? '✅' : '❌';
+        console.log(`      ${status} Score: ${evaluation.overallScore}/100 (${evalTime}ms)`);
+
+        if (evaluation.diagnosis.criticalErrors.length > 0) {
+          console.log(`      ⚠️  Critical: ${evaluation.diagnosis.criticalErrors[0]}`);
+        }
+      } catch (error) {
+        console.log(`      ❌ Evaluation error: ${error}`);
+      }
     }
   }
 
@@ -319,6 +396,17 @@ function printSummary(result: TestRunResult): void {
  */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Helper: chunk array into batches
+ */
+function chunk<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
- * Enhanced Message Component
+ * Message Bubble Component
  *
- * Improved message bubble with:
+ * Chat message bubble with:
  * - Status indicators (sending, sent, failed)
  * - Timestamps with smart formatting
  * - Retry button for failed messages
@@ -24,7 +24,7 @@ import { designSystem } from '../design-system';
 
 const { colors, spacing, typography } = designSystem;
 
-interface EnhancedMessageProps {
+interface MessageBubbleProps {
   message: StoredMessage;
   isDarkMode?: boolean;
   onRetry?: (messageId: string) => void;
@@ -33,7 +33,7 @@ interface EnhancedMessageProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const EnhancedMessage: React.FC<EnhancedMessageProps> = ({
+const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   isDarkMode = false,
   onRetry,
@@ -286,4 +286,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default EnhancedMessage;
+export default MessageBubble;

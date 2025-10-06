@@ -25,7 +25,21 @@
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "downlevelIteration": true,
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["./*"],
+      "@/config/*": ["./config/*"],
+      "@/services/*": ["./services/*"],
+      "@/types/*": ["./types/*"],
+      "@/utils/*": ["./utils/*"],
+      "@/errors/*": ["./errors/*"],
+      "@/middleware/*": ["./middleware/*"],
+      "@/routes/*": ["./routes/*"],
+      "@/schemas/*": ["./schemas/*"],
+      "@/layers/*": ["./layers/*"],
+      "@/framework/*": ["./framework/*"]
+    }
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.js", "**/*.spec.ts", "**/*.spec.js"]

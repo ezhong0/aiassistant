@@ -57,8 +57,8 @@ export interface Cradle {
   userPreferencesService: import('../services/user-preferences.service').UserPreferencesService;
 
   // Middleware
-  errorHandler: import('../middleware/errorHandler').ErrorHandlerMiddleware;
-  notFoundHandler: import('../middleware/errorHandler').NotFoundHandlerMiddleware;
+  errorHandler: import('../middleware/error-handler.middleware').ErrorHandlerMiddleware;
+  notFoundHandler: import('../middleware/error-handler.middleware').NotFoundHandlerMiddleware;
 
   // Domain Services
   emailDomainService: import('../services/domain/email-domain.service').EmailDomainService;

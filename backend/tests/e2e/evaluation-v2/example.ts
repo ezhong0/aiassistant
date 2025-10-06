@@ -189,6 +189,10 @@ async function runSingleInboxTest() {
       'SEARCH & RETRIEVAL',
     ],
 
+    // Parallel execution (optional - speeds up tests 5-10x)
+    parallelExecution: false, // Set to true for parallel mode
+    batchSize: 5, // Number of queries to evaluate in parallel
+
     // Your chatbot function
     chatbotFunction: yourChatbotFunction,
   });
@@ -263,7 +267,35 @@ async function runRegressionTest() {
 }
 
 /**
- * Example 4: Analyze a specific failure
+ * Example 4: Fast parallel execution (for large test suites)
+ */
+async function runParallelTest() {
+  console.log('\n📧 Example 4: Parallel Execution (Fast Mode)\n');
+
+  const result = await runAutomatedTests({
+    inboxPath: path.join(__dirname, '../data/generated-inboxes/inbox-01-founder.json'),
+    commandsDocPath: path.join(__dirname, '../../../docs/CHATBOT_COMMANDS_EXAMPLES.md'),
+    outputDir: path.join(__dirname, '../data/test-results'),
+    generateQueryCount: 10, // Generate more queries for this example
+
+    // Enable parallel execution for speed
+    parallelExecution: true,
+    batchSize: 5, // Process 5 evaluations simultaneously
+
+    chatbotFunction: yourChatbotFunction,
+  });
+
+  console.log('\n✅ Parallel test complete!');
+  console.log(`\nPerformance:`);
+  console.log(`- Total time: ${(result.metrics.totalTime / 1000).toFixed(1)}s`);
+  console.log(`- Queries tested: ${result.queries.count}`);
+  console.log(`- Speed: ${(result.queries.count / (result.metrics.totalTime / 1000)).toFixed(1)} queries/sec`);
+
+  return result;
+}
+
+/**
+ * Example 5: Analyze a specific failure
  */
 function analyzeSingleFailure(result: any, queryId: string) {
   const evaluation = result.evaluations.find((e: any) => e.testId === queryId);
@@ -316,12 +348,15 @@ if (require.main === module) {
     runMultipleInboxTests().catch(console.error);
   } else if (args[0] === 'regression') {
     runRegressionTest().catch(console.error);
+  } else if (args[0] === 'parallel') {
+    runParallelTest().catch(console.error);
   } else {
     console.log(`
 Usage:
-  ts-node example.ts single      - Test single inbox
+  ts-node example.ts single      - Test single inbox (sequential)
   ts-node example.ts multiple    - Test multiple inboxes
   ts-node example.ts regression  - Run regression test with saved queries
+  ts-node example.ts parallel    - Test with parallel execution (5-10x faster)
 
 First, generate test inboxes:
   npm run e2e:generate-inbox founder
@@ -335,5 +370,6 @@ export {
   runSingleInboxTest,
   runMultipleInboxTests,
   runRegressionTest,
+  runParallelTest,
   analyzeSingleFailure,
 };

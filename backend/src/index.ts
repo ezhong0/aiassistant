@@ -8,7 +8,7 @@ dotenv.config({ path: envPath });
 
 import express, { Request, Response } from 'express';
 import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, validateContainer, type AppContainer } from './di';
-import { requestLogger } from './middleware/requestLogger';
+import { requestLogger } from './middleware/request-logger.middleware';
 import logger from './utils/logger';
 import { 
   corsMiddleware, 

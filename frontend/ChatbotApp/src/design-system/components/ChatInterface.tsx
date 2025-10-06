@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, TextInput, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { designSystem } from '../../design-system';
+import { designSystem } from '../index';
 import { ChatMessage } from './ChatMessage';
 import { Button } from './Button';
 import { Card } from './Card';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, View } from 'react-native';
-import { designSystem } from '../../design-system';
-import type { ShadowDepth } from '../../design-system';
+import { designSystem } from '../index';
+import type { ShadowDepth } from '../index';
 
 interface ButtonProps {
   title: string;

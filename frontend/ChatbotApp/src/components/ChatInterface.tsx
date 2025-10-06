@@ -19,7 +19,7 @@ interface Message {
   isTyping?: boolean;
 }
 
-interface ChatInterfaceEnhancedProps {
+interface ChatInterfaceProps {
   onSendMessage?: (message: string) => Promise<void>;
   isLoading?: boolean;
   placeholder?: string;
@@ -29,7 +29,7 @@ interface ChatInterfaceEnhancedProps {
   maxMessages?: number;
 }
 
-export const ChatInterfaceEnhanced: React.FC<ChatInterfaceEnhancedProps> = ({
+export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSendMessage,
   isLoading = false,
   placeholder,
@@ -373,7 +373,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isLoading }) => 
 /*
 INTEGRATION EXAMPLE:
 -------------------
-<ChatInterfaceEnhanced
+<ChatInterface
   onSendMessage={async (message) => {
     // Call your API here
     const response = await fetch('/api/chat', {

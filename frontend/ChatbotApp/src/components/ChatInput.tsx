@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, Text } from 'react-native';
 
-interface SimpleChatInputProps {
+interface ChatInputProps {
   onSendMessage: (message: string) => void;
   placeholder?: string;
 }
 
-export const SimpleChatInput: React.FC<SimpleChatInputProps> = ({
+export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   placeholder = "Type a message..."
 }) => {

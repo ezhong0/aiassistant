@@ -466,6 +466,50 @@ Edit `multi-layer-evaluator.ts` to adjust:
 
 ## Advanced Features
 
+### Parallel Execution (5-10x Faster)
+
+For large test suites, enable parallel execution to dramatically speed up testing:
+
+```typescript
+const result = await runAutomatedTests({
+  inboxPath: './data/generated-inboxes/inbox-01-founder.json',
+  commandsDocPath: './docs/CHATBOT_COMMANDS_EXAMPLES.md',
+  outputDir: './data/test-results',
+  generateQueryCount: 10,
+
+  // Enable parallel execution
+  parallelExecution: true,
+  batchSize: 5, // Evaluate 5 queries simultaneously
+
+  chatbotFunction: yourChatbotFunction,
+});
+```
+
+**Performance comparison:**
+```
+Sequential (default):
+  50 queries × 1.2s = ~60 seconds
+
+Parallel (batchSize: 5):
+  50 queries ÷ 5 batches × ~2s = ~10-15 seconds
+  ⚡ 4-6x faster!
+```
+
+**When to use:**
+- ✅ Large test suites (50+ queries)
+- ✅ Stable chatbot implementation
+- ✅ CI/CD environments
+
+**When not to use:**
+- ⚠️ Small test suites (< 20 queries) - overhead not worth it
+- ⚠️ Debugging specific failures - sequential easier to trace
+- ⚠️ API rate limits are very strict
+
+**Configuration:**
+- `parallelExecution`: Enable/disable (default: false)
+- `batchSize`: Queries per batch (default: 5, recommended: 3-10)
+- Automatic rate limiting (200ms stagger between parallel requests)
+
 ### Expose Internal State
 If your chatbot exposes internal state, the evaluator can provide deeper insights:
 

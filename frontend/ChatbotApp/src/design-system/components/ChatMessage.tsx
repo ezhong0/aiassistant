@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, ViewProps } from 'react-native';
-import { designSystem } from '../../design-system';
+import { designSystem } from '../index';
 
 interface ChatMessageProps extends ViewProps {
   message: string;

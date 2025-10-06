@@ -37,7 +37,7 @@ import { storageService, StoredMessage } from './src/services/storage.service';
 import { offlineService, NetworkStatus } from './src/services/offline.service';
 
 // Components
-import EnhancedMessage from './src/components/EnhancedMessage';
+import MessageBubble from './src/components/MessageBubble';
 import EmptyState from './src/components/EmptyState';
 import LoadingIndicator from './src/components/LoadingIndicator';
 
@@ -549,7 +549,7 @@ const App = () => {
             data={messages}
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
-              <EnhancedMessage
+              <MessageBubble
                 message={item}
                 isDarkMode={isDarkMode}
                 onRetry={handleRetryMessage}
