@@ -86,6 +86,13 @@ export interface EvaluationReport {
     priority: 'high' | 'medium' | 'low';
     recommendation: string;
   }>;
+
+  // Actual test data for debugging
+  testData?: {
+    userQuery: string;
+    actualResponse: any;
+    expectedEmailIds?: string[];
+  };
 }
 
 /**
@@ -109,11 +116,13 @@ export async function evaluateChatbotResponse(
   );
 
   // Call evaluator LLM with retry logic
+  // Using GPT-5-nano with minimal reasoning for fast, cheap evaluation
+  // GPT-5-nano: $0.05/1M input tokens, $0.40/1M output tokens
   const response = await callLLMWithRetry(() =>
     llmClient.chat.completions.create({
-      model: 'gpt-5-nano', // Using gpt-5-nano for evaluation (reasoning model)
-      max_completion_tokens: 6000, // Higher limit for reasoning + output
-      reasoning_effort: 'minimal', // Use minimal effort for evaluation to save tokens
+      model: 'gpt-5-nano',
+      max_completion_tokens: 6000,
+      reasoning_effort: 'minimal', // Fast evaluation without extensive reasoning
       messages: [{
         role: 'user',
         content: prompt,
@@ -124,6 +133,14 @@ export async function evaluateChatbotResponse(
   // Parse evaluation
   const responseContent = (response as any).choices[0].message.content;
   const evaluation = parseEvaluationResponse(responseContent, query.id);
+
+  // Add actual test data for debugging
+  const expectedEmailIds = calculateExpectedEmails(query, inbox);
+  evaluation.testData = {
+    userQuery: query.query,
+    actualResponse: chatbotResponse,
+    expectedEmailIds: expectedEmailIds
+  };
 
   return evaluation;
 }

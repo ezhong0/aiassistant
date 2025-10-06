@@ -13,6 +13,48 @@ export interface ValidationResult {
 }
 
 export class ExecutionGraphValidator {
+  // Allowed Gmail API filter prefixes
+  private static readonly ALLOWED_GMAIL_FILTERS = new Set([
+    'from:',
+    'to:',
+    'subject:',
+    'has:',
+    'is:',
+    'label:',
+    'newer_than:',
+    'older_than:',
+    'in:',
+    'after:',
+    'before:'
+  ]);
+
+  // Allowed strategy types
+  private static readonly ALLOWED_STRATEGY_TYPES = new Set([
+    'metadata_filter',
+    'keyword_search',
+    'urgency_detector',
+    'sender_classifier',
+    'action_detector',
+    'batch_thread_read',
+    'cross_reference',
+    'semantic_analysis'
+  ]);
+
+  // Forbidden filter patterns
+  private static readonly FORBIDDEN_FILTERS = new Set([
+    'isUrgent',
+    'priority',
+    'urgency',
+    'requiresResponse',
+    'requires_response',
+    'needsReply',
+    'senderType',
+    'sender_type',
+    'dueToday',
+    'due_today',
+    'deadline'
+  ]);
+
   /**
    * Validate an execution graph
    */
@@ -82,6 +124,14 @@ export class ExecutionGraphValidator {
 
     if (!node.type) {
       errors.push(`Node ${node.id} missing type`);
+    } else {
+      // Validate strategy type is allowed
+      if (!ExecutionGraphValidator.ALLOWED_STRATEGY_TYPES.has(node.type)) {
+        errors.push(
+          `Node ${node.id} has invalid strategy type: "${node.type}". ` +
+          `Allowed types: ${Array.from(ExecutionGraphValidator.ALLOWED_STRATEGY_TYPES).join(', ')}`
+        );
+      }
     }
 
     if (!node.strategy) {
@@ -103,8 +153,52 @@ export class ExecutionGraphValidator {
       errors.push(`Node ${node.id} missing expected_cost`);
     }
 
+    // Validate filters for metadata_filter nodes
+    if (node.type === 'metadata_filter') {
+      this.validateMetadataFilters(node, errors);
+    }
+
     // Check for bounds in params
     this.validateNodeBounds(node, warnings);
+  }
+
+  /**
+   * Validate that metadata_filter nodes only use allowed Gmail filters
+   */
+  private validateMetadataFilters(node: InformationNode, errors: string[]): void {
+    const params = node.strategy?.params;
+    if (!params || !params.filters) return;
+
+    const filters = Array.isArray(params.filters) ? params.filters : [params.filters];
+
+    for (const filter of filters) {
+      if (typeof filter !== 'string') continue;
+
+      // Check if filter starts with forbidden pattern
+      const filterLower = filter.toLowerCase();
+      for (const forbidden of ExecutionGraphValidator.FORBIDDEN_FILTERS) {
+        if (filterLower.includes(forbidden.toLowerCase())) {
+          errors.push(
+            `Node ${node.id} uses forbidden filter: "${filter}". ` +
+            `This is a semantic filter that requires a strategy node (urgency_detector, sender_classifier, or action_detector).`
+          );
+          return;
+        }
+      }
+
+      // Check if filter uses allowed Gmail operator
+      const isAllowed = Array.from(ExecutionGraphValidator.ALLOWED_GMAIL_FILTERS).some(
+        allowed => filter.startsWith(allowed)
+      );
+
+      if (!isAllowed) {
+        errors.push(
+          `Node ${node.id} uses invalid Gmail filter: "${filter}". ` +
+          `Allowed filters: ${Array.from(ExecutionGraphValidator.ALLOWED_GMAIL_FILTERS).join(', ')}. ` +
+          `For semantic filtering (urgency, sender type, action required), use a strategy node instead.`
+        );
+      }
+    }
   }
 
   /**

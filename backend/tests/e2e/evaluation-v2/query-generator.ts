@@ -74,11 +74,13 @@ export async function generateQueries(
     complexityDistribution
   );
 
+  // Use GPT-5-mini for query generation with low reasoning effort
+  // GPT-5-mini provides good quality queries with creative diversity
   const response = await callLLMWithRetry(() =>
     llmClient.chat.completions.create({
-      model: 'gpt-5-mini', // Using gpt-5-mini for query generation (reasoning model)
-      max_completion_tokens: 16000, // Very high limit for reasoning + JSON output
-      reasoning_effort: 'minimal', // Minimal reasoning for JSON generation tasks
+      model: 'gpt-5-mini',
+      max_completion_tokens: 8000,
+      reasoning_effort: 'low', // Some reasoning for diverse, realistic queries
       messages: [{
         role: 'user',
         content: prompt,

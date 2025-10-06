@@ -90,6 +90,9 @@ export interface Cradle {
   // Phase 2: Strategy Executors
   metadataFilterStrategy: import('../layers/layer2-execution/strategies/metadata-filter-strategy').MetadataFilterStrategy;
   keywordSearchStrategy: import('../layers/layer2-execution/strategies/keyword-search-strategy').KeywordSearchStrategy;
+  urgencyDetectorStrategy: import('../layers/layer2-execution/strategies/urgency-detector-strategy').UrgencyDetectorStrategy;
+  senderClassifierStrategy: import('../layers/layer2-execution/strategies/sender-classifier-strategy').SenderClassifierStrategy;
+  actionDetectorStrategy: import('../layers/layer2-execution/strategies/action-detector-strategy').ActionDetectorStrategy;
   batchThreadReadStrategy: import('../layers/layer2-execution/strategies/batch-thread-read-strategy').BatchThreadReadStrategy;
   crossReferenceStrategy: import('../layers/layer2-execution/strategies/cross-reference-strategy').CrossReferenceStrategy;
   semanticAnalysisStrategy: import('../layers/layer2-execution/strategies/semantic-analysis-strategy').SemanticAnalysisStrategy;

@@ -32,6 +32,9 @@ import { BaseStrategy } from './strategies/base-strategy';
 export const StrategyType = {
   METADATA_FILTER: Symbol.for('metadata_filter'),
   KEYWORD_SEARCH: Symbol.for('keyword_search'),
+  URGENCY_DETECTOR: Symbol.for('urgency_detector'),
+  SENDER_CLASSIFIER: Symbol.for('sender_classifier'),
+  ACTION_DETECTOR: Symbol.for('action_detector'),
   BATCH_THREAD_READ: Symbol.for('batch_thread_read'),
   CROSS_REFERENCE: Symbol.for('cross_reference'),
   SEMANTIC_ANALYSIS: Symbol.for('semantic_analysis'),

@@ -38,9 +38,13 @@ logs/
 backend/logs/
 *.log
 
-# E2E Test Reports
+# E2E Test Reports and Results
 tests/e2e/reports/
 backend/tests/e2e/reports/
+tests/e2e/data/test-results/
+backend/tests/e2e/data/test-results/
+tests/e2e/data/generated-inboxes/
+backend/tests/e2e/data/generated-inboxes/
 
 # Runtime data
 pids/

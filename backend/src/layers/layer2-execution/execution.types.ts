@@ -9,6 +9,9 @@ import { InformationNode } from '../layer1-decomposition/execution-graph.types';
 export type InformationNodeType =
   | 'metadata_filter'
   | 'keyword_search'
+  | 'urgency_detector'
+  | 'sender_classifier'
+  | 'action_detector'
   | 'batch_thread_read'
   | 'cross_reference'
   | 'semantic_analysis';

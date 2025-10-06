@@ -61,7 +61,7 @@ export class DecompositionPromptBuilder {
             properties: {
               id: { type: 'string' },
               description: { type: 'string' },
-              type: { type: 'string', enum: ['metadata_filter', 'keyword_search', 'batch_thread_read', 'cross_reference', 'semantic_analysis'] },
+              type: { type: 'string', enum: ['metadata_filter', 'keyword_search', 'urgency_detector', 'sender_classifier', 'action_detector', 'batch_thread_read', 'cross_reference', 'semantic_analysis'] },
               importance: { type: 'string', enum: ['critical', 'important', 'optional'] },
               strategy: {
                 type: 'object',
@@ -182,14 +182,65 @@ Think step-by-step:
 - What data depends on other data (sequential)?
 - How can I bound each information need (max_results, time_range)?
 
-### Step 3: Strategy Selection
+### Step 3: Filter Vocabulary (CRITICAL)
+
+**STRICT RULE**: When using metadata_filter, you MUST ONLY use Gmail API operators. Using any other filter will cause execution failure.
+
+**ALLOWED Gmail Filters**:
+- \`from:<email|name>\` - Emails from sender (e.g., from:jeff@acme.com, from:Jennifer)
+- \`to:<email|name>\` - Emails to recipient
+- \`subject:<keyword>\` - Search in subject
+- \`has:attachment\` - Has attachments
+- \`is:unread\` - Unread emails
+- \`is:read\` - Read emails
+- \`is:important\` - Gmail marked important
+- \`is:starred\` - Starred emails
+- \`label:<name>\` - Has specific label
+- \`newer_than:<X>d\` - Last X days (e.g., newer_than:7d)
+- \`older_than:<X>d\` - Older than X days
+- \`in:inbox\` - In inbox
+- \`in:sent\` - Sent by user
+
+**FORBIDDEN Filters** (will cause errors):
+❌ \`isUrgent\`, \`priority\`, \`urgency:high\`
+❌ \`requiresResponse\`, \`requires_response\`, \`needsReply\`
+❌ \`senderType\`, \`sender_type:investor\`
+❌ \`dueToday\`, \`due_today\`, \`deadline\`
+❌ Any filter not in the ALLOWED list above
+
+**For Semantic Filtering**: Use strategy nodes instead of filters!
+
+### Step 3.5: Strategy Selection
 
 For each information need, choose the most efficient strategy:
 
-**metadata_filter** (no LLM, API only):
-- Use when: Filtering by known fields (date, sender, read/unread status)
-- Example: "emails from last 30 days where user received last message"
+**metadata_filter** (no LLM, Gmail API only):
+- Use when: Filtering by Gmail-supported fields (date, sender, read/unread, labels)
+- Parameters must use ALLOWED Gmail filters only
+- Example: "emails from last 30 days unread"
+- Filters: \`["newer_than:30d", "is:unread"]\`
 - Cost: Low (API call only)
+
+**urgency_detector** (LLM-powered, NEW):
+- Use when: Need to find urgent/important emails
+- Replaces: ❌ \`isUrgent\` filter
+- Detects urgency from: subject keywords (URGENT, ASAP), Gmail importance markers, sender type
+- Input: email_ids from previous node
+- Cost: Medium (LLM analysis)
+
+**sender_classifier** (LLM-powered, NEW):
+- Use when: Need to filter by sender type (investor, boss, report, customer)
+- Replaces: ❌ \`sender_type:X\` filter
+- Classifies senders from: email domain, frequency, org relationships
+- Input: email_ids from previous node
+- Cost: Low-Medium (pattern matching + light LLM)
+
+**action_detector** (LLM-powered, NEW):
+- Use when: Find emails requiring response/action
+- Replaces: ❌ \`requiresResponse\` filter
+- Detects from: questions (?), request phrases, last sender in thread
+- Input: email_ids from previous node
+- Cost: Medium (LLM analysis)
 
 **keyword_search** (no LLM, API only):
 - Use when: Searching for specific terms or patterns
@@ -208,7 +259,7 @@ For each information need, choose the most efficient strategy:
 - Cost: Medium (single LLM call on structured data)
 
 **semantic_analysis** (LLM-powered, batch):
-- Use when: Need to classify intent or extract meaning
+- Use when: Need to classify intent or extract meaning beyond specific strategies
 - Operates on items in parallel batches
 - Cost: Medium-High (depends on batch size)
 
@@ -273,7 +324,7 @@ Return ONLY a JSON object with this exact structure:
     {
       "id": "unique_id",
       "description": "What this node does",
-      "type": "metadata_filter" | "keyword_search" | "batch_thread_read" | "cross_reference" | "semantic_analysis",
+      "type": "metadata_filter" | "keyword_search" | "urgency_detector" | "sender_classifier" | "action_detector" | "batch_thread_read" | "cross_reference" | "semantic_analysis",
       "importance": "critical" | "important" | "optional",
       "strategy": {
         "method": "specific method name",
@@ -322,7 +373,77 @@ Return ONLY a JSON object with this exact structure:
 
 ## EXAMPLES
 
-### Example 1: Simple Query
+### Example 1: Urgent Emails (Using New Strategies)
+Query: "Show me urgent emails"
+
+{
+  "query_classification": {
+    "type": "filtered_search",
+    "complexity": "moderate",
+    "domains": ["email"],
+    "reasoning": "Requires two-stage filtering: Gmail API for candidates, then urgency detection"
+  },
+  "information_needs": [
+    {
+      "id": "recent_unread",
+      "description": "Get recent unread emails as candidates",
+      "type": "metadata_filter",
+      "importance": "critical",
+      "strategy": {
+        "method": "gmail_search",
+        "params": {
+          "domain": "email",
+          "filters": ["is:unread", "newer_than:7d"],
+          "max_results": 100
+        }
+      },
+      "depends_on": [],
+      "parallel_group": 1,
+      "expected_cost": {
+        "tokens": 0,
+        "llm_calls": 0,
+        "time_seconds": 0.5
+      }
+    },
+    {
+      "id": "detect_urgency",
+      "description": "Analyze emails for urgency signals",
+      "type": "urgency_detector",
+      "importance": "critical",
+      "strategy": {
+        "method": "analyze_urgency",
+        "params": {
+          "input_email_ids": "{{recent_unread.email_ids}}",
+          "threshold": "medium",
+          "signals": ["subject_keywords", "importance_markers", "sender_type"]
+        }
+      },
+      "depends_on": ["recent_unread"],
+      "parallel_group": 2,
+      "expected_cost": {
+        "tokens": 5000,
+        "llm_calls": 1,
+        "time_seconds": 1.5
+      }
+    }
+  ],
+  "synthesis_instructions": {
+    "task": "Present urgent emails with urgency level and reason",
+    "ranking_criteria": "by urgency_score desc, then by date",
+    "presentation_format": "List with urgency indicators",
+    "user_preferences": "Show why each is urgent"
+  },
+  "resource_estimate": {
+    "total_items_accessed": 100,
+    "total_llm_calls": 1,
+    "estimated_tokens": 5000,
+    "estimated_time_seconds": 2,
+    "estimated_cost_usd": 0.01,
+    "user_should_confirm": false
+  }
+}
+
+### Example 2: Simple Query
 Query: "What's on my calendar today?"
 
 {
@@ -371,7 +492,7 @@ Query: "What's on my calendar today?"
   }
 }
 
-### Example 2: Investigative Query
+### Example 3: Investigative Query
 Query: "What emails am I blocking people on?"
 
 {
@@ -491,6 +612,245 @@ Query: "What emails am I blocking people on?"
     "estimated_cost_usd": 0.028,
     "user_should_confirm": false
   }
+}
+
+### Example 4: Sender Classification
+Query: "Show me emails from investors"
+
+{
+  "query_classification": {
+    "type": "filtered_search",
+    "complexity": "moderate",
+    "domains": ["email"],
+    "reasoning": "Requires sender classification since Gmail doesn't know who is an investor"
+  },
+  "information_needs": [
+    {
+      "id": "recent_emails",
+      "description": "Get recent emails as candidates",
+      "type": "metadata_filter",
+      "importance": "critical",
+      "strategy": {
+        "method": "gmail_search",
+        "params": {
+          "filters": ["newer_than:30d"],
+          "max_results": 200
+        }
+      },
+      "depends_on": [],
+      "parallel_group": 1,
+      "expected_cost": {
+        "tokens": 0,
+        "llm_calls": 0,
+        "time_seconds": 0.5
+      }
+    },
+    {
+      "id": "classify_senders",
+      "description": "Classify senders by type to find investors",
+      "type": "sender_classifier",
+      "importance": "critical",
+      "strategy": {
+        "method": "classify_senders",
+        "params": {
+          "input_email_ids": "{{recent_emails.email_ids}}",
+          "filter_types": ["investor"],
+          "confidence_threshold": 70
+        }
+      },
+      "depends_on": ["recent_emails"],
+      "parallel_group": 2,
+      "expected_cost": {
+        "tokens": 3000,
+        "llm_calls": 1,
+        "time_seconds": 1.0
+      }
+    }
+  ],
+  "synthesis_instructions": {
+    "task": "Present emails from investors grouped by sender",
+    "ranking_criteria": "by date desc",
+    "presentation_format": "Grouped by investor name with recent emails first",
+    "user_preferences": "Show sender relationship context"
+  },
+  "resource_estimate": {
+    "total_items_accessed": 200,
+    "total_llm_calls": 1,
+    "estimated_tokens": 3000,
+    "estimated_time_seconds": 1.5,
+    "estimated_cost_usd": 0.005,
+    "user_should_confirm": false
+  }
+}
+
+### Example 5: Action Required Detection
+Query: "What haven't I responded to from clients?"
+
+{
+  "query_classification": {
+    "type": "investigative",
+    "complexity": "moderate",
+    "domains": ["email"],
+    "reasoning": "Combines sender classification (clients) with action detection (requires response)"
+  },
+  "information_needs": [
+    {
+      "id": "inbox_emails",
+      "description": "Get inbox emails from last 14 days",
+      "type": "metadata_filter",
+      "importance": "critical",
+      "strategy": {
+        "method": "gmail_search",
+        "params": {
+          "filters": ["in:inbox", "newer_than:14d"],
+          "max_results": 150
+        }
+      },
+      "depends_on": [],
+      "parallel_group": 1,
+      "expected_cost": {
+        "tokens": 0,
+        "llm_calls": 0,
+        "time_seconds": 0.5
+      }
+    },
+    {
+      "id": "find_clients",
+      "description": "Identify emails from clients",
+      "type": "sender_classifier",
+      "importance": "critical",
+      "strategy": {
+        "method": "classify_senders",
+        "params": {
+          "input_email_ids": "{{inbox_emails.email_ids}}",
+          "filter_types": ["customer", "client"],
+          "confidence_threshold": 60
+        }
+      },
+      "depends_on": ["inbox_emails"],
+      "parallel_group": 2,
+      "expected_cost": {
+        "tokens": 2000,
+        "llm_calls": 1,
+        "time_seconds": 0.8
+      }
+    },
+    {
+      "id": "detect_action_needed",
+      "description": "Find which emails require response",
+      "type": "action_detector",
+      "importance": "critical",
+      "strategy": {
+        "method": "detect_required_actions",
+        "params": {
+          "input_email_ids": "{{find_clients.filtered_email_ids}}",
+          "action_types": ["reply", "review"],
+          "check_thread_context": true
+        }
+      },
+      "depends_on": ["find_clients"],
+      "parallel_group": 3,
+      "expected_cost": {
+        "tokens": 4000,
+        "llm_calls": 1,
+        "time_seconds": 1.2
+      }
+    }
+  ],
+  "synthesis_instructions": {
+    "task": "Present client emails awaiting response",
+    "ranking_criteria": "by urgency and days waiting",
+    "presentation_format": "List with action type and context",
+    "user_preferences": "Show what action is needed (reply, review, etc.)"
+  },
+  "resource_estimate": {
+    "total_items_accessed": 150,
+    "total_llm_calls": 2,
+    "estimated_tokens": 6000,
+    "estimated_time_seconds": 2.5,
+    "estimated_cost_usd": 0.01,
+    "user_should_confirm": false
+  }
+}
+
+## COMMON MISTAKES TO AVOID
+
+❌ **WRONG**: Using forbidden filters
+{
+  "type": "metadata_filter",
+  "strategy": {
+    "method": "gmail_search",
+    "params": {
+      "filters": ["isUrgent:true", "requiresResponse"]  // ❌ These don't exist in Gmail API!
+    }
+  }
+}
+
+✅ **CORRECT**: Use two-stage approach with strategy nodes
+{
+  // Stage 1: Gmail API filter for candidates
+  "id": "unread_emails",
+  "type": "metadata_filter",
+  "strategy": {
+    "params": { "filters": ["is:unread", "newer_than:7d"] }  // ✅ Gmail filters only
+  }
+},
+{
+  // Stage 2: LLM strategy for semantic filtering
+  "id": "find_urgent",
+  "type": "urgency_detector",
+  "strategy": {
+    "params": { "input_email_ids": "{{unread_emails.email_ids}}" }  // ✅ Uses previous node
+  },
+  "depends_on": ["unread_emails"]
+}
+
+❌ **WRONG**: Asking for sender_type filter
+{
+  "type": "metadata_filter",
+  "strategy": {
+    "params": {
+      "filters": ["sender_type:investor"]  // ❌ Gmail doesn't know sender types!
+    }
+  }
+}
+
+✅ **CORRECT**: Use sender_classifier strategy
+{
+  "id": "classify",
+  "type": "sender_classifier",
+  "strategy": {
+    "method": "classify_senders",
+    "params": {
+      "input_email_ids": "{{recent.email_ids}}",
+      "filter_types": ["investor"]
+    }
+  },
+  "depends_on": ["recent"]
+}
+
+❌ **WRONG**: Missing dependencies
+{
+  "id": "analyze",
+  "type": "urgency_detector",
+  "strategy": {
+    "params": {
+      "input_email_ids": "{{emails.ids}}"  // ❌ References "emails" node but no depends_on
+    }
+  },
+  "depends_on": []  // ❌ Should depend on "emails" node!
+}
+
+✅ **CORRECT**: Explicit dependencies
+{
+  "id": "analyze",
+  "type": "urgency_detector",
+  "strategy": {
+    "params": {
+      "input_email_ids": "{{emails.ids}}"
+    }
+  },
+  "depends_on": ["emails"]  // ✅ Clear dependency
 }
 
 Now analyze the user's query and generate the execution graph.`;

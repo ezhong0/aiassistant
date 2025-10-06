@@ -26,6 +26,9 @@ import { StrategyRegistry } from '../../layers/layer2-execution/strategy-registr
 // Phase 2: Strategy Executors (import to trigger decorators)
 import '../../layers/layer2-execution/strategies/metadata-filter-strategy';
 import '../../layers/layer2-execution/strategies/keyword-search-strategy';
+import '../../layers/layer2-execution/strategies/urgency-detector-strategy';
+import '../../layers/layer2-execution/strategies/sender-classifier-strategy';
+import '../../layers/layer2-execution/strategies/action-detector-strategy';
 import '../../layers/layer2-execution/strategies/batch-thread-read-strategy';
 import '../../layers/layer2-execution/strategies/cross-reference-strategy';
 import '../../layers/layer2-execution/strategies/semantic-analysis-strategy';

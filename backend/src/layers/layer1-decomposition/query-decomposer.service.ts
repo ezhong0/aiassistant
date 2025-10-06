@@ -16,7 +16,7 @@ export class QueryDecomposerService extends BaseService {
   constructor(
     private aiService: AIDomainService,
     private decompositionPromptBuilder: DecompositionPromptBuilder,
-    private validator: ExecutionGraphValidator
+    private executionGraphValidator: ExecutionGraphValidator
   ) {
     super('QueryDecomposerService');
   }
@@ -57,7 +57,7 @@ export class QueryDecomposerService extends BaseService {
       const graph = await this.decompositionPromptBuilder.execute(input);
 
       // Validate the generated graph
-      const validationResult = this.validator.validate(graph);
+      const validationResult = this.executionGraphValidator.validate(graph);
 
       if (!validationResult.valid) {
         this.logError('Generated execution graph is invalid', new Error('Invalid graph'), {
