@@ -110,8 +110,8 @@ export async function evaluateChatbotResponse(
 
   // Call evaluator LLM with retry logic
   const response = await callLLMWithRetry(() =>
-    llmClient.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+    llmClient.chat.completions.create({
+      model: 'gpt-5-nano', // Using GPT-5-nano for evaluation (consistent scoring needed)
       max_tokens: 3000,
       temperature: 0.3, // Lower temp for consistent evaluation
       messages: [{
@@ -122,7 +122,7 @@ export async function evaluateChatbotResponse(
   );
 
   // Parse evaluation
-  const responseContent = (response as any).content[0].text;
+  const responseContent = response.choices[0].message.content;
   const evaluation = parseEvaluationResponse(responseContent, query.id);
 
   return evaluation;

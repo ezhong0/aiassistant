@@ -11,8 +11,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-// NOTE: Install @anthropic-ai/sdk to use this: npm install @anthropic-ai/sdk
-// import Anthropic from '@anthropic-ai/sdk';
+// NOTE: Install openai to use this: npm install openai
+// import OpenAI from 'openai';
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 import { generateQueries, saveQueries, loadQueries, GeneratedQuery } from './query-generator';
 import { evaluateChatbotResponse, aggregateEvaluations, ChatbotResponse, EvaluationReport } from './multi-layer-evaluator';
@@ -71,10 +71,10 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
   console.log('\n🚀 Starting Automated Test Run\n');
   console.log('='.repeat(60));
 
-  // Create Anthropic client (requires @anthropic-ai/sdk package)
-  const Anthropic = require('@anthropic-ai/sdk').default;
-  const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+  // Create OpenAI client (requires openai package)
+  const OpenAI = require('openai').default;
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
   });
 
   // Metrics tracking
@@ -103,7 +103,7 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
       inbox,
       queryCount: config.generateQueryCount || 3,
       includedCategories: config.queryCategories,
-    }, anthropic);
+    }, openai);
     apiCalls++; // Query generation API call
 
     // Save generated queries
@@ -174,7 +174,7 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
             // Stagger requests within batch to respect rate limits
             await sleep(index * 200); // 200ms stagger between parallel requests
 
-            const evaluation = await evaluateChatbotResponse(query, inbox, response, anthropic);
+            const evaluation = await evaluateChatbotResponse(query, inbox, response, openai);
             const evalTime = Date.now() - evalStart;
 
             const status = evaluation.passed ? '✅' : '❌';
@@ -224,7 +224,7 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
       try {
         await rateLimiter.throttle();
         const evalStart = Date.now();
-        const evaluation = await evaluateChatbotResponse(query, inbox, response, anthropic);
+        const evaluation = await evaluateChatbotResponse(query, inbox, response, openai);
         const evalTime = Date.now() - evalStart;
         evaluationTimes.push(evalTime);
         apiCalls++; // Evaluation API call
@@ -256,9 +256,9 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
     ? evaluationTimes.reduce((sum, t) => sum + t, 0) / evaluationTimes.length
     : 0;
 
-  // Estimate cost: ~$3 per million input tokens, ~$15 per million output tokens (Sonnet pricing)
+  // Estimate cost: ~$2 per million input tokens, ~$8 per million output tokens (GPT-5 pricing)
   // Average request: ~2000 input tokens, ~500 output tokens
-  const estimatedCost = apiCalls * ((2000 * 3 / 1000000) + (500 * 15 / 1000000));
+  const estimatedCost = apiCalls * ((2000 * 2 / 1000000) + (500 * 8 / 1000000));
 
   const slowestQueries = queryTimes
     .sort((a, b) => b.timeMs - a.timeMs)

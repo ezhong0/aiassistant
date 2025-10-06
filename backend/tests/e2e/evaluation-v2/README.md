@@ -7,9 +7,29 @@
 This system uses **4 LLMs** to automatically test your email chatbot:
 
 1. **Inbox Generator** → Creates realistic test inboxes with ground truth
-2. **Query Generator** → Generates diverse queries from your command doc
+2. **Query Generator** → Generates diverse queries from your command doc (using OpenAI GPT-5-mini)
 3. **Your Chatbot** → Being evaluated
-4. **Multi-Layer Evaluator** → Analyzes where it succeeded/failed
+4. **Multi-Layer Evaluator** → Analyzes where it succeeded/failed (using OpenAI GPT-5-nano)
+
+## Prerequisites
+
+### Required Environment Variables
+
+```bash
+# OpenAI API Key (required for query generation and evaluation)
+OPENAI_API_KEY=your-openai-api-key
+```
+
+### Required Packages
+
+```bash
+# Already installed in your project
+npm install openai
+```
+
+The system uses OpenAI's GPT-5 models for both query generation and multi-layer evaluation:
+- **GPT-5-mini** for query generation (higher creativity for diverse test cases)
+- **GPT-5-nano** for evaluation (consistent scoring and analysis)
 
 ## Quick Start
 
@@ -210,13 +230,13 @@ PRE-STEP: Inbox Generation (Separate, One-Time)
 
 MAIN PIPELINE: Automated Testing
 ├─ 1. Load saved inbox
-├─ 2. Query Generator LLM
+├─ 2. Query Generator LLM (OpenAI GPT-5-mini)
 │     ├─ Reads CHATBOT_COMMANDS_EXAMPLES.md
 │     ├─ Analyzes inbox content
 │     └─ Generates 10-20 relevant queries
 ├─ 3. Your Chatbot (being tested)
 │     └─ Processes each query
-├─ 4. Multi-Layer Evaluator LLM
+├─ 4. Multi-Layer Evaluator LLM (OpenAI GPT-5-nano)
 │     ├─ Analyzes query understanding
 │     ├─ Checks retrieval quality
 │     ├─ Validates ranking

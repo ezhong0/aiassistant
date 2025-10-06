@@ -75,8 +75,8 @@ export async function generateQueries(
   );
 
   const response = await callLLMWithRetry(() =>
-    llmClient.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+    llmClient.chat.completions.create({
+      model: 'gpt-5-mini', // Using GPT-5-mini for query generation (higher creativity needed)
       max_tokens: 4000,
       temperature: 0.8, // Higher temp for diversity
       messages: [{
@@ -87,7 +87,7 @@ export async function generateQueries(
   );
 
   // Parse response
-  const responseContent = (response as any).content[0].text;
+  const responseContent = response.choices[0].message.content;
   const queries = parseQueryGeneratorResponse(responseContent);
 
   return queries;
