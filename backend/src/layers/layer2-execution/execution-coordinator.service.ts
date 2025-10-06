@@ -127,11 +127,14 @@ export class ExecutionCoordinatorService extends BaseService {
 
     // Store all results
     stageResults.forEach((result, idx) => {
-      results.set(nodes[idx].id, result);
+      const node = nodes[idx];
+      if (!node) return;  // Skip if node is undefined
+
+      results.set(node.id, result);
       this.logInfo('Node execution succeeded (strict mode)', {
         stage: stageNum,
-        nodeId: nodes[idx].id,
-        nodeType: nodes[idx].type,
+        nodeId: node.id,
+        nodeType: node.type,
         tokensUsed: result.tokens_used
       });
     });
@@ -159,11 +162,14 @@ export class ExecutionCoordinatorService extends BaseService {
       );
 
       criticalResults.forEach((result, idx) => {
-        results.set(criticalNodes[idx].id, result);
+        const node = criticalNodes[idx];
+        if (!node) return;  // Skip if node is undefined
+
+        results.set(node.id, result);
         this.logInfo('Critical node execution succeeded', {
           stage: stageNum,
-          nodeId: criticalNodes[idx].id,
-          nodeType: criticalNodes[idx].type,
+          nodeId: node.id,
+          nodeType: node.type,
           tokensUsed: result.tokens_used
         });
       });
@@ -177,6 +183,8 @@ export class ExecutionCoordinatorService extends BaseService {
 
       otherResults.forEach((result, idx) => {
         const node = otherNodes[idx];
+        if (!node) return;  // Skip if node is undefined
+
         if (result.status === 'fulfilled') {
           results.set(node.id, result.value);
           this.logInfo('Optional node execution succeeded', {
@@ -238,6 +246,8 @@ export class ExecutionCoordinatorService extends BaseService {
 
     stageResults.forEach((result, idx) => {
       const node = nodes[idx];
+      if (!node) return;  // Skip if node is undefined
+
       if (result.status === 'fulfilled') {
         results.set(node.id, result.value);
         this.logInfo('Node execution succeeded (graceful mode)', {

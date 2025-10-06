@@ -111,7 +111,7 @@ export async function evaluateChatbotResponse(
   // Call evaluator LLM with retry logic
   const response = await callLLMWithRetry(() =>
     llmClient.chat.completions.create({
-      model: 'gpt-5-nano', // Using GPT-5-nano for evaluation (consistent scoring needed)
+      model: 'gpt-4o', // Using gpt-4o for evaluation (consistent scoring, no reasoning overhead)
       max_tokens: 3000,
       temperature: 0.3, // Lower temp for consistent evaluation
       messages: [{
@@ -232,20 +232,20 @@ function resolveFilter(filterName: string): ((label: any) => boolean) | null {
   }
 
   // Fuzzy match
-  if (normalized.includes('urgent')) return FILTER_RESOLVERS.urgent;
-  if (normalized.includes('important')) return FILTER_RESOLVERS.important;
-  if (normalized.includes('dropped') || normalized.includes('ball')) return FILTER_RESOLVERS.dropped_ball;
-  if (normalized.includes('unanswered') || normalized.includes('respond')) return FILTER_RESOLVERS.unanswered;
-  if (normalized.includes('follow')) return FILTER_RESOLVERS.follow_up;
-  if (normalized.includes('escalat')) return FILTER_RESOLVERS.escalated;
-  if (normalized.includes('boss') || normalized.includes('manager')) return FILTER_RESOLVERS.sender_type_boss;
-  if (normalized.includes('customer') || normalized.includes('client')) return FILTER_RESOLVERS.sender_type_customer;
-  if (normalized.includes('vendor') || normalized.includes('supplier')) return FILTER_RESOLVERS.sender_type_vendor;
-  if (normalized.includes('investor')) return FILTER_RESOLVERS.sender_type_investor;
-  if (normalized.includes('peer') || normalized.includes('colleague')) return FILTER_RESOLVERS.sender_type_peer;
-  if (normalized.includes('report') || normalized.includes('direct')) return FILTER_RESOLVERS.sender_type_report;
-  if (normalized.includes('commitment') && normalized.includes('overdue')) return FILTER_RESOLVERS.commitment_overdue;
-  if (normalized.includes('vip')) return FILTER_RESOLVERS.vip;
+  if (normalized.includes('urgent')) return FILTER_RESOLVERS.urgent ?? null;
+  if (normalized.includes('important')) return FILTER_RESOLVERS.important ?? null;
+  if (normalized.includes('dropped') || normalized.includes('ball')) return FILTER_RESOLVERS.dropped_ball ?? null;
+  if (normalized.includes('unanswered') || normalized.includes('respond')) return FILTER_RESOLVERS.unanswered ?? null;
+  if (normalized.includes('follow')) return FILTER_RESOLVERS.follow_up ?? null;
+  if (normalized.includes('escalat')) return FILTER_RESOLVERS.escalated ?? null;
+  if (normalized.includes('boss') || normalized.includes('manager')) return FILTER_RESOLVERS.sender_type_boss ?? null;
+  if (normalized.includes('customer') || normalized.includes('client')) return FILTER_RESOLVERS.sender_type_customer ?? null;
+  if (normalized.includes('vendor') || normalized.includes('supplier')) return FILTER_RESOLVERS.sender_type_vendor ?? null;
+  if (normalized.includes('investor')) return FILTER_RESOLVERS.sender_type_investor ?? null;
+  if (normalized.includes('peer') || normalized.includes('colleague')) return FILTER_RESOLVERS.sender_type_peer ?? null;
+  if (normalized.includes('report') || normalized.includes('direct')) return FILTER_RESOLVERS.sender_type_report ?? null;
+  if (normalized.includes('commitment') && normalized.includes('overdue')) return FILTER_RESOLVERS.commitment_overdue ?? null;
+  if (normalized.includes('vip')) return FILTER_RESOLVERS.vip ?? null;
 
   console.warn(`⚠️  Unknown filter: "${filterName}"`);
   return null;
@@ -589,7 +589,7 @@ function parseEvaluationResponse(responseText: string, queryId: string): Evaluat
   // Extract JSON
   const jsonMatch = responseText.match(/```json\n([\s\S]+?)\n```/) || responseText.match(/({[\s\S]+})/);
 
-  if (!jsonMatch) {
+  if (!jsonMatch || !jsonMatch[1]) {
     throw new Error('Failed to parse evaluation response as JSON');
   }
 
@@ -635,7 +635,7 @@ export function aggregateEvaluations(evaluations: EvaluationReport[]): any {
 
     weakestLayer: Object.entries(avgScores)
       .filter(([k]) => k !== 'overall')
-      .sort((a, b) => a[1] - b[1])[0][0],
+      .sort((a, b) => a[1] - b[1])[0]?.[0] ?? 'unknown',
 
     criticalErrors: {
       count: allCriticalErrors.length,

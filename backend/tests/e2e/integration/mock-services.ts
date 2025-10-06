@@ -6,15 +6,28 @@
  */
 
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
-import { IEmailDomainService } from '../../../src/services/domain/interfaces/email-domain.interface';
-import { ICalendarDomainService } from '../../../src/services/domain/interfaces/calendar-domain.interface';
+import { EmailDomainService } from '../../../src/services/domain/email-domain.service';
+import { CalendarDomainService } from '../../../src/services/domain/calendar-domain.service';
+import { ContactsDomainService } from '../../../src/services/domain/contacts-domain.service';
 
 /**
  * Mock Email Domain Service
- * Returns emails from GeneratedInbox instead of Gmail API
+ * Extends real service but overrides methods to return data from GeneratedInbox
  */
-export class MockEmailDomainService implements Partial<IEmailDomainService> {
-  constructor(private inbox: GeneratedInbox) {}
+export class MockEmailDomainService extends EmailDomainService {
+  constructor(private inbox: GeneratedInbox) {
+    // Call parent with null dependencies - we won't use them
+    super(null as any, null as any);
+  }
+
+  // Override initialize to skip Google API setup
+  protected async onInitialize(): Promise<void> {
+    // No-op: we don't need real Google API
+  }
+
+  protected async onDestroy(): Promise<void> {
+    // No-op
+  }
 
   async searchEmails(userId: string, params: any): Promise<any[]> {
     const { query, maxResults = 100 } = params;
@@ -107,16 +120,28 @@ export class MockEmailDomainService implements Partial<IEmailDomainService> {
  * Mock Calendar Domain Service
  * Returns empty calendar for now (can be extended)
  */
-export class MockCalendarDomainService implements Partial<ICalendarDomainService> {
-  constructor(private inbox: GeneratedInbox) {}
+export class MockCalendarDomainService extends CalendarDomainService {
+  constructor(private inbox: GeneratedInbox) {
+    // Call parent with null dependencies - we won't use them
+    super(null as any, null as any);
+  }
 
-  async getEvents(userId: string, params: any): Promise<any[]> {
+  // Override initialize to skip Google API setup
+  protected async onInitialize(): Promise<void> {
+    // No-op: we don't need real Google API
+  }
+
+  protected async onDestroy(): Promise<void> {
+    // No-op
+  }
+
+  async listEvents(userId: string, params: any): Promise<any[]> {
     // For now, return empty array
     // In future, could generate calendar events from inbox
     return [];
   }
 
-  async getEventById(userId: string, eventId: string): Promise<any> {
+  async getEvent(userId: string, eventId: string, calendarId?: string): Promise<any> {
     throw new Error('No events in test inbox');
   }
 }
@@ -124,23 +149,85 @@ export class MockCalendarDomainService implements Partial<ICalendarDomainService
 /**
  * Mock Contacts Domain Service
  */
-export class MockContactsDomainService {
-  constructor(private inbox: GeneratedInbox) {}
+export class MockContactsDomainService extends ContactsDomainService {
+  constructor(private inbox: GeneratedInbox) {
+    // Call parent with null dependencies - we won't use them
+    super(null as any, null as any);
+  }
 
-  async getContacts(userId: string): Promise<any[]> {
+  // Override initialize to skip Google API setup
+  protected async onInitialize(): Promise<void> {
+    // No-op: we don't need real Google API
+  }
+
+  protected async onDestroy(): Promise<void> {
+    // No-op
+  }
+
+  async listContacts(userId: string, params?: any): Promise<any> {
     // Extract unique senders from inbox
     const senders = new Map();
 
     for (const email of this.inbox.emails) {
       if (!senders.has(email.from)) {
         senders.set(email.from, {
-          email: email.from,
-          name: email.label.senderName,
-          type: email.label.senderType,
+          resourceName: `people/${email.from}`,
+          etag: `etag-${email.from}`,
+          metadata: {
+            sources: [{ type: 'CONTACT', id: email.from }],
+            objectType: 'PERSON' as const,
+          },
+          names: [{
+            displayName: email.label.senderName,
+            givenName: email.label.senderName.split(' ')[0],
+            familyName: email.label.senderName.split(' ').slice(1).join(' '),
+            metadata: {
+              primary: true,
+              source: { type: 'CONTACT', id: email.from }
+            }
+          }],
+          emailAddresses: [{
+            value: email.from,
+            type: 'work' as const,
+            primary: true
+          }]
         });
       }
     }
 
-    return Array.from(senders.values());
+    return {
+      connections: Array.from(senders.values()),
+      totalItems: senders.size
+    };
+  }
+
+  async getContact(userId: string, contactId: string): Promise<any> {
+    const email = this.inbox.emails.find(e => e.from === contactId.replace('people/', ''));
+    if (!email) {
+      throw new Error(`Contact not found: ${contactId}`);
+    }
+
+    return {
+      resourceName: contactId,
+      etag: `etag-${email.from}`,
+      metadata: {
+        sources: [{ type: 'CONTACT', id: email.from }],
+        objectType: 'PERSON' as const,
+      },
+      names: [{
+        displayName: email.label.senderName,
+        givenName: email.label.senderName.split(' ')[0],
+        familyName: email.label.senderName.split(' ').slice(1).join(' '),
+        metadata: {
+          primary: true,
+          source: { type: 'CONTACT', id: email.from }
+        }
+      }],
+      emailAddresses: [{
+        value: email.from,
+        type: 'work' as const,
+        primary: true
+      }]
+    };
   }
 }

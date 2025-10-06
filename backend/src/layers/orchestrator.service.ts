@@ -188,16 +188,12 @@ export class OrchestratorService extends BaseService {
           processingTime: totalTime,
           totalSteps: executionGraph.information_needs.length,
           tokensUsed: totalTokens,
-          executionStatus: executionResults.telemetry.executionStatus,
-          fallbacksUsed: executionResults.telemetry.fallbacksUsed,
           layers: {
             layer1_tokens: layer1Tokens,
             layer1_time_ms: layer1Time,
             layer2_tokens: layer2Tokens,
             layer2_time_ms: layer2Time,
             layer2_stages: this.countStages(executionGraph),
-            layer2_successful_nodes: executionResults.telemetry.successfulNodes,
-            layer2_failed_nodes: executionResults.telemetry.failedNodes,
             layer3_tokens: synthesis.metadata.tokens_used,
             layer3_time_ms: layer3Time
           }

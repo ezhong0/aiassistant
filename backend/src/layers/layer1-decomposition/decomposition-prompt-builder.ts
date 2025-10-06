@@ -62,6 +62,7 @@ export class DecompositionPromptBuilder {
               id: { type: 'string' },
               description: { type: 'string' },
               type: { type: 'string', enum: ['metadata_filter', 'keyword_search', 'batch_thread_read', 'cross_reference', 'semantic_analysis'] },
+              importance: { type: 'string', enum: ['critical', 'important', 'optional'] },
               strategy: {
                 type: 'object',
                 properties: {
@@ -82,7 +83,7 @@ export class DecompositionPromptBuilder {
                 required: ['tokens', 'llm_calls', 'time_seconds']
               }
             },
-            required: ['id', 'description', 'type', 'strategy', 'depends_on', 'parallel_group', 'expected_cost']
+            required: ['id', 'description', 'type', 'importance', 'strategy', 'depends_on', 'parallel_group', 'expected_cost']
           }
         },
         synthesis_instructions: {
@@ -211,6 +212,34 @@ For each information need, choose the most efficient strategy:
 - Operates on items in parallel batches
 - Cost: Medium-High (depends on batch size)
 
+### Step 3.5: Importance Classification
+
+**CRITICAL**: For each node, classify its importance level. This controls failure handling:
+
+**critical** - Query cannot be answered without this node:
+- Use when: The node directly provides the answer to the user's query
+- Example: "show me urgent emails" → filtering by urgency is CRITICAL
+- Example: "what's on my calendar today" → fetching today's events is CRITICAL
+- If this fails: Entire query fails immediately (no partial results)
+
+**important** (default) - Node significantly improves the answer:
+- Use when: Node enhances results but fallback is possible
+- Example: "show me urgent emails" → keyword search for urgency indicators is IMPORTANT (can fall back to metadata)
+- Example: Thread analysis that adds context but isn't the core answer
+- If this fails: System may use fallback strategy, logs warning
+
+**optional** - Node adds nice-to-have context:
+- Use when: Node enriches results but isn't necessary
+- Example: Fetching related calendar events when user asked about emails
+- Example: Thread context when user asked for specific emails
+- If this fails: Silent failure, results still useful without it
+
+**Guidelines:**
+- If user explicitly asks for X, nodes providing X are CRITICAL
+- Enrichment/ranking nodes are usually IMPORTANT
+- Cross-domain context nodes are usually OPTIONAL
+- When in doubt, mark as IMPORTANT (safe default)
+
 ### Step 4: Dependency Graph
 
 Create a directed acyclic graph (DAG):
@@ -245,6 +274,7 @@ Return ONLY a JSON object with this exact structure:
       "id": "unique_id",
       "description": "What this node does",
       "type": "metadata_filter" | "keyword_search" | "batch_thread_read" | "cross_reference" | "semantic_analysis",
+      "importance": "critical" | "important" | "optional",
       "strategy": {
         "method": "specific method name",
         "params": {
@@ -307,6 +337,7 @@ Query: "What's on my calendar today?"
       "id": "today_events",
       "description": "Get all calendar events for today",
       "type": "metadata_filter",
+      "importance": "critical",
       "strategy": {
         "method": "calendar_events_by_date",
         "params": {
@@ -355,6 +386,7 @@ Query: "What emails am I blocking people on?"
       "id": "recent_unreplied",
       "description": "Find emails where user received last message",
       "type": "metadata_filter",
+      "importance": "critical",
       "strategy": {
         "method": "gmail_search",
         "params": {
@@ -375,6 +407,7 @@ Query: "What emails am I blocking people on?"
       "id": "waiting_indicators",
       "description": "Find emails with language indicating someone is waiting",
       "type": "keyword_search",
+      "importance": "important",
       "strategy": {
         "method": "gmail_search",
         "params": {
@@ -396,6 +429,7 @@ Query: "What emails am I blocking people on?"
       "id": "candidate_threads",
       "description": "Intersect and rank candidate threads",
       "type": "cross_reference",
+      "importance": "important",
       "strategy": {
         "method": "intersect_and_rank",
         "params": {
@@ -417,6 +451,7 @@ Query: "What emails am I blocking people on?"
       "id": "thread_analysis",
       "description": "Analyze each thread to determine who's waiting and context",
       "type": "batch_thread_read",
+      "importance": "critical",
       "strategy": {
         "method": "analyze_threads_batch",
         "params": {

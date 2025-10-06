@@ -112,9 +112,9 @@ export function createRealOrchestratorChatbotFunction(
         })),
         internalState: {
           processingTime: result.metadata?.processingTime,
-          parsedIntent: result.masterState?.executionGraph?.query_classification,
+          parsedIntent: (result.masterState as any)?.executionGraph?.query_classification,
           filtersApplied: [], // Could extract from execution graph
-          resultsBeforeRanking: result.masterState?.executionResults?.nodeResults?.size,
+          resultsBeforeRanking: (result.masterState as any)?.executionResults?.nodeResults?.size,
         },
       };
     } catch (error: any) {
@@ -122,12 +122,10 @@ export function createRealOrchestratorChatbotFunction(
 
       // Return error response
       return {
-        type: 'error',
+        type: 'email_list',
         emailIds: [],
         presentation: `Error: ${error.message}`,
-        internalState: {
-          error: error.message,
-        },
+        internalState: {},
       };
     }
   };

@@ -119,6 +119,8 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
 
   for (let i = 0; i < queries.length; i++) {
     const query = queries[i];
+    if (!query) continue;
+
     console.log(`   [${i + 1}/${queries.length}] "${query.query}"`);
 
     try {
@@ -159,6 +161,8 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
 
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
       const batch = batches[batchIndex];
+      if (!batch) continue;
+
       const batchNum = batchIndex + 1;
       const totalBatches = batches.length;
 
@@ -219,7 +223,10 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
     const rateLimiter = new RateLimiter(1200); // 50 requests/min = 1.2s interval
 
     for (let i = 0; i < chatbotResponses.length; i++) {
-      const { query, response } = chatbotResponses[i];
+      const item = chatbotResponses[i];
+      if (!item) continue;
+
+      const { query, response } = item;
       console.log(`   [${i + 1}/${chatbotResponses.length}] Evaluating "${query.query}"`);
 
       try {

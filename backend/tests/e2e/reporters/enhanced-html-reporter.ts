@@ -309,7 +309,7 @@ export class EnhancedHTMLReporter {
       ${aggregate.criticalErrors.count > 0 ? `
       <div class="critical-errors">
         <h3>🚨 Critical Errors (${aggregate.criticalErrors.count})</h3>
-        ${aggregate.criticalErrors.list.slice(0, 10).map(err => `
+        ${aggregate.criticalErrors.list.slice(0, 10).map((err: string) => `
           <div class="error-item">${this.escapeHtml(err)}</div>
         `).join('')}
         ${aggregate.criticalErrors.list.length > 10 ? `
@@ -498,7 +498,10 @@ export class EnhancedHTMLReporter {
   /**
    * Escape HTML
    */
-  private escapeHtml(text: string): string {
+  private escapeHtml(text: string | undefined | null): string {
+    if (text == null || text === undefined) {
+      return '';
+    }
     const map: Record<string, string> = {
       '&': '&amp;',
       '<': '&lt;',
@@ -506,7 +509,7 @@ export class EnhancedHTMLReporter {
       '"': '&quot;',
       "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, m => map[m]);
+    return text.replace(/[&<>"']/g, m => map[m] || m);
   }
 
   /**

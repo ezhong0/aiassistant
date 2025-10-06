@@ -125,3 +125,6 @@ Thumbs.db
 build/
 dist/
 backend/dist/
+
+# Personal files - resume and job search materials
+resume/

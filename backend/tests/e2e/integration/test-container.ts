@@ -8,6 +8,7 @@
  */
 
 import { createAppContainer, AppContainer } from '../../../src/di/container';
+import { registerAllServices } from '../../../src/di/registrations';
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 import { MockEmailDomainService, MockCalendarDomainService, MockContactsDomainService } from './mock-services';
 import { asValue } from 'awilix';
@@ -22,25 +23,28 @@ export function createTestContainer(inbox: GeneratedInbox): AppContainer {
   // Create base container with all real services
   const container = createAppContainer();
 
+  // Register all services (orchestrator, layers, domain services, etc.)
+  registerAllServices(container);
+
   // Override email service with mock that returns inbox data
   const mockEmailService = new MockEmailDomainService(inbox);
   container.register({
-    emailDomainService: asValue(mockEmailService),
-    emailService: asValue(mockEmailService), // Alias for strategies
+    emailDomainService: asValue(mockEmailService as any),
+    emailService: asValue(mockEmailService as any), // Alias for strategies
   });
 
   // Override calendar service with mock
   const mockCalendarService = new MockCalendarDomainService(inbox);
   container.register({
-    calendarDomainService: asValue(mockCalendarService),
-    calendarService: asValue(mockCalendarService), // Alias for strategies
+    calendarDomainService: asValue(mockCalendarService as any),
+    calendarService: asValue(mockCalendarService as any), // Alias for strategies
   });
 
   // Override contacts service with mock
   const mockContactsService = new MockContactsDomainService(inbox);
   container.register({
-    contactsDomainService: asValue(mockContactsService),
-    contactsService: asValue(mockContactsService), // Alias for strategies
+    contactsDomainService: asValue(mockContactsService as any),
+    contactsService: asValue(mockContactsService as any), // Alias for strategies
   });
 
   // All other services (AI, Layer 1/2/3, etc.) remain real

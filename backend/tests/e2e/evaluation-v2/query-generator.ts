@@ -76,7 +76,7 @@ export async function generateQueries(
 
   const response = await callLLMWithRetry(() =>
     llmClient.chat.completions.create({
-      model: 'gpt-5-mini', // Using GPT-5-mini for query generation (higher creativity needed)
+      model: 'gpt-4o', // Using gpt-4o instead of gpt-5-mini (no reasoning tokens overhead)
       max_tokens: 4000,
       temperature: 0.8, // Higher temp for diversity
       messages: [{
@@ -87,7 +87,15 @@ export async function generateQueries(
   );
 
   // Parse response
-  const responseContent = (response as any).choices[0].message.content;
+  const responseContent = (response as any).choices?.[0]?.message?.content;
+
+  if (!responseContent) {
+    console.error('❌ No content in LLM response:', JSON.stringify(response, null, 2));
+    throw new Error('LLM response is empty or malformed');
+  }
+
+  console.log('🤖 LLM returned response, length:', responseContent.length);
+
   const queries = parseQueryGeneratorResponse(responseContent);
 
   return queries;
@@ -137,6 +145,7 @@ function extractRelevantCategories(commandsDoc: string, categories: string[]): s
   // Add requested categories
   for (const section of sections.slice(1)) {
     const sectionTitle = section.split('\n')[0];
+    if (!sectionTitle) continue;
 
     // Check if this section matches any requested category (case-insensitive, partial match)
     const matches = categories.some(cat =>
@@ -305,14 +314,38 @@ function validateGeneratedQuery(query: any): query is GeneratedQuery {
  * Parse LLM response into structured queries
  */
 function parseQueryGeneratorResponse(responseText: string): GeneratedQuery[] {
-  // Extract JSON array from response
-  const jsonMatch = responseText.match(/```json\n([\s\S]+?)\n```/) || responseText.match(/(\[[\s\S]+\])/);
+  // Log raw response for debugging
+  console.log('📝 Raw LLM Response (first 500 chars):', responseText.substring(0, 500));
+
+  // Extract JSON array from response - try multiple patterns
+  let jsonMatch = responseText.match(/```json\n([\s\S]+?)\n```/);
 
   if (!jsonMatch) {
+    // Try without the json specifier
+    jsonMatch = responseText.match(/```\n([\s\S]+?)\n```/);
+  }
+
+  if (!jsonMatch) {
+    // Try to find JSON array directly
+    jsonMatch = responseText.match(/(\[[\s\S]+\])/);
+  }
+
+  if (!jsonMatch || !jsonMatch[1]) {
+    console.error('❌ Failed to extract JSON from response');
+    console.error('Full response:', responseText);
     throw new Error('Failed to parse query generator response as JSON');
   }
 
-  const queries = JSON.parse(jsonMatch[1]);
+  console.log('✅ Extracted JSON (first 300 chars):', jsonMatch[1].substring(0, 300));
+
+  let queries;
+  try {
+    queries = JSON.parse(jsonMatch[1]);
+  } catch (parseError) {
+    console.error('❌ JSON.parse failed:', parseError);
+    console.error('Attempted to parse:', jsonMatch[1]);
+    throw new Error(`Failed to parse JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+  }
 
   // Validate structure
   if (!Array.isArray(queries)) {
