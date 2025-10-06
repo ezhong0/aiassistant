@@ -24,6 +24,11 @@ import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 const envPath = '/Users/edwardzhong/Projects/assistantapp/.env';
 dotenv.config({ path: envPath });
 
+// IMPORTANT: Force strict execution mode for E2E tests
+// This ensures E2E tests fail-fast and validate perfect execution
+// rather than masking issues with fallback strategies
+process.env.EXECUTION_MODE = 'strict';
+
 // Verify API key is loaded
 if (!process.env.OPENAI_API_KEY) {
   console.error('❌ OPENAI_API_KEY not found in environment');
@@ -47,9 +52,15 @@ async function main() {
     if (arg.startsWith('--queries=')) {
       queriesPath = arg.split('=')[1];
     } else if (arg.startsWith('--categories=')) {
-      categories = arg.split('=')[1].split(',');
+      const value = arg.split('=')[1];
+      if (value) {
+        categories = value.split(',');
+      }
     } else if (arg.startsWith('--count=')) {
-      queryCount = parseInt(arg.split('=')[1]);
+      const value = arg.split('=')[1];
+      if (value) {
+        queryCount = parseInt(value);
+      }
     } else if (!arg.startsWith('--')) {
       inboxFile = arg;
     }
@@ -124,7 +135,7 @@ async function main() {
 
     if (result.aggregate.criticalErrors.count > 0) {
       console.log('🚨 Critical errors found:');
-      result.aggregate.criticalErrors.list.slice(0, 3).forEach((err, i) => {
+      result.aggregate.criticalErrors.list.slice(0, 3).forEach((err: string, i: number) => {
         console.log(`   ${i + 1}. ${err}`);
       });
       console.log('');

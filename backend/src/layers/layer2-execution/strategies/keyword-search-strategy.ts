@@ -154,7 +154,7 @@ export class KeywordSearchStrategy extends BaseStrategy {
 
     // Combine patterns with OR if multiple
     if (patterns.length > 0) {
-      if (patterns.length === 1) {
+      if (patterns.length === 1 && patterns[0]) {
         parts.push(patterns[0]);
       } else {
         // Group patterns with OR
@@ -206,7 +206,7 @@ export class KeywordSearchStrategy extends BaseStrategy {
       return `after:${date}`;
     } else if (timeRange.startsWith('last_')) {
       const match = timeRange.match(/last_(\d+)_days?/);
-      if (match) {
+      if (match && match[1]) {
         const days = parseInt(match[1]);
         const pastDate = new Date(now);
         pastDate.setDate(pastDate.getDate() - days);
@@ -252,7 +252,7 @@ export class KeywordSearchStrategy extends BaseStrategy {
       timeMax.setDate(timeMin.getDate() + 7);
     } else if (timeRange.startsWith('last_')) {
       const match = timeRange.match(/last_(\d+)_days?/);
-      if (match) {
+      if (match && match[1]) {
         const days = parseInt(match[1]);
         timeMin = new Date(now);
         timeMin.setDate(timeMin.getDate() - days);
@@ -264,7 +264,7 @@ export class KeywordSearchStrategy extends BaseStrategy {
       }
     } else if (timeRange.startsWith('next_')) {
       const match = timeRange.match(/next_(\d+)_days?/);
-      if (match) {
+      if (match && match[1]) {
         const days = parseInt(match[1]);
         timeMin = now;
         timeMax = new Date(now);

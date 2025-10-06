@@ -230,10 +230,12 @@ export class DataLoader<K, V> {
         const value = values[i];
         const item = batch[i];
 
+        if (!item) continue;
+
         if (value instanceof Error) {
           item.reject(value);
           this.clear(item.key); // Don't cache errors
-        } else {
+        } else if (value !== undefined) {
           item.resolve(value);
         }
       }

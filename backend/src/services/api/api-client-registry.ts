@@ -39,6 +39,7 @@ export function registerAllAPIClients(apiClientFactory: APIClientFactory): void 
   });
 
   // Register OpenAI API client
+  // Note: E2E_TESTING is a test-specific env var, acceptable to read directly
   const e2eTesting = process.env.E2E_TESTING === 'true';
   const openAITimeout = e2eTesting ? 300000 : 60000; // 5 min for E2E, 1 min otherwise
 

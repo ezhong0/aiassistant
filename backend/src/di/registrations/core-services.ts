@@ -25,8 +25,10 @@ export function registerCoreServices(container: AppContainer): void {
     // Cache service - Redis-based caching (auto-resolves 'config' parameter)
     cacheService: asClass(CacheService).singleton(),
 
-    // Encryption service - data encryption/decryption
-    encryptionService: asClass(EncryptionService).singleton(),
+    // Encryption service - data encryption/decryption (inject tokenEncryptionKey)
+    encryptionService: asFunction(({ config }) => {
+      return new EncryptionService(config.tokenEncryptionKey);
+    }).singleton(),
 
     // Sentry service - error tracking (no constructor parameters)
     sentryService: asClass(SentryService).singleton(),

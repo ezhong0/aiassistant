@@ -71,9 +71,12 @@ export interface StructuredSchema {
  */
 export class AIDomainService extends BaseService implements Partial<IAIDomainService> {
   /**
-   * Constructor with OpenAI client injection
+   * Constructor with OpenAI client and config injection
    */
-  constructor(private readonly openAIClient: OpenAIClient) {
+  constructor(
+    private readonly openAIClient: OpenAIClient,
+    private readonly config: typeof import('../../config').config
+  ) {
     super('AIDomainService');
   }
 
@@ -84,10 +87,10 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
     try {
       this.logInfo('Initializing AI Domain Service');
 
-      // Authenticate with OpenAI API key
-      const apiKey = process.env.OPENAI_API_KEY;
+      // Get API key from unified config
+      const apiKey = this.config.openaiApiKey;
       if (!apiKey) {
-        throw ErrorFactory.domain.serviceError('AIDomainService', 'OPENAI_API_KEY environment variable is required for AI operations');
+        throw ErrorFactory.domain.serviceError('AIDomainService', 'OPENAI_API_KEY is required for AI operations');
       }
 
       this.logInfo('Authenticating with OpenAI API', {

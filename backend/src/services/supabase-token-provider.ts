@@ -52,7 +52,7 @@ export class SupabaseTokenProvider extends BaseService {
     this.supabaseServiceKey = supabaseServiceKey;
 
     if (!this.supabaseUrl || !this.supabaseServiceKey) {
-      throw new Error('Supabase URL and Service Role Key are required');
+      throw ErrorFactory.domain.serviceError('SupabaseTokenProvider', 'Supabase URL and Service Role Key are required');
     }
   }
 
@@ -99,7 +99,7 @@ export class SupabaseTokenProvider extends BaseService {
 
       // Supabase stores provider tokens in identity_data
       const tokens: GoogleProviderTokens = {
-        access_token: googleIdentity.identity_data?.access_token,
+        access_token: googleIdentity.identity_data?.access_token ?? '',
         refresh_token: googleIdentity.identity_data?.refresh_token,
         expires_at: googleIdentity.identity_data?.expires_at,
         expires_in: googleIdentity.identity_data?.expires_in,
@@ -125,7 +125,7 @@ export class SupabaseTokenProvider extends BaseService {
     try {
       const tokens = await this.getGoogleTokens(supabaseUserId);
       return !!tokens.access_token;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }

@@ -7,9 +7,10 @@
  */
 
 import { BaseService } from '../../services/base-service';
-import { ExecutionGraph } from '../layer1-decomposition/execution-graph.types';
-import { ExecutionResults, NodeResult, InformationNode } from './execution.types';
+import { ExecutionGraph, NodeImportance } from '../layer1-decomposition/execution-graph.types';
+import { ExecutionResults, NodeResult, InformationNode, ExecutionTelemetry, NodeFailure } from './execution.types';
 import { StrategyRegistry } from './strategy-registry';
+import { unifiedConfig } from '../../config/unified-config';
 
 export class ExecutionCoordinatorService extends BaseService {
   constructor(private strategyRegistry: StrategyRegistry) {
@@ -34,14 +35,25 @@ export class ExecutionCoordinatorService extends BaseService {
    * Execute the full execution graph
    * @param graph - Execution graph from Layer 1
    * @param userId - User ID for API calls
-   * @returns Results from all executed nodes
+   * @returns Results from all executed nodes with telemetry
    */
   async execute(graph: ExecutionGraph, userId: string): Promise<ExecutionResults> {
     const nodeResults = new Map<string, NodeResult>();
+    const telemetry: ExecutionTelemetry = {
+      totalNodes: graph.information_needs.length,
+      successfulNodes: 0,
+      failedNodes: 0,
+      fallbacksUsed: 0,
+      executionStatus: 'complete',
+      failures: []
+    };
+
+    const executionMode = unifiedConfig.featureFlags.executionMode;
 
     this.logInfo('Executing graph', {
       userId,
-      nodeCount: graph.information_needs.length
+      nodeCount: graph.information_needs.length,
+      executionMode
     });
 
     // Group nodes by parallel_group
@@ -49,49 +61,35 @@ export class ExecutionCoordinatorService extends BaseService {
 
     this.logInfo('Grouped nodes into stages', {
       stageCount: stages.size,
+      executionMode,
       stages: Array.from(stages.entries()).map(([stageNum, nodes]) => ({
         stage: stageNum,
         nodeCount: nodes.length
       }))
     });
 
-    // Execute each stage sequentially, nodes within stage in parallel
+    // Execute each stage based on execution mode
     for (const [stageNum, nodes] of stages.entries()) {
-      this.logInfo(`Executing stage ${stageNum}`, { nodeCount: nodes.length });
+      this.logInfo(`Executing stage ${stageNum}`, {
+        nodeCount: nodes.length,
+        executionMode
+      });
 
-      // Execute all nodes in this stage concurrently
-      const stageResults = await Promise.allSettled(
-        nodes.map(node => this.executeNode(node, nodeResults, userId))
-      );
-
-      // Store results
-      for (let i = 0; i < nodes.length; i++) {
-        const node = nodes[i];
-        const result = stageResults[i];
-
-        if (result.status === 'fulfilled') {
-          nodeResults.set(node.id, result.value);
-          this.logInfo('Node execution succeeded', {
-            nodeId: node.id,
-            nodeType: node.type,
-            tokensUsed: result.value.tokens_used
-          });
-        } else {
-          // Handle failure - store error but continue
-          this.logError('Node execution failed', {
-            nodeId: node.id,
-            nodeType: node.type,
-            error: result.reason.message
-          });
-
-          nodeResults.set(node.id, {
-            success: false,
-            error: result.reason.message,
-            node_id: node.id,
-            tokens_used: 0
-          });
-        }
+      if (executionMode === 'strict') {
+        await this.executeStageStrict(stageNum, nodes, nodeResults, userId, telemetry);
+      } else if (executionMode === 'hybrid') {
+        await this.executeStageHybrid(stageNum, nodes, nodeResults, userId, telemetry);
+      } else {
+        await this.executeStageGraceful(stageNum, nodes, nodeResults, userId, telemetry);
       }
+    }
+
+    // Calculate final telemetry
+    telemetry.successfulNodes = Array.from(nodeResults.values()).filter(r => r.success).length;
+    telemetry.failedNodes = telemetry.totalNodes - telemetry.successfulNodes;
+
+    if (telemetry.failedNodes > 0) {
+      telemetry.executionStatus = telemetry.failedNodes === telemetry.totalNodes ? 'failed' : 'partial';
     }
 
     const totalTokens = Array.from(nodeResults.values()).reduce(
@@ -101,11 +99,219 @@ export class ExecutionCoordinatorService extends BaseService {
 
     this.logInfo('Graph execution complete', {
       totalNodes: nodeResults.size,
-      successfulNodes: Array.from(nodeResults.values()).filter(r => r.success).length,
+      successfulNodes: telemetry.successfulNodes,
+      failedNodes: telemetry.failedNodes,
+      fallbacksUsed: telemetry.fallbacksUsed,
+      executionStatus: telemetry.executionStatus,
       totalTokens
     });
 
-    return { nodeResults };
+    return { nodeResults, telemetry };
+  }
+
+  /**
+   * STRICT MODE: Fail-fast on any node failure
+   * Used for development and testing to find all bugs
+   */
+  private async executeStageStrict(
+    stageNum: number,
+    nodes: InformationNode[],
+    results: Map<string, NodeResult>,
+    userId: string,
+    telemetry: ExecutionTelemetry
+  ): Promise<void> {
+    // Promise.all = any failure throws immediately
+    const stageResults = await Promise.all(
+      nodes.map(node => this.executeNode(node, results, userId))
+    );
+
+    // Store all results
+    stageResults.forEach((result, idx) => {
+      results.set(nodes[idx].id, result);
+      this.logInfo('Node execution succeeded (strict mode)', {
+        stage: stageNum,
+        nodeId: nodes[idx].id,
+        nodeType: nodes[idx].type,
+        tokensUsed: result.tokens_used
+      });
+    });
+  }
+
+  /**
+   * HYBRID MODE: Fail-fast for critical nodes, graceful for optional
+   * Used for staging/production with explicit criticality marking
+   */
+  private async executeStageHybrid(
+    stageNum: number,
+    nodes: InformationNode[],
+    results: Map<string, NodeResult>,
+    userId: string,
+    telemetry: ExecutionTelemetry
+  ): Promise<void> {
+    // Separate critical and non-critical nodes
+    const criticalNodes = nodes.filter(n => n.importance === NodeImportance.CRITICAL);
+    const otherNodes = nodes.filter(n => n.importance !== NodeImportance.CRITICAL);
+
+    // Critical nodes: fail-fast (Promise.all)
+    if (criticalNodes.length > 0) {
+      const criticalResults = await Promise.all(
+        criticalNodes.map(node => this.executeNode(node, results, userId))
+      );
+
+      criticalResults.forEach((result, idx) => {
+        results.set(criticalNodes[idx].id, result);
+        this.logInfo('Critical node execution succeeded', {
+          stage: stageNum,
+          nodeId: criticalNodes[idx].id,
+          nodeType: criticalNodes[idx].type,
+          tokensUsed: result.tokens_used
+        });
+      });
+    }
+
+    // Other nodes: graceful (Promise.allSettled)
+    if (otherNodes.length > 0) {
+      const otherResults = await Promise.allSettled(
+        otherNodes.map(node => this.executeNode(node, results, userId))
+      );
+
+      otherResults.forEach((result, idx) => {
+        const node = otherNodes[idx];
+        if (result.status === 'fulfilled') {
+          results.set(node.id, result.value);
+          this.logInfo('Optional node execution succeeded', {
+            stage: stageNum,
+            nodeId: node.id,
+            nodeType: node.type,
+            tokensUsed: result.value.tokens_used
+          });
+        } else {
+          // Track fallback
+          telemetry.fallbacksUsed++;
+          const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+
+          this.logWarn('Optional node failed, continuing (hybrid mode)', {
+            stage: stageNum,
+            nodeId: node.id,
+            nodeType: node.type,
+            importance: node.importance || NodeImportance.IMPORTANT,
+            error: errorMessage
+          });
+
+          // Record failure details
+          telemetry.failures.push({
+            nodeId: node.id,
+            nodeType: node.type,
+            importance: node.importance || NodeImportance.IMPORTANT,
+            reason: errorMessage,
+            isRetryable: this.isRetryableError(result.reason),
+            impact: `Optional ${node.type} operation unavailable`
+          });
+
+          // Store error result
+          results.set(node.id, {
+            success: false,
+            node_id: node.id,
+            error: errorMessage,
+            tokens_used: 0
+          });
+        }
+      });
+    }
+  }
+
+  /**
+   * GRACEFUL MODE: Continue on all failures, maximize results
+   * Used for production to maximize user success rate
+   */
+  private async executeStageGraceful(
+    stageNum: number,
+    nodes: InformationNode[],
+    results: Map<string, NodeResult>,
+    userId: string,
+    telemetry: ExecutionTelemetry
+  ): Promise<void> {
+    // Promise.allSettled = all nodes execute, failures tracked
+    const stageResults = await Promise.allSettled(
+      nodes.map(node => this.executeNode(node, results, userId))
+    );
+
+    stageResults.forEach((result, idx) => {
+      const node = nodes[idx];
+      if (result.status === 'fulfilled') {
+        results.set(node.id, result.value);
+        this.logInfo('Node execution succeeded (graceful mode)', {
+          stage: stageNum,
+          nodeId: node.id,
+          nodeType: node.type,
+          tokensUsed: result.value.tokens_used
+        });
+      } else {
+        // Track fallback
+        telemetry.fallbacksUsed++;
+        const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+
+        this.logWarn('Node failed, continuing (graceful mode)', {
+          stage: stageNum,
+          nodeId: node.id,
+          nodeType: node.type,
+          importance: node.importance || NodeImportance.IMPORTANT,
+          error: errorMessage
+        });
+
+        // Record failure details
+        telemetry.failures.push({
+          nodeId: node.id,
+          nodeType: node.type,
+          importance: node.importance || NodeImportance.IMPORTANT,
+          reason: errorMessage,
+          isRetryable: this.isRetryableError(result.reason),
+          impact: this.describeFailureImpact(node)
+        });
+
+        // Store error result
+        results.set(node.id, {
+          success: false,
+          node_id: node.id,
+          error: errorMessage,
+          tokens_used: 0
+        });
+      }
+    });
+  }
+
+  /**
+   * Determine if an error is retryable
+   */
+  private isRetryableError(error: any): boolean {
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      return message.includes('timeout') ||
+             message.includes('rate limit') ||
+             message.includes('503') ||
+             message.includes('429');
+    }
+    return false;
+  }
+
+  /**
+   * Describe the impact of a node failure for user messaging
+   */
+  private describeFailureImpact(node: InformationNode): string {
+    switch (node.type) {
+      case 'metadata_filter':
+        return 'Some email filtering unavailable';
+      case 'keyword_search':
+        return 'Text search results may be incomplete';
+      case 'semantic_analysis':
+        return 'Urgency/intent analysis unavailable';
+      case 'cross_reference':
+        return 'Result ranking may be less accurate';
+      case 'batch_thread_read':
+        return 'Full conversation context unavailable';
+      default:
+        return 'Some functionality unavailable';
+    }
   }
 
   /**
@@ -183,6 +389,12 @@ export class ExecutionCoordinatorService extends BaseService {
         const reference = value.slice(2, -2); // Remove {{ and }}
         const [nodeId, ...fieldPath] = reference.split('.');
 
+        if (!nodeId) {
+          this.logWarn('Invalid reference format', { reference });
+          resolved[key] = null;
+          continue;
+        }
+
         const nodeResult = previousResults.get(nodeId);
         if (!nodeResult || !nodeResult.success) {
           this.logWarn('Referenced node not found or failed', { nodeId, reference });
@@ -208,6 +420,8 @@ export class ExecutionCoordinatorService extends BaseService {
           if (typeof item === 'string' && item.startsWith('{{') && item.endsWith('}}')) {
             const reference = item.slice(2, -2);
             const [nodeId, ...fieldPath] = reference.split('.');
+
+            if (!nodeId) return null;
 
             const nodeResult = previousResults.get(nodeId);
             if (!nodeResult || !nodeResult.success) {

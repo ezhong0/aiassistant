@@ -183,7 +183,7 @@ export class MetadataFilterStrategy extends BaseStrategy {
     } else if (timeRange.startsWith('last_')) {
       // Handle "last_7_days", "last_30_days", etc.
       const match = timeRange.match(/last_(\d+)_days?/);
-      if (match) {
+      if (match && match[1]) {
         const days = parseInt(match[1]);
         const pastDate = new Date(now);
         pastDate.setDate(pastDate.getDate() - days);
@@ -230,7 +230,7 @@ export class MetadataFilterStrategy extends BaseStrategy {
     } else if (timeRange.startsWith('next_')) {
       // Handle "next_7_days", "next_30_days", etc.
       const match = timeRange.match(/next_(\d+)_days?/);
-      if (match) {
+      if (match && match[1]) {
         const days = parseInt(match[1]);
         timeMin = now;
         timeMax = new Date(now);

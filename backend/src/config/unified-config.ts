@@ -168,6 +168,7 @@ const SecuritySchema = z.object({
 
   securityHeaders: z.boolean().default(true),
   bcryptRounds: z.number().min(10).max(15).default(12),
+  tokenEncryptionKey: z.string().optional(),
 }).default({
   cors: { origin: '*', credentials: true },
   rateLimiting: {
@@ -184,6 +185,7 @@ const SecuritySchema = z.object({
   },
   securityHeaders: true,
   bcryptRounds: 12,
+  tokenEncryptionKey: undefined,
 });
 
 // Feature Flags Configuration
@@ -194,9 +196,20 @@ const FeatureFlagsSchema = z.object({
   // Percentage of traffic to route to 3-layer (0-100)
   // Only applies if enable3LayerArchitecture is true
   threeLayerTrafficPercent: z.number().min(0).max(100).default(0),
+
+  // Enable detailed health checks (includes all service health)
+  enableDetailedHealth: z.boolean().default(false),
+
+  // Execution Mode: Controls failure handling strategy
+  // - 'strict': Fail-fast on any node failure (development/testing)
+  // - 'hybrid': Fail-fast for critical nodes, graceful for optional (staging)
+  // - 'graceful': Maximum resilience, show partial results (production)
+  executionMode: z.enum(['strict', 'hybrid', 'graceful']).default('strict'),
 }).default({
   enable3LayerArchitecture: false,
   threeLayerTrafficPercent: 0,
+  enableDetailedHealth: false,
+  executionMode: 'strict',
 });
 
 // Main configuration schema
@@ -275,6 +288,8 @@ const UnifiedConfigSchema = z.object({
   featureFlags: {
     enable3LayerArchitecture: false,
     threeLayerTrafficPercent: 0,
+    enableDetailedHealth: false,
+    executionMode: 'strict',
   },
 });
 
@@ -423,8 +438,14 @@ export class UnifiedConfigService extends BaseService {
           },
           securityHeaders: process.env.SECURITY_SECURITY_HEADERS !== 'false',
           bcryptRounds: process.env.SECURITY_BCRYPT_ROUNDS ? parseInt(process.env.SECURITY_BCRYPT_ROUNDS) : undefined,
+          tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY,
         },
-        // Feature flags removed - 3-layer architecture is now the default
+        featureFlags: {
+          enable3LayerArchitecture: process.env.ENABLE_3_LAYER_ARCHITECTURE === 'true',
+          threeLayerTrafficPercent: process.env.THREE_LAYER_TRAFFIC_PERCENT ? parseInt(process.env.THREE_LAYER_TRAFFIC_PERCENT) : 0,
+          enableDetailedHealth: process.env.ENABLE_DETAILED_HEALTH === 'true',
+          executionMode: (process.env.EXECUTION_MODE as 'strict' | 'hybrid' | 'graceful') || 'strict',
+        },
       };
 
       const result = UnifiedConfigSchema.parse(envConfig);
@@ -591,6 +612,14 @@ export class UnifiedConfigService extends BaseService {
 
   get supabaseJwtSecret(): string | undefined {
     return this.config.services.supabase?.jwtSecret;
+  }
+
+  get tokenEncryptionKey(): string | undefined {
+    return this.config.security.tokenEncryptionKey;
+  }
+
+  get featureFlags(): FeatureFlagsConfig {
+    return this.config.featureFlags;
   }
 
   /**

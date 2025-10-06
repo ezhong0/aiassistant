@@ -1,5 +1,6 @@
 import { BaseService } from './base-service';
 import { CacheService } from './cache.service';
+import { ErrorFactory } from '../errors';
 
 /**
  * Feature flag configuration
@@ -38,7 +39,10 @@ export class FeatureFlagsService extends BaseService {
   private flags: Map<string, FeatureFlag> = new Map();
   private readonly CACHE_TTL = 300; // 5 minutes
 
-  constructor(private readonly cacheService?: CacheService) {
+  constructor(
+    private readonly cacheService: CacheService | undefined,
+    private readonly config: typeof import('../config').config
+  ) {
     super('FeatureFlagsService');
   }
 
@@ -111,8 +115,7 @@ export class FeatureFlagsService extends BaseService {
 
     // Check environment
     if (flag.environment && flag.environment.length > 0) {
-      const currentEnv = process.env.NODE_ENV || 'development';
-      if (!flag.environment.includes(currentEnv)) {
+      if (!flag.environment.includes(this.config.nodeEnv)) {
         return false;
       }
     }
@@ -158,7 +161,7 @@ export class FeatureFlagsService extends BaseService {
         if (cached) {
           return cached;
         }
-      } catch (error) {
+      } catch (_error) {
         // Ignore cache errors, fall through to direct lookup
       }
     }
@@ -205,7 +208,7 @@ export class FeatureFlagsService extends BaseService {
    */
   setRolloutPercentage(featureName: string, percentage: number): void {
     if (percentage < 0 || percentage > 100) {
-      throw new Error('Rollout percentage must be between 0 and 100');
+      throw ErrorFactory.api.badRequest('Rollout percentage must be between 0 and 100');
     }
 
     const flag = this.flags.get(featureName);

@@ -46,6 +46,7 @@ export class AIServiceCircuitBreaker extends BaseService {
     super('AIServiceCircuitBreaker');
     
     // Use environment variables for configuration
+    // Note: E2E_TESTING is a test-specific env var, acceptable to read directly
     const e2eTesting = process.env.E2E_TESTING === 'true';
 
     this.config = {

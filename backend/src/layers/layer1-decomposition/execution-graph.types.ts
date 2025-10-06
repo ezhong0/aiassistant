@@ -63,6 +63,7 @@ export interface InformationNode {
   depends_on: string[];
   parallel_group: number;
   expected_cost: ExpectedCost;
+  importance?: NodeImportance; // Optional: defaults to IMPORTANT for backward compatibility
 }
 
 export type InformationNodeType =
@@ -71,6 +72,19 @@ export type InformationNodeType =
   | 'batch_thread_read'
   | 'cross_reference'
   | 'semantic_analysis';
+
+/**
+ * Node importance level for execution mode handling
+ *
+ * - critical: Must succeed or entire query fails (fail-fast)
+ * - important: Should succeed, graceful degradation possible
+ * - optional: Nice to have, silent failure acceptable
+ */
+export enum NodeImportance {
+  CRITICAL = 'critical',
+  IMPORTANT = 'important',
+  OPTIONAL = 'optional'
+}
 
 export interface NodeStrategy {
   method: string;

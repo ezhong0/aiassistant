@@ -9,6 +9,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
 import { createLogContext } from '../utils/log-context';
+import { ErrorFactory } from '../errors';
 
 /**
  * Supabase JWT payload structure
@@ -55,7 +56,7 @@ export function createSupabaseAuth(jwtSecret: string) {
       correlationId: 'supabase-auth-init',
       operation: 'supabase_auth_middleware_init',
     });
-    throw new Error('Supabase JWT secret is required');
+    throw ErrorFactory.api.unauthorized('Supabase JWT secret is required');
   }
 
   return (req: SupabaseAuthenticatedRequest, res: Response, next: NextFunction): void => {

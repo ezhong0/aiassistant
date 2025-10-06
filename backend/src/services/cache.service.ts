@@ -17,27 +17,17 @@ export class CacheService extends BaseService {
 
   constructor(private readonly config: typeof import('../config').config) {
     super('cacheService');
-    
-    // Use environment variables directly to avoid Awilix proxy property resolution
-    this.REDIS_URL = 
-                     process.env.REDIS_URL || 
-                     process.env.REDISCLOUD_URL || 
-                     process.env.REDIS_PRIVATE_URL ||
-                     process.env.REDIS_PUBLIC_URL ||
-                     process.env.RAILWAY_REDIS_URL ||
-                     'redis://localhost:6379';
-    
+
+    // Get Redis URL from unified config
+    this.REDIS_URL = this.config.redisUrl || 'redis://localhost:6379';
+
     logger.debug('CacheService initializing', {
       correlationId: `cache-init-${Date.now()}`,
       operation: 'cache_service_init',
       metadata: {
         redisUrl: this.maskRedisUrl(this.REDIS_URL),
-        environment: process.env.NODE_ENV || 'development',
-        hasRedisEnv: !!(process.env.REDIS_URL || process.env.REDISCLOUD_URL || 
-                       process.env.REDIS_PRIVATE_URL || process.env.REDIS_PUBLIC_URL ||
-                       process.env.RAILWAY_REDIS_URL),
-        availableRedisVars: Object.keys(process.env).filter(key => 
-          key.toLowerCase().includes('redis')).length,
+        environment: this.config.nodeEnv,
+        hasRedisUrl: !!this.config.redisUrl,
       },
     });
   }
@@ -54,30 +44,17 @@ export class CacheService extends BaseService {
   protected async onInitialize(): Promise<void> {
     try {
       // Check if Redis should be disabled
-      if (process.env.DISABLE_REDIS === 'true') {
-        logger.debug('Redis disabled via DISABLE_REDIS environment variable', {
+      if (this.config.isFeatureEnabled('DISABLE_REDIS')) {
+        logger.debug('Redis disabled via DISABLE_REDIS feature flag', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',
-          metadata: { reason: 'disabled_env_var' },
+          metadata: { reason: 'disabled_feature_flag' },
         });
         return;
       }
 
-      // Log all available Redis-related environment variables for debugging
-      const redisEnvVars = Object.keys(process.env).filter(key => 
-        key.toLowerCase().includes('redis'));
-      if (redisEnvVars.length > 0) {
-        logger.debug('Available Redis environment variables', {
-          correlationId: `cache-init-${Date.now()}`,
-          operation: 'cache_service_init',
-          metadata: { 
-            redisEnvVars: redisEnvVars.map(key => `${key}=${this.maskRedisUrl(process.env[key] || '')}`),
-          },
-        });
-      }
-
       // Skip Redis if we're using localhost and not in development
-      if (this.REDIS_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
+      if (this.REDIS_URL.includes('localhost') && this.config.isProduction) {
         logger.warn('Skipping Redis connection - localhost URL in production environment', {
           correlationId: `cache-init-${Date.now()}`,
           operation: 'cache_service_init',

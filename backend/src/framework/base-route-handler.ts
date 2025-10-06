@@ -137,11 +137,14 @@ export abstract class BaseRouteHandler {
       });
     } else {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      // Note: We can't easily access config here without refactoring the entire base class
+      // For now, keep this single process.env usage as it's a fallback error case
+      const isDev = process.env.NODE_ENV === 'development';
       res.status(500).send(
         HTMLTemplates.error({
           title: 'Server Error',
           message: 'An unexpected error occurred',
-          details: process.env.NODE_ENV === 'development' ? errorMessage : undefined,
+          details: isDev ? errorMessage : undefined,
         }),
       );
     }

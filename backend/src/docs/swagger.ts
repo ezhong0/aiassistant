@@ -1,43 +1,45 @@
 import { Application } from 'express';
 import swaggerUi from 'swagger-ui-express';
+import { UnifiedConfigService } from '../config/unified-config';
 
-const swaggerDocument = {
-  openapi: '3.0.0',
-  info: {
-    title: 'AI Assistant Application API',
-    version: '1.0.0',
-    description: `
-      AI-powered assistant application that orchestrates multiple domain-specific services 
-      (Email, Calendar, Contacts, Slack) through an intelligent agent system.
-      
-      ## Features
-      - Multi-agent AI system with specialized agents for different domains
-      - OAuth 2.0 authentication with Google and Slack
-      - Secure token management with encryption
-      - Rate limiting and security middleware
-      - Comprehensive error tracking and monitoring
-      
-      ## Authentication
-      This API uses OAuth 2.0 for authentication. Most endpoints require a valid JWT token
-      obtained through the OAuth flow.
-    `,
-    contact: {
-      name: 'API Support',
-      email: 'support@assistantapp.com',
+function createSwaggerDocument(config: UnifiedConfigService) {
+  return {
+    openapi: '3.0.0',
+    info: {
+      title: 'AI Assistant Application API',
+      version: '1.0.0',
+      description: `
+        AI-powered assistant application that orchestrates multiple domain-specific services
+        (Email, Calendar, Contacts, Slack) through an intelligent agent system.
+
+        ## Features
+        - Multi-agent AI system with specialized agents for different domains
+        - OAuth 2.0 authentication with Google and Slack
+        - Secure token management with encryption
+        - Rate limiting and security middleware
+        - Comprehensive error tracking and monitoring
+
+        ## Authentication
+        This API uses OAuth 2.0 for authentication. Most endpoints require a valid JWT token
+        obtained through the OAuth flow.
+      `,
+      contact: {
+        name: 'API Support',
+        email: 'support@assistantapp.com',
+      },
+      license: {
+        name: 'MIT',
+        url: 'https://opensource.org/licenses/MIT',
+      },
     },
-    license: {
-      name: 'MIT',
-      url: 'https://opensource.org/licenses/MIT',
-    },
-  },
-  servers: [
-    {
-      url: process.env.NODE_ENV === 'production' 
-        ? 'https://your-production-domain.com' 
-        : 'http://localhost:3000',
-      description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server',
-    },
-  ],
+    servers: [
+      {
+        url: config.isProduction
+          ? 'https://your-production-domain.com'
+          : `http://localhost:${config.port}`,
+        description: config.isProduction ? 'Production server' : 'Development server',
+      },
+    ],
   paths: {
     '/healthz': {
       get: {
@@ -418,16 +420,20 @@ const swaggerDocument = {
       description: 'Slack integration endpoints',
     },
   ],
-};
+  };
+}
 
-export function setupSwagger(app: Application): void {
+export function setupSwagger(app: Application, config: UnifiedConfigService): void {
   // Only enable Swagger in development or when explicitly enabled
-  if (process.env.NODE_ENV === 'development' || process.env.ENABLE_SWAGGER === 'true') {
+  const enableSwagger = config.isDevelopment || config.isFeatureEnabled('SWAGGER');
+
+  if (enableSwagger) {
+    const swaggerDocument = createSwaggerDocument(config);
     app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
       customCss: '.swagger-ui .topbar { display: none }',
       customSiteTitle: 'Assistant App API Documentation',
     }));
-    
+
     // Swagger UI available at /docs
   }
 }

@@ -14,20 +14,21 @@ import type { AppContainer } from '../../di';
 
 export function createAuthRoutes(container: AppContainer) {
   const router = express.Router();
+  const config = container.resolve('config');
 
-// Mount debug routes (only in development/test environments)
-if (process.env.NODE_ENV !== 'production') {
-  router.use('/debug', createDebugRoutes(container));
-  logger.info('Debug auth routes enabled', {
-    operation: 'auth_routes_init',
-    environment: process.env.NODE_ENV || 'development'
-  });
-} else {
-  logger.info('Debug auth routes disabled (production environment)', {
-    operation: 'auth_routes_init',
-    environment: 'production'
-  });
-}
+  // Mount debug routes (only in development/test environments)
+  if (!config.isProduction) {
+    router.use('/debug', createDebugRoutes(container));
+    logger.info('Debug auth routes enabled', {
+      operation: 'auth_routes_init',
+      environment: config.nodeEnv
+    });
+  } else {
+    logger.info('Debug auth routes disabled (production environment)', {
+      operation: 'auth_routes_init',
+      environment: 'production'
+    });
+  }
 
   return router;
 }

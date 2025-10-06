@@ -3,45 +3,44 @@ import logger from '../utils/logger';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-// Use environment variables directly since middleware is initialized at startup
+import { unifiedConfig } from '../config/unified-config';
 
 /**
  * CORS configuration
  */
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    // Use SECURITY_CORS_ORIGIN for consistency with unified config
-    const corsOrigin = process.env.SECURITY_CORS_ORIGIN || process.env.CORS_ORIGIN;
+    const corsOrigin = unifiedConfig.security.cors.origin;
     const allowedOrigins = corsOrigin ? corsOrigin.split(',').map((o: string) => o.trim()) : [];
-    
+
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
-    
+
     // In development, allow all origins if no explicit config
-    if (process.env.NODE_ENV === 'development' && allowedOrigins.length === 0) {
+    if (unifiedConfig.isDevelopment && allowedOrigins.length === 0) {
       return callback(null, true);
     }
-    
+
     // In production, require explicit allowlist
-    if (process.env.NODE_ENV === 'production' && allowedOrigins.length === 0) {
+    if (unifiedConfig.isProduction && allowedOrigins.length === 0) {
       logger.error('CORS configuration missing in production', {
         correlationId: `cors-config-missing-${Date.now()}`,
         operation: 'cors_config_error',
-        metadata: { origin, nodeEnv: process.env.NODE_ENV },
+        metadata: { origin, nodeEnv: unifiedConfig.nodeEnv },
       });
       callback(new Error('CORS configuration required in production'), false);
       return;
     }
-    
+
     // Check if origin is allowed
     if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    
+
     logger.warn('CORS origin blocked', {
       correlationId: `cors-blocked-${Date.now()}`,
       operation: 'cors_blocked',
-      metadata: { origin, allowedOrigins, nodeEnv: process.env.NODE_ENV },
+      metadata: { origin, allowedOrigins, nodeEnv: unifiedConfig.nodeEnv },
     });
     callback(new Error('Not allowed by CORS'), false);
   },
@@ -79,9 +78,9 @@ export const securityHeaders = helmet({
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
-      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+      upgradeInsecureRequests: unifiedConfig.isProduction ? [] : null,
     },
-    reportOnly: process.env.NODE_ENV === 'development',
+    reportOnly: unifiedConfig.isDevelopment,
   },
   crossOriginEmbedderPolicy: false, // Disabled for API
   hsts: {
@@ -108,7 +107,7 @@ export const compressionMiddleware = compression({
     // Use compression filter function
     return compression.filter(req, res);
   },
-  level: process.env.NODE_ENV === 'production' ? 6 : 1, // Higher compression in production
+  level: unifiedConfig.isProduction ? 6 : 1, // Higher compression in production
   threshold: 1024, // Only compress if response is larger than 1KB
 });
 

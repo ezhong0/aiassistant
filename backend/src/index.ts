@@ -175,9 +175,9 @@ const getHealthStatus = () => ({
 
 const getDetailedHealthStatus = async () => {
   const basicHealth = getHealthStatus();
-  
+
   // Only include detailed service health in development or when explicitly requested
-  if (process.env.NODE_ENV === 'development' || process.env.ENABLE_DETAILED_HEALTH === 'true') {
+  if (unifiedConfig.isDevelopment || unifiedConfig.featureFlags.enableDetailedHealth) {
     try {
       // Get service health from DI container
       const serviceHealth: Record<string, any> = {};
@@ -250,7 +250,7 @@ app.use((req, res, next) => {
 
 
 // API Documentation
-setupSwagger(app);
+setupSwagger(app, unifiedConfig);
 
 // Note: API routes will be registered after bootstrap in setupRoutes()
 

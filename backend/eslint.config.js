@@ -36,6 +36,7 @@ module.exports = [
         module: 'writable',
         require: 'readonly',
         NodeJS: 'readonly',
+        fetch: 'readonly', // Node 18+ native fetch
       },
     },
     plugins: {
@@ -144,7 +145,10 @@ module.exports = [
       'no-new-func': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
-      'no-process-env': 'off', // Allow for now - TODO: Enable after UnifiedConfig migration complete
+      // Restrict process.env usage - use UnifiedConfig instead
+      // Exceptions: unified-config.ts (reads env), logger.ts (circular dependency),
+      // debug routes, sentry (optional config), base-route-handler (fallback error)
+      'no-process-env': 'warn',
       'prefer-arrow-callback': 'off',
       'prefer-template': 'off',
       'prefer-spread': 'off',
@@ -174,6 +178,50 @@ module.exports = [
       'custom-rules/enforce-code-quality': 'off',
       'custom-rules/enforce-base-service': 'off',
       'max-lines-per-function': 'off',
+    },
+  },
+  {
+    files: ['**/config/unified-config.ts', '**/config/config-loader.ts', '**/utils/logger.ts'],
+    rules: {
+      // These files are the source of truth for env vars - allow process.env
+      'no-process-env': 'off',
+    },
+  },
+  {
+    files: ['**/config/config-loader.ts'],
+    rules: {
+      // Legacy config loader - allow some flexibility
+      '@typescript-eslint/no-explicit-any': 'off',
+      'custom-rules/no-raw-error-throw': 'off',
+    },
+  },
+  {
+    files: ['**/sentry.service.ts'],
+    rules: {
+      // Sentry needs process.env for optional DSN and version
+      'no-process-env': 'off',
+    },
+  },
+  {
+    files: ['**/framework/base-route-handler.ts'],
+    rules: {
+      // Fallback error handling in base class - allow process.env for NODE_ENV
+      'no-process-env': 'off',
+    },
+  },
+  {
+    files: ['**/routes/auth/debug/**/*.ts'],
+    rules: {
+      // Debug routes can use process.env - they're excluded from production build
+      'no-process-env': 'off',
+    },
+  },
+  {
+    files: ['**/services/api/**/*.ts', '**/services/ai-circuit-breaker.service.ts'],
+    rules: {
+      // E2E_TESTING is a test-specific env var - allow in API clients
+      // These are documented with inline comments
+      'no-process-env': 'off',
     },
   },
   {

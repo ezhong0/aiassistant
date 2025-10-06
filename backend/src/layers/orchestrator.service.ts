@@ -7,7 +7,7 @@
  */
 
 import { BaseService } from '../services/base-service';
-import { OrchestratorInput, OrchestratorResult } from './orchestrator.types';
+import { OrchestratorResult } from './orchestrator.types';
 import { QueryDecomposerService } from './layer1-decomposition/query-decomposer.service';
 import { ExecutionCoordinatorService } from './layer2-execution/execution-coordinator.service';
 import { SynthesisService } from './layer3-synthesis/synthesis.service';
@@ -54,7 +54,7 @@ export class OrchestratorService extends BaseService {
     userInput: string,
     userId: string,
     conversationHistory: ConversationMessage[] = [],
-    previousState?: unknown
+    _previousState?: unknown
   ): Promise<OrchestratorResult> {
     const startTime = Date.now();
     const layer1Start = Date.now();
@@ -123,9 +123,28 @@ export class OrchestratorService extends BaseService {
 
       this.logInfo('Layer 2 complete', {
         nodesExecuted: executionResults.nodeResults.size,
+        successfulNodes: executionResults.telemetry.successfulNodes,
+        failedNodes: executionResults.telemetry.failedNodes,
+        fallbacksUsed: executionResults.telemetry.fallbacksUsed,
+        executionStatus: executionResults.telemetry.executionStatus,
         tokensUsed: layer2Tokens,
         timeMs: layer2Time
       });
+
+      // Log warnings if fallbacks were used
+      if (executionResults.telemetry.fallbacksUsed > 0) {
+        this.logWarn('Layer 2 used fallback strategies', {
+          fallbackCount: executionResults.telemetry.fallbacksUsed,
+          totalNodes: executionResults.telemetry.totalNodes,
+          fallbackRate: (executionResults.telemetry.fallbacksUsed / executionResults.telemetry.totalNodes * 100).toFixed(1) + '%',
+          failures: executionResults.telemetry.failures.map(f => ({
+            node: f.nodeId,
+            type: f.nodeType,
+            reason: f.reason,
+            retryable: f.isRetryable
+          }))
+        });
+      }
 
       // LAYER 3: Synthesis
       const layer3Start = Date.now();
@@ -169,12 +188,16 @@ export class OrchestratorService extends BaseService {
           processingTime: totalTime,
           totalSteps: executionGraph.information_needs.length,
           tokensUsed: totalTokens,
+          executionStatus: executionResults.telemetry.executionStatus,
+          fallbacksUsed: executionResults.telemetry.fallbacksUsed,
           layers: {
             layer1_tokens: layer1Tokens,
             layer1_time_ms: layer1Time,
             layer2_tokens: layer2Tokens,
             layer2_time_ms: layer2Time,
             layer2_stages: this.countStages(executionGraph),
+            layer2_successful_nodes: executionResults.telemetry.successfulNodes,
+            layer2_failed_nodes: executionResults.telemetry.failedNodes,
             layer3_tokens: synthesis.metadata.tokens_used,
             layer3_time_ms: layer3Time
           }

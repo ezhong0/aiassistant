@@ -11,10 +11,12 @@ export class EncryptionService extends BaseService {
   private static readonly KEY_LENGTH = 32; // 256 bits
   private static readonly IV_LENGTH = 16;  // 128 bits
   private static readonly TAG_LENGTH = 16; // 128 bits
-  
+
   private encryptionKey: Buffer | null = null;
-  
-  constructor() {
+
+  constructor(
+    private readonly tokenEncryptionKey?: string
+  ) {
     super('EncryptionService');
   }
 
@@ -45,15 +47,13 @@ export class EncryptionService extends BaseService {
   }
 
   /**
-   * Initialize encryption key from environment or generate one
+   * Initialize encryption key from config or generate one
    */
   private async initializeEncryptionKey(): Promise<void> {
-    const envKey = process.env.TOKEN_ENCRYPTION_KEY;
-    
-    if (envKey) {
+    if (this.tokenEncryptionKey) {
       // Use provided key (should be base64 encoded)
       try {
-        this.encryptionKey = Buffer.from(envKey, 'base64');
+        this.encryptionKey = Buffer.from(this.tokenEncryptionKey, 'base64');
         if (this.encryptionKey.length !== EncryptionService.KEY_LENGTH) {
           throw ErrorFactory.domain.serviceError('EncryptionService', `Invalid key length: ${this.encryptionKey.length}, expected ${EncryptionService.KEY_LENGTH}`);
         }

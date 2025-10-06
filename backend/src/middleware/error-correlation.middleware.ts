@@ -1,5 +1,4 @@
 /**
-import logger from '../utils/logger';
  * Error Correlation Middleware for AI Assistant
  *
  * Provides request correlation IDs, timing metrics, and structured error tracking

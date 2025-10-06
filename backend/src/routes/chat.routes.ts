@@ -61,14 +61,15 @@ export function createChatRoutes(container: AppContainer) {
     context: contextSchema.optional(),
   });
 
-  const chatMessageResponseSchema = z.object({
-    message: z.string(),
-    context: contextSchema,
-    metadata: z.object({
-      tools_used: z.array(z.string()).optional(),
-      processing_time: z.number().optional(),
-    }).optional(),
-  });
+  // Response schema for documentation (not currently used for validation)
+  // const chatMessageResponseSchema = z.object({
+  //   message: z.string(),
+  //   context: contextSchema,
+  //   metadata: z.object({
+  //     tools_used: z.array(z.string()).optional(),
+  //     processing_time: z.number().optional(),
+  //   }).optional(),
+  // });
 
   /**
    * POST /api/chat/message

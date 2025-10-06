@@ -50,7 +50,7 @@ export class GoogleErrorTransformer {
       errorCode = ERROR_CODES.GOOGLE_RATE_LIMIT;
       retryable = true;
       retryAfter = 60;
-    } else if (status >= 500) {
+    } else if (status && status >= 500) {
       errorCode = ERROR_CODES.GOOGLE_SERVER_ERROR;
       retryable = true;
       retryAfter = 30;
@@ -112,7 +112,7 @@ export class OpenAIErrorTransformer {
       message = 'OpenAI API request timed out';
       retryable = true;
       retryAfter = 5;
-    } else if (status >= 500 || errorType === 'server_error') {
+    } else if ((status && status >= 500) || errorType === 'server_error') {
       errorCode = ERROR_CODES.OPENAI_SERVER_ERROR;
       message = `OpenAI server error: ${errorMessage}`;
       retryable = true;

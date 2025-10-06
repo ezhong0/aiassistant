@@ -221,14 +221,20 @@ export class ExecutionGraphValidator {
     for (const [group, groupNodes] of groupMap.entries()) {
       if (groupNodes.length > 1) {
         // Check if dependencies are consistent
-        const firstDeps = groupNodes[0].depends_on.sort().join(',');
+        const firstNode = groupNodes[0];
+        if (!firstNode) continue;
+
+        const firstDeps = firstNode.depends_on.sort().join(',');
 
         for (let i = 1; i < groupNodes.length; i++) {
-          const currentDeps = groupNodes[i].depends_on.sort().join(',');
+          const currentNode = groupNodes[i];
+          if (!currentNode) continue;
+
+          const currentDeps = currentNode.depends_on.sort().join(',');
           if (currentDeps !== firstDeps) {
             warnings.push(
               `Nodes in parallel_group ${group} have different dependencies: ` +
-              `${groupNodes[0].id} (${firstDeps}) vs ${groupNodes[i].id} (${currentDeps})`
+              `${firstNode.id} (${firstDeps}) vs ${currentNode.id} (${currentDeps})`
             );
           }
         }

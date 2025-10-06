@@ -279,6 +279,6 @@ const shouldLogAtLevel = (level: 'info' | 'warn' | 'error'): boolean => {
     debug: 3,
     trace: 4,
   };
-  return levels[level] <= levels[configLevel];
+  return (levels[level] ?? 2) <= (levels[configLevel] ?? 2);
 };
 

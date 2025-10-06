@@ -155,6 +155,7 @@ export abstract class BaseAPIClient extends BaseService {
    */
   async makeRequest<T = any>(request: APIRequest): Promise<APIResponse<T>> {
     // E2E Testing: Intercept external API calls for testing (EXCEPT OpenAI - those should be real)
+    // Note: E2E_TESTING is a test-specific env var, acceptable to read directly
     if (process.env.E2E_TESTING === 'true' && this.name !== 'OpenAIClient') {
       logger.debug('E2E_TESTING enabled, attempting to intercept external API call', {
         clientName: this.name,
@@ -231,6 +232,7 @@ export abstract class BaseAPIClient extends BaseService {
       const executionTime = Date.now() - startTime;
       
       // Record OpenAI calls for E2E testing
+      // Note: E2E_TESTING is a test-specific env var, acceptable to read directly
       if (process.env.E2E_TESTING === 'true' && this.name === 'OpenAIClient') {
         try {
           const path = await import('path');

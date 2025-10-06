@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import express, { Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { ErrorFactory } from '../errors';
 import { validateRequest } from '../middleware/validation.middleware';
 import {
   createSupabaseAuth,
@@ -23,7 +24,7 @@ export function createProtectedRoutes(container: AppContainer) {
   const config = container.resolve('config');
   const supabaseJwtSecret = config.supabaseJwtSecret;
   if (!supabaseJwtSecret) {
-    throw new Error('SUPABASE_JWT_SECRET is required for protected routes');
+    throw ErrorFactory.api.unauthorized('SUPABASE_JWT_SECRET is required for protected routes');
   }
 
   const authenticateToken = createSupabaseAuth(supabaseJwtSecret);

@@ -30,6 +30,8 @@ export class SentryService extends BaseService {
 
     try {
       const config = unifiedConfig;
+      // Sentry DSN is optional and not in unified config yet
+      // Keep as process.env for now as it's a low-priority config
       const sentryDsn = process.env.SENTRY_DSN;
 
       if (!sentryDsn) {
@@ -42,12 +44,12 @@ export class SentryService extends BaseService {
       // Initialize Sentry
       Sentry.init({
         dsn: sentryDsn,
-        environment: process.env.NODE_ENV || 'development',
+        environment: config.nodeEnv,
         release: process.env.npm_package_version || '1.0.0',
-        
+
         // Performance monitoring
-        tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-        profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+        tracesSampleRate: config.isProduction ? 0.1 : 1.0,
+        profilesSampleRate: config.isProduction ? 0.1 : 1.0,
         
         // Error filtering
         beforeSend(event, hint) {

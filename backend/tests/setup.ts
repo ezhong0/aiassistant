@@ -9,6 +9,11 @@
 process.env.NODE_ENV = 'test';
 process.env.LOG_LEVEL = 'error'; // Reduce log noise in tests
 
+// IMPORTANT: Force strict execution mode for all tests
+// This ensures tests fail-fast and catch real issues
+// rather than masking problems with fallback strategies
+process.env.EXECUTION_MODE = 'strict';
+
 // Global timeout for all tests (can be overridden per test)
 jest.setTimeout(30000);
 

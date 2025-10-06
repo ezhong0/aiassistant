@@ -110,10 +110,10 @@ export function createAppContainer(): AppContainer {
   container.register({
     config: asValue(unifiedConfig),
     logger: asValue(logger),
-    // Supabase configuration values - use environment variables directly
-    supabaseUrl: asValue(process.env.SUPABASE_URL || ''),
-    supabaseServiceRoleKey: asValue(process.env.SUPABASE_SERVICE_ROLE_KEY || ''),
-    supabaseAnonKey: asValue(process.env.SUPABASE_ANON_KEY || ''),
+    // Supabase configuration values - from unified config
+    supabaseUrl: asValue(unifiedConfig.supabaseUrl || ''),
+    supabaseServiceRoleKey: asValue(unifiedConfig.supabaseServiceRoleKey || ''),
+    supabaseAnonKey: asValue(unifiedConfig.supabaseAnonKey || ''),
   });
 
   logger.info('DI Container created', {

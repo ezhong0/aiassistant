@@ -42,7 +42,7 @@ export const BrandedId = {
  */
 export function isBrandedId<T extends string>(
   value: unknown,
-  brand: T
+  _brand: T
 ): value is Brand<string, T> {
   return typeof value === 'string';
 }

@@ -37,10 +37,35 @@ export interface NodeResultData {
 }
 
 /**
+ * Telemetry data for execution tracking
+ */
+export interface ExecutionTelemetry {
+  totalNodes: number;
+  successfulNodes: number;
+  failedNodes: number;
+  fallbacksUsed: number;
+  executionStatus: 'complete' | 'partial' | 'failed';
+  failures: NodeFailure[];
+}
+
+/**
+ * Details about a node failure
+ */
+export interface NodeFailure {
+  nodeId: string;
+  nodeType: string;
+  importance: string;
+  reason: string;
+  isRetryable: boolean;
+  impact?: string; // Human-readable description of impact
+}
+
+/**
  * Complete results from Layer 2 execution
  */
 export interface ExecutionResults {
   nodeResults: Map<string, NodeResult>;
+  telemetry: ExecutionTelemetry;
 }
 
 /**

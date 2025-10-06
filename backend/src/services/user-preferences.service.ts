@@ -23,16 +23,13 @@ export class UserPreferencesService extends BaseService {
 
   constructor(
     private readonly cacheService: CacheService,
-    private readonly supabaseUrl?: string,
-    private readonly supabaseServiceKey?: string
+    private readonly supabaseUrl: string,
+    private readonly supabaseServiceKey: string
   ) {
     super('UserPreferencesService');
 
-    this.supabaseUrl = supabaseUrl || process.env.SUPABASE_URL || '';
-    this.supabaseServiceKey = supabaseServiceKey || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
     if (!this.supabaseUrl || !this.supabaseServiceKey) {
-      throw new Error('Supabase URL and Service Role Key are required');
+      throw ErrorFactory.domain.serviceError('UserPreferencesService', 'Supabase URL and Service Role Key are required');
     }
   }
 
@@ -134,14 +131,14 @@ export class UserPreferencesService extends BaseService {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Failed to fetch user from Supabase: ${error}`);
+      throw ErrorFactory.api.badRequest(`Failed to fetch user from Supabase: ${error}`);
     }
 
     const data = await response.json() as { user?: any };
     const user = data.user;
 
     if (!user) {
-      throw new Error('User not found');
+      throw ErrorFactory.api.notFound('User not found');
     }
 
     // Extract preferences from user_metadata, fallback to defaults
@@ -189,7 +186,7 @@ export class UserPreferencesService extends BaseService {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Failed to update user preferences in Supabase: ${error}`);
+      throw ErrorFactory.api.badRequest(`Failed to update user preferences in Supabase: ${error}`);
     }
 
     return updated;
