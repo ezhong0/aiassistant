@@ -48,7 +48,7 @@ export const investorDroppedBall: ThreadTemplate = {
   emails: [
     {
       id: 'inv-1',
-      from: 'john.chen@vc-capital.com',
+      from: 'jchen@kleinerperkins.com',
       fromName: 'John Chen',
       to: ['{{user_email}}'],
       subject: 'Series B - Next Steps',
@@ -62,7 +62,7 @@ Looking forward to hearing from you.
 
 Best,
 John Chen
-Partner, VC Capital Partners`,
+Partner, Kleiner Perkins`,
       sentDaysAgo: 14,
       labels: {
         senderType: 'investor',
@@ -74,7 +74,7 @@ Partner, VC Capital Partners`,
     },
     {
       id: 'inv-2',
-      from: 'john.chen@vc-capital.com',
+      from: 'jchen@kleinerperkins.com',
       fromName: 'John Chen',
       to: ['{{user_email}}'],
       subject: 'Re: Series B - Next Steps',
@@ -100,7 +100,7 @@ John`,
     },
     {
       id: 'inv-3',
-      from: 'john.chen@vc-capital.com',
+      from: 'jchen@kleinerperkins.com',
       fromName: 'John Chen',
       to: ['{{user_email}}'],
       subject: 'Re: Series B - Next Steps',
@@ -127,10 +127,10 @@ John`,
     },
     {
       id: 'inv-4',
-      from: 'john.chen@vc-capital.com',
+      from: 'jchen@kleinerperkins.com',
       fromName: 'John Chen',
       to: ['{{user_email}}'],
-      cc: ['managing-partner@vc-capital.com'],
+      cc: ['mwang@kleinerperkins.com'],
       subject: 'Re: Series B - Next Steps',
       body: `{{user_name}},
 
@@ -139,7 +139,7 @@ John`,
 Are you still interested in raising capital? Please advise ASAP.
 
 John Chen
-Partner, VC Capital Partners
+Partner, Kleiner Perkins
 
 CC: {{managing-partner-name}} (Managing Partner)`,
       sentDaysAgo: 0, // Today
@@ -180,7 +180,7 @@ export const customerProductionIssue: ThreadTemplate = {
   emails: [
     {
       id: 'cust-1',
-      from: 'david.kim@enterprise-corp.com',
+      from: 'dkim@shopify.com',
       fromName: 'David Kim',
       to: ['{{user_email}}'],
       subject: 'URGENT: Production Issue - Login Failures',
@@ -195,7 +195,7 @@ Error message: "Authentication service unavailable"
 Priority: P0 - Business Critical
 
 David Kim
-CTO, Enterprise Corp`,
+CTO, Shopify`,
       sentDaysAgo: 3,
       labels: {
         senderType: 'customer',
@@ -211,7 +211,7 @@ CTO, Enterprise Corp`,
       id: 'cust-2',
       from: '{{user_email}}',
       fromName: '{{user_name}}',
-      to: ['david.kim@enterprise-corp.com'],
+      to: ['dkim@shopify.com'],
       subject: 'Re: URGENT: Production Issue - Login Failures',
       body: `David,
 
@@ -232,7 +232,7 @@ On it. Our engineering team is investigating now. I'll have an update for you wi
     },
     {
       id: 'cust-3',
-      from: 'david.kim@enterprise-corp.com',
+      from: 'dkim@shopify.com',
       fromName: 'David Kim',
       to: ['{{user_email}}'],
       subject: 'Re: URGENT: Production Issue - Login Failures',
@@ -257,10 +257,10 @@ David`,
     },
     {
       id: 'cust-4',
-      from: 'david.kim@enterprise-corp.com',
+      from: 'dkim@shopify.com',
       fromName: 'David Kim',
       to: ['{{user_email}}'],
-      cc: ['ceo@enterprise-corp.com'],
+      cc: ['jmartinez@shopify.com'],
       subject: 'Re: URGENT: Production Issue - Login Failures',
       body: `{{user_name}},
 
@@ -269,9 +269,9 @@ Escalating to our CEO. This is now 24 hours of downtime. Unacceptable.
 We need this fixed by EOD today or we'll need to review our contract and consider alternatives.
 
 David Kim
-CTO, Enterprise Corp
+CTO, Shopify
 
-CC: Jennifer Martinez (CEO, Enterprise Corp)`,
+CC: Jennifer Martinez (CEO, Shopify)`,
       sentDaysAgo: 0,
       labels: {
         senderType: 'customer',
@@ -309,7 +309,7 @@ export const overdueCommitment: ThreadTemplate = {
   emails: [
     {
       id: 'board-1',
-      from: 'sarah.johnson@board-member.com',
+      from: 'sjohnson@foundry.com',
       fromName: 'Sarah Johnson',
       to: ['{{user_email}}'],
       subject: 'Q3 Metrics for Friday Board Meeting',
@@ -335,7 +335,7 @@ Board Member`,
       id: 'board-2',
       from: '{{user_email}}',
       fromName: '{{user_name}}',
-      to: ['sarah.johnson@board-member.com'],
+      to: ['sjohnson@foundry.com'],
       subject: 'Re: Q3 Metrics for Friday Board Meeting',
       body: `Sarah,
 
@@ -357,7 +357,7 @@ Yes, I'll have them to you by Thursday EOD.
     // Thursday EOD passes - no metrics sent
     {
       id: 'board-3',
-      from: 'sarah.johnson@board-member.com',
+      from: 'sjohnson@foundry.com',
       fromName: 'Sarah Johnson',
       to: ['{{user_email}}'],
       subject: 'Re: Q3 Metrics for Friday Board Meeting',
@@ -405,7 +405,7 @@ export const teamQuestionBlocking: ThreadTemplate = {
   emails: [
     {
       id: 'team-1',
-      from: 'alex.rodriguez@company.com',
+      from: 'arodriguez@acme.com',
       fromName: 'Alex Rodriguez',
       to: ['{{user_email}}'],
       subject: 'API Redesign vs Mobile Bug Fixes - Priority?',
@@ -434,7 +434,7 @@ Engineering Lead`,
     // No response from user
     {
       id: 'team-2',
-      from: 'alex.rodriguez@company.com',
+      from: 'arodriguez@acme.com',
       fromName: 'Alex Rodriguez',
       to: ['{{user_email}}'],
       subject: 'Re: API Redesign vs Mobile Bug Fixes - Priority?',
@@ -462,7 +462,7 @@ Alex`,
     },
     {
       id: 'team-3',
-      from: 'alex.rodriguez@company.com',
+      from: 'arodriguez@acme.com',
       fromName: 'Alex Rodriguez',
       to: ['{{user_email}}'],
       subject: 'Re: API Redesign vs Mobile Bug Fixes - Priority?',
@@ -511,7 +511,7 @@ export const normalHiringCoordination: ThreadTemplate = {
   emails: [
     {
       id: 'hire-1',
-      from: 'recruiter@company.com',
+      from: 'jlee@acme.com',
       fromName: 'Jennifer Lee',
       to: ['{{user_email}}'],
       subject: 'VP Sales Candidates - Interview Scheduling',
@@ -543,7 +543,7 @@ Head of Talent`,
       id: 'hire-2',
       from: '{{user_email}}',
       fromName: '{{user_name}}',
-      to: ['recruiter@company.com'],
+      to: ['jlee@acme.com'],
       subject: 'Re: VP Sales Candidates - Interview Scheduling',
       body: `Jennifer,
 
@@ -561,7 +561,7 @@ Let's prioritize Michael and Lisa for first round.
     },
     {
       id: 'hire-3',
-      from: 'recruiter@company.com',
+      from: 'jlee@acme.com',
       fromName: 'Jennifer Lee',
       to: ['{{user_email}}'],
       subject: 'Re: VP Sales Candidates - Interview Scheduling',

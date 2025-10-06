@@ -94,7 +94,25 @@ async function main() {
   }
 
   const persona = (args[0] || 'quick-test') as keyof typeof PERSONA_CONFIGS;
-  const outputFile = args[1] || `inbox-${persona}-${Date.now()}.json`;
+
+  // Generate output file with chronological ordering
+  let outputFile = args[1];
+  if (!outputFile) {
+    // Find existing files to determine next sequence number
+    const outputDir = path.join(__dirname, '../data/generated-inboxes');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const existingFiles = fs.readdirSync(outputDir).filter(f => f.startsWith('inbox-') && f.endsWith('.json'));
+    const maxSequence = existingFiles.reduce((max, file) => {
+      const match = file.match(/^inbox-(\d+)-/);
+      return match ? Math.max(max, parseInt(match[1])) : max;
+    }, 0);
+
+    const nextSequence = (maxSequence + 1).toString().padStart(2, '0');
+    outputFile = `inbox-${nextSequence}-${persona}.json`;
+  }
 
   const config = PERSONA_CONFIGS[persona];
   if (!config) {
@@ -132,7 +150,19 @@ async function main() {
     }
 
     const outputPath = path.join(outputDir, outputFile);
-    fs.writeFileSync(outputPath, JSON.stringify(inboxData, null, 2));
+
+    // Serialize Maps to objects for proper JSON serialization
+    const serializedData = {
+      ...inboxData,
+      groundTruth: {
+        ...inboxData.groundTruth,
+        emailLabels: Object.fromEntries(inboxData.groundTruth.emailLabels),
+        threadMetadata: Object.fromEntries(inboxData.groundTruth.threadMetadata || new Map()),
+        senderProfiles: Object.fromEntries(inboxData.groundTruth.senderProfiles),
+      },
+    };
+
+    fs.writeFileSync(outputPath, JSON.stringify(serializedData, null, 2));
 
     // Print summary
     // Count total test queries across all categories

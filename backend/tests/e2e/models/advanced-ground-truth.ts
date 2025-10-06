@@ -5,7 +5,7 @@
  * Captures temporal, relational, and content complexity.
  */
 
-export type SenderType = 'boss' | 'report' | 'peer' | 'customer' | 'vendor' | 'investor' | 'external' | 'spam';
+export type SenderType = 'boss' | 'report' | 'peer' | 'customer' | 'vendor' | 'investor' | 'external' | 'recruiter' | 'spam';
 export type EmailFrequency = 'daily' | 'weekly' | 'monthly' | 'rare' | 'first';
 export type ThreadPosition = 'first' | 'reply' | 'follow_up' | 'escalation' | 'reminder';
 export type CommitmentType = 'deliverable' | 'response' | 'meeting' | 'decision' | 'none';

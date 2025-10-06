@@ -68,6 +68,12 @@ import {
   getRandomEmailTemplate,
 } from './realistic-email-templates';
 
+import {
+  getRandomNoiseTemplate,
+  categorizeNoiseEmail,
+  NoiseTemplate,
+} from './noise-templates';
+
 /**
  * Generated email with full metadata
  */
@@ -133,7 +139,7 @@ export async function generateHyperRealisticInbox(
   } = options;
 
   // Build relationship graph
-  const relationshipGraph = buildRelationshipGraph('user@company.com', persona);
+  const relationshipGraph = buildRelationshipGraph('user@acme.com', persona);
 
   // Initialize collections
   const emails: GeneratedEmail[] = [];
@@ -279,7 +285,7 @@ export async function generateHyperRealisticInbox(
         id: emailId,
         threadId,
         from: senderEmail,
-        to: 'user@company.com',
+        to: 'user@acme.com',
         cc: emailTemplate.cc,
         subject: emailTemplate.subject,
         body: emailTemplate.body,
@@ -429,7 +435,7 @@ export async function generateHyperRealisticInbox(
       id: emailId,
       threadId,
       from: sender.email,
-      to: 'user@company.com',
+      to: 'user@acme.com',
       subject: template.subject,
       body: emailBody,
       sentDate,
@@ -441,7 +447,7 @@ export async function generateHyperRealisticInbox(
     emailLabels.set(emailId, label);
   }
 
-  // Phase 3: Generate noise emails (spam, newsletters)
+  // Phase 3: Generate noise emails (spam, newsletters, cold outreach)
   if (includeNoise) {
     const noiseEmailsNeeded = Math.floor(emailCount * (noisePercentage / 100));
 
@@ -450,32 +456,16 @@ export async function generateHyperRealisticInbox(
       const emailId = nextEmailId();
       const sentDate = daysAgo(Math.floor(Math.random() * 7), currentDate);
 
-      const noiseScenarios = [
-        {
-          from: 'newsletter@saas-company.com',
-          name: 'SaaS Weekly',
-          subject: 'ACTION REQUIRED: New Compliance Updates',
-          body: 'Important updates you need to know about...',
-          isDeceptive: true,
-        },
-        {
-          from: 'recruiter@linkedin.com',
-          name: 'Sarah Recruiter',
-          subject: 'Re: Senior Engineer Opportunity',
-          body: 'Following up on the role we discussed...',
-          isDeceptive: true,
-        },
-        {
-          from: 'sales@vendor.com',
-          name: 'John Sales',
-          subject: 'Increase your revenue by 10x',
-          body: 'Our platform can help you...',
-          isDeceptive: false,
-        },
-      ];
-
-      const scenario = noiseScenarios[Math.floor(Math.random() * noiseScenarios.length)];
+      // Get random noise template
+      const template = getRandomNoiseTemplate(persona);
       const temporal = calculateTemporalContext(sentDate, currentDate);
+
+      // Categorize based on persona (what's spam for one might be signal for another)
+      const category = categorizeNoiseEmail(template, persona);
+
+      // Calculate importance based on category and persona
+      const importance = category === 'signal' ? 5 : category === 'noise' ? 2 : 1;
+      const requiresResponse = category === 'signal' && template.senderType === 'recruiter';
 
       const label: AdvancedEmailLabel = {
         emailId,
@@ -489,15 +479,15 @@ export async function generateHyperRealisticInbox(
         positionInThread: 1,
         isDroppedBall: false,
         lastResponseFrom: 'none',
-        userNeedsToRespond: false,
+        userNeedsToRespond: requiresResponse,
         containsCommitment: false,
         commitmentType: 'none',
         commitmentStatus: 'none',
         commitmentMadeBy: 'none',
-        senderEmail: scenario.from,
-        senderName: scenario.name,
-        senderType: 'spam',
-        senderImportance: 1,
+        senderEmail: template.from,
+        senderName: template.fromName,
+        senderType: template.senderType,
+        senderImportance: importance,
         isFirstTimeContact: true,
         emailFrequencyWithSender: 'rare',
         typicalResponseTime: 0,
@@ -509,32 +499,32 @@ export async function generateHyperRealisticInbox(
         hasActionItems: false,
         actionItems: [],
         sentiment: 'neutral',
-        isFollowUp: false,
+        isFollowUp: template.subject.startsWith('Re:') || template.body.toLowerCase().includes('following up'),
         followUpIteration: 0,
         referencesOlderEmail: false,
         olderEmailIds: [],
         followUpKeywords: [],
         isUrgent: false,
-        isImportant: false,
-        requiresResponse: false,
-        calculatedPriority: 1,
-        category: 'spam',
-        subcategory: 'marketing',
+        isImportant: category === 'signal',
+        requiresResponse,
+        calculatedPriority: importance,
+        category,
+        subcategory: template.subcategory,
         topics: [],
         isEscalated: false,
         blocksOthers: false,
         hasAttachments: false,
-        isDeceptiveNoise: scenario.isDeceptive,
+        isDeceptiveNoise: template.isDeceptive,
         requiresImmediateAction: false,
       };
 
       const email: GeneratedEmail = {
         id: emailId,
         threadId,
-        from: scenario.from,
-        to: 'user@company.com',
-        subject: scenario.subject,
-        body: scenario.body,
+        from: template.from,
+        to: 'user@acme.com',
+        subject: template.subject,
+        body: template.body,
         sentDate,
         hasAttachments: false,
         label,

@@ -236,106 +236,106 @@ export function buildRelationshipGraph(userEmail: string, persona: 'executive' |
     // Founder persona: lots of high-importance contacts
 
     // Board members & investors (2-3)
-    senders.set('sarah.chen@boardadvisors.com', generateSenderProfile(
+    senders.set('schen@greylock.com', generateSenderProfile(
       'Sarah Chen',
-      'sarah.chen@boardadvisors.com',
+      'schen@greylock.com',
       'seniorLeadership',
       { totalEmailsSent: 15, totalEmailsReceived: 12 }
     ));
 
-    senders.set('michael.roberts@sequoiacapital.com', generateSenderProfile(
+    senders.set('mroberts@sequoiacap.com', generateSenderProfile(
       'Michael Roberts',
-      'michael.roberts@sequoiacapital.com',
+      'mroberts@sequoiacap.com',
       'investor',
       { totalEmailsSent: 8, totalEmailsReceived: 6 }
     ));
 
-    senders.set('jennifer.wu@andreessenhorowitz.com', generateSenderProfile(
+    senders.set('jwu@a16z.com', generateSenderProfile(
       'Jennifer Wu',
-      'jennifer.wu@andreessenhorowitz.com',
+      'jwu@a16z.com',
       'investor',
       { totalEmailsSent: 5, totalEmailsReceived: 3 }
     ));
 
     // Direct reports (3-5 key people)
-    senders.set('david.park@yourcompany.io', generateSenderProfile(
+    senders.set('dpark@acme.com', generateSenderProfile(
       'David Park',
-      'david.park@yourcompany.io',
+      'dpark@acme.com',
       'directReport',
       { importance: 8, totalEmailsSent: 45, totalEmailsReceived: 50, isVIP: true }
     ));
 
-    senders.set('amanda.torres@yourcompany.io', generateSenderProfile(
+    senders.set('atorres@acme.com', generateSenderProfile(
       'Amanda Torres',
-      'amanda.torres@yourcompany.io',
+      'atorres@acme.com',
       'directReport',
       { importance: 8, totalEmailsSent: 35, totalEmailsReceived: 38, isVIP: true }
     ));
 
-    senders.set('james.kim@yourcompany.io', generateSenderProfile(
+    senders.set('jkim@acme.com', generateSenderProfile(
       'James Kim',
-      'james.kim@yourcompany.io',
+      'jkim@acme.com',
       'directReport',
       { importance: 7, totalEmailsSent: 30, totalEmailsReceived: 32 }
     ));
 
     // Enterprise customers (2-3)
-    senders.set('robert.anderson@acmecorp.com', generateSenderProfile(
+    senders.set('randerson@stripe.com', generateSenderProfile(
       'Robert Anderson',
-      'robert.anderson@acmecorp.com',
+      'randerson@stripe.com',
       'enterpriseCustomer',
       { totalEmailsSent: 12, totalEmailsReceived: 14 }
     ));
 
-    senders.set('lisa.thompson@globaltech.com', generateSenderProfile(
+    senders.set('lthompson@databricks.com', generateSenderProfile(
       'Lisa Thompson',
-      'lisa.thompson@globaltech.com',
+      'lthompson@databricks.com',
       'enterpriseCustomer',
       { totalEmailsSent: 8, totalEmailsReceived: 10 }
     ));
 
     // SMB customers (3-5)
-    senders.set('mark.johnson@growthstartup.com', generateSenderProfile(
+    senders.set('mjohnson@vanta.com', generateSenderProfile(
       'Mark Johnson',
-      'mark.johnson@growthstartup.com',
+      'mjohnson@vanta.com',
       'smbCustomer',
       { totalEmailsSent: 6, totalEmailsReceived: 7 }
     ));
 
-    senders.set('emily.davis@quickbooks-client.com', generateSenderProfile(
+    senders.set('edavis@notion.so', generateSenderProfile(
       'Emily Davis',
-      'emily.davis@quickbooks-client.com',
+      'edavis@notion.so',
       'smbCustomer',
       { totalEmailsSent: 4, totalEmailsReceived: 5 }
     ));
 
     // Vendors/Partners (2-3)
-    senders.set('chris.martinez@awspartner.com', generateSenderProfile(
+    senders.set('cmartinez@amazon.com', generateSenderProfile(
       'Chris Martinez',
-      'chris.martinez@awspartner.com',
+      'cmartinez@amazon.com',
       'vendor',
       { totalEmailsSent: 10, totalEmailsReceived: 8 }
     ));
 
     // External contacts (recruiters, sales, etc.) (3-5)
-    senders.set('sarah.recruiter@toptalent.io', generateSenderProfile(
+    senders.set('smitchell@linkedin.com', generateSenderProfile(
       'Sarah Mitchell',
-      'sarah.recruiter@toptalent.io',
+      'smitchell@linkedin.com',
       'external',
       { totalEmailsSent: 3, totalEmailsReceived: 0 }
     ));
 
-    senders.set('john.patterson@salesforce.com', generateSenderProfile(
+    senders.set('jpatterson@hubspot.com', generateSenderProfile(
       'John Patterson',
-      'john.patterson@salesforce.com',
+      'jpatterson@hubspot.com',
       'spam',
       { totalEmailsSent: 5, totalEmailsReceived: 0 }
     ));
 
     // First-time contacts (1-2)
-    senders.set('alex.parker@newfund.io', generateSenderProfile(
+    senders.set('aparker@benchmark.com', generateSenderProfile(
       'Alex Parker',
-      'alex.parker@newfund.io',
+      'aparker@benchmark.com',
       'firstTime',
       { totalEmailsSent: 1, totalEmailsReceived: 0 }
     ));
@@ -344,47 +344,47 @@ export function buildRelationshipGraph(userEmail: string, persona: 'executive' |
     // Executive persona: boss, peers, direct reports
 
     // CEO/Boss
-    senders.set('jennifer.lawrence@yourcompany.io', generateSenderProfile(
+    senders.set('jlawrence@acme.com', generateSenderProfile(
       'Jennifer Lawrence',
-      'jennifer.lawrence@yourcompany.io',
+      'jlawrence@acme.com',
       'directBoss',
       { totalEmailsSent: 25, totalEmailsReceived: 23, importance: 10 }
     ));
 
     // Peer executives (2-3)
-    senders.set('cfo@company.com', generateSenderProfile(
-      'Michael CFO',
-      'cfo@company.com',
+    senders.set('mchen@acme.com', generateSenderProfile(
+      'Michael Chen',
+      'mchen@acme.com',
       'peer',
       { importance: 7, totalEmailsSent: 15, totalEmailsReceived: 16, isVIP: true }
     ));
 
-    senders.set('coo@company.com', generateSenderProfile(
-      'Sarah COO',
-      'coo@company.com',
+    senders.set('spatel@acme.com', generateSenderProfile(
+      'Sarah Patel',
+      'spatel@acme.com',
       'peer',
       { importance: 7, totalEmailsSent: 12, totalEmailsReceived: 13, isVIP: true }
     ));
 
     // Direct reports (4-6)
-    senders.set('senior-manager-1@company.com', generateSenderProfile(
-      'Tom Manager',
-      'senior-manager-1@company.com',
+    senders.set('tharris@acme.com', generateSenderProfile(
+      'Tom Harris',
+      'tharris@acme.com',
       'directReport',
       { totalEmailsSent: 40, totalEmailsReceived: 45 }
     ));
 
-    senders.set('senior-manager-2@company.com', generateSenderProfile(
-      'Lisa Manager',
-      'senior-manager-2@company.com',
+    senders.set('lwang@acme.com', generateSenderProfile(
+      'Lisa Wang',
+      'lwang@acme.com',
       'directReport',
       { totalEmailsSent: 35, totalEmailsReceived: 38 }
     ));
 
     // Customers (1-2)
-    senders.set('client@bigcorp.com', generateSenderProfile(
-      'David Client',
-      'client@bigcorp.com',
+    senders.set('djones@salesforce.com', generateSenderProfile(
+      'David Jones',
+      'djones@salesforce.com',
       'enterpriseCustomer',
       { totalEmailsSent: 8, totalEmailsReceived: 10 }
     ));
@@ -393,46 +393,46 @@ export function buildRelationshipGraph(userEmail: string, persona: 'executive' |
     // Manager persona: boss, peers, direct reports
 
     // Direct boss
-    senders.set('susan.director@yourcompany.io', generateSenderProfile(
+    senders.set('sdirector@acme.com', generateSenderProfile(
       'Susan Director',
-      'susan.director@yourcompany.io',
+      'sdirector@acme.com',
       'directBoss',
       { totalEmailsSent: 30, totalEmailsReceived: 28 }
     ));
 
     // Peers (3-4)
-    senders.set('john.williams@yourcompany.io', generateSenderProfile(
+    senders.set('jwilliams@acme.com', generateSenderProfile(
       'John Williams',
-      'john.williams@yourcompany.io',
+      'jwilliams@acme.com',
       'peer',
       { totalEmailsSent: 20, totalEmailsReceived: 22 }
     ));
 
-    senders.set('emma.rodriguez@yourcompany.io', generateSenderProfile(
+    senders.set('erodriguez@acme.com', generateSenderProfile(
       'Emma Rodriguez',
-      'emma.rodriguez@yourcompany.io',
+      'erodriguez@acme.com',
       'peer',
       { totalEmailsSent: 15, totalEmailsReceived: 16 }
     ));
 
     // Direct reports (4-6)
-    senders.set('alex.garcia@yourcompany.io', generateSenderProfile(
+    senders.set('agarcia@acme.com', generateSenderProfile(
       'Alex Garcia',
-      'alex.garcia@yourcompany.io',
+      'agarcia@acme.com',
       'directReport',
       { totalEmailsSent: 50, totalEmailsReceived: 55 }
     ));
 
-    senders.set('maria.lopez@yourcompany.io', generateSenderProfile(
+    senders.set('mlopez@acme.com', generateSenderProfile(
       'Maria Lopez',
-      'maria.lopez@yourcompany.io',
+      'mlopez@acme.com',
       'directReport',
       { totalEmailsSent: 45, totalEmailsReceived: 48 }
     ));
 
-    senders.set('chris.taylor@yourcompany.io', generateSenderProfile(
+    senders.set('ctaylor@acme.com', generateSenderProfile(
       'Chris Taylor',
-      'chris.taylor@yourcompany.io',
+      'ctaylor@acme.com',
       'directReport',
       { totalEmailsSent: 40, totalEmailsReceived: 42 }
     ));
@@ -441,24 +441,24 @@ export function buildRelationshipGraph(userEmail: string, persona: 'executive' |
     // Individual contributor persona
 
     // Direct boss
-    senders.set('rachel.manager@yourcompany.io', generateSenderProfile(
+    senders.set('rchen@acme.com', generateSenderProfile(
       'Rachel Chen',
-      'rachel.manager@yourcompany.io',
+      'rchen@acme.com',
       'directBoss',
       { totalEmailsSent: 35, totalEmailsReceived: 32 }
     ));
 
     // Peers (4-5)
-    senders.set('kevin.nguyen@yourcompany.io', generateSenderProfile(
+    senders.set('knguyen@acme.com', generateSenderProfile(
       'Kevin Nguyen',
-      'kevin.nguyen@yourcompany.io',
+      'knguyen@acme.com',
       'peer',
       { totalEmailsSent: 25, totalEmailsReceived: 26 }
     ));
 
-    senders.set('priya.patel@yourcompany.io', generateSenderProfile(
+    senders.set('ppatel@acme.com', generateSenderProfile(
       'Priya Patel',
-      'priya.patel@yourcompany.io',
+      'ppatel@acme.com',
       'peer',
       { totalEmailsSent: 20, totalEmailsReceived: 21 }
     ));

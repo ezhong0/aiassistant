@@ -276,6 +276,12 @@ export const SENDER_LANGUAGE: Record<SenderType, {
     style: 'formal',
   },
 
+  recruiter: {
+    greetings: ['Hi', 'Hello'],
+    closings: ['Best', 'Looking forward to connecting', 'Happy to chat further'],
+    style: 'formal',
+  },
+
   spam: {
     greetings: ['Hello', 'Hi there', 'Greetings'],
     closings: ['Best', 'Regards', 'Have a great day!'],
