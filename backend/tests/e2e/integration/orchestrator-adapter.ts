@@ -66,28 +66,12 @@ export function createRealOrchestratorChatbotFunction(
 ): (inbox: GeneratedInbox, query: string) => Promise<ChatbotResponse> {
 
   return async (inboxData: GeneratedInbox, query: string): Promise<ChatbotResponse> => {
-    // Create test container with mock services
-    const container = createTestContainer(inbox);
+    // Create test container with mock services (includes user context/preferences mocks)
+    const container = await createTestContainer(inbox);
     const userContext = createTestUserContext(inbox);
 
     // Resolve the REAL orchestrator from container
     const orchestrator = container.resolve('orchestrator');
-
-    // Mock user context service to return test user
-    const mockUserContextService = {
-      getUserContext: async (userId: string) => userContext,
-    };
-    container.register({
-      userContextService: { resolve: () => mockUserContextService } as any,
-    });
-
-    // Mock user preferences service
-    const mockUserPreferencesService = {
-      getPreferences: async (userId: string) => userContext.preferences,
-    };
-    container.register({
-      userPreferencesService: { resolve: () => mockUserPreferencesService } as any,
-    });
 
     try {
       // Call REAL orchestrator with REAL Layer 1/2/3

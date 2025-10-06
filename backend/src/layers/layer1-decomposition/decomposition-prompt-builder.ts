@@ -19,14 +19,16 @@ export class DecompositionPromptBuilder {
     const schema = this.getExecutionGraphSchema();
 
     // Call AI service with structured output
+    // Using GPT-5-mini for better reasoning on complex filter vocabulary rules
+    // GPT-5-nano was too weak and kept generating invalid Gmail filters
     const response = await this.aiService.executePrompt<ExecutionGraph>(
       {
         systemPrompt,
         userPrompt,
         options: {
-          temperature: 0.1, // Low temperature for consistent structured output
-          maxTokens: 3000, // Bounded output
-          model: 'gpt-5-nano'
+          temperature: 0.2, // Low-medium for structured output with reasoning
+          maxTokens: 4000, // Bounded output (larger for mini)
+          model: 'gpt-5-mini'
         }
       },
       schema,
@@ -186,7 +188,13 @@ Think step-by-step:
 
 **STRICT RULE**: When using metadata_filter, you MUST ONLY use Gmail API operators. Using any other filter will cause execution failure.
 
-**ALLOWED Gmail Filters**:
+**SEPARATION OF CONCERNS**:
+- ✅ **metadata_filter**: ONLY Gmail API search operators (from:, to:, subject:, is:, newer_than:, etc.)
+- ❌ **NOT in metadata_filter**: sorting (sort_by:), grouping (group_by:), topics (topic:), or any semantic concepts
+- ✅ **Sorting/Grouping**: Put in synthesis_instructions, NOT in filters
+- ✅ **Semantic search**: Use strategy nodes (urgency_detector, sender_classifier, etc.)
+
+**ALLOWED Gmail Filters** (EXHAUSTIVE LIST - nothing else works!):
 - \`from:<email|name>\` - Emails from sender (e.g., from:jeff@acme.com, from:Jennifer)
 - \`to:<email|name>\` - Emails to recipient
 - \`subject:<keyword>\` - Search in subject
@@ -202,10 +210,15 @@ Think step-by-step:
 - \`in:sent\` - Sent by user
 
 **FORBIDDEN Filters** (will cause errors):
-❌ \`isUrgent\`, \`priority\`, \`urgency:high\`
-❌ \`requiresResponse\`, \`requires_response\`, \`needsReply\`
-❌ \`senderType\`, \`sender_type:investor\`
-❌ \`dueToday\`, \`due_today\`, \`deadline\`
+❌ \`isUrgent\`, \`priority\`, \`urgency:high\` → Use urgency_detector strategy instead
+❌ \`requiresResponse\`, \`requires_response\`, \`needsReply\` → Use action_detector strategy
+❌ \`senderType\`, \`sender_type:investor\`, \`sender:\` → Use from: filter OR sender_classifier
+❌ \`dueToday\`, \`due_today\`, \`deadline\` → Use newer_than: filter
+❌ \`topic:\`, \`about:\`, \`category:\` → Use subject: filter OR keyword_search
+❌ \`sort_by:\`, \`order_by:\`, \`group_by:\` → Put in synthesis_instructions
+❌ \`date_range:\`, \`time_range:\` → Use newer_than:/older_than: instead
+❌ \`sent_by_me\`, \`from_me\` → Use in:sent
+❌ \`text_contains:\`, \`contains:\` → Use keyword_search strategy
 ❌ Any filter not in the ALLOWED list above
 
 **For Semantic Filtering**: Use strategy nodes instead of filters!

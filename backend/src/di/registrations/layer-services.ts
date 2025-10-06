@@ -18,6 +18,8 @@ import { asClass, Lifetime } from 'awilix';
 import { QueryDecomposerService } from '../../layers/layer1-decomposition/query-decomposer.service';
 import { DecompositionPromptBuilder } from '../../layers/layer1-decomposition/decomposition-prompt-builder';
 import { ExecutionGraphValidator } from '../../layers/layer1-decomposition/execution-graph-validator';
+import { IntentExtractorService } from '../../layers/layer1-decomposition/intent-extractor.service';
+import { QueryPlannerService } from '../../layers/layer1-decomposition/query-planner.service';
 import { ExecutionCoordinatorService } from '../../layers/layer2-execution/execution-coordinator.service';
 import { SynthesisService } from '../../layers/layer3-synthesis/synthesis.service';
 import { OrchestratorService } from '../../layers/orchestrator.service';
@@ -61,8 +63,16 @@ export function registerLayerServices(container: AppContainer): AppContainer {
     executionGraphValidator: asClass(ExecutionGraphValidator, {
       lifetime: Lifetime.SINGLETON,
     }),
+    intentExtractor: asClass(IntentExtractorService, {
+      lifetime: Lifetime.SINGLETON,
+      // Note: depends on 'aiService' (alias for AIDomainService)
+    }),
+    queryPlanner: asClass(QueryPlannerService, {
+      lifetime: Lifetime.SINGLETON,
+    }),
     queryDecomposer: asClass(QueryDecomposerService, {
       lifetime: Lifetime.SINGLETON,
+      // Note: depends on 'aiService', 'decompositionPromptBuilder', 'executionGraphValidator', 'intentExtractor', 'queryPlanner'
     }),
   });
 

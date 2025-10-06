@@ -29,11 +29,11 @@ Production-grade AI assistant that transforms natural language queries into comp
 **Technical Highlights:**
 - 72,000+ lines of production TypeScript/React with 80%+ test coverage
 - Stateless backend enables horizontal scaling with OAuth 2.0, AES-256-GCM token encryption, circuit breakers, rate limiting
-- Custom E2E testing framework validates non-deterministic LLM outputs using AI-powered judges (GPT-4, Claude) against ground truth datasets
+- Custom E2E testing framework validates non-deterministic LLM outputs using AI-powered judges (GPT-5, Claude) against ground truth datasets
 - React Native mobile app with offline-first architecture, AsyncStorage persistence, comprehensive onboarding flow
 - 700+ documented use cases covering inbox triage, commitment tracking, context recovery
 
-**Stack:** Node.js, TypeScript, PostgreSQL, OpenAI GPT-4, Anthropic Claude, React Native, Supabase, Docker
+**Stack:** Node.js, TypeScript, PostgreSQL, OpenAI GPT-5 (gpt-5-nano), Anthropic Claude, React Native, Supabase, Docker
 
 ---
 

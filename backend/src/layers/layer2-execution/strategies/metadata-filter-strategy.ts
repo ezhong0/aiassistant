@@ -141,8 +141,61 @@ export class MetadataFilterStrategy extends BaseStrategy {
   /**
    * Build Gmail query string from filters and time range
    */
+  /**
+   * Normalize filters to fix common LLM mistakes
+   */
+  private normalizeFilter(filter: string): string | null {
+    const trimmed = filter.trim();
+
+    // Map of common LLM mistakes -> correct Gmail syntax
+    const corrections: [RegExp, string][] = [
+      // isRead=false -> is:unread
+      [/^isRead\s*=\s*false$/i, 'is:unread'],
+      [/^isRead\s*=\s*true$/i, 'is:read'],
+
+      // sender: -> from:
+      [/^sender:(.+)$/i, 'from:$1'],
+
+      // date_range:7d -> newer_than:7d
+      [/^date_range:(\d+)d$/i, 'newer_than:$1d'],
+
+      // sent_by_me -> in:sent
+      [/^sent_by_me$/i, 'in:sent'],
+      [/^from_me$/i, 'in:sent'],
+
+      // topic: or about: -> subject:
+      [/^topic:(.+)$/i, 'subject:$1'],
+      [/^about:(.+)$/i, 'subject:$1'],
+
+      // Remove invalid filters that should be in synthesis
+      [/^(sort_by|order_by|group_by):.*/i, ''], // Sorting/grouping goes to synthesis
+
+      // Remove semantic filters that need strategies
+      [/^(isUrgent|priority|urgency|requiresResponse|needsReply|senderType|sender_type).*/i, ''],
+      [/^text_contains:.*/i, ''], // Should use keyword_search strategy
+    ];
+
+    // Apply corrections
+    for (const [pattern, replacement] of corrections) {
+      if (pattern.test(trimmed)) {
+        const corrected = trimmed.replace(pattern, replacement);
+        if (corrected && corrected !== trimmed) {
+          this.log(`Normalized filter: "${trimmed}" -> "${corrected}"`);
+        }
+        return corrected || null;
+      }
+    }
+
+    return trimmed;
+  }
+
   private buildGmailQuery(filters: string[], timeRange: string): string {
-    const parts: string[] = [...filters];
+    // Normalize and filter out invalid filters
+    const normalizedFilters = filters
+      .map(f => this.normalizeFilter(f))
+      .filter((f): f is string => f !== null && f !== '');
+
+    const parts: string[] = [...normalizedFilters];
 
     // Add time range if specified
     if (timeRange) {

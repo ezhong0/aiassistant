@@ -136,7 +136,7 @@ Testing AI assistants is fundamentally different from traditional software:
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Multi-Model Validation                                         │
-│  • Tests queries against GPT-4, Claude simultaneously           │
+│  • Tests queries against GPT-5, Claude simultaneously           │
 │  • Compares responses for consistency                           │
 │  • Validates execution graphs (not just final output)           │
 │  • Checks intermediate layer outputs                            │
@@ -171,7 +171,7 @@ Testing AI assistants is fundamentally different from traditional software:
 1. **Execution Graph Validation** - Ensures Layer 1 generates correct DAG structure
 2. **Operation Validation** - Verifies Layer 2 executes operations correctly
 3. **Response Validation** - Checks Layer 3 synthesis quality
-4. **Multi-LLM Comparison** - Validates responses from GPT-4 and Claude are consistent
+4. **Multi-LLM Comparison** - Validates responses from GPT-5 and Claude are consistent
 5. **Semantic Correctness** - AI judge evaluates meaning, not just syntax
 
 **Reporting & Analytics**
@@ -223,7 +223,7 @@ npm run e2e:test -- --count=10
 - **Framework:** Express.js with comprehensive middleware stack
 - **Database:** PostgreSQL 15+ via Supabase
 - **Caching:** Redis (optional, can be disabled)
-- **AI/LLM:** OpenAI GPT-4 + Anthropic Claude
+- **AI/LLM:** OpenAI GPT-5 (gpt-5-nano) + Anthropic Claude
 - **Auth:** Supabase OAuth 2.0 (Google, Slack)
 
 ### Frontend (React Native)
@@ -559,7 +559,7 @@ Built by **[Edward Zhong](https://github.com/ezhong0)** over 4 weeks as a demons
 - Full-stack development capabilities (backend + mobile)
 
 ### Technologies & Libraries
-- **AI/LLM:** OpenAI GPT-4, Anthropic Claude
+- **AI/LLM:** OpenAI GPT-5 (gpt-5-nano default), Anthropic Claude
 - **Backend:** Node.js, Express, TypeScript, PostgreSQL
 - **Frontend:** React Native, TypeScript
 - **Auth & DB:** Supabase (PostgreSQL + OAuth)

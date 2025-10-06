@@ -82,6 +82,8 @@ export interface Cradle {
   strategyRegistry: import('../layers/layer2-execution/strategy-registry').StrategyRegistry;
   decompositionPromptBuilder: import('../layers/layer1-decomposition/decomposition-prompt-builder').DecompositionPromptBuilder;
   executionGraphValidator: import('../layers/layer1-decomposition/execution-graph-validator').ExecutionGraphValidator;
+  intentExtractor: import('../layers/layer1-decomposition/intent-extractor.service').IntentExtractorService;
+  queryPlanner: import('../layers/layer1-decomposition/query-planner.service').QueryPlannerService;
   queryDecomposer: import('../layers/layer1-decomposition/query-decomposer.service').QueryDecomposerService;
   executionCoordinator: import('../layers/layer2-execution/execution-coordinator.service').ExecutionCoordinatorService;
   synthesisService: import('../layers/layer3-synthesis/synthesis.service').SynthesisService;

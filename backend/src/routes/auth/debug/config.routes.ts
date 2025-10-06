@@ -132,5 +132,84 @@ export function createDebugConfigRoutes(container: AppContainer) {
     }
   );
 
+  /**
+   * POST /auth/debug/generate-test-token
+   * Generate a test JWT token for development/testing
+   */
+  router.post('/generate-test-token',
+    validateRequest({ body: z.object({
+      userId: z.string().optional(),
+      email: z.string().email().optional(),
+    }).optional() }),
+    (req: Request, res: Response) => {
+      try {
+        const logContext = createLogContext(req, { operation: 'generate_test_token' });
+        logger.info('Generate test token request', logContext);
+
+        const config = container.resolve('config');
+        const supabaseJwtSecret = config.supabaseJwtSecret;
+
+        if (!supabaseJwtSecret) {
+          return res.status(500).json({
+            success: false,
+            error: 'SUPABASE_JWT_SECRET not configured',
+            message: 'Please set SUPABASE_JWT_SECRET in your .env file'
+          });
+        }
+
+        // Generate a test JWT token
+        const jwt = require('jsonwebtoken');
+        const userId = req.body?.userId || 'test-user-' + Date.now();
+        const email = req.body?.email || `test-${Date.now()}@example.com`;
+
+        const payload = {
+          sub: userId,
+          email: email,
+          role: 'authenticated',
+          aud: 'authenticated',
+          iss: 'supabase',
+          exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
+          iat: Math.floor(Date.now() / 1000),
+          user_metadata: {
+            name: 'Test User',
+          },
+          app_metadata: {
+            provider: 'email',
+          }
+        };
+
+        const token = jwt.sign(payload, supabaseJwtSecret, {
+          algorithm: 'HS256'
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            token,
+            payload: {
+              userId,
+              email,
+              expiresIn: '24h',
+            },
+            usage: {
+              header: `Authorization: Bearer ${token}`,
+              webchatUrl: `http://localhost:8080?token=${token}`
+            }
+          },
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        const logContext = createLogContext(req, { operation: 'generate_test_token' });
+        logger.error('Error generating test token', error as Error, logContext);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to generate test token',
+          message: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  );
+
   return router;
 }

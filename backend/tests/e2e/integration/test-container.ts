@@ -7,7 +7,7 @@
  * - Returns data from GeneratedInbox instead of APIs
  */
 
-import { createAppContainer, AppContainer } from '../../../src/di/container';
+import { createAppContainer, AppContainer, initializeAllServices } from '../../../src/di/container';
 import { registerAllServices } from '../../../src/di/registrations';
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 import { MockEmailDomainService, MockCalendarDomainService, MockContactsDomainService } from './mock-services';
@@ -19,12 +19,32 @@ import { asValue } from 'awilix';
  * @param inbox - Generated inbox for testing
  * @returns Container with real layers but mock data sources
  */
-export function createTestContainer(inbox: GeneratedInbox): AppContainer {
+export async function createTestContainer(inbox: GeneratedInbox): Promise<AppContainer> {
   // Create base container with all real services
   const container = createAppContainer();
 
   // Register all services (orchestrator, layers, domain services, etc.)
   registerAllServices(container);
+
+  // Override user context service with mock (BEFORE it's resolved)
+  const mockUserContextService = {
+    initialize: async () => {},
+    destroy: async () => {},
+    getUserContext: async (userId: string) => createTestUserContext(inbox),
+  };
+  container.register({
+    userContextService: asValue(mockUserContextService as any),
+  });
+
+  // Override user preferences service with mock (BEFORE it's resolved)
+  const mockUserPreferencesService = {
+    initialize: async () => {},
+    destroy: async () => {},
+    getPreferences: async (userId: string) => createTestUserContext(inbox).preferences,
+  };
+  container.register({
+    userPreferencesService: asValue(mockUserPreferencesService as any),
+  });
 
   // Override email service with mock that returns inbox data
   const mockEmailService = new MockEmailDomainService(inbox);
@@ -46,6 +66,9 @@ export function createTestContainer(inbox: GeneratedInbox): AppContainer {
     contactsDomainService: asValue(mockContactsService as any),
     contactsService: asValue(mockContactsService as any), // Alias for strategies
   });
+
+  // Initialize all services (CRITICAL for BaseService-based services)
+  await initializeAllServices(container);
 
   // All other services (AI, Layer 1/2/3, etc.) remain real
   return container;
