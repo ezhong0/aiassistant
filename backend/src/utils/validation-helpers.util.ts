@@ -194,7 +194,7 @@ export class ValidationUtils {
       return data;
     }
 
-    const sanitized = { ...data };
+    const sanitized: Record<string, unknown> = { ...data };
     const sensitiveFields = ['password', 'token', 'secret', 'key', 'auth', 'credential'];
 
     for (const [key, value] of Object.entries(sanitized)) {

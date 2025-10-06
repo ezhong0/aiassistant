@@ -31,6 +31,8 @@
     "test:whole-inbox:report": "npm run test:whole-inbox && open tests/e2e/reports/html/*.html",
     "e2e:generate-simple": "E2E_TESTING=true npx ts-node tests/e2e/scripts/generate-simple-inbox.ts",
     "e2e:generate-inbox": "npx ts-node tests/e2e/scripts/generate-inbox.ts",
+    "e2e:test": "npx ts-node tests/e2e/scripts/run-e2e-tests.ts",
+    "e2e:test:mock": "npx ts-node tests/e2e/scripts/run-e2e-tests.ts --mock",
     "e2e:test-command": "npx ts-node tests/e2e/scripts/test-command.ts",
     "e2e:list-inboxes": "npx ts-node tests/e2e/scripts/list-inboxes.ts",
     "test:fast": "node --max-old-space-size=256 --expose-gc node_modules/.bin/jest tests/unit/simple.test.ts --runInBand",

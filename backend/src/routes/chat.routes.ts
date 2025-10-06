@@ -20,11 +20,11 @@ export function createChatRoutes(container: AppContainer) {
   const router = express.Router();
 
   // Resolve dependencies from container
-  // Use new 3-layer orchestrator instead of old MasterAgent
   const orchestrator = container.resolve('orchestrator');
+  const config = container.resolve('config');
 
-  // Get Supabase JWT secret from environment
-  const supabaseJwtSecret = process.env.SUPABASE_JWT_SECRET;
+  // Get Supabase JWT secret from config
+  const supabaseJwtSecret = config.supabaseJwtSecret;
 
   if (!supabaseJwtSecret) {
     logger.warn('SUPABASE_JWT_SECRET not configured - chat routes will not work', {

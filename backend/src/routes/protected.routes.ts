@@ -19,8 +19,9 @@ import type { AppContainer } from '../di';
 export function createProtectedRoutes(container: AppContainer) {
   const router = express.Router();
 
-  // Create Supabase auth middleware
-  const supabaseJwtSecret = process.env.SUPABASE_JWT_SECRET;
+  // Create Supabase auth middleware using config from container
+  const config = container.resolve('config');
+  const supabaseJwtSecret = config.supabaseJwtSecret;
   if (!supabaseJwtSecret) {
     throw new Error('SUPABASE_JWT_SECRET is required for protected routes');
   }

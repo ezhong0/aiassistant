@@ -2,7 +2,7 @@
  * Layer 3: Synthesis Service
  *
  * Transforms structured findings from Layer 2 into natural language responses.
- * This is a stub implementation - to be completed in Phase 4.
+ * Production-ready implementation with user preference handling.
  */
 
 import { BaseService } from '../../services/base-service';
@@ -151,7 +151,7 @@ export class SynthesisService extends BaseService {
 
       information_gathered.push({
         node_id: nodeId,
-        node_description: data.description,
+        node_description: String(data.description ?? ''),
         summary,
         key_findings: key_findings.slice(0, 10), // Limit to top 10 items
         item_count: data.count || data.items?.length || 0

@@ -244,7 +244,7 @@ const swaggerDocument = {
         summary: 'Validate token',
         description: 'Validates the current access token and returns user information',
         tags: ['Authentication'],
-        security: [{ bearerAuth: [] }],
+        security: [{ bearerAuth: [] as string[] }],
         responses: {
           '200': {
             description: 'Token is valid',
@@ -397,7 +397,7 @@ const swaggerDocument = {
   },
   security: [
     {
-      bearerAuth: [],
+      bearerAuth: [] as string[],
     },
   ],
   tags: [

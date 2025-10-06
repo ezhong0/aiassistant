@@ -4,6 +4,7 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
+    // PHASE 2: strictNullChecks enabled - null/undefined safety
     "strict": false,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -14,12 +15,12 @@
     "declarationMap": false,
     "sourceMap": false,
     "removeComments": true,
-    "noImplicitAny": false,
-    "noImplicitReturns": false,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": false,
+    "noUncheckedIndexedAccess": true,  // ✅ PHASE 2: Enabled
+    "strictNullChecks": true,  // ✅ PHASE 2: Enabled
+    "strictFunctionTypes": false,  // PHASE 3: Full strict mode
     "exactOptionalPropertyTypes": false,
     "isolatedModules": true,
     "incremental": true,

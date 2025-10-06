@@ -122,7 +122,7 @@ export class SemanticAnalysisStrategy extends BaseStrategy {
         intent_classification: 'statement' as const,
         directed_at_user: false,
         urgency_level: 'low' as const,
-        key_phrases: [],
+        key_phrases: [] as string[],
         reasoning: 'Error analyzing item'
       }));
     }

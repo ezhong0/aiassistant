@@ -1,25 +1,30 @@
 /**
  * Complete Example: Multi-LLM Automated Testing
  *
- * This demonstrates the full workflow:
- * 1. Generate inbox (one-time)
- * 2. Run automated test suite
- * 3. Get comprehensive diagnostic report
+ * DEPRECATED: Use the test runner script instead:
+ *   npm run e2e:test          # Uses real 3-layer orchestrator (default)
+ *   npm run e2e:test --mock   # Uses simplified mock
+ *   npm run e2e:test --count=5 # Generate 5 queries per category
+ *
+ * This file is kept for reference only.
+ * Real orchestrator integration is in:
+ *   - tests/e2e/integration/orchestrator-adapter.ts
+ *   - tests/e2e/integration/test-container.ts
+ *   - tests/e2e/scripts/run-e2e-tests.ts
  */
 
 import * as path from 'path';
 import { runAutomatedTests } from './test-runner';
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 import { ChatbotResponse } from './multi-layer-evaluator';
-// import { createAppContainer } from '../../src/di/container'; // Uncomment when integrating with orchestrator
 
 /**
- * EXAMPLE: Chatbot function for e2e testing
+ * EXAMPLE: Mock chatbot function
  *
- * To integrate with your real 3-layer orchestrator:
- * 1. Replace this mock implementation with a call to your orchestrator
- * 2. See SIMPLE_INTEGRATION.md for detailed instructions
- * 3. The orchestrator will process queries using the test inbox data
+ * NOTE: The real orchestrator integration is now available!
+ * Use npm run e2e:test to test your actual 3-layer implementation.
+ *
+ * This mock is kept for reference/examples only.
  */
 async function yourChatbotFunction(
   inbox: GeneratedInbox,
@@ -178,8 +183,8 @@ async function runSingleInboxTest() {
     // Path to saved inbox (generate first with: npm run e2e:generate-inbox founder)
     inboxPath: path.join(__dirname, '../data/generated-inboxes/inbox-01-founder.json'),
 
-    // Path to CHATBOT_COMMANDS_EXAMPLES.md
-    commandsDocPath: path.join(__dirname, '../../../docs/CHATBOT_COMMANDS_EXAMPLES.md'),
+    // Path to commands documentation
+    commandsDocPath: path.join(__dirname, '../../../docs/api/commands.md'),
 
     // Output directory for results
     outputDir: path.join(__dirname, '../data/test-results'),
@@ -193,8 +198,8 @@ async function runSingleInboxTest() {
       'SEARCH & RETRIEVAL',
     ],
 
-    // Parallel execution (optional - speeds up tests 5-10x)
-    parallelExecution: false, // Set to true for parallel mode
+    // Parallel execution (enabled by default - speeds up tests 5-10x)
+    parallelExecution: true,
     batchSize: 5, // Number of queries to evaluate in parallel
 
     // Your chatbot function
@@ -229,7 +234,7 @@ async function runMultipleInboxTests() {
 
     const result = await runAutomatedTests({
       inboxPath: path.join(__dirname, '../data/generated-inboxes', inboxFile),
-      commandsDocPath: path.join(__dirname, '../../../docs/CHATBOT_COMMANDS_EXAMPLES.md'),
+      commandsDocPath: path.join(__dirname, '../../../docs/api/commands.md'),
       outputDir: path.join(__dirname, '../data/test-results'),
       generateQueryCount: 3,
       chatbotFunction: yourChatbotFunction,

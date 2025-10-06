@@ -23,7 +23,7 @@ export function registerAuthServices(container: AppContainer): void {
   } else {
     // Register a no-op placeholder to prevent dependency resolution errors
     container.register({
-      supabaseTokenProvider: asFunction(() => null).singleton(),
+      supabaseTokenProvider: asFunction((): null => null).singleton(),
     });
   }
 }

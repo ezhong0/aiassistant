@@ -54,7 +54,7 @@ module.exports = [
         varsIgnorePattern: '^_',
         caughtErrorsIgnorePattern: '^_',
       }],
-      '@typescript-eslint/no-explicit-any': 'off', // Allow any when needed (use strict config for errors)
+      '@typescript-eslint/no-explicit-any': 'warn', // Warn on any usage - should have explicit types
 
       // Function types
       '@typescript-eslint/explicit-function-return-type': 'off', // Allow implicit return types
@@ -144,6 +144,7 @@ module.exports = [
       'no-new-func': 'error',
       'no-var': 'error',
       'prefer-const': 'error',
+      'no-process-env': 'off', // Allow for now - TODO: Enable after UnifiedConfig migration complete
       'prefer-arrow-callback': 'off',
       'prefer-template': 'off',
       'prefer-spread': 'off',

@@ -65,6 +65,7 @@ const ServicesSchema = z.object({
     url: z.string().optional(),
     serviceRoleKey: z.string().optional(),
     anonKey: z.string().optional(),
+    jwtSecret: z.string().optional(),
   }).optional(),
 });
 
@@ -367,6 +368,7 @@ export class UnifiedConfigService extends BaseService {
             url: process.env.SUPABASE_URL,
             serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
             anonKey: process.env.SUPABASE_ANON_KEY,
+            jwtSecret: process.env.SUPABASE_JWT_SECRET,
           },
         },
         ai: {
@@ -456,6 +458,11 @@ export class UnifiedConfigService extends BaseService {
 
     if (!this.config.auth.google?.clientId || !this.config.auth.google?.clientSecret) {
       issues.push('Google OAuth credentials required in production');
+    }
+
+    // Security validations
+    if (this.config.security.cors.origin === '*') {
+      issues.push('SECURITY_CORS_ORIGIN must be explicitly set in production (not "*"). Set comma-separated origins like: https://yourdomain.com,https://app.yourdomain.com');
     }
 
     if (issues.length > 0) {
@@ -582,6 +589,10 @@ export class UnifiedConfigService extends BaseService {
     return this.config.services.supabase?.anonKey;
   }
 
+  get supabaseJwtSecret(): string | undefined {
+    return this.config.services.supabase?.jwtSecret;
+  }
+
   /**
    * Get AI model configuration by name
    */
@@ -607,6 +618,7 @@ export class UnifiedConfigService extends BaseService {
       if (!this.jwtSecret || this.jwtSecret.length < 32) issues.push('JWT_SECRET insecure');
       if (!this.openaiApiKey) issues.push('OpenAI API key missing');
       if (!this.googleAuth?.clientId) issues.push('Google OAuth missing');
+      if (this.security.cors.origin === '*') issues.push('CORS origin must be explicitly configured in production (not *)');
     }
 
     return {

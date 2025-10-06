@@ -9,6 +9,7 @@ dotenv.config({ path: envPath });
 import express, { Request, Response } from 'express';
 import { createAppContainer, registerAllServices, initializeAllServices, shutdownAllServices, validateContainer, type AppContainer } from './di';
 import { requestLogger } from './middleware/request-logger.middleware';
+import { requestIdMiddleware } from './middleware/request-id.middleware';
 import logger from './utils/logger';
 import { 
   corsMiddleware, 
@@ -74,13 +75,36 @@ const initializeApplication = async (): Promise<void> => {
     appContainer = createAppContainer();
     registerAllServices(appContainer);
     
-    // Validate container in development mode (catches dependency issues early)
-    if (unifiedConfig.nodeEnv === 'development') {
-      logger.info('Validating DI container', {
-        correlationId: 'startup',
-        operation: 'container_validation'
-      });
+    // Validate container (catches dependency issues early)
+    // Always validate, but handle errors differently in production
+    logger.info('Validating DI container', {
+      correlationId: 'startup',
+      operation: 'container_validation'
+    });
+
+    try {
       validateContainer(appContainer);
+      logger.info('DI container validation passed', {
+        correlationId: 'startup',
+        operation: 'container_validation_success'
+      });
+    } catch (error) {
+      logger.error('DI container validation failed', error as Error, {
+        correlationId: 'startup',
+        operation: 'container_validation_error',
+        metadata: { nodeEnv: unifiedConfig.nodeEnv }
+      });
+
+      // In production, log but don't block startup (already logged to error tracking)
+      // In dev/test, fail fast
+      if (unifiedConfig.nodeEnv !== 'production') {
+        throw error;
+      } else {
+        logger.warn('Continuing despite container validation errors in production', {
+          correlationId: 'startup',
+          operation: 'container_validation_bypass'
+        });
+      }
     }
     
     // Initialize utility factories with container
@@ -211,7 +235,8 @@ app.use(requestSizeLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request processing middleware
+// Request processing middleware (order matters!)
+app.use(requestIdMiddleware); // ✅ First: Generate request ID for tracing
 app.use(sanitizeRequest);
 app.use(requestLogger);
 

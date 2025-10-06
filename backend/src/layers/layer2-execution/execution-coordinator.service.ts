@@ -3,7 +3,7 @@
  *
  * Orchestrates execution of the DAG created by Layer 1.
  * Executes nodes in parallel stages while respecting dependencies.
- * This is a stub implementation - to be completed in Phase 3.
+ * Production-ready implementation with 5 strategy types.
  */
 
 import { BaseService } from '../../services/base-service';

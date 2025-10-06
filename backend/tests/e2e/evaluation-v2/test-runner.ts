@@ -16,6 +16,7 @@ import * as path from 'path';
 import { GeneratedInbox } from '../generators/hyper-realistic-inbox';
 import { generateQueries, saveQueries, loadQueries, GeneratedQuery } from './query-generator';
 import { evaluateChatbotResponse, aggregateEvaluations, ChatbotResponse, EvaluationReport } from './multi-layer-evaluator';
+import { EnhancedHTMLReporter } from '../reporters/enhanced-html-reporter';
 
 export interface TestRunConfig {
   inboxPath: string;
@@ -145,8 +146,8 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
   console.log('\n⚖️  Step 4: Evaluating responses...');
   const evaluations: EvaluationReport[] = [];
 
-  // Determine execution mode
-  const useParallel = config.parallelExecution ?? false;
+  // Determine execution mode (parallel by default for better performance)
+  const useParallel = config.parallelExecution ?? true;
   const batchSize = config.batchSize ?? 5;
 
   if (useParallel) {
@@ -296,6 +297,11 @@ export async function runAutomatedTests(config: TestRunConfig): Promise<TestRunR
   const resultPath = path.join(config.outputDir, `${runId}.json`);
   fs.writeFileSync(resultPath, JSON.stringify(result, null, 2));
   console.log(`   ✅ Saved results to ${resultPath}`);
+
+  // Generate enhanced HTML report
+  const htmlReporter = new EnhancedHTMLReporter();
+  const htmlPath = htmlReporter.saveReport(result, config.outputDir);
+  console.log(`   📊 Generated HTML report: ${htmlPath}`);
 
   // 7. Print summary
   printSummary(result);

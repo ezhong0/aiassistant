@@ -37,7 +37,7 @@ function transformZodErrors(error: ZodError): ValidationError[] {
     field: err.path.join('.'),
     message: err.message,
     code: err.code,
-    value: undefined, // ZodIssue doesn't have input property
+    value: undefined as unknown, // ZodIssue doesn't have input property
   }));
 }
 

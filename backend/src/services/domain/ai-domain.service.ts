@@ -655,9 +655,9 @@ export class AIDomainService extends BaseService implements Partial<IAIDomainSer
         id: model.id,
         name: model.id,
         description: model.id,
-        contextLength: undefined,
+        contextLength: undefined as number | undefined,
         capabilities: ['text-generation'],
-        pricing: undefined
+        pricing: undefined as Record<string, unknown> | undefined
       }));
 
       this.logInfo('Models listed successfully', {
